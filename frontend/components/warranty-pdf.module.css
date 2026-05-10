@@ -1,0 +1,33 @@
+@page {
+  size: A4 landscape;
+  margin: 0;
+}
+
+@media print {
+  :global(html),
+  :global(body) {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  :global(body) {
+    min-height: auto !important;
+  }
+
+  .previewShell {
+    min-height: auto !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .sheet {
+    width: 297mm !important;
+    height: 210mm !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

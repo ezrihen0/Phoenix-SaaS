@@ -1,0 +1,2 @@
+export const SEARCH_DEBOUNCE_MS = 220;
+export const SEARCH_TRANSPORT_TIMEOUT_MS = 5000;

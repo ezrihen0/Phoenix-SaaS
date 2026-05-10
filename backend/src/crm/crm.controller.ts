@@ -1,0 +1,3183 @@
+import {
+  Body,
+  Controller,
+  Get,
+  HttpException,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { In, Not, Repository } from "typeorm";
+
+import {
+  actorHasPermission,
+  canAccessAssignedJob,
+  canAccessEstimateResource,
+  canAccessInvoiceResource,
+  canAccessJobResource,
+  requireActorProfile,
+  requirePermission,
+  type RoleModePermission,
+} from "../auth/permissions";
+import { SessionGuard } from "../auth/session.guard";
+import { apiError, apiSuccess } from "../common/api-response";
+import type { ActorContext, RequestWithActor } from "../common/request-types";
+import {
+  canTransitionJobStatus,
+  getJobStatusLabel,
+  getJobStatusTimestampUpdates,
+  getServiceTypeLabel,
+  isOfficeOnlyJobStatus,
+  openJobStatuses,
+  type InvoiceStatus,
+} from "./constants";
+import {
+  customerImportSourceOptions,
+  type CustomerImportDuplicateMatch,
+  type CustomerImportField,
+  type CustomerImportPreviewResponse,
+  type CustomerImportPreviewRow,
+  type CustomerImportResult,
+  type CustomerImportRowInput,
+  type CustomerImportSource,
+} from "./customer-import";
+import { formatAddress } from "./display";
+import {
+  type DocumentLineItemInput,
+  parseConvertLeadPayload,
+  parseCreateJobNotePayload,
+  parseCreateJobPayload,
+  parseCreateLeadPayload,
+  parseJobStatusPayload,
+  parseRecordInvoicePaymentPayload,
+  parseSignDocumentPayload,
+  parseUpdateJobPayload,
+  parseUpdateLeadPayload,
+  parseUpsertInvoicePayload,
+  parseUpsertQuotePayload,
+} from "./validation";
+import { CustomerEntity } from "../database/entities/customer.entity";
+import { InvoiceEntity } from "../database/entities/invoice.entity";
+import { JobNoteEntity } from "../database/entities/job-note.entity";
+import { JobStatusEventEntity } from "../database/entities/job-status-event.entity";
+import { JobEntity } from "../database/entities/job.entity";
+import { LeadEntity } from "../database/entities/lead.entity";
+import { ProfileEntity } from "../database/entities/profile.entity";
+import { QuoteEntity } from "../database/entities/quote.entity";
+import { ServiceEntity } from "../database/entities/service.entity";
+import { TechnicianEntity } from "../database/entities/technician.entity";
+import { DocumentPricingService } from "./document-pricing.service";
+import { DocumentSnapshotService } from "./document-snapshot.service";
+import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
+import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
+
+type RelatedValue<T> = T | T[] | null;
+
+type DashboardControlItem = {
+  id: string;
+  jobId: string | null;
+  title: string;
+  customerName: string;
+  addressLabel: string;
+  technicianName: string | null;
+  amountCents: number | null;
+  scheduledFor: Date | null;
+  occurredAt: Date | null;
+  statusLabel: string;
+};
+
+type ImportPayload = {
+  mode: "preview" | "import";
+  confirmImport: boolean;
+  rows: CustomerImportRowInput[];
+};
+
+type CustomerInsertCandidate = Pick<
+  CustomerEntity,
+  | "external_client_number"
+  | "full_name"
+  | "phone"
+  | "email"
+  | "company_name"
+  | "service_address_line_1"
+  | "service_address_line_2"
+  | "legacy_created_at"
+  | "source"
+  | "notes"
+>;
+
+type PreviewRowAnalysis = CustomerImportPreviewRow & {
+  duplicateMatches: CustomerImportDuplicateMatch[];
+  insertValue: CustomerInsertCandidate | null;
+  normalizedExternalClientNumber: string | null;
+  normalizedPhone: string | null;
+  normalizedEmail: string | null;
+  normalizedAddressKey: string | null;
+};
+
+@UseGuards(SessionGuard)
+@Controller("api")
+export class CrmController {
+  constructor(
+    @InjectRepository(ProfileEntity)
+    private readonly profilesRepository: Repository<ProfileEntity>,
+    @InjectRepository(TechnicianEntity)
+    private readonly techniciansRepository: Repository<TechnicianEntity>,
+    @InjectRepository(ServiceEntity)
+    private readonly servicesRepository: Repository<ServiceEntity>,
+    @InjectRepository(CustomerEntity)
+    private readonly customersRepository: Repository<CustomerEntity>,
+    @InjectRepository(LeadEntity)
+    private readonly leadsRepository: Repository<LeadEntity>,
+    @InjectRepository(JobEntity)
+    private readonly jobsRepository: Repository<JobEntity>,
+    @InjectRepository(QuoteEntity)
+    private readonly quotesRepository: Repository<QuoteEntity>,
+    @InjectRepository(InvoiceEntity)
+    private readonly invoicesRepository: Repository<InvoiceEntity>,
+    @InjectRepository(InvoicePaymentEntity)
+    private readonly invoicePaymentsRepository: Repository<InvoicePaymentEntity>,
+    @InjectRepository(JobNoteEntity)
+    private readonly jobNotesRepository: Repository<JobNoteEntity>,
+    @InjectRepository(JobStatusEventEntity)
+    private readonly jobStatusEventsRepository: Repository<JobStatusEventEntity>,
+    private readonly documentPricingService: DocumentPricingService,
+    private readonly documentSnapshotService: DocumentSnapshotService,
+    private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
+  ) {}
+
+  private requireActor(request: RequestWithActor) {
+    return requireActorProfile(request.actor);
+  }
+
+  private requireCrmPermissionActor(
+    request: RequestWithActor,
+    permission: RoleModePermission,
+    code = "forbidden",
+    message = "This CRM action is not available for the current account.",
+  ) {
+    return requirePermission(request.actor, permission, code, message);
+  }
+
+  private requireTechnicianActor(request: RequestWithActor) {
+    const actor = this.requireActor(request);
+
+    if (!actorHasPermission(actor, "jobs.assigned.view") || !actor.technician) {
+      apiError(
+        403,
+        "technician_required",
+        "This endpoint is only available to technicians.",
+      );
+    }
+
+    return actor as ActorContext & {
+      profile: ProfileEntity;
+      technician: TechnicianEntity;
+    };
+  }
+
+  private relationValue<T>(value: RelatedValue<T> | undefined) {
+    if (Array.isArray(value)) {
+      return value[0] ?? null;
+    }
+
+    return value ?? null;
+  }
+
+  private buildJobControlItem(job: JobEntity): DashboardControlItem {
+    const customer = this.relationValue(job.customer as RelatedValue<CustomerEntity>);
+    const technician = this.relationValue(job.technician as RelatedValue<TechnicianEntity>);
+
+    return {
+      id: job.id,
+      jobId: job.id,
+      title: job.title,
+      customerName: customer?.full_name ?? "Customer pending",
+      addressLabel: formatAddress(
+        job.service_address_line_1,
+        job.service_address_line_2,
+        job.service_city,
+        job.service_state_or_region,
+        job.service_postal_code,
+      ),
+      technicianName: technician?.display_name ?? null,
+      amountCents: null,
+      scheduledFor: job.scheduled_for,
+      occurredAt: job.completed_at ?? job.updated_at,
+      statusLabel: getJobStatusLabel(job.status),
+    };
+  }
+
+  private buildQuoteControlItem(quote: QuoteEntity): DashboardControlItem {
+    const job = this.relationValue(quote.job as RelatedValue<JobEntity>);
+    const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
+    const technician = this.relationValue(job?.technician as RelatedValue<TechnicianEntity>);
+
+    return {
+      id: quote.id,
+      jobId: job?.id ?? quote.job_id,
+      title: job?.title ?? "Quote waiting approval",
+      customerName: customer?.full_name ?? "Customer pending",
+      addressLabel: job
+        ? formatAddress(
+          job.service_address_line_1,
+          job.service_address_line_2,
+          job.service_city,
+          job.service_state_or_region,
+          job.service_postal_code,
+        )
+        : "Address unavailable",
+      technicianName: technician?.display_name ?? null,
+      amountCents: quote.price_cents,
+      scheduledFor: job?.scheduled_for ?? null,
+      occurredAt: quote.sent_at,
+      statusLabel: "Waiting Approval",
+    };
+  }
+
+  private buildInvoiceControlItem(invoice: InvoiceEntity): DashboardControlItem {
+    const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
+    const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
+    const technician = this.relationValue(job?.technician as RelatedValue<TechnicianEntity>);
+
+    return {
+      id: invoice.id,
+      jobId: job?.id ?? invoice.job_id,
+      title: job?.title ?? "Invoice awaiting payment",
+      customerName: customer?.full_name ?? "Customer pending",
+      addressLabel: job
+        ? formatAddress(
+          job.service_address_line_1,
+          job.service_address_line_2,
+          job.service_city,
+          job.service_state_or_region,
+          job.service_postal_code,
+        )
+        : "Address unavailable",
+      technicianName: technician?.display_name ?? null,
+      amountCents: invoice.amount_cents,
+      scheduledFor: job?.scheduled_for ?? null,
+      occurredAt: invoice.issued_at,
+      statusLabel: "Unpaid",
+    };
+  }
+
+  private startOfToday() {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }
+
+  private endOfToday() {
+    const date = new Date();
+    date.setHours(23, 59, 59, 999);
+    return date;
+  }
+
+  private async loadJobDetail(jobId: string) {
+    const job = await this.jobsRepository.findOne({
+      where: {
+        id: jobId,
+      },
+      relations: {
+        customer: true,
+        service: true,
+        technician: true,
+        quote: true,
+        invoice: {
+          payments: true,
+        },
+        notes: {
+          author_profile: true,
+        },
+        status_events: true,
+      },
+    });
+
+    if (!job) {
+      return null;
+    }
+
+    if (job.notes) {
+      job.notes = [...job.notes].sort(
+        (left, right) =>
+          new Date(left.created_at).getTime() - new Date(right.created_at).getTime(),
+      );
+    }
+
+    if (job.status_events) {
+      job.status_events = [...job.status_events].sort(
+        (left, right) =>
+          new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+      );
+    }
+
+    const quote = this.relationValue(job.quote as RelatedValue<QuoteEntity>);
+
+    if (quote) {
+      Object.assign(quote, {
+        subtotal_cents: quote.subtotal_cents || quote.price_cents,
+        tax_cents: quote.tax_cents ?? 0,
+        total_cents: quote.total_cents || quote.price_cents,
+      });
+    }
+
+    const invoice = this.relationValue(job.invoice as RelatedValue<InvoiceEntity>);
+
+    if (invoice) {
+      const ledgerSummary = this.summarizeInvoiceLedger(invoice);
+
+      Object.assign(invoice, {
+        subtotal_cents: invoice.subtotal_cents || invoice.amount_cents,
+        tax_cents: invoice.tax_cents ?? 0,
+        total_cents: invoice.total_cents || ledgerSummary.totalCents,
+        amount_paid_cents: ledgerSummary.netPaidCents,
+        refunded_cents: ledgerSummary.refundedCents,
+        balance_cents: ledgerSummary.balanceCents,
+        lifecycle_status: ledgerSummary.lifecycleStatus,
+      });
+
+      delete (invoice as InvoiceEntity & { payments?: InvoicePaymentEntity[] }).payments;
+    }
+
+    return job;
+  }
+
+  private buildJobNoteResponse(note: JobNoteEntity & { author_profile?: ProfileEntity | null }) {
+    return {
+      id: note.id,
+      job_id: note.job_id,
+      author_profile_id: note.author_profile_id,
+      author_name: note.author_profile?.full_name?.trim() || null,
+      findings: note.findings,
+      recommendations: note.recommendations,
+      photo_urls: note.photo_urls,
+      created_at: note.created_at.toISOString(),
+      updated_at: note.updated_at.toISOString(),
+    };
+  }
+
+  private buildJobDetailResponse(job: JobEntity) {
+    return {
+      ...job,
+      notes: (job.notes ?? []).map((note) => this.buildJobNoteResponse(note)),
+    };
+  }
+
+  @Get("dashboard")
+  async getDashboard(@Req() request: RequestWithActor) {
+    this.requireCrmPermissionActor(
+      request,
+      "dashboard.office.view",
+      "dashboard_view_forbidden",
+      "This account cannot view the office dashboard.",
+    );
+
+    try {
+      const todayStart = this.startOfToday();
+      const todayEnd = this.endOfToday();
+
+      const [
+        newLeadCount,
+        contactedLeadCount,
+        activeJobCount,
+        todayJobCount,
+        unpaidInvoiceCount,
+        leads,
+        jobs,
+        technicians,
+        services,
+        quotesWaitingApproval,
+        unpaidInvoices,
+        contactedJobs,
+        todaysScheduledJobs,
+        recentCompletedJobs,
+      ] = await Promise.all([
+        this.leadsRepository.countBy({ status: "new_lead" }),
+        this.leadsRepository.countBy({ status: "contacted" }),
+        this.jobsRepository.count({
+          where: {
+            status: In(openJobStatuses),
+          },
+        }),
+        this.jobsRepository
+          .createQueryBuilder("job")
+          .where("job.scheduled_for >= :todayStart", { todayStart })
+          .andWhere("job.scheduled_for <= :todayEnd", { todayEnd })
+          .andWhere("job.status != :status", { status: "cancelled" })
+          .getCount(),
+        this.invoicesRepository.countBy({ status: "unpaid" }),
+        this.leadsRepository.find({
+          where: {
+            status: Not("converted"),
+          },
+          order: {
+            created_at: "DESC",
+          },
+          take: 12,
+        }),
+        this.jobsRepository.find({
+          where: {
+            status: Not("cancelled"),
+          },
+          relations: {
+            customer: true,
+            service: true,
+            technician: true,
+            quote: true,
+            invoice: true,
+          },
+          order: {
+            scheduled_for: "ASC",
+            created_at: "DESC",
+          },
+          take: 60,
+        }),
+        this.techniciansRepository.find({
+          order: {
+            display_name: "ASC",
+          },
+        }),
+        this.servicesRepository.find({
+          where: {
+            is_active: true,
+          },
+          order: {
+            sort_position: "ASC",
+          },
+        }),
+        this.quotesRepository.find({
+          where: {
+            status: "sent",
+          },
+          relations: {
+            job: {
+              customer: true,
+              technician: true,
+            },
+          },
+          order: {
+            sent_at: "ASC",
+          },
+          take: 4,
+        }),
+        this.invoicesRepository.find({
+          where: {
+            status: "unpaid",
+          },
+          relations: {
+            job: {
+              customer: true,
+              technician: true,
+            },
+          },
+          order: {
+            issued_at: "ASC",
+          },
+          take: 4,
+        }),
+        this.jobsRepository.find({
+          where: {
+            status: "contacted",
+          },
+          relations: {
+            customer: true,
+            technician: true,
+          },
+          order: {
+            updated_at: "DESC",
+          },
+          take: 4,
+        }),
+        this.jobsRepository
+          .createQueryBuilder("job")
+          .leftJoinAndSelect("job.customer", "customer")
+          .leftJoinAndSelect("job.technician", "technician")
+          .where("job.scheduled_for >= :todayStart", { todayStart })
+          .andWhere("job.scheduled_for <= :todayEnd", { todayEnd })
+          .andWhere("job.status != :cancelledStatus", { cancelledStatus: "cancelled" })
+          .orderBy("job.scheduled_for", "ASC")
+          .limit(4)
+          .getMany(),
+        this.jobsRepository.find({
+          where: {
+            status: In(["completed", "paid"]),
+          },
+          relations: {
+            customer: true,
+            technician: true,
+          },
+          order: {
+            completed_at: "DESC",
+          },
+          take: 4,
+        }),
+      ]);
+
+      return apiSuccess({
+        summary: {
+          newLeads: newLeadCount,
+          contactedLeads: contactedLeadCount,
+          activeJobs: activeJobCount,
+          jobsScheduledToday: todayJobCount,
+          unpaidInvoices: unpaidInvoiceCount,
+        },
+        controls: {
+          quotesWaitingApproval: quotesWaitingApproval.map((item) => this.buildQuoteControlItem(item)),
+          unpaidInvoices: unpaidInvoices.map((item) => this.buildInvoiceControlItem(item)),
+          followUpsNeeded: contactedJobs.map((item) => this.buildJobControlItem(item)),
+          todaysScheduledJobs: todaysScheduledJobs.map((item) => this.buildJobControlItem(item)),
+          recentCompletedJobs: recentCompletedJobs.map((item) => this.buildJobControlItem(item)),
+        },
+        leads,
+        jobs,
+        technicians,
+        services,
+      });
+    } catch (error) {
+      apiError(
+        500,
+        "dashboard_load_failed",
+        "The office dashboard data could not be loaded.",
+        error,
+      );
+    }
+  }
+
+  @Get("technician/dashboard")
+  async getTechnicianDashboard(@Req() request: RequestWithActor) {
+    const actor = this.requireTechnicianActor(request);
+
+    try {
+      const todayStart = this.startOfToday();
+
+      const [openCount, inProgressCount, waitingApprovalCount, completedTodayCount, jobs] = await Promise.all([
+        this.jobsRepository.count({
+          where: {
+            assigned_technician_id: actor.technician.id,
+            status: In(openJobStatuses),
+          },
+        }),
+        this.jobsRepository.count({
+          where: {
+            assigned_technician_id: actor.technician.id,
+            status: "in_progress",
+          },
+        }),
+        this.jobsRepository.count({
+          where: {
+            assigned_technician_id: actor.technician.id,
+            status: "waiting_for_approval",
+          },
+        }),
+        this.jobsRepository
+          .createQueryBuilder("job")
+          .where("job.assigned_technician_id = :technicianId", {
+            technicianId: actor.technician.id,
+          })
+          .andWhere("job.status = :status", { status: "completed" })
+          .andWhere("job.completed_at >= :todayStart", { todayStart })
+          .getCount(),
+        this.jobsRepository.find({
+          where: {
+            assigned_technician_id: actor.technician.id,
+            status: Not("cancelled"),
+          },
+          relations: {
+            customer: true,
+            service: true,
+            technician: true,
+            quote: true,
+            invoice: true,
+          },
+          order: {
+            scheduled_for: "ASC",
+            created_at: "DESC",
+          },
+        }),
+      ]);
+
+      return apiSuccess({
+        technician: {
+          id: actor.technician.id,
+          displayName: actor.technician.display_name,
+          phone: actor.technician.phone,
+          specialties: actor.technician.specialties,
+          lastSeenAt: actor.technician.last_seen_at,
+          fullName: actor.profile.full_name,
+        },
+        summary: {
+          openJobs: openCount,
+          inProgressJobs: inProgressCount,
+          waitingForApprovalJobs: waitingApprovalCount,
+          completedToday: completedTodayCount,
+        },
+        jobs,
+      });
+    } catch (error) {
+      apiError(
+        500,
+        "technician_dashboard_load_failed",
+        "The technician dashboard could not be loaded.",
+        error,
+      );
+    }
+  }
+
+  @Get("jobs")
+  async listJobs(
+    @Req() request: RequestWithActor,
+    @Query("status") status?: string,
+    @Query("technicianId") technicianId?: string,
+  ) {
+    this.requireCrmPermissionActor(
+      request,
+      "jobs.view",
+      "job_list_forbidden",
+      "This account cannot view the job board.",
+    );
+
+    try {
+      const queryBuilder = this.jobsRepository
+        .createQueryBuilder("job")
+        .leftJoinAndSelect("job.customer", "customer")
+        .leftJoinAndSelect("job.service", "service")
+        .leftJoinAndSelect("job.technician", "technician")
+        .leftJoinAndSelect("job.quote", "quote")
+        .leftJoinAndSelect("job.invoice", "invoice")
+        .orderBy("job.scheduled_for", "ASC")
+        .addOrderBy("job.created_at", "DESC");
+
+      if (status) {
+        queryBuilder.andWhere("job.status = :status", { status });
+      } else {
+        queryBuilder.andWhere("job.status != :cancelled", { cancelled: "cancelled" });
+      }
+
+      if (technicianId) {
+        queryBuilder.andWhere("job.assigned_technician_id = :technicianId", {
+          technicianId,
+        });
+      }
+
+      const jobs = await queryBuilder.getMany();
+
+      return apiSuccess(jobs);
+    } catch (error) {
+      apiError(500, "job_list_failed", "The job board could not be loaded.", error);
+    }
+  }
+
+  @Post("jobs")
+  async createJob(@Req() request: RequestWithActor, @Body() body: unknown) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "jobs.create",
+      "job_create_forbidden",
+      "This account cannot create jobs.",
+    );
+
+    try {
+      const payload = parseCreateJobPayload(body);
+      let customerId = payload.customerId;
+      let customerLabel = "Customer";
+      let leadSource: JobEntity["lead_source"] = "website";
+      let requestTimestamp = new Date();
+      let leadToConvertId: string | null = null;
+
+      if (payload.leadId) {
+        const lead = await this.leadsRepository.findOne({
+          where: {
+            id: payload.leadId,
+          },
+        });
+
+        if (!lead) {
+          apiError(404, "lead_not_found", "The lead could not be found.");
+        }
+
+        if (lead.converted_job_id || lead.status === "converted") {
+          apiError(400, "lead_already_converted", "This lead has already been converted into a job.");
+        }
+
+        const customerInsert = this.customersRepository.create({
+          full_name: lead.full_name,
+          phone: lead.phone,
+          email: lead.email,
+          service_address_line_1: lead.service_address_line_1,
+          service_address_line_2: lead.service_address_line_2,
+          service_city: lead.service_city,
+          service_state_or_region: lead.service_state_or_region,
+          service_postal_code: lead.service_postal_code,
+          source: lead.source,
+          preferred_service_type: lead.service_type,
+          notes: lead.description,
+        });
+
+        const customer = await this.customersRepository.save(customerInsert);
+
+        customerId = customer.id;
+        customerLabel = customer.full_name;
+        leadSource = lead.source;
+        requestTimestamp = lead.created_at;
+        leadToConvertId = lead.id;
+      } else if (customerId) {
+        const customer = await this.customersRepository.findOne({
+          where: {
+            id: customerId,
+          },
+        });
+
+        if (!customer) {
+          apiError(404, "customer_not_found", "The customer could not be found.");
+        }
+
+        customerLabel = customer.full_name;
+        leadSource = customer.source ?? "website";
+      }
+
+      if (!customerId) {
+        apiError(400, "job_source_missing", "A customer or lead is required to create a job.");
+      }
+
+      const job = await this.jobsRepository.save(
+        this.jobsRepository.create({
+          customer_id: customerId,
+          service_id: null,
+          assigned_technician_id: payload.assignedTechnicianId,
+          title: `${getServiceTypeLabel(payload.serviceType)} for ${customerLabel}`,
+          description: payload.internalNotes,
+          lead_source: leadSource,
+          requested_service_type: payload.serviceType,
+          status: "scheduled",
+          service_address_line_1: payload.serviceAddressLine1,
+          service_address_line_2: payload.serviceAddressLine2,
+          service_city: payload.serviceCity,
+          service_state_or_region: payload.serviceStateOrRegion,
+          service_postal_code: payload.servicePostalCode,
+          scheduled_for: new Date(payload.scheduledFor),
+          scheduled_window: null,
+          requested_at: requestTimestamp,
+          created_by_auth_user_id: actor.user.id,
+          updated_by_auth_user_id: actor.user.id,
+        }),
+      );
+
+      if (leadToConvertId) {
+        await this.leadsRepository.update(
+          {
+            id: leadToConvertId,
+          },
+          {
+            status: "converted",
+            converted_job_id: job.id,
+          },
+        );
+      }
+
+      await this.jobStatusEventsRepository.save(
+        this.jobStatusEventsRepository.create({
+          job_id: job.id,
+          author_profile_id: actor.profile.id,
+          status: "scheduled",
+          note: leadToConvertId
+            ? "Lead converted to scheduled job."
+            : "Job created from customer record.",
+        }),
+      );
+
+      const detail = await this.loadJobDetail(job.id);
+
+      return apiSuccess({ job: detail ? this.buildJobDetailResponse(detail) : job });
+    } catch (error) {
+      apiError(400, "invalid_job_payload", "The job payload is invalid.", error);
+    }
+  }
+
+  @Get("jobs/:jobId")
+  async getJob(
+    @Req() request: RequestWithActor,
+    @Param("jobId") jobId: string,
+  ) {
+    const actor = this.requireActor(request);
+
+    try {
+      const job = await this.loadJobDetail(jobId);
+
+      if (!job) {
+        apiError(404, "job_not_found", "The job could not be found.");
+      }
+
+      if (!canAccessJobResource(actor, job.assigned_technician_id)) {
+        apiError(403, "job_access_denied", "You do not have access to this job.");
+      }
+
+      return apiSuccess(this.buildJobDetailResponse(job));
+    } catch (error) {
+      apiError(400, "job_lookup_failed", "The job could not be loaded.", error);
+    }
+  }
+
+  @Patch("jobs/:jobId")
+  async updateJob(
+    @Req() request: RequestWithActor,
+    @Param("jobId") jobId: string,
+    @Body() body: unknown,
+  ) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "jobs.update",
+      "job_update_forbidden",
+      "This account cannot update jobs.",
+    );
+
+    try {
+      const payload = parseUpdateJobPayload(body);
+      const job = await this.jobsRepository.findOne({
+        where: {
+          id: jobId,
+        },
+      });
+
+      if (!job) {
+        apiError(404, "job_not_found", "The job could not be found.");
+      }
+
+      const updates: Partial<JobEntity> = {
+        updated_by_auth_user_id: actor.user.id,
+      };
+
+      if (payload.title !== undefined) {
+        updates.title = payload.title;
+      }
+
+      if (payload.description !== undefined) {
+        updates.description = payload.description;
+      }
+
+      if (payload.assignedTechnicianId !== undefined) {
+        updates.assigned_technician_id = payload.assignedTechnicianId;
+      }
+
+      if (payload.serviceId !== undefined) {
+        updates.service_id = payload.serviceId;
+      }
+
+      if (payload.scheduledFor !== undefined) {
+        updates.scheduled_for = payload.scheduledFor ? new Date(payload.scheduledFor) : null;
+      }
+
+      if (payload.scheduledWindow !== undefined) {
+        updates.scheduled_window = payload.scheduledWindow;
+      }
+
+      await this.jobsRepository.update({ id: jobId }, updates);
+      const detail = await this.loadJobDetail(jobId);
+
+      return apiSuccess(detail ? this.buildJobDetailResponse(detail) : null);
+    } catch (error) {
+      apiError(400, "invalid_job_update_payload", "The job update payload is invalid.", error);
+    }
+  }
+
+  @Post("jobs/:jobId/status")
+  async updateJobStatus(
+    @Req() request: RequestWithActor,
+    @Param("jobId") jobId: string,
+    @Body() body: unknown,
+  ) {
+    const actor = this.requireActor(request);
+
+    try {
+      const payload = parseJobStatusPayload(body);
+      const job = await this.jobsRepository.findOne({
+        where: {
+          id: jobId,
+        },
+      });
+
+      if (!job) {
+        apiError(404, "job_not_found", "The job could not be found.");
+      }
+
+      if (!canAccessJobResource(actor, job.assigned_technician_id)) {
+        apiError(403, "job_access_denied", "You do not have access to this job.");
+      }
+
+      if (
+        !actorHasPermission(actor, "jobs.status.update")
+        && !(
+          actorHasPermission(actor, "jobs.assigned.status.update")
+          && canAccessAssignedJob(actor, job.assigned_technician_id)
+        )
+      ) {
+        apiError(403, "job_status_forbidden", "This account cannot update job status.");
+      }
+
+      if (
+        !actorHasPermission(actor, "jobs.update")
+        && isOfficeOnlyJobStatus(payload.status)
+      ) {
+        apiError(
+          403,
+          "office_only_job_status",
+          "Only office staff can set this CRM job status.",
+        );
+      }
+
+      if (!canTransitionJobStatus(job.status, payload.status)) {
+        apiError(
+          400,
+          "invalid_job_status_transition",
+          "This job cannot move to the requested status from its current state.",
+        );
+      }
+
+      const timestamp = new Date();
+      const paidAtTimestamp = this.formatSqlTimestamp(timestamp);
+      const cancellationReason = payload.note?.trim() ?? null;
+
+      if (payload.status === "cancelled" && !cancellationReason) {
+        apiError(
+          400,
+          "job_cancellation_reason_required",
+          "Provide a cancellation reason before cancelling this job.",
+        );
+      }
+
+      const statusTimestampUpdates = getJobStatusTimestampUpdates(payload.status, timestamp);
+
+      await this.jobsRepository.update(
+        { id: jobId },
+        {
+          status: payload.status,
+          updated_by_auth_user_id: actor.user.id,
+          ...(payload.status === "cancelled"
+            ? {
+              cancellation_reason: cancellationReason,
+              cancelled_at: timestamp,
+              cancelled_by: actor.user.id,
+            }
+            : {}),
+          ...statusTimestampUpdates,
+        },
+      );
+
+      await this.jobStatusEventsRepository.save(
+        this.jobStatusEventsRepository.create({
+          job_id: jobId,
+          author_profile_id: actor.profile?.id ?? null,
+          status: payload.status,
+          note: payload.status === "cancelled" ? cancellationReason : payload.note,
+        }),
+      );
+
+      if (payload.status === "paid") {
+        await this.invoicesRepository.update(
+          {
+            job_id: jobId,
+          },
+          {
+            status: "paid",
+            paid_at: paidAtTimestamp as unknown as Date,
+          },
+        );
+      }
+
+      const detail = await this.loadJobDetail(jobId);
+
+      return apiSuccess(detail ? this.buildJobDetailResponse(detail) : null);
+    } catch (error) {
+      apiError(400, "invalid_job_status_payload", "The job status payload is invalid.", error);
+    }
+  }
+
+  @Put("jobs/:jobId/quote")
+  async upsertQuote(
+    @Req() request: RequestWithActor,
+    @Param("jobId") jobId: string,
+    @Body() body: unknown,
+  ) {
+    this.requireCrmPermissionActor(
+      request,
+      "estimates.manage",
+      "estimate_manage_forbidden",
+      "This account cannot change estimates.",
+    );
+
+    try {
+      const payload = parseUpsertQuotePayload(body);
+      const job = await this.jobsRepository.findOne({
+        where: {
+          id: jobId,
+        },
+      });
+
+      if (!job) {
+        apiError(404, "job_not_found", "The job could not be found.");
+      }
+
+      const existingQuote = await this.quotesRepository.findOne({
+        where: {
+          job_id: jobId,
+        },
+      });
+
+      if (existingQuote && this.isDocumentLocked(existingQuote.approved_at, existingQuote.signed_at)) {
+        this.throwDocumentLockedError("estimate");
+      }
+
+      const hasSnapshotLineItems = payload.lineItems !== undefined;
+      const quoteLineDrafts = hasSnapshotLineItems
+        ? await this.buildDocumentLineDrafts(payload.lineItems ?? [])
+        : [];
+      const quoteTotals = hasSnapshotLineItems
+        ? this.documentPricingService.computeSnapshotTotals(
+            quoteLineDrafts.map((lineDraft) => ({
+              quantity: lineDraft.quantity,
+              unitPriceCents: lineDraft.unit_price_cents_snapshot,
+            })),
+            payload.taxRateBps ?? 0,
+          )
+        : this.documentPricingService.buildLegacyTotals(payload.priceCents);
+
+      const timestamp = new Date();
+      const sent_at = payload.status === "draft"
+        ? null
+        : existingQuote?.sent_at ?? timestamp;
+      const approved_at = payload.status === "approved"
+        ? existingQuote?.approved_at ?? timestamp
+        : null;
+
+      if (existingQuote) {
+        existingQuote.description = payload.description;
+        existingQuote.price_cents = quoteTotals.totalCents;
+        existingQuote.subtotal_cents = quoteTotals.subtotalCents;
+        existingQuote.tax_rate_bps_snapshot = quoteTotals.taxRateBpsSnapshot;
+        existingQuote.tax_cents = quoteTotals.taxCents;
+        existingQuote.total_cents = quoteTotals.totalCents;
+        existingQuote.status = payload.status;
+        existingQuote.sent_at = sent_at;
+        existingQuote.approved_at = approved_at;
+
+        const result = await this.quotesRepository.save(existingQuote);
+        await this.documentSnapshotService.replaceQuoteLineItems(
+          result.id,
+          hasSnapshotLineItems ? quoteLineDrafts : [],
+        );
+        return apiSuccess(result);
+      }
+
+      const result = await this.quotesRepository.save(
+        this.quotesRepository.create({
+          job_id: jobId,
+          description: payload.description,
+          price_cents: quoteTotals.totalCents,
+          subtotal_cents: quoteTotals.subtotalCents,
+          tax_rate_bps_snapshot: quoteTotals.taxRateBpsSnapshot,
+          tax_cents: quoteTotals.taxCents,
+          total_cents: quoteTotals.totalCents,
+          status: payload.status,
+          sent_at,
+          approved_at,
+        }),
+      );
+
+      await this.documentSnapshotService.replaceQuoteLineItems(
+        result.id,
+        hasSnapshotLineItems ? quoteLineDrafts : [],
+      );
+
+      return apiSuccess(result);
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "invalid_quote_payload", "The quote payload is invalid.", error);
+    }
+  }
+
+  private buildInvoiceDocumentNumber(invoice: InvoiceEntity) {
+    return `INV-${invoice.id.slice(0, 8).toUpperCase()}`;
+  }
+
+  private buildEstimateDocumentNumber(quote: QuoteEntity) {
+    return `EST-${quote.id.slice(0, 8).toUpperCase()}`;
+  }
+
+  private toIsoString(value: Date | null | undefined) {
+    return value ? value.toISOString() : null;
+  }
+
+  private summarizeInvoiceLedger(invoice: InvoiceEntity) {
+    return this.invoicePaymentLedgerService.summarizeInvoice({
+      totalCents: invoice.total_cents || invoice.amount_cents,
+      legacyStatus: invoice.status,
+      legacyPaidAt: invoice.paid_at,
+      payments: invoice.payments ?? [],
+    });
+  }
+
+  private isDocumentLocked(approvedAt: Date | null, signedAt: Date | null) {
+    return Boolean(approvedAt || signedAt);
+  }
+
+  private throwDocumentLockedError(documentKind: "invoice" | "estimate") {
+    apiError(
+      409,
+      `${documentKind}_document_locked`,
+      `This ${documentKind} is locked because it has already been approved or signed. Use a future revision, void, or duplicate flow to change customer-facing financial content.`,
+    );
+  }
+
+  private rethrowHttpException(error: unknown) {
+    if (error instanceof HttpException) {
+      throw error;
+    }
+  }
+
+  private buildInvoicePaymentResponse(invoice: InvoiceEntity) {
+    return (invoice.payments ?? [])
+      .slice()
+      .sort((left, right) => right.occurred_at.getTime() - left.occurred_at.getTime())
+      .map((payment) => ({
+        id: payment.id,
+        invoice_id: payment.invoice_id,
+        entry_type: payment.entry_type,
+        amount_cents: payment.amount_cents,
+        method: payment.method,
+        reference: payment.reference,
+        note: payment.note,
+        occurred_at: payment.occurred_at.toISOString(),
+        created_by_auth_user_id: payment.created_by_auth_user_id,
+        created_at: payment.created_at.toISOString(),
+        updated_at: payment.updated_at.toISOString(),
+      }));
+  }
+
+  private deriveLegacyInvoiceStatusFromLedger(invoice: InvoiceEntity) {
+    const ledgerSummary = this.summarizeInvoiceLedger(invoice);
+
+    return {
+      status:
+        ledgerSummary.lifecycleStatus === "paid" || ledgerSummary.lifecycleStatus === "overpaid"
+          ? ("paid" as InvoiceStatus)
+          : ("unpaid" as InvoiceStatus),
+      paidAt:
+        ledgerSummary.lifecycleStatus === "paid" || ledgerSummary.lifecycleStatus === "overpaid"
+          ? ledgerSummary.paidAt
+          : null,
+    };
+  }
+
+  private async syncInvoiceJobPaymentState(
+    invoice: InvoiceEntity,
+    job: JobEntity,
+    actor: ActorContext & { profile: ProfileEntity },
+  ) {
+    const legacyState = this.deriveLegacyInvoiceStatusFromLedger(invoice);
+
+    if (invoice.status !== legacyState.status || this.toIsoString(invoice.paid_at) !== this.toIsoString(legacyState.paidAt)) {
+      invoice.status = legacyState.status;
+      invoice.paid_at = legacyState.paidAt;
+      await this.invoicesRepository.save(invoice);
+    }
+
+    if (legacyState.status === "paid" && job.status !== "paid" && canTransitionJobStatus(job.status, "paid")) {
+      await this.jobsRepository.update(
+        {
+          id: job.id,
+        },
+        {
+          status: "paid",
+          paid_at: legacyState.paidAt,
+          updated_by_auth_user_id: actor.user.id,
+        },
+      );
+
+      await this.jobStatusEventsRepository.save(
+        this.jobStatusEventsRepository.create({
+          job_id: job.id,
+          author_profile_id: actor.profile.id,
+          status: "paid",
+          note: "Invoice marked paid from payment ledger.",
+        }),
+      );
+    }
+
+    if (legacyState.status === "unpaid" && job.status === "paid") {
+      await this.jobsRepository.update(
+        {
+          id: job.id,
+        },
+        {
+          status: "completed",
+          paid_at: null,
+          updated_by_auth_user_id: actor.user.id,
+        },
+      );
+
+      await this.jobStatusEventsRepository.save(
+        this.jobStatusEventsRepository.create({
+          job_id: job.id,
+          author_profile_id: actor.profile.id,
+          status: "completed",
+          note: "Invoice payment ledger no longer indicates paid in full.",
+        }),
+      );
+    }
+  }
+
+  private buildInvoiceListItem(invoice: InvoiceEntity) {
+    const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
+    const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
+    const ledgerSummary = this.summarizeInvoiceLedger(invoice);
+
+    return {
+      id: invoice.id,
+      job_id: invoice.job_id,
+      document_number: this.buildInvoiceDocumentNumber(invoice),
+      total_cents: ledgerSummary.totalCents,
+      amount_paid_cents: ledgerSummary.netPaidCents,
+      refunded_cents: ledgerSummary.refundedCents,
+      balance_cents: ledgerSummary.balanceCents,
+      lifecycle_status: ledgerSummary.lifecycleStatus,
+      status: invoice.status,
+      issued_at: invoice.issued_at?.toISOString() ?? invoice.created_at.toISOString(),
+      customer_name: customer?.full_name ?? "Customer pending",
+      job_title: job?.title ?? "Job",
+    };
+  }
+
+  private buildInvoiceLineItemResponse(invoice: InvoiceEntity) {
+    return (invoice.line_items ?? []).map((lineItem) => ({
+      id: lineItem.id,
+      invoice_id: lineItem.invoice_id,
+      pricebook_item_id: lineItem.pricebook_item_id,
+      sku_snapshot: lineItem.sku_snapshot,
+      name_snapshot: lineItem.name_snapshot,
+      description_snapshot: lineItem.description_snapshot,
+      item_type_snapshot: lineItem.item_type_snapshot,
+      unit_of_measure_snapshot: lineItem.unit_of_measure_snapshot,
+      unit_price_cents_snapshot: lineItem.unit_price_cents_snapshot,
+      base_cost_cents_snapshot: lineItem.base_cost_cents_snapshot,
+      material_cost_cents_snapshot: lineItem.material_cost_cents_snapshot,
+      labor_cost_cents_snapshot: lineItem.labor_cost_cents_snapshot,
+      estimated_labor_minutes_snapshot: lineItem.estimated_labor_minutes_snapshot,
+      warranty_months_snapshot: lineItem.warranty_months_snapshot,
+      quantity: lineItem.quantity,
+      line_subtotal_cents: lineItem.line_subtotal_cents,
+      sort_order: lineItem.sort_order,
+      created_at: lineItem.created_at.toISOString(),
+      updated_at: lineItem.updated_at.toISOString(),
+    }));
+  }
+
+  private buildQuoteLineItemResponse(quote: QuoteEntity) {
+    return (quote.line_items ?? []).map((lineItem) => ({
+      id: lineItem.id,
+      quote_id: lineItem.quote_id,
+      pricebook_item_id: lineItem.pricebook_item_id,
+      sku_snapshot: lineItem.sku_snapshot,
+      name_snapshot: lineItem.name_snapshot,
+      description_snapshot: lineItem.description_snapshot,
+      item_type_snapshot: lineItem.item_type_snapshot,
+      unit_of_measure_snapshot: lineItem.unit_of_measure_snapshot,
+      unit_price_cents_snapshot: lineItem.unit_price_cents_snapshot,
+      base_cost_cents_snapshot: lineItem.base_cost_cents_snapshot,
+      material_cost_cents_snapshot: lineItem.material_cost_cents_snapshot,
+      labor_cost_cents_snapshot: lineItem.labor_cost_cents_snapshot,
+      estimated_labor_minutes_snapshot: lineItem.estimated_labor_minutes_snapshot,
+      warranty_months_snapshot: lineItem.warranty_months_snapshot,
+      quantity: lineItem.quantity,
+      line_subtotal_cents: lineItem.line_subtotal_cents,
+      sort_order: lineItem.sort_order,
+      created_at: lineItem.created_at.toISOString(),
+      updated_at: lineItem.updated_at.toISOString(),
+    }));
+  }
+
+  private async buildDocumentLineDrafts(lineItems: DocumentLineItemInput[]) {
+    return this.documentSnapshotService.buildLineDrafts(lineItems);
+  }
+
+  @Get("invoices")
+  async listInvoices(
+    @Req() request: RequestWithActor,
+    @Query("customerId") customerId?: string,
+  ) {
+    const actor = this.requireActor(request);
+
+    if (!actorHasPermission(actor, "invoices.view") && !actorHasPermission(actor, "invoices.assigned.view")) {
+      apiError(403, "invoice_view_forbidden", "This account cannot view invoices.");
+    }
+
+    try {
+      const invoices = await this.invoicesRepository.find({
+        relations: {
+          job: {
+            customer: true,
+          },
+          payments: true,
+        },
+        order: {
+          issued_at: "DESC",
+          created_at: "DESC",
+        },
+      });
+
+      const visibleInvoices = invoices.filter((invoice) => {
+        const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
+
+        if (!job) {
+          return actorHasPermission(actor, "invoices.view");
+        }
+
+        return canAccessInvoiceResource(actor, job.assigned_technician_id);
+      });
+
+      const filteredInvoices = customerId
+        ? visibleInvoices.filter((invoice) => {
+          const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
+          return job?.customer_id === customerId;
+        })
+        : visibleInvoices;
+
+      return apiSuccess(filteredInvoices.map((invoice) => this.buildInvoiceListItem(invoice)));
+    } catch (error) {
+      apiError(500, "invoice_list_failed", "The invoice list could not be loaded.", error);
+    }
+  }
+
+  @Get("invoices/:invoiceId")
+  async getInvoice(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+  ) {
+    const actor = this.requireActor(request);
+
+    try {
+      const invoice = await this.invoicesRepository.findOne({
+        where: {
+          id: invoiceId,
+        },
+        relations: {
+          job: {
+            customer: true,
+          },
+          line_items: true,
+          payments: true,
+        },
+      });
+
+      if (!invoice) {
+        apiError(404, "invoice_not_found", "The invoice could not be found.");
+      }
+
+      const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
+
+      if (!canAccessInvoiceResource(actor, job?.assigned_technician_id)) {
+        apiError(403, "invoice_access_denied", "You do not have access to this invoice.");
+      }
+
+      const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
+      const listItem = this.buildInvoiceListItem(invoice);
+      const ledgerSummary = this.summarizeInvoiceLedger(invoice);
+
+      return apiSuccess({
+        id: listItem.id,
+        job_id: listItem.job_id,
+        invoice_id: listItem.document_number,
+        document_number: listItem.document_number,
+        description: invoice.description ?? "",
+        amount_cents: invoice.amount_cents,
+        subtotal_cents: invoice.subtotal_cents || invoice.amount_cents,
+        tax_rate_bps_snapshot: invoice.tax_rate_bps_snapshot,
+        tax_cents: invoice.tax_cents,
+        total_cents: invoice.total_cents || listItem.total_cents,
+        amount_paid_cents: listItem.amount_paid_cents,
+        refunded_cents: listItem.refunded_cents,
+        balance_cents: listItem.balance_cents,
+        lifecycle_status: listItem.lifecycle_status,
+        status: listItem.status,
+        issued_at: listItem.issued_at,
+        paid_at: this.toIsoString(ledgerSummary.paidAt),
+        approval_requested_at: this.toIsoString(invoice.approval_requested_at),
+        approved_at: this.toIsoString(invoice.approved_at),
+        signature_requested_at: this.toIsoString(invoice.signature_requested_at),
+        signature_requested: Boolean(invoice.signature_requested_at),
+        signed_at: this.toIsoString(invoice.signed_at),
+        signed_by_name: invoice.signed_by_name,
+        is_locked: this.isDocumentLocked(invoice.approved_at, invoice.signed_at),
+        line_items: this.buildInvoiceLineItemResponse(invoice),
+        payments: this.buildInvoicePaymentResponse(invoice),
+        customer_name: listItem.customer_name,
+        job_title: listItem.job_title,
+        job: job
+          ? {
+            id: job.id,
+            title: job.title,
+            status: job.status,
+            assigned_technician_id: job.assigned_technician_id,
+          }
+          : null,
+        customer: customer
+          ? {
+            id: customer.id,
+            full_name: customer.full_name,
+            company_name: customer.company_name,
+            email: customer.email,
+            phone: customer.phone,
+            service_address_line_1: customer.service_address_line_1,
+            service_address_line_2: customer.service_address_line_2,
+            service_city: customer.service_city,
+            service_state_or_region: customer.service_state_or_region,
+            service_postal_code: customer.service_postal_code,
+            notes: customer.notes,
+          }
+          : null,
+      });
+    } catch (error) {
+      apiError(400, "invoice_lookup_failed", "The invoice could not be loaded.", error);
+    }
+  }
+
+  @Post("invoices/:invoiceId/request-approval")
+  async requestInvoiceApproval(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+  ) {
+    this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+
+    try {
+      const invoice = await this.invoicesRepository.findOne({
+        where: {
+          id: invoiceId,
+        },
+      });
+
+      if (!invoice) {
+        apiError(404, "invoice_not_found", "The invoice could not be found.");
+      }
+
+      invoice.approval_requested_at = invoice.approval_requested_at ?? new Date();
+      await this.invoicesRepository.save(invoice);
+
+      return apiSuccess({ ok: true });
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "invoice_request_approval_failed", "The invoice approval request could not be saved.", error);
+    }
+  }
+
+  @Post("invoices/:invoiceId/approve")
+  async approveInvoice(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+  ) {
+    this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+
+    try {
+      const invoice = await this.invoicesRepository.findOne({
+        where: {
+          id: invoiceId,
+        },
+      });
+
+      if (!invoice) {
+        apiError(404, "invoice_not_found", "The invoice could not be found.");
+      }
+
+      const timestamp = new Date();
+      invoice.approval_requested_at = invoice.approval_requested_at ?? timestamp;
+      invoice.approved_at = invoice.approved_at ?? timestamp;
+      await this.invoicesRepository.save(invoice);
+
+      return apiSuccess({ ok: true });
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "invoice_approve_failed", "The invoice could not be approved.", error);
+    }
+  }
+
+  @Post("invoices/:invoiceId/request-signature")
+  async requestInvoiceSignature(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+  ) {
+    this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+
+    try {
+      const invoice = await this.invoicesRepository.findOne({
+        where: {
+          id: invoiceId,
+        },
+      });
+
+      if (!invoice) {
+        apiError(404, "invoice_not_found", "The invoice could not be found.");
+      }
+
+      invoice.signature_requested_at = invoice.signature_requested_at ?? new Date();
+      await this.invoicesRepository.save(invoice);
+
+      return apiSuccess({ ok: true });
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "invoice_request_signature_failed", "The invoice signature request could not be saved.", error);
+    }
+  }
+
+  @Post("invoices/:invoiceId/sign")
+  async signInvoice(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+    @Body() body: unknown,
+  ) {
+    this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+
+    try {
+      const payload = parseSignDocumentPayload(body);
+      const invoice = await this.invoicesRepository.findOne({
+        where: {
+          id: invoiceId,
+        },
+      });
+
+      if (!invoice) {
+        apiError(404, "invoice_not_found", "The invoice could not be found.");
+      }
+
+      const timestamp = new Date();
+      invoice.approval_requested_at = invoice.approval_requested_at ?? timestamp;
+      invoice.approved_at = invoice.approved_at ?? timestamp;
+      invoice.signature_requested_at = invoice.signature_requested_at ?? timestamp;
+      invoice.signed_at = invoice.signed_at ?? timestamp;
+      invoice.signed_by_name = payload.signedByName;
+      await this.invoicesRepository.save(invoice);
+
+      return apiSuccess({ ok: true });
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "invoice_sign_failed", "The invoice could not be signed.", error);
+    }
+  }
+
+  @Post("invoices/:invoiceId/open")
+  async openInvoiceDocument(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+  ) {
+    this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+
+    try {
+      const invoice = await this.invoicesRepository.findOne({
+        where: {
+          id: invoiceId,
+        },
+      });
+
+      if (!invoice) {
+        apiError(404, "invoice_not_found", "The invoice could not be found.");
+      }
+
+      invoice.approval_requested_at = null;
+      invoice.approved_at = null;
+      invoice.signature_requested_at = null;
+      invoice.signed_at = null;
+      invoice.signed_by_name = null;
+      await this.invoicesRepository.save(invoice);
+
+      return apiSuccess({ ok: true });
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "invoice_open_failed", "The invoice could not be opened for changes.", error);
+    }
+  }
+
+  @Post("invoices/:invoiceId/payments")
+  async recordInvoicePayment(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+    @Body() body: unknown,
+  ) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "invoices.payment.manage",
+      "invoice_payment_manage_forbidden",
+      "This account cannot record invoice payments.",
+    );
+
+    try {
+      const payload = parseRecordInvoicePaymentPayload(body);
+
+      if (payload.amountCents <= 0) {
+        apiError(400, "invalid_invoice_payment_amount", "Invoice payments must be greater than zero.");
+      }
+
+      const invoice = await this.invoicesRepository.findOne({
+        where: {
+          id: invoiceId,
+        },
+        relations: {
+          payments: true,
+          job: true,
+        },
+      });
+
+      if (!invoice) {
+        apiError(404, "invoice_not_found", "The invoice could not be found.");
+      }
+
+      const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
+
+      if (!job) {
+        apiError(404, "invoice_job_not_found", "The related job could not be found.");
+      }
+
+      const occurredAt = payload.occurredAt
+        ? new Date(payload.occurredAt)
+        : new Date();
+
+      await this.invoicePaymentsRepository.save(
+        this.invoicePaymentsRepository.create({
+          invoice_id: invoice.id,
+          entry_type: payload.entryType,
+          amount_cents: payload.amountCents,
+          method: payload.method,
+          reference: payload.reference,
+          note: payload.note,
+          occurred_at: occurredAt,
+          created_by_auth_user_id: actor.user.id,
+        }),
+      );
+
+      const refreshedInvoice = await this.invoicesRepository.findOne({
+        where: {
+          id: invoice.id,
+        },
+        relations: {
+          payments: true,
+          job: true,
+        },
+      });
+
+      if (!refreshedInvoice) {
+        apiError(404, "invoice_not_found", "The invoice could not be found.");
+      }
+
+      await this.syncInvoiceJobPaymentState(refreshedInvoice, job, actor);
+
+      return apiSuccess({
+        ok: true,
+      });
+    } catch (error) {
+      apiError(400, "invalid_invoice_payment_payload", "The invoice payment payload is invalid.", error);
+    }
+  }
+
+  @Get("estimates")
+  async listEstimates(
+    @Req() request: RequestWithActor,
+    @Query("q") q?: string,
+    @Query("status") status?: string,
+    @Query("lifecycleStatus") lifecycleStatus?: string,
+    @Query("customerId") customerId?: string,
+    @Query("jobId") jobId?: string,
+  ) {
+    const actor = this.requireActor(request);
+
+    if (!actorHasPermission(actor, "estimates.view") && !actorHasPermission(actor, "estimates.assigned.view")) {
+      apiError(403, "estimate_view_forbidden", "This account cannot view estimates.");
+    }
+
+    try {
+      const quotes = await this.quotesRepository.find({
+        relations: {
+          job: {
+            customer: true,
+            invoice: true,
+          },
+        },
+        order: {
+          updated_at: "DESC",
+        },
+      });
+
+      const normalizedQuery = (q ?? "").trim().toLowerCase();
+      const normalizedStatus = (status ?? "").trim().toLowerCase();
+      const normalizedLifecycleStatus = (lifecycleStatus ?? "").trim().toLowerCase();
+      const normalizedCustomerId = (customerId ?? "").trim();
+      const normalizedJobId = (jobId ?? "").trim();
+
+      const estimates = quotes
+        .filter((quote) => {
+          const relatedJob = this.relationValue(quote.job as RelatedValue<JobEntity>);
+          const relatedCustomer = this.relationValue(relatedJob?.customer as RelatedValue<CustomerEntity>);
+
+          if (!relatedJob || !relatedCustomer) {
+            return false;
+          }
+
+          if (!canAccessEstimateResource(actor, relatedJob.assigned_technician_id)) {
+            return false;
+          }
+
+          if (normalizedCustomerId && relatedCustomer.id !== normalizedCustomerId) {
+            return false;
+          }
+
+          if (normalizedJobId && relatedJob.id !== normalizedJobId) {
+            return false;
+          }
+
+          if (normalizedStatus && quote.status !== normalizedStatus) {
+            return false;
+          }
+
+          const lifecycle =
+            quote.status === "rejected"
+              ? "void"
+              : quote.status === "approved"
+                ? relatedJob.invoice
+                  ? "converted"
+                  : "approved"
+                : quote.status;
+
+          if (normalizedLifecycleStatus && lifecycle !== normalizedLifecycleStatus) {
+            return false;
+          }
+
+          const searchableText = [
+            relatedCustomer.full_name,
+            relatedJob.title,
+            this.buildEstimateDocumentNumber(quote),
+            quote.description,
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          if (normalizedQuery && !searchableText.includes(normalizedQuery)) {
+            return false;
+          }
+
+          return true;
+        })
+        .map((quote) => {
+          const relatedJob = this.relationValue(quote.job as RelatedValue<JobEntity>);
+          const relatedCustomer = this.relationValue(relatedJob?.customer as RelatedValue<CustomerEntity>);
+          const lifecycle =
+            quote.status === "rejected"
+              ? "void"
+              : quote.status === "approved"
+                ? relatedJob?.invoice
+                  ? "converted"
+                  : "approved"
+                : quote.status;
+
+          return {
+            id: quote.id,
+            job_id: relatedJob?.id ?? quote.job_id,
+            customer_id: relatedCustomer?.id ?? "",
+            customer_name: relatedCustomer?.full_name ?? "Customer pending",
+            job_title: relatedJob?.title ?? "Job",
+            document_number: this.buildEstimateDocumentNumber(quote),
+            lifecycle_status: lifecycle,
+            description: quote.description,
+            price_cents: quote.price_cents,
+            status: quote.status,
+            sent_at: this.toIsoString(quote.sent_at),
+            approved_at: this.toIsoString(quote.approved_at),
+          };
+        });
+
+      return apiSuccess(estimates);
+    } catch (error) {
+      apiError(500, "estimate_list_failed", "The estimates list could not be loaded.", error);
+    }
+  }
+
+  @Get("estimates/:estimateId")
+  async getEstimate(
+    @Req() request: RequestWithActor,
+    @Param("estimateId") estimateId: string,
+  ) {
+    const actor = this.requireActor(request);
+
+    try {
+      const quote = await this.quotesRepository.findOne({
+        where: {
+          id: estimateId,
+        },
+        relations: {
+          job: {
+            customer: true,
+            invoice: true,
+          },
+          line_items: true,
+        },
+      });
+
+      if (!quote) {
+        apiError(404, "estimate_not_found", "The estimate could not be found.");
+      }
+
+      const job = this.relationValue(quote.job as RelatedValue<JobEntity>);
+      const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
+
+      if (!job || !customer) {
+        apiError(404, "estimate_not_found", "The estimate could not be found.");
+      }
+
+      if (!canAccessEstimateResource(actor, job.assigned_technician_id)) {
+        apiError(403, "estimate_access_denied", "You do not have access to this estimate.");
+      }
+
+      const lifecycle =
+        quote.status === "rejected"
+          ? "void"
+          : quote.status === "approved"
+            ? job.invoice
+              ? "converted"
+              : "approved"
+            : quote.status;
+      const totalCents = quote.total_cents || quote.price_cents;
+
+      return apiSuccess({
+        id: quote.id,
+        estimate_id: this.buildEstimateDocumentNumber(quote),
+        document_number: this.buildEstimateDocumentNumber(quote),
+        job_id: job.id,
+        customer_id: customer.id,
+        customer_name: customer.full_name,
+        job_title: job.title,
+        lifecycle_status: lifecycle,
+        description: quote.description,
+        price_cents: quote.price_cents,
+        subtotal_cents: quote.subtotal_cents || quote.price_cents,
+        tax_rate_bps_snapshot: quote.tax_rate_bps_snapshot,
+        tax_cents: quote.tax_cents,
+        total_cents: totalCents,
+        status: quote.status,
+        sent_at: this.toIsoString(quote.sent_at),
+        approval_requested_at: this.toIsoString(quote.approval_requested_at),
+        approved_at: this.toIsoString(quote.approved_at),
+        signature_requested_at: this.toIsoString(quote.signature_requested_at),
+        signature_requested: Boolean(quote.signature_requested_at),
+        signed_at: this.toIsoString(quote.signed_at),
+        signed_by_name: quote.signed_by_name,
+        is_locked: this.isDocumentLocked(quote.approved_at, quote.signed_at),
+        line_items: this.buildQuoteLineItemResponse(quote),
+      });
+    } catch (error) {
+      apiError(400, "estimate_lookup_failed", "The estimate could not be loaded.", error);
+    }
+  }
+
+  @Post("estimates/:estimateId/request-approval")
+  async requestEstimateApproval(
+    @Req() request: RequestWithActor,
+    @Param("estimateId") estimateId: string,
+  ) {
+    this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+
+    try {
+      const quote = await this.quotesRepository.findOne({
+        where: {
+          id: estimateId,
+        },
+      });
+
+      if (!quote) {
+        apiError(404, "estimate_not_found", "The estimate could not be found.");
+      }
+
+      quote.approval_requested_at = quote.approval_requested_at ?? new Date();
+      await this.quotesRepository.save(quote);
+
+      return apiSuccess({ ok: true });
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "estimate_request_approval_failed", "The estimate approval request could not be saved.", error);
+    }
+  }
+
+  @Post("estimates/:estimateId/approve")
+  async approveEstimate(
+    @Req() request: RequestWithActor,
+    @Param("estimateId") estimateId: string,
+  ) {
+    this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+
+    try {
+      const quote = await this.quotesRepository.findOne({
+        where: {
+          id: estimateId,
+        },
+      });
+
+      if (!quote) {
+        apiError(404, "estimate_not_found", "The estimate could not be found.");
+      }
+
+      const timestamp = new Date();
+      quote.approval_requested_at = quote.approval_requested_at ?? timestamp;
+      quote.approved_at = quote.approved_at ?? timestamp;
+      await this.quotesRepository.save(quote);
+
+      return apiSuccess({ ok: true });
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "estimate_approve_failed", "The estimate could not be approved.", error);
+    }
+  }
+
+  @Post("estimates/:estimateId/request-signature")
+  async requestEstimateSignature(
+    @Req() request: RequestWithActor,
+    @Param("estimateId") estimateId: string,
+  ) {
+    this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+
+    try {
+      const quote = await this.quotesRepository.findOne({
+        where: {
+          id: estimateId,
+        },
+      });
+
+      if (!quote) {
+        apiError(404, "estimate_not_found", "The estimate could not be found.");
+      }
+
+      quote.signature_requested_at = quote.signature_requested_at ?? new Date();
+      await this.quotesRepository.save(quote);
+
+      return apiSuccess({ ok: true });
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "estimate_request_signature_failed", "The estimate signature request could not be saved.", error);
+    }
+  }
+
+  @Post("estimates/:estimateId/sign")
+  async signEstimate(
+    @Req() request: RequestWithActor,
+    @Param("estimateId") estimateId: string,
+    @Body() body: unknown,
+  ) {
+    this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+
+    try {
+      const payload = parseSignDocumentPayload(body);
+      const quote = await this.quotesRepository.findOne({
+        where: {
+          id: estimateId,
+        },
+      });
+
+      if (!quote) {
+        apiError(404, "estimate_not_found", "The estimate could not be found.");
+      }
+
+      const timestamp = new Date();
+      quote.approval_requested_at = quote.approval_requested_at ?? timestamp;
+      quote.approved_at = quote.approved_at ?? timestamp;
+      quote.signature_requested_at = quote.signature_requested_at ?? timestamp;
+      quote.signed_at = quote.signed_at ?? timestamp;
+      quote.signed_by_name = payload.signedByName;
+      await this.quotesRepository.save(quote);
+
+      return apiSuccess({ ok: true });
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "estimate_sign_failed", "The estimate could not be signed.", error);
+    }
+  }
+
+  @Put("jobs/:jobId/invoice")
+  async upsertInvoice(
+    @Req() request: RequestWithActor,
+    @Param("jobId") jobId: string,
+    @Body() body: unknown,
+  ) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "invoices.manage",
+      "invoice_manage_forbidden",
+      "This account cannot change invoices.",
+    );
+
+    try {
+      const payload = parseUpsertInvoicePayload(body);
+      const job = await this.jobsRepository.findOne({
+        where: {
+          id: jobId,
+        },
+      });
+
+      if (!job) {
+        apiError(404, "job_not_found", "The job could not be found.");
+      }
+
+      const existingInvoice = await this.invoicesRepository.findOne({
+        where: {
+          job_id: jobId,
+        },
+        relations: {
+          payments: true,
+        },
+      });
+
+      if (existingInvoice && this.isDocumentLocked(existingInvoice.approved_at, existingInvoice.signed_at)) {
+        this.throwDocumentLockedError("invoice");
+      }
+
+      const hasSnapshotLineItems = payload.lineItems !== undefined;
+      const invoiceLineDrafts = hasSnapshotLineItems
+        ? await this.buildDocumentLineDrafts(payload.lineItems ?? [])
+        : [];
+      const invoiceTotals = hasSnapshotLineItems
+        ? this.documentPricingService.computeSnapshotTotals(
+            invoiceLineDrafts.map((lineDraft) => ({
+              quantity: lineDraft.quantity,
+              unitPriceCents: lineDraft.unit_price_cents_snapshot,
+            })),
+            payload.taxRateBps ?? 0,
+          )
+        : this.documentPricingService.buildLegacyTotals(payload.amountCents);
+
+      const timestamp = new Date();
+      const paidAtTimestamp = this.formatSqlTimestamp(timestamp);
+      const invoiceDescription =
+        payload.description
+        ?? existingInvoice?.description
+        ?? `Invoice for ${job.title}`;
+      const paid_at = payload.status === "paid"
+        ? existingInvoice?.paid_at ?? (paidAtTimestamp as unknown as Date)
+        : null;
+
+      let invoice: InvoiceEntity;
+
+      if (existingInvoice) {
+        existingInvoice.description = invoiceDescription;
+        existingInvoice.amount_cents = invoiceTotals.totalCents;
+        existingInvoice.subtotal_cents = invoiceTotals.subtotalCents;
+        existingInvoice.tax_rate_bps_snapshot = invoiceTotals.taxRateBpsSnapshot;
+        existingInvoice.tax_cents = invoiceTotals.taxCents;
+        existingInvoice.total_cents = invoiceTotals.totalCents;
+        existingInvoice.status = payload.status;
+        existingInvoice.paid_at = paid_at;
+        invoice = await this.invoicesRepository.save(existingInvoice);
+      } else {
+        invoice = await this.invoicesRepository.save(
+          this.invoicesRepository.create({
+            job_id: jobId,
+            description: invoiceDescription,
+            amount_cents: invoiceTotals.totalCents,
+            subtotal_cents: invoiceTotals.subtotalCents,
+            tax_rate_bps_snapshot: invoiceTotals.taxRateBpsSnapshot,
+            tax_cents: invoiceTotals.taxCents,
+            total_cents: invoiceTotals.totalCents,
+            status: payload.status,
+            paid_at,
+          }),
+        );
+      }
+
+      await this.documentSnapshotService.replaceInvoiceLineItems(
+        invoice.id,
+        hasSnapshotLineItems ? invoiceLineDrafts : [],
+      );
+
+      if ((invoice.payments?.length ?? 0) > 0) {
+        await this.syncInvoiceJobPaymentState(invoice, job, actor);
+        return apiSuccess(invoice);
+      }
+
+      if (
+        payload.status === "paid"
+        && job.status !== "paid"
+        && canTransitionJobStatus(job.status, "paid")
+      ) {
+        await this.jobsRepository.update(
+          {
+            id: jobId,
+          },
+          {
+            status: "paid",
+            paid_at,
+            updated_by_auth_user_id: actor.user.id,
+          },
+        );
+
+        await this.jobStatusEventsRepository.save(
+          this.jobStatusEventsRepository.create({
+            job_id: jobId,
+            author_profile_id: actor.profile.id,
+            status: "paid",
+            note: "Invoice marked paid.",
+          }),
+        );
+      }
+
+      if (payload.status === "unpaid" && job.status === "paid") {
+        await this.jobsRepository.update(
+          {
+            id: jobId,
+          },
+          {
+            status: "completed",
+            paid_at: null,
+            updated_by_auth_user_id: actor.user.id,
+          },
+        );
+
+        await this.jobStatusEventsRepository.save(
+          this.jobStatusEventsRepository.create({
+            job_id: jobId,
+            author_profile_id: actor.profile.id,
+            status: "completed",
+            note: "Invoice payment status changed to unpaid.",
+          }),
+        );
+      }
+
+      return apiSuccess(invoice);
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "invalid_invoice_payload", "The invoice payload is invalid.", error);
+    }
+  }
+
+  @Post("jobs/:jobId/notes")
+  async createJobNote(
+    @Req() request: RequestWithActor,
+    @Param("jobId") jobId: string,
+    @Body() body: unknown,
+  ) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "jobs.notes.create",
+      "job_note_create_forbidden",
+      "This account cannot create job notes.",
+    );
+
+    try {
+      const payload = parseCreateJobNotePayload(body);
+      const job = await this.jobsRepository.findOne({
+        where: {
+          id: jobId,
+        },
+      });
+
+      if (!job) {
+        apiError(404, "job_not_found", "The job could not be found.");
+      }
+
+      if (!canAccessJobResource(actor, job.assigned_technician_id)) {
+        apiError(403, "job_access_denied", "You do not have access to this job.");
+      }
+
+      if (!payload.findings && !payload.recommendations && payload.photoUrls.length === 0) {
+        apiError(400, "empty_job_note", "Add findings or recommendations before saving a note.");
+      }
+
+      const result = await this.jobNotesRepository.save(
+        this.jobNotesRepository.create({
+          job_id: jobId,
+          author_profile_id: actor.profile?.id ?? null,
+          findings: payload.findings,
+          recommendations: payload.recommendations,
+          photo_urls: payload.photoUrls,
+        }),
+      );
+      result.author_profile = actor.profile ?? null;
+
+      return apiSuccess(this.buildJobNoteResponse(result));
+    } catch (error) {
+      apiError(400, "invalid_job_note_payload", "The job note payload is invalid.", error);
+    }
+  }
+
+  @Get("leads")
+  async listLeads(
+    @Req() request: RequestWithActor,
+    @Query("status") status?: string,
+  ) {
+    this.requireCrmPermissionActor(request, "leads.view", "lead_view_forbidden", "This account cannot view leads.");
+
+    try {
+      const leads = await this.leadsRepository.find({
+        where: status ? { status: status as LeadEntity["status"] } : {},
+        order: {
+          created_at: "DESC",
+        },
+      });
+
+      return apiSuccess(leads);
+    } catch (error) {
+      apiError(500, "lead_list_failed", "The lead queue could not be loaded.", error);
+    }
+  }
+
+  @Post("leads")
+  async createLead(@Req() request: RequestWithActor, @Body() body: unknown) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "leads.manage",
+      "lead_manage_forbidden",
+      "This account cannot change leads.",
+    );
+
+    try {
+      const payload = parseCreateLeadPayload(body);
+      const lead = await this.leadsRepository.save(
+        this.leadsRepository.create({
+          full_name: payload.fullName,
+          phone: payload.phone,
+          email: payload.email,
+          service_address_line_1: payload.serviceAddressLine1,
+          service_address_line_2: payload.serviceAddressLine2,
+          service_city: payload.serviceCity,
+          service_state_or_region: payload.serviceStateOrRegion,
+          service_postal_code: payload.servicePostalCode,
+          source: payload.source,
+          service_type: payload.serviceType,
+          description: payload.description,
+          created_by_auth_user_id: actor.user.id,
+        }),
+      );
+
+      return apiSuccess(lead);
+    } catch (error) {
+      apiError(400, "invalid_lead_payload", "The lead payload is invalid.", error);
+    }
+  }
+
+  @Get("leads/:leadId")
+  async getLead(@Req() request: RequestWithActor, @Param("leadId") leadId: string) {
+    this.requireCrmPermissionActor(request, "leads.view", "lead_view_forbidden", "This account cannot view leads.");
+
+    try {
+      const lead = await this.leadsRepository.findOne({
+        where: {
+          id: leadId,
+        },
+        relations: {
+          converted_job: true,
+        },
+      });
+
+      if (!lead) {
+        apiError(404, "lead_not_found", "The lead could not be found.");
+      }
+
+      return apiSuccess({
+        ...lead,
+        converted_job: lead.converted_job
+          ? {
+            id: lead.converted_job.id,
+            title: lead.converted_job.title,
+            status: lead.converted_job.status,
+            scheduled_for: lead.converted_job.scheduled_for,
+          }
+          : null,
+      });
+    } catch (error) {
+      apiError(400, "lead_lookup_failed", "The lead could not be loaded.", error);
+    }
+  }
+
+  @Patch("leads/:leadId")
+  async updateLead(
+    @Req() request: RequestWithActor,
+    @Param("leadId") leadId: string,
+    @Body() body: unknown,
+  ) {
+    this.requireCrmPermissionActor(request, "leads.manage", "lead_manage_forbidden", "This account cannot change leads.");
+
+    try {
+      const payload = parseUpdateLeadPayload(body);
+
+      if (payload.status === "converted") {
+        apiError(
+          400,
+          "lead_status_managed_by_conversion",
+          "Use the conversion endpoint to move a lead into the converted state.",
+        );
+      }
+
+      const lead = await this.leadsRepository.findOne({
+        where: {
+          id: leadId,
+        },
+      });
+
+      if (!lead) {
+        apiError(404, "lead_not_found", "The lead could not be found.");
+      }
+
+      if (payload.fullName !== undefined) {
+        lead.full_name = payload.fullName;
+      }
+
+      if (payload.phone !== undefined) {
+        lead.phone = payload.phone;
+      }
+
+      if (payload.email !== undefined) {
+        lead.email = payload.email;
+      }
+
+      if (payload.serviceAddressLine1 !== undefined) {
+        lead.service_address_line_1 = payload.serviceAddressLine1;
+      }
+
+      if (payload.serviceAddressLine2 !== undefined) {
+        lead.service_address_line_2 = payload.serviceAddressLine2;
+      }
+
+      if (payload.serviceCity !== undefined) {
+        lead.service_city = payload.serviceCity;
+      }
+
+      if (payload.serviceStateOrRegion !== undefined) {
+        lead.service_state_or_region = payload.serviceStateOrRegion;
+      }
+
+      if (payload.servicePostalCode !== undefined) {
+        lead.service_postal_code = payload.servicePostalCode;
+      }
+
+      if (payload.source !== undefined) {
+        lead.source = payload.source;
+      }
+
+      if (payload.serviceType !== undefined) {
+        lead.service_type = payload.serviceType;
+      }
+
+      if (payload.description !== undefined) {
+        lead.description = payload.description;
+      }
+
+      if (payload.status !== undefined) {
+        lead.status = payload.status;
+      }
+
+      const result = await this.leadsRepository.save(lead);
+
+      return apiSuccess(result);
+    } catch (error) {
+      apiError(400, "invalid_lead_update_payload", "The lead update payload is invalid.", error);
+    }
+  }
+
+  @Post("leads/:leadId/convert")
+  async convertLead(
+    @Req() request: RequestWithActor,
+    @Param("leadId") leadId: string,
+    @Body() body: unknown,
+  ) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "leads.manage",
+      "lead_manage_forbidden",
+      "This account cannot change leads.",
+    );
+
+    try {
+      const payload = parseConvertLeadPayload(body);
+      const lead = await this.leadsRepository.findOne({
+        where: {
+          id: leadId,
+        },
+      });
+
+      if (!lead) {
+        apiError(404, "lead_not_found", "The lead could not be found.");
+      }
+
+      if (lead.converted_job_id || lead.status === "converted") {
+        apiError(400, "lead_already_converted", "This lead has already been converted into a job.");
+      }
+
+      const customer = await this.customersRepository.save(
+        this.customersRepository.create({
+          full_name: lead.full_name,
+          phone: lead.phone,
+          email: lead.email,
+          service_address_line_1: lead.service_address_line_1,
+          service_address_line_2: lead.service_address_line_2,
+          service_city: lead.service_city,
+          service_state_or_region: lead.service_state_or_region,
+          service_postal_code: lead.service_postal_code,
+          source: lead.source,
+          preferred_service_type: lead.service_type,
+          notes: lead.description,
+        }),
+      );
+
+      const job = await this.jobsRepository.save(
+        this.jobsRepository.create({
+          customer_id: customer.id,
+          service_id: payload.serviceId,
+          assigned_technician_id: payload.assignedTechnicianId,
+          title: payload.title,
+          description: payload.description ?? lead.description,
+          lead_source: lead.source,
+          requested_service_type: lead.service_type,
+          status: "scheduled",
+          service_address_line_1: lead.service_address_line_1,
+          service_address_line_2: lead.service_address_line_2,
+          service_city: lead.service_city,
+          service_state_or_region: lead.service_state_or_region,
+          service_postal_code: lead.service_postal_code,
+          scheduled_for: payload.scheduledFor ? new Date(payload.scheduledFor) : null,
+          scheduled_window: payload.scheduledWindow,
+          requested_at: lead.created_at,
+          created_by_auth_user_id: actor.user.id,
+          updated_by_auth_user_id: actor.user.id,
+        }),
+      );
+
+      lead.status = "converted";
+      lead.converted_job_id = job.id;
+      const updatedLead = await this.leadsRepository.save(lead);
+
+      await this.jobStatusEventsRepository.save(
+        this.jobStatusEventsRepository.create({
+          job_id: job.id,
+          author_profile_id: actor.profile.id,
+          status: "scheduled",
+          note: "Lead converted to scheduled job.",
+        }),
+      );
+
+      const detail = await this.loadJobDetail(job.id);
+
+      return apiSuccess({
+        lead: updatedLead,
+        customer,
+        job: detail ? this.buildJobDetailResponse(detail) : job,
+      });
+    } catch (error) {
+      apiError(400, "invalid_lead_conversion_payload", "The lead conversion payload is invalid.", error);
+    }
+  }
+
+  @Get("technicians")
+  async listTechnicians(
+    @Req() request: RequestWithActor,
+    @Query("active") active?: string,
+  ) {
+    this.requireCrmPermissionActor(
+      request,
+      "jobs.update",
+      "technician_list_forbidden",
+      "This account cannot view the technician roster.",
+    );
+
+    try {
+      const activeOnly = active === undefined ? true : active === "true";
+
+      const technicians = await this.techniciansRepository.find({
+        where: activeOnly ? { is_active: true } : {},
+        order: {
+          display_name: "ASC",
+        },
+      });
+
+      return apiSuccess(technicians);
+    } catch (error) {
+      apiError(500, "technician_list_failed", "The technician roster could not be loaded.", error);
+    }
+  }
+
+  @Get("customers")
+  async listCustomers(@Req() request: RequestWithActor) {
+    this.requireCrmPermissionActor(request, "customers.view", "customer_view_forbidden", "This account cannot view customers.");
+
+    try {
+      const customers = await this.customersRepository.find({
+        order: {
+          updated_at: "DESC",
+        },
+      });
+
+      if (customers.length === 0) {
+        return apiSuccess([] as Array<CustomerEntity & { relatedJobs: JobEntity[] }>);
+      }
+
+      const customerIds = customers.map((customer) => customer.id);
+      const jobs = await this.jobsRepository.find({
+        where: {
+          customer_id: In(customerIds),
+        },
+        relations: {
+          technician: true,
+        },
+        order: {
+          scheduled_for: "ASC",
+          updated_at: "DESC",
+        },
+      });
+
+      const jobsByCustomer = new Map<string, JobEntity[]>();
+
+      for (const job of jobs) {
+        const existing = jobsByCustomer.get(job.customer_id) ?? [];
+        existing.push(job);
+        jobsByCustomer.set(job.customer_id, existing);
+      }
+
+      const result = customers.map((customer) => ({
+        ...customer,
+        relatedJobs: jobsByCustomer.get(customer.id) ?? [],
+      }));
+
+      return apiSuccess(result);
+    } catch (error) {
+      apiError(500, "customer_list_failed", "The customer list could not be loaded.", error);
+    }
+  }
+
+  @Get("customers/:customerId")
+  async getCustomer(
+    @Req() request: RequestWithActor,
+    @Param("customerId") customerId: string,
+  ) {
+    this.requireCrmPermissionActor(request, "customers.view", "customer_view_forbidden", "This account cannot view customers.");
+
+    try {
+      const [customer, relatedJobs] = await Promise.all([
+        this.customersRepository.findOne({
+          where: {
+            id: customerId,
+          },
+        }),
+        this.jobsRepository.find({
+          where: {
+            customer_id: customerId,
+          },
+          relations: {
+            technician: true,
+          },
+          order: {
+            scheduled_for: "ASC",
+            updated_at: "DESC",
+          },
+        }),
+      ]);
+
+      if (!customer) {
+        apiError(404, "customer_not_found", "The customer could not be found.");
+      }
+
+      return apiSuccess({
+        customer,
+        relatedJobs,
+      });
+    } catch (error) {
+      apiError(400, "customer_lookup_failed", "The customer could not be loaded.", error);
+    }
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  private normalizeText(value: unknown, maxLength: number) {
+    if (typeof value !== "string") {
+      return null;
+    }
+
+    const normalizedValue = value.trim();
+
+    if (!normalizedValue) {
+      return null;
+    }
+
+    return normalizedValue.slice(0, maxLength);
+  }
+
+  private normalizeEmail(value: string | null) {
+    if (!value) {
+      return null;
+    }
+
+    return value.trim().toLowerCase();
+  }
+
+  private normalizePhone(value: string | null) {
+    if (!value) {
+      return null;
+    }
+
+    const digits = value.replace(/\D+/g, "");
+
+    return digits || null;
+  }
+
+  private normalizeLookupToken(value: string | null) {
+    if (!value) {
+      return null;
+    }
+
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
+  private formatSqlTimestamp(value: Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    const hours = String(value.getHours()).padStart(2, "0");
+    const minutes = String(value.getMinutes()).padStart(2, "0");
+    const seconds = String(value.getSeconds()).padStart(2, "0");
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+  private parseLegacyCreatedAt(value: string | null) {
+    if (!value) {
+      return null;
+    }
+
+    const normalizedValue = value.trim();
+
+    if (!normalizedValue) {
+      return null;
+    }
+
+    const directDate = new Date(normalizedValue);
+
+    if (!Number.isNaN(directDate.getTime())) {
+      return this.formatSqlTimestamp(directDate);
+    }
+
+    const match = normalizedValue.match(
+      /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})(?:[\s,T]+(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*(am|pm)?)?$/i,
+    );
+
+    if (!match) {
+      return null;
+    }
+
+    const [, monthValue, dayValue, yearValue, hourValue, minuteValue, secondValue, meridiem] = match;
+    const month = Number(monthValue);
+    const day = Number(dayValue);
+    const year = yearValue.length === 2 ? 2000 + Number(yearValue) : Number(yearValue);
+
+    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(day) || day < 1 || day > 31) {
+      return null;
+    }
+
+    let hours = hourValue ? Number(hourValue) : 0;
+    const minutes = minuteValue ? Number(minuteValue) : 0;
+    const seconds = secondValue ? Number(secondValue) : 0;
+
+    if (!Number.isInteger(hours) || hours < 0 || hours > 23) {
+      return null;
+    }
+
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > 59 || !Number.isInteger(seconds) || seconds < 0 || seconds > 59) {
+      return null;
+    }
+
+    if (meridiem) {
+      if (hours < 1 || hours > 12) {
+        return null;
+      }
+
+      const normalizedMeridiem = meridiem.toLowerCase();
+
+      if (normalizedMeridiem === "pm" && hours < 12) {
+        hours += 12;
+      }
+
+      if (normalizedMeridiem === "am" && hours === 12) {
+        hours = 0;
+      }
+    }
+
+    const parsedDate = new Date(year, month - 1, day, hours, minutes, seconds);
+
+    if (
+      Number.isNaN(parsedDate.getTime())
+      || parsedDate.getFullYear() !== year
+      || parsedDate.getMonth() !== month - 1
+      || parsedDate.getDate() !== day
+    ) {
+      return null;
+    }
+
+    return this.formatSqlTimestamp(parsedDate);
+  }
+
+  private normalizeAddressKey(
+    fullName: string | null,
+    addressLine1: string | null,
+  ) {
+    const normalizedName = this.normalizeLookupToken(fullName);
+    const normalizedAddressLine1 = this.normalizeLookupToken(addressLine1);
+
+    if (!normalizedName || !normalizedAddressLine1) {
+      return null;
+    }
+
+    return [normalizedName, normalizedAddressLine1].join("::");
+  }
+
+  private matchesEmailPattern(value: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
+
+  private parseEnumValue<T extends readonly string[]>(
+    value: string | null,
+    allowedValues: T,
+  ) {
+    if (!value) {
+      return null;
+    }
+
+    const normalizedValue = this.normalizeLookupToken(value);
+
+    if (!normalizedValue) {
+      return null;
+    }
+
+    return allowedValues.find((allowedValue) => this.normalizeLookupToken(allowedValue) === normalizedValue) ?? null;
+  }
+
+  private parseImportPayload(jsonBody: unknown): ImportPayload {
+    if (!this.isRecord(jsonBody)) {
+      throw new Error("Customer import payload must be a JSON object.");
+    }
+
+    const mode = jsonBody.mode;
+    const confirmImport = jsonBody.confirmImport === true;
+    const rows = jsonBody.rows;
+
+    if (mode !== "preview" && mode !== "import") {
+      throw new Error("mode must be preview or import.");
+    }
+
+    if (!Array.isArray(rows)) {
+      throw new Error("rows must be an array.");
+    }
+
+    const parsedRows = rows.map((row, index) => {
+      if (!this.isRecord(row)) {
+        throw new Error(`Row ${index + 1} must be an object.`);
+      }
+
+      const rowNumber = typeof row.rowNumber === "number" && Number.isFinite(row.rowNumber)
+        ? row.rowNumber
+        : index + 2;
+
+      const parsedRow: CustomerImportRowInput = { rowNumber };
+
+      for (const field of [
+        "external_client_number",
+        "full_name",
+        "email",
+        "company_name",
+        "service_address_line_1",
+        "phone",
+        "legacy_created_at",
+        "notes",
+        "source",
+      ] as CustomerImportField[]) {
+        const value = row[field];
+        parsedRow[field] = typeof value === "string" ? value : value == null ? null : String(value);
+      }
+
+      return parsedRow;
+    });
+
+    return {
+      mode,
+      confirmImport,
+      rows: parsedRows,
+    };
+  }
+
+  private buildExistingDuplicateLabel(customer: CustomerEntity) {
+    const customerReference = customer.external_client_number ? `Client # ${customer.external_client_number}` : null;
+
+    return [
+      customer.full_name,
+      customer.company_name,
+      customerReference,
+      formatAddress(
+        customer.service_address_line_1,
+        customer.service_address_line_2,
+        customer.service_city,
+        customer.service_state_or_region,
+        customer.service_postal_code,
+      ),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  private analyzeRow(row: CustomerImportRowInput): PreviewRowAnalysis {
+    const issues: string[] = [];
+    const externalClientNumber = this.normalizeText(row.external_client_number, 120);
+    const fullName = this.normalizeText(row.full_name, 255);
+    const companyName = this.normalizeText(row.company_name, 255);
+    const phone = this.normalizeText(row.phone, 64);
+    const email = this.normalizeEmail(this.normalizeText(row.email, 320));
+    const serviceAddressLine1 = this.normalizeText(row.service_address_line_1, 255);
+    const legacyCreatedAt = this.parseLegacyCreatedAt(this.normalizeText(row.legacy_created_at, 80));
+    const notes = this.normalizeText(row.notes, 3000);
+    const source = this.parseEnumValue(row.source ?? null, customerImportSourceOptions) ?? "website";
+
+    if (!fullName) {
+      issues.push("Full Name is required.");
+    }
+
+    if (!phone) {
+      issues.push("Phone is required.");
+    }
+
+    if (!serviceAddressLine1) {
+      issues.push("Address is required.");
+    }
+
+    if (email && !this.matchesEmailPattern(email)) {
+      issues.push("Email must be a valid email address.");
+    }
+
+    if (row.source && !this.parseEnumValue(row.source ?? null, customerImportSourceOptions)) {
+      issues.push("Lead Source must be one of: phone, website, google, referral, repeat_customer, other.");
+    }
+
+    const addressLabel = formatAddress(
+      serviceAddressLine1 ?? "",
+      null,
+      "",
+      null,
+      "",
+    );
+
+    const normalizedExternalClientNumber = this.normalizeLookupToken(externalClientNumber);
+    const normalizedPhone = this.normalizePhone(phone);
+    const normalizedEmail = this.normalizeEmail(email);
+    const normalizedAddressKey = this.normalizeAddressKey(fullName, serviceAddressLine1);
+
+    return {
+      rowNumber: row.rowNumber,
+      externalClientNumber,
+      fullName,
+      phone,
+      email,
+      companyName,
+      legacyCreatedAt,
+      addressLabel,
+      source: source as CustomerImportSource,
+      notes,
+      issues,
+      duplicateMatches: [],
+      status: issues.length > 0 ? "invalid" : "ready",
+      insertValue:
+        issues.length > 0
+          ? null
+          : {
+            external_client_number: externalClientNumber,
+            full_name: fullName as string,
+            phone: phone as string,
+            email,
+            company_name: companyName,
+            service_address_line_1: serviceAddressLine1 as string,
+            service_address_line_2: null,
+            legacy_created_at: legacyCreatedAt ? new Date(legacyCreatedAt) : null,
+            source: source as CustomerImportSource,
+            notes,
+          },
+      normalizedExternalClientNumber,
+      normalizedPhone,
+      normalizedEmail,
+      normalizedAddressKey,
+    };
+  }
+
+  private async loadDuplicateCandidates(rows: PreviewRowAnalysis[]) {
+    const exactClientNumbers = Array.from(new Set(
+      rows.map((row) => row.insertValue?.external_client_number).filter((value): value is string => Boolean(value)),
+    ));
+    const exactPhones = Array.from(new Set(rows.map((row) => row.phone).filter((value): value is string => Boolean(value))));
+    const exactEmails = Array.from(new Set(rows.map((row) => row.email).filter((value): value is string => Boolean(value))));
+    const exactAddressLines = Array.from(new Set(
+      rows
+        .map((row) => row.insertValue?.service_address_line_1)
+        .filter((value): value is string => Boolean(value)),
+    ));
+
+    const queries: Array<Promise<CustomerEntity[]>> = [];
+
+    if (exactClientNumbers.length > 0) {
+      queries.push(this.customersRepository.find({
+        where: {
+          external_client_number: In(exactClientNumbers),
+        },
+      }));
+    }
+
+    if (exactPhones.length > 0) {
+      queries.push(this.customersRepository.find({
+        where: {
+          phone: In(exactPhones),
+        },
+      }));
+    }
+
+    if (exactEmails.length > 0) {
+      queries.push(this.customersRepository.find({
+        where: {
+          email: In(exactEmails),
+        },
+      }));
+    }
+
+    if (exactAddressLines.length > 0) {
+      queries.push(this.customersRepository.find({
+        where: {
+          service_address_line_1: In(exactAddressLines),
+        },
+      }));
+    }
+
+    if (queries.length === 0) {
+      return [] as CustomerEntity[];
+    }
+
+    const results = await Promise.all(queries);
+    const candidateMap = new Map<string, CustomerEntity>();
+
+    for (const result of results) {
+      for (const customer of result) {
+        candidateMap.set(customer.id, customer);
+      }
+    }
+
+    return Array.from(candidateMap.values());
+  }
+
+  private async buildPreviewResponse(
+    rows: CustomerImportRowInput[],
+  ): Promise<CustomerImportPreviewResponse & { analyzedRows: PreviewRowAnalysis[] }> {
+    const analyzedRows = rows.map((row) => this.analyzeRow(row));
+    const existingCustomers = await this.loadDuplicateCandidates(analyzedRows.filter((row) => row.insertValue));
+
+    for (const row of analyzedRows) {
+      if (!row.insertValue) {
+        continue;
+      }
+
+      for (const customer of existingCustomers) {
+        const duplicateReasons: string[] = [];
+        const customerExternalClientNumber = this.normalizeLookupToken(customer.external_client_number);
+        const customerPhone = this.normalizePhone(customer.phone);
+        const customerEmail = this.normalizeEmail(customer.email);
+        const customerAddressKey = this.normalizeAddressKey(
+          customer.full_name,
+          customer.service_address_line_1,
+        );
+
+        if (
+          row.normalizedExternalClientNumber
+          && customerExternalClientNumber
+          && row.normalizedExternalClientNumber === customerExternalClientNumber
+        ) {
+          duplicateReasons.push("matching Client #");
+        }
+
+        if (row.normalizedPhone && customerPhone && row.normalizedPhone === customerPhone) {
+          duplicateReasons.push("matching phone");
+        }
+
+        if (row.normalizedEmail && customerEmail && row.normalizedEmail === customerEmail) {
+          duplicateReasons.push("matching email");
+        }
+
+        if (row.normalizedAddressKey && customerAddressKey && row.normalizedAddressKey === customerAddressKey) {
+          duplicateReasons.push("matching name and address");
+        }
+
+        if (duplicateReasons.length === 0) {
+          continue;
+        }
+
+        row.duplicateMatches.push({
+          kind: "existing_customer",
+          reference: customer.id,
+          label: this.buildExistingDuplicateLabel(customer),
+          reasons: duplicateReasons,
+        });
+      }
+    }
+
+    const seenExternalClientNumber = new Map<string, PreviewRowAnalysis>();
+    const seenPhone = new Map<string, PreviewRowAnalysis>();
+    const seenEmail = new Map<string, PreviewRowAnalysis>();
+    const seenAddress = new Map<string, PreviewRowAnalysis>();
+
+    for (const row of analyzedRows) {
+      if (!row.insertValue) {
+        continue;
+      }
+
+      const matchImportRow = (
+        key: string | null,
+        seenMap: Map<string, PreviewRowAnalysis>,
+        reason: string,
+      ) => {
+        if (!key) {
+          return;
+        }
+
+        const existingMatch = seenMap.get(key);
+
+        if (!existingMatch) {
+          seenMap.set(key, row);
+          return;
+        }
+
+        const currentLabel = `CSV row ${row.rowNumber}`;
+        const existingLabel = `CSV row ${existingMatch.rowNumber}`;
+        const currentMatchAlreadyPresent = row.duplicateMatches.some(
+          (duplicateMatch) => duplicateMatch.kind === "import_row" && duplicateMatch.reference === String(existingMatch.rowNumber),
+        );
+        const existingMatchAlreadyPresent = existingMatch.duplicateMatches.some(
+          (duplicateMatch) => duplicateMatch.kind === "import_row" && duplicateMatch.reference === String(row.rowNumber),
+        );
+
+        if (!currentMatchAlreadyPresent) {
+          row.duplicateMatches.push({
+            kind: "import_row",
+            reference: String(existingMatch.rowNumber),
+            label: existingLabel,
+            reasons: [reason],
+          });
+        }
+
+        if (!existingMatchAlreadyPresent) {
+          existingMatch.duplicateMatches.push({
+            kind: "import_row",
+            reference: String(row.rowNumber),
+            label: currentLabel,
+            reasons: [reason],
+          });
+        }
+      };
+
+      matchImportRow(row.normalizedExternalClientNumber, seenExternalClientNumber, "matching Client #");
+      matchImportRow(row.normalizedPhone, seenPhone, "matching phone");
+      matchImportRow(row.normalizedEmail, seenEmail, "matching email");
+      matchImportRow(row.normalizedAddressKey, seenAddress, "matching name and address");
+    }
+
+    for (const row of analyzedRows) {
+      row.status = row.issues.length > 0
+        ? "invalid"
+        : row.duplicateMatches.length > 0
+          ? "duplicate"
+          : "ready";
+    }
+
+    return {
+      analyzedRows,
+      summary: {
+        totalRows: analyzedRows.length,
+        readyRows: analyzedRows.filter((row) => row.status === "ready").length,
+        duplicateRows: analyzedRows.filter((row) => row.status === "duplicate").length,
+        invalidRows: analyzedRows.filter((row) => row.status === "invalid").length,
+      },
+      rows: analyzedRows.map((row) => ({
+        rowNumber: row.rowNumber,
+        externalClientNumber: row.externalClientNumber,
+        fullName: row.fullName,
+        phone: row.phone,
+        email: row.email,
+        companyName: row.companyName,
+        legacyCreatedAt: row.legacyCreatedAt,
+        addressLabel: row.addressLabel,
+        source: row.source,
+        notes: row.notes,
+        issues: row.issues,
+        duplicateMatches: row.duplicateMatches,
+        status: row.status,
+      })),
+    };
+  }
+
+  @Post("admin/customers/import")
+  async importCustomers(@Req() request: RequestWithActor, @Body() body: unknown) {
+    this.requireCrmPermissionActor(
+      request,
+      "customers.manage",
+      "customer_import_forbidden",
+      "This account cannot import customers.",
+    );
+
+    try {
+      const payload = this.parseImportPayload(body);
+
+      if (payload.rows.length === 0) {
+        apiError(400, "empty_customer_import", "Upload and parse at least one CSV row before importing customers.");
+      }
+
+      const preview = await this.buildPreviewResponse(payload.rows);
+
+      if (payload.mode === "preview") {
+        return apiSuccess<CustomerImportPreviewResponse>({
+          summary: preview.summary,
+          rows: preview.rows,
+        });
+      }
+
+      if (!payload.confirmImport) {
+        apiError(400, "customer_import_confirmation_required", "Confirm the import before writing customers to the CRM.");
+      }
+
+      const importableRows = preview.analyzedRows
+        .filter((row) => row.status === "ready" && row.insertValue)
+        .map((row) => row.insertValue as CustomerInsertCandidate);
+
+      if (importableRows.length === 0) {
+        apiError(400, "no_customer_rows_ready", "No customer rows are ready to import. Resolve duplicates or validation issues first.");
+      }
+
+      const insertResult = await this.customersRepository.save(
+        importableRows.map((row) => this.customersRepository.create(row)),
+      );
+
+      return apiSuccess<CustomerImportResult>({
+        summary: {
+          ...preview.summary,
+          importedRows: insertResult.length,
+          skippedRows: preview.summary.totalRows - insertResult.length,
+        },
+        rows: preview.rows,
+        importedCustomers: insertResult.map((customer) => ({
+          id: customer.id,
+          fullName: customer.full_name,
+          phone: customer.phone,
+          email: customer.email,
+        })),
+      });
+    } catch (error) {
+      apiError(400, "invalid_customer_import_payload", "The customer import payload is invalid.", error);
+    }
+  }
+}
+

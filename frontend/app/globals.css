@@ -1,0 +1,599 @@
+@import "tailwindcss";
+
+:root,
+:root[data-theme="brown-cream"] {
+  color-scheme: dark;
+
+  /* Layer 1: Theme mode */
+  --theme-name: brown-cream;
+  --theme-tone-1: #1A120B;
+  --theme-tone-2: #3C2A21;
+  --theme-tone-3: #D5CEA3;
+  --theme-tone-4: #E5E5CB;
+  --background: var(--theme-tone-1);
+  --foreground: color-mix(in srgb, white 84%, var(--theme-tone-4) 16%);
+
+  /* Layer 2: Foundations */
+  --flat-canvas: var(--theme-tone-1);
+  --flat-panel: color-mix(in srgb, var(--theme-tone-2) 78%, black 22%);
+  --flat-border: color-mix(in srgb, white 8%, var(--theme-tone-4) 18%);
+  --flat-emerald: #50c878;
+  --flat-gold: var(--theme-tone-3);
+  --flat-blue: color-mix(in srgb, #6aa8ff 56%, var(--theme-tone-4) 44%);
+  --flat-coral: color-mix(in srgb, #f87171 62%, var(--theme-tone-4) 38%);
+
+  --fdn-color-neutral-980: color-mix(in srgb, var(--theme-tone-1) 92%, black 8%);
+  --fdn-color-neutral-950: var(--theme-tone-1);
+  --fdn-color-neutral-920: color-mix(in srgb, var(--theme-tone-1) 82%, var(--theme-tone-2) 18%);
+  --fdn-color-neutral-900: color-mix(in srgb, var(--theme-tone-2) 72%, black 28%);
+  --fdn-color-neutral-850: color-mix(in srgb, var(--theme-tone-2) 84%, var(--theme-tone-4) 16%);
+
+  --fdn-surface-neutral-canvas: var(--fdn-color-neutral-950);
+  --fdn-surface-neutral-panel: color-mix(in srgb, var(--theme-tone-2) 74%, black 26%);
+  --fdn-surface-neutral-card: color-mix(in srgb, var(--theme-tone-2) 82%, black 18%);
+  --fdn-surface-neutral-raised: color-mix(in srgb, var(--theme-tone-2) 88%, var(--theme-tone-4) 12%);
+
+  --fdn-color-emerald-500: #50c878;
+  --fdn-color-gold-500: var(--theme-tone-3);
+  --fdn-color-gold-400: color-mix(in srgb, var(--theme-tone-4) 68%, var(--theme-tone-3) 32%);
+  --fdn-color-blue-500: color-mix(in srgb, #6aa8ff 56%, var(--theme-tone-4) 44%);
+  --fdn-color-amber-500: color-mix(in srgb, var(--theme-tone-3) 78%, #ffbd59 22%);
+  --fdn-color-red-500: #ef4444;
+
+  --fdn-alpha-white-02: rgba(255, 255, 255, 0.02);
+  --fdn-alpha-white-04: rgba(255, 255, 255, 0.04);
+  --fdn-alpha-white-06: rgba(255, 255, 255, 0.06);
+  --fdn-alpha-white-08: rgba(255, 255, 255, 0.08);
+  --fdn-alpha-white-12: rgba(255, 255, 255, 0.12);
+  --fdn-alpha-white-14: rgba(255, 255, 255, 0.14);
+  --fdn-alpha-white-18: rgba(255, 255, 255, 0.18);
+  --fdn-alpha-white-20: rgba(255, 255, 255, 0.20);
+  --fdn-alpha-white-24: rgba(255, 255, 255, 0.24);
+  --fdn-alpha-black-55: rgba(0, 0, 0, 0.55);
+  --fdn-alpha-black-68: rgba(0, 0, 0, 0.68);
+  --fdn-alpha-black-74: rgba(0, 0, 0, 0.74);
+
+  --fdn-text-primary: color-mix(in srgb, white 84%, var(--theme-tone-4) 16%);
+  --fdn-text-secondary: color-mix(in srgb, white 66%, var(--theme-tone-4) 34%);
+  --fdn-text-muted: color-mix(in srgb, white 44%, var(--theme-tone-4) 56%);
+  --fdn-text-inverse: color-mix(in srgb, black 80%, var(--theme-tone-1) 20%);
+
+  /* Layer 3: Semantic roles */
+  --sem-canvas-base: var(--fdn-surface-neutral-canvas);
+  --sem-surface-panel: var(--fdn-surface-neutral-panel);
+  --sem-surface-card: var(--fdn-surface-neutral-card);
+  --sem-surface-raised: var(--fdn-surface-neutral-raised);
+  --sem-surface-modal: color-mix(in srgb, var(--fdn-surface-neutral-raised) 92%, black 8%);
+  --sem-surface-soft: color-mix(in srgb, var(--fdn-surface-neutral-panel) 92%, white 8%);
+  --sem-surface-overlay: var(--fdn-alpha-black-68);
+
+  --sem-text-primary: var(--fdn-text-primary);
+  --sem-text-secondary: var(--fdn-text-secondary);
+  --sem-text-muted: var(--fdn-text-muted);
+  --sem-text-accent: var(--fdn-color-gold-400);
+  --sem-text-inverse: var(--fdn-text-inverse);
+
+  --sem-border-subtle: var(--fdn-alpha-white-08);
+  --sem-border-strong: var(--fdn-alpha-white-14);
+  --sem-border-accent: color-mix(in srgb, var(--fdn-color-gold-500) 42%, transparent);
+  --sem-focus-ring: color-mix(in srgb, var(--fdn-color-gold-500) 34%, transparent);
+
+  --sem-accent-primary: var(--fdn-color-gold-500);
+  --sem-action-primary: var(--fdn-color-gold-500);
+  --sem-action-secondary: var(--fdn-color-blue-500);
+
+  --sem-state-success: var(--fdn-color-emerald-500);
+  --sem-state-warning: var(--fdn-color-amber-500);
+  --sem-state-info: var(--fdn-color-blue-500);
+  --sem-state-error: var(--fdn-color-red-500);
+
+  --sem-state-success-bg: color-mix(in srgb, var(--sem-state-success) 16%, var(--sem-surface-panel));
+  --sem-state-success-border: color-mix(in srgb, var(--sem-state-success) 34%, transparent);
+  --sem-state-success-text: color-mix(in srgb, var(--sem-state-success) 48%, white);
+  --sem-state-warning-bg: color-mix(in srgb, var(--sem-state-warning) 16%, var(--sem-surface-panel));
+  --sem-state-warning-border: color-mix(in srgb, var(--sem-state-warning) 34%, transparent);
+  --sem-state-warning-text: color-mix(in srgb, var(--sem-state-warning) 52%, white);
+  --sem-state-info-bg: color-mix(in srgb, var(--sem-state-info) 16%, var(--sem-surface-panel));
+  --sem-state-info-border: color-mix(in srgb, var(--sem-state-info) 34%, transparent);
+  --sem-state-info-text: color-mix(in srgb, var(--sem-state-info) 46%, white);
+  --sem-state-error-bg: color-mix(in srgb, var(--sem-state-error) 16%, var(--sem-surface-panel));
+  --sem-state-error-border: color-mix(in srgb, var(--sem-state-error) 34%, transparent);
+  --sem-state-error-text: color-mix(in srgb, var(--sem-state-error) 48%, white);
+
+  /* Layer 4: Component contract and compatibility aliases */
+  --cmp-surface-canvas: var(--sem-canvas-base);
+  --cmp-surface-panel: var(--sem-surface-panel);
+  --cmp-surface-card: var(--sem-surface-card);
+  --cmp-surface-raised: var(--sem-surface-raised);
+  --cmp-surface-modal: var(--sem-surface-modal);
+  --cmp-surface-soft: var(--sem-surface-soft);
+
+  --cmp-action-primary: var(--sem-action-primary);
+  --cmp-action-secondary: var(--sem-action-secondary);
+  --cmp-action-primary-bg: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--sem-action-primary) 28%, transparent),
+    color-mix(in srgb, var(--sem-action-primary) 10%, var(--sem-surface-card))
+  );
+  --cmp-action-primary-border: color-mix(in srgb, var(--sem-action-primary) 34%, transparent);
+  --cmp-action-primary-text: var(--sem-text-accent);
+  --cmp-action-secondary-bg: color-mix(in srgb, var(--sem-action-secondary) 18%, var(--sem-surface-card));
+  --cmp-action-secondary-border: color-mix(in srgb, var(--sem-action-secondary) 30%, transparent);
+  --cmp-action-secondary-text: var(--sem-text-primary);
+  --cmp-action-ghost-bg: transparent;
+  --cmp-action-ghost-border: var(--sem-border-subtle);
+  --cmp-action-ghost-text: var(--sem-text-secondary);
+
+  --cmp-input-bg: color-mix(in srgb, var(--sem-surface-panel) 96%, transparent);
+  --cmp-input-text: var(--sem-text-primary);
+  --cmp-input-placeholder: var(--sem-text-muted);
+  --cmp-input-border: var(--sem-border-subtle);
+  --cmp-input-focus: var(--sem-focus-ring);
+
+  --cmp-border-subtle: var(--sem-border-subtle);
+  --cmp-border-strong: var(--sem-border-strong);
+  --cmp-border-accent: var(--sem-border-accent);
+  --cmp-divider-subtle: var(--sem-border-subtle);
+
+  --cmp-badge-success: var(--sem-state-success-text);
+  --cmp-badge-warning: var(--sem-state-warning-text);
+  --cmp-badge-info: var(--sem-state-info-text);
+  --cmp-badge-error: var(--sem-state-error-text);
+
+  --cmp-status-success-bg: var(--sem-state-success-bg);
+  --cmp-status-success-border: var(--sem-state-success-border);
+  --cmp-status-success-text: var(--sem-state-success-text);
+  --cmp-status-warning-bg: var(--sem-state-warning-bg);
+  --cmp-status-warning-border: var(--sem-state-warning-border);
+  --cmp-status-warning-text: var(--sem-state-warning-text);
+  --cmp-status-info-bg: var(--sem-state-info-bg);
+  --cmp-status-info-border: var(--sem-state-info-border);
+  --cmp-status-info-text: var(--sem-state-info-text);
+  --cmp-status-error-bg: var(--sem-state-error-bg);
+  --cmp-status-error-border: var(--sem-state-error-border);
+  --cmp-status-error-text: var(--sem-state-error-text);
+
+  --cmp-widget-surface: var(--sem-surface-card);
+  --cmp-widget-accent: var(--sem-accent-primary);
+  --cmp-hover-surface: var(--sem-surface-raised);
+  --cmp-selected-bg: color-mix(in srgb, var(--sem-accent-primary) 16%, var(--sem-surface-card));
+  --cmp-selected-border: color-mix(in srgb, var(--sem-accent-primary) 36%, transparent);
+  --cmp-selected-shadow: 0 18px 44px color-mix(in srgb, var(--sem-accent-primary) 16%, transparent);
+  --cmp-focus-ring: var(--sem-focus-ring);
+  --cmp-backdrop-scrim: var(--sem-surface-overlay);
+
+  --bg-canvas: var(--cmp-surface-canvas);
+  --bg-primary: var(--cmp-surface-panel);
+  --bg-panel: var(--cmp-surface-panel);
+  --bg-card: var(--cmp-surface-card);
+  --bg-soft: var(--cmp-surface-soft);
+  --bg-overlay: var(--cmp-backdrop-scrim);
+
+  --text-primary: var(--sem-text-primary);
+  --text-secondary: var(--sem-text-secondary);
+  --text-muted: var(--sem-text-muted);
+  --text-accent: var(--sem-text-accent);
+
+  --border-subtle: var(--cmp-border-subtle);
+  --border-strong: var(--cmp-border-strong);
+  --border-accent: var(--cmp-border-accent);
+
+  --input-border: var(--cmp-input-border);
+  --input-focus-ring: var(--cmp-input-focus);
+
+  --button-secondary-bg: var(--cmp-action-secondary-bg);
+  --button-secondary-border: var(--cmp-action-secondary-border);
+
+  --status-success-bg: var(--cmp-status-success-bg);
+  --status-success-border: var(--cmp-status-success-border);
+  --status-success-text: var(--cmp-status-success-text);
+  --status-warning-bg: var(--cmp-status-warning-bg);
+  --status-warning-border: var(--cmp-status-warning-border);
+  --status-warning-text: var(--cmp-status-warning-text);
+  --status-info-bg: var(--cmp-status-info-bg);
+  --status-info-border: var(--cmp-status-info-border);
+  --status-info-text: var(--cmp-status-info-text);
+  --status-error-bg: var(--cmp-status-error-bg);
+  --status-error-border: var(--cmp-status-error-border);
+  --status-error-text: var(--cmp-status-error-text);
+}
+
+:root[data-theme="fire-ember"] {
+  --theme-name: fire-ember;
+  --theme-tone-1: #280905;
+  --theme-tone-2: #740A03;
+  --theme-tone-3: #C3110C;
+  --theme-tone-4: #E6501B;
+}
+
+:root[data-theme="ash-rose"] {
+  --theme-name: ash-rose;
+  --theme-tone-1: #452829;
+  --theme-tone-2: #57595B;
+  --theme-tone-3: #E8D1C5;
+  --theme-tone-4: #F3E8DF;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--sem-accent-primary) 14%, transparent), transparent 26%),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--sem-action-secondary) 12%, transparent), transparent 22%),
+    linear-gradient(180deg, var(--fdn-color-neutral-980) 0%, var(--fdn-color-neutral-950) 100%);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--sem-accent-primary) 28%, transparent);
+  color: var(--sem-text-primary);
+}
+
+/* Layer 5: Theme recipes */
+
+.theme-surface-card,
+.theme-surface-modal,
+.theme-modal-surface,
+.theme-control-surface,
+.theme-control-surface-soft,
+.theme-selected-card {
+  color: var(--text-primary);
+}
+
+.theme-surface-card:not([class*="bg-"]) {
+  background: var(--cmp-surface-card);
+}
+
+.theme-surface-card:not([class*="border"]) {
+  border: 1px solid var(--cmp-border-subtle);
+}
+
+.theme-surface-card:not([class*="shadow"]) {
+  box-shadow: 0 24px 60px color-mix(in srgb, var(--bg-canvas) 72%, transparent);
+}
+
+.theme-surface-modal:not([class*="bg-"]) {
+  background: var(--cmp-surface-modal);
+}
+
+.theme-surface-modal:not([class*="border"]) {
+  border: 1px solid var(--cmp-border-subtle);
+}
+
+.theme-surface-modal:not([class*="shadow"]) {
+  box-shadow: 0 32px 96px color-mix(in srgb, var(--bg-canvas) 78%, transparent);
+}
+
+.theme-surface-modal {
+  backdrop-filter: blur(24px);
+}
+
+.theme-modal-surface:not([class*="bg-"]) {
+  background: var(--cmp-surface-modal);
+}
+
+.theme-modal-surface:not([class*="border"]) {
+  border: 1px solid var(--cmp-border-subtle);
+}
+
+.theme-modal-surface {
+  color: var(--text-primary);
+  backdrop-filter: blur(18px);
+}
+
+.theme-control-surface:not([class*="bg-"]) {
+  background: var(--cmp-surface-card);
+}
+
+.theme-control-surface:not([class*="border"]) {
+  border: 1px solid var(--cmp-border-subtle);
+}
+
+.theme-control-surface-soft:not([class*="bg-"]) {
+  background: var(--cmp-surface-soft);
+}
+
+.theme-control-surface-soft:not([class*="border"]) {
+  border: 1px solid var(--cmp-border-subtle);
+}
+
+.theme-selected-card {
+  background: var(--cmp-selected-bg);
+  border: 1px solid var(--cmp-selected-border);
+  box-shadow: var(--cmp-selected-shadow);
+}
+
+.theme-input-control {
+  width: 100%;
+  border: 1px solid var(--cmp-input-border);
+  background: var(--cmp-input-bg);
+  color: var(--cmp-input-text);
+}
+
+.theme-input-control::placeholder {
+  color: var(--cmp-input-placeholder);
+}
+
+.theme-input-control:focus,
+.theme-input-control:focus-visible {
+  border-color: var(--cmp-input-focus);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--cmp-input-focus);
+}
+
+.theme-btn-primary,
+.theme-btn-secondary,
+.theme-btn-ghost,
+.theme-menu-item {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.theme-btn-primary {
+  border: 1px solid var(--cmp-action-primary-border);
+  background: var(--cmp-action-primary-bg);
+  color: var(--cmp-action-primary-text);
+  box-shadow: 0 16px 36px color-mix(in srgb, var(--sem-action-primary) 18%, transparent);
+}
+
+.theme-btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+.theme-btn-secondary {
+  border: 1px solid var(--cmp-action-secondary-border);
+  background: var(--cmp-action-secondary-bg);
+  color: var(--cmp-action-secondary-text);
+}
+
+.theme-btn-secondary:hover {
+  border-color: var(--cmp-border-accent);
+  filter: brightness(1.04);
+}
+
+.theme-btn-ghost {
+  border: 1px solid var(--cmp-action-ghost-border);
+  background: var(--cmp-action-ghost-bg);
+  color: var(--cmp-action-ghost-text);
+}
+
+.theme-btn-ghost:hover,
+.theme-menu-item:hover {
+  background: var(--cmp-hover-surface);
+  color: var(--text-primary);
+}
+
+.theme-btn-primary:focus-visible,
+.theme-btn-secondary:focus-visible,
+.theme-btn-ghost:focus-visible,
+.theme-menu-item:focus-visible,
+.theme-control-surface:focus-visible,
+.theme-control-surface-soft:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--cmp-focus-ring);
+}
+
+.theme-btn-primary:disabled,
+.theme-btn-secondary:disabled,
+.theme-btn-ghost:disabled,
+.theme-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.theme-alert-error,
+.theme-status-error {
+  border-color: var(--status-error-border);
+  background: var(--status-error-bg);
+  color: var(--status-error-text);
+}
+
+.theme-alert-warning,
+.theme-status-warning {
+  border-color: var(--status-warning-border);
+  background: var(--status-warning-bg);
+  color: var(--status-warning-text);
+}
+
+.theme-alert-success,
+.theme-status-success {
+  border-color: var(--status-success-border);
+  background: var(--status-success-bg);
+  color: var(--status-success-text);
+}
+
+.theme-alert-info,
+.theme-status-info {
+  border-color: var(--status-info-border);
+  background: var(--status-info-bg);
+  color: var(--status-info-text);
+}
+
+.theme-badge {
+  border: 1px solid var(--cmp-border-subtle);
+  background: var(--cmp-surface-card);
+  color: var(--text-secondary);
+}
+
+.theme-backdrop-scrim {
+  background: var(--bg-overlay);
+  backdrop-filter: blur(10px);
+}
+
+.theme-overlay-atmosphere {
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--sem-accent-primary) 14%, transparent), transparent 24%),
+    radial-gradient(circle at bottom right, color-mix(in srgb, var(--sem-action-secondary) 16%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 32%);
+}
+
+.theme-overlay-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, white 5%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, white 5%, transparent) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.theme-icon {
+  color: var(--text-secondary);
+}
+
+.theme-icon-accent {
+  color: var(--text-accent);
+}
+
+.theme-menu-item {
+  color: var(--text-secondary);
+}
+
+/* Shared table chrome */
+.master-table-wrap {
+  overflow: hidden;
+  border: 1px solid var(--cmp-border-subtle);
+  border-radius: 22px;
+  background: var(--cmp-surface-panel);
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--bg-canvas) 72%, transparent);
+}
+
+.master-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.master-table-header-cell {
+  border-right: 1px solid var(--cmp-border-subtle);
+  border-bottom: 1px solid var(--cmp-border-subtle);
+  background: color-mix(in srgb, var(--cmp-surface-card) 88%, transparent);
+  color: var(--sem-text-muted);
+  vertical-align: middle;
+}
+
+.master-table-cell {
+  border-right: 1px solid var(--cmp-border-subtle);
+  border-bottom: 1px solid var(--cmp-border-subtle);
+  color: var(--sem-text-secondary);
+  vertical-align: middle;
+}
+
+.master-table-header-cell:last-child,
+.master-table-cell:last-child {
+  border-right: 0;
+}
+
+.master-table-row:last-child .master-table-cell {
+  border-bottom: 0;
+}
+
+.master-table-row:nth-child(even) .master-table-cell {
+  background: color-mix(in srgb, var(--cmp-surface-card) 36%, transparent);
+}
+
+.master-table-row-interactive {
+  cursor: pointer;
+}
+
+.master-table-row-interactive:hover .master-table-cell,
+.master-table-row-selected .master-table-cell {
+  background: color-mix(in srgb, var(--sem-accent-primary) 12%, var(--cmp-surface-card));
+}
+
+.master-table-empty {
+  border: 1px solid var(--cmp-border-subtle);
+  background: var(--cmp-surface-panel);
+  color: var(--sem-text-secondary);
+  text-align: center;
+}
+
+.master-table-pagination {
+  border-top: 1px solid var(--cmp-border-subtle);
+}
+
+.master-mobile-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.master-mobile-card,
+.master-mobile-empty {
+  border: 1px solid var(--cmp-border-subtle);
+}
+
+.crm-table-frame {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--cmp-border-subtle);
+  border-radius: 24px;
+  background: var(--cmp-surface-panel);
+}
+
+.crm-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.crm-table th,
+.crm-table td {
+  border-right: 1px solid var(--cmp-border-subtle);
+  border-bottom: 1px solid var(--cmp-border-subtle);
+  vertical-align: middle;
+}
+
+.crm-table th {
+  background: color-mix(in srgb, var(--cmp-surface-card) 88%, transparent);
+}
+
+.crm-table th:last-child,
+.crm-table td:last-child {
+  border-right: 0;
+}
+
+.crm-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.crm-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--cmp-surface-card) 34%, transparent);
+}
+
+.document-line-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.document-line-table th,
+.document-line-table td {
+  border-right: 1px solid rgb(226 232 240);
+  border-bottom: 1px solid rgb(226 232 240);
+  vertical-align: top;
+}
+
+.document-line-table th:last-child,
+.document-line-table td:last-child {
+  border-right: 0;
+}
+
+.document-line-table tbody tr:last-child td {
+  border-bottom: 0;
+}

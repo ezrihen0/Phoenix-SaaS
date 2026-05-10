@@ -1,0 +1,38 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: phoenix_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: phoenix_crm
+      MYSQL_USER: phoenix
+      MYSQL_PASSWORD: phoenix
+    ports:
+      - "3306:3306"
+    volumes:
+      - phoenix_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  phpmyadmin:
+    image: phpmyadmin:5.2
+    container_name: phoenix_phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: root
+      UPLOAD_LIMIT: 64M
+    ports:
+      - "8081:80"
+
+volumes:
+  phoenix_mysql_data:

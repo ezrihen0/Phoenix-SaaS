@@ -1,0 +1,24 @@
+{
+  "name": "phoenix-crm-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev:stop && concurrently -n frontend,backend -c cyan,yellow \"npm run dev --workspace frontend\" \"npm run start:dev --workspace backend\"",
+    "dev:stop": "node scripts/kill-dev-ports.mjs",
+    "build": "npm run build --workspace backend && npm run build --workspace frontend",
+    "lint": "npm run lint --workspace frontend && npm run lint --workspace backend",
+    "db:up": "docker compose -f docker/mysql/docker-compose.yml up -d",
+    "db:down": "docker compose -f docker/mysql/docker-compose.yml down",
+    "db:logs": "docker compose -f docker/mysql/docker-compose.yml logs -f"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "optionalDependencies": {
+    "lightningcss-linux-x64-gnu": "^1.32.0"
+  }
+}

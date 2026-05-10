@@ -1,0 +1,119 @@
+# -----------------------------
+# Dependencies
+# -----------------------------
+node_modules/
+**/node_modules/
+
+# Yarn PnP
+.pnp
+.pnp.*
+
+# Yarn modern workspace cache (keep checked-in plugins/patches/releases)
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# -----------------------------
+# Build & cache artifacts
+# -----------------------------
+.next/
+out/
+build/
+dist/
+coverage/
+.cache/
+tmp/
+temp/
+
+# Monorepo package build outputs
+frontend/.next/
+frontend/out/
+backend/dist/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Next.js generated file
+next-env.d.ts
+
+# -----------------------------
+# Logs
+# -----------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# -----------------------------
+# Local environment/secrets
+# -----------------------------
+.env
+.env.local
+.env.development
+.env.production
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Any nested env files
+**/.env
+**/.env.local
+**/.env.development
+**/.env.production
+**/.env.development.local
+**/.env.test.local
+**/.env.production.local
+
+# Keep examples committed
+!.env.example
+!**/.env.example
+
+# -----------------------------
+# Database / backups / archives
+# -----------------------------
+backups/
+*.zip
+*.sql
+*.sqlite
+*.db
+*.bundle
+
+# -----------------------------
+# Hosting / platform
+# -----------------------------
+.vercel/
+
+# -----------------------------
+# Supabase local tooling
+# -----------------------------
+.supabase/
+
+# -----------------------------
+# OS / editor junk
+# -----------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# -----------------------------
+# Certificates / keys
+# -----------------------------
+*.pem
+*.key
+
+# -----------------------------
+# Local scratch outputs
+# -----------------------------
+.tmp-automations-cookies.txt
+search_results*.txt
+tsc_output.txt
+Phoenix-CRM_recovered/backend/uploads/
+Phoenix-CRM_recovered/docs/
+Phoenix-CRM_recovered/
+.pnpm-store/
+node_modules/
