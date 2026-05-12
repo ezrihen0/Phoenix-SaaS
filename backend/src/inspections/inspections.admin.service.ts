@@ -75,7 +75,9 @@ export class InspectionsAdminService {
     } | null;
     property_address: string | null;
     actor: ActorContext;
+    organizationId: string;
   }) {
+    const organizationId = this.requireOrganizationId(input.organizationId);
     let customer: CustomerEntity | null = null;
     let job: JobEntity | null = null;
     let isInternalDraft = input.source === "internal_draft";
@@ -87,6 +89,7 @@ export class InspectionsAdminService {
       const fullName = `${input.new_customer.first_name} ${input.new_customer.last_name}`.trim();
       customer = await this.customersRepository.save(
         this.customersRepository.create({
+          organization_id: organizationId,
           full_name: fullName,
           phone: input.new_customer.phone,
           email: input.new_customer.email,
@@ -102,33 +105,38 @@ export class InspectionsAdminService {
           notes: "Created from inspections modal.",
         }),
       );
-      job = await this.createInspectionJob(customer, input.new_customer.property_address, input.report_type, input.actor);
+      job = await this.createInspectionJob(customer, input.new_customer.property_address, input.report_type, input.actor, organizationId);
     } else if (input.source === "existing_job") {
       if (!input.job_id) {
         apiError(400, "invalid_job_id", "job_id is required.");
       }
-      job = await this.jobsRepository.findOne({ where: { id: input.job_id }, relations: { customer: true } });
+      job = await this.jobsRepository.findOne({
+        where: { id: input.job_id, organization_id: organizationId },
+        relations: { customer: true },
+      });
       if (!job) {
         apiError(404, "job_not_found", "Job not found.");
       }
-      customer = job.customer ?? await this.customersRepository.findOne({ where: { id: job.customer_id } });
+      customer = job.customer?.organization_id === organizationId
+        ? job.customer
+        : await this.customersRepository.findOne({ where: { id: job.customer_id, organization_id: organizationId } });
       if (!customer) {
         apiError(404, "customer_not_found", "Customer not found for selected job.");
       }
     } else if (input.source === "internal_draft") {
-      customer = await this.resolveOrCreateDraftCustomer();
+      customer = await this.resolveOrCreateDraftCustomer(organizationId);
     } else {
       if (!input.customer_id) {
         apiError(400, "invalid_customer_id", "customer_id is required.");
       }
-      customer = await this.customersRepository.findOne({ where: { id: input.customer_id } });
+      customer = await this.customersRepository.findOne({ where: { id: input.customer_id, organization_id: organizationId } });
       if (!customer) {
         apiError(404, "customer_not_found", "Customer not found.");
       }
 
       if (input.job_id) {
         job = await this.jobsRepository.findOne({
-          where: { id: input.job_id, customer_id: customer.id },
+          where: { id: input.job_id, customer_id: customer.id, organization_id: organizationId },
         });
         if (!job) {
           apiError(404, "job_not_found", "Job not found for customer.");
@@ -136,7 +144,7 @@ export class InspectionsAdminService {
       } else {
         const propertyAddress = input.property_address?.trim() || customer.service_address_line_1;
         if (propertyAddress) {
-          job = await this.createInspectionJob(customer, propertyAddress, input.report_type, input.actor);
+          job = await this.createInspectionJob(customer, propertyAddress, input.report_type, input.actor, organizationId);
         }
       }
     }
@@ -144,6 +152,7 @@ export class InspectionsAdminService {
     const template = this.workflowService.getTemplateSeed(input.report_type);
     const inspection = await this.inspectionsRepository.save(
       this.inspectionsRepository.create({
+        organization_id: organizationId,
         customer_id: customer.id,
         job_id: job?.id ?? null,
         report_type: input.report_type,
@@ -168,6 +177,7 @@ export class InspectionsAdminService {
       await this.inspectionItemsRepository.save(
         template.items.map((item) =>
           this.inspectionItemsRepository.create({
+            organization_id: organizationId,
             inspection_id: inspection.id,
             ...item,
             status: "na",
@@ -180,6 +190,7 @@ export class InspectionsAdminService {
       await this.inspectionRequiredFieldsRepository.save(
         template.required_fields.map((field) =>
           this.inspectionRequiredFieldsRepository.create({
+            organization_id: organizationId,
             inspection_id: inspection.id,
             ...field,
             field_value: null,
@@ -188,10 +199,11 @@ export class InspectionsAdminService {
       );
     }
 
-    return this.getWorkspace(inspection.id);
+    return this.getWorkspace(inspection.id, organizationId);
   }
 
-  async searchCustomers(rawQuery: string) {
+  async searchCustomers(rawQuery: string, organizationId: string) {
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
     const query = rawQuery.trim().toLowerCase();
     if (query.length < 2) {
       return [] as Array<{ id: string; full_name: string; phone: string; email: string | null }>;
@@ -199,9 +211,11 @@ export class InspectionsAdminService {
 
     const rows = await this.customersRepository.createQueryBuilder("customer")
       .select(["customer.id", "customer.full_name", "customer.phone", "customer.email"])
-      .where("LOWER(customer.full_name) LIKE :query", { query: `%${query}%` })
-      .orWhere("LOWER(COALESCE(customer.email, '')) LIKE :query", { query: `%${query}%` })
-      .orWhere("LOWER(customer.phone) LIKE :query", { query: `%${query}%` })
+      .where("customer.organization_id = :organizationId", { organizationId: scopedOrganizationId })
+      .andWhere(
+        "(LOWER(customer.full_name) LIKE :query OR LOWER(COALESCE(customer.email, '')) LIKE :query OR LOWER(customer.phone) LIKE :query)",
+        { query: `%${query}%` },
+      )
       .orderBy("customer.updated_at", "DESC")
       .take(20)
       .getMany();
@@ -214,7 +228,8 @@ export class InspectionsAdminService {
     }));
   }
 
-  async searchJobs(rawQuery: string) {
+  async searchJobs(rawQuery: string, organizationId: string) {
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
     const query = rawQuery.trim().toLowerCase();
     if (query.length < 2) {
       return [] as Array<{
@@ -229,11 +244,13 @@ export class InspectionsAdminService {
       }>;
     }
 
-    const rows = await this.jobsRepository.find({
-      relations: { customer: true },
-      order: { updated_at: "DESC" },
-    });
-    const codeMap = await this.buildPublicJobCodeMap();
+    const rows = await this.jobsRepository.createQueryBuilder("job")
+      .innerJoinAndSelect("job.customer", "customer")
+      .where("job.organization_id = :organizationId", { organizationId: scopedOrganizationId })
+      .andWhere("customer.organization_id = :organizationId", { organizationId: scopedOrganizationId })
+      .orderBy("job.updated_at", "DESC")
+      .getMany();
+    const codeMap = await this.buildPublicJobCodeMap(scopedOrganizationId);
 
     return rows
       .map((row) => {
@@ -261,11 +278,13 @@ export class InspectionsAdminService {
   }
 
   async listInspections(input: {
+    organizationId: string;
     query?: string;
     report_type?: string;
     status?: string;
     customer_id?: string;
   }) {
+    const organizationId = this.requireOrganizationId(input.organizationId);
     const qb = this.inspectionsRepository.createQueryBuilder("inspection")
       .select([
         "inspection.id",
@@ -281,6 +300,7 @@ export class InspectionsAdminService {
         "inspection.updated_at",
         "inspection.sent_to_customer_at",
       ])
+      .where("inspection.organization_id = :organizationId", { organizationId })
       .orderBy("inspection.updated_at", "DESC")
       .take(200);
 
@@ -295,7 +315,7 @@ export class InspectionsAdminService {
     }
 
     const rows = await qb.getMany();
-    const codeMap = await this.buildPublicJobCodeMap();
+    const codeMap = await this.buildPublicJobCodeMap(organizationId);
     const mapped = rows.map((row) => {
       const publicJobCode = row.job_id ? (codeMap.get(row.job_id) ?? this.buildPublicJobCodeAttempt(row.job_id, 0)) : null;
       return {
@@ -339,30 +359,26 @@ export class InspectionsAdminService {
     });
   }
 
-  async getWorkspace(inspectionId: string) {
-    const inspection = await this.inspectionsRepository.findOne({
-      where: { id: inspectionId },
-    });
-    if (!inspection) {
-      apiError(404, "inspection_not_found", "Inspection not found.");
-    }
+  async getWorkspace(inspectionId: string, organizationId: string) {
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
 
     const relatedJob = inspection.job_id
-      ? await this.jobsRepository.findOne({ where: { id: inspection.job_id } })
+      ? await this.jobsRepository.findOne({ where: { id: inspection.job_id, organization_id: scopedOrganizationId } })
       : null;
-    const codeMap = await this.buildPublicJobCodeMap();
+    const codeMap = await this.buildPublicJobCodeMap(scopedOrganizationId);
     const publicJobCode = relatedJob ? (codeMap.get(relatedJob.id) ?? this.buildPublicJobCodeAttempt(relatedJob.id, 0)) : null;
 
     const [rawItems, requiredFields, photos] = await Promise.all([
       this.inspectionItemsRepository.find({
-        where: { inspection_id: inspection.id },
+        where: { inspection_id: inspection.id, organization_id: scopedOrganizationId },
         order: { section_key: "ASC", sort_order: "ASC", created_at: "ASC" },
       }),
       this.inspectionRequiredFieldsRepository.find({
-        where: { inspection_id: inspection.id },
+        where: { inspection_id: inspection.id, organization_id: scopedOrganizationId },
       }),
       this.inspectionPhotosRepository.find({
-        where: { inspection_id: inspection.id },
+        where: { inspection_id: inspection.id, organization_id: scopedOrganizationId },
         order: { sort_order: "ASC", created_at: "ASC" },
       }),
     ]);
@@ -499,14 +515,13 @@ export class InspectionsAdminService {
       recommendation_text?: string | null;
     },
     actor: ActorContext,
+    organizationId: string,
   ) {
-    const [inspection, item] = await Promise.all([
-      this.inspectionsRepository.findOne({ where: { id: inspectionId } }),
-      this.inspectionItemsRepository.findOne({ where: { id: itemId, inspection_id: inspectionId } }),
-    ]);
-    if (!inspection) {
-      apiError(404, "inspection_not_found", "Inspection not found.");
-    }
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
+    const item = await this.inspectionItemsRepository.findOne({
+      where: { id: itemId, inspection_id: inspectionId, organization_id: scopedOrganizationId },
+    });
     if (!item) {
       apiError(404, "inspection_item_not_found", "Inspection item not found.");
     }
@@ -523,7 +538,9 @@ export class InspectionsAdminService {
     item.updated_by_user_id = actor.user.id;
     await this.inspectionItemsRepository.save(item);
 
-    const items = await this.inspectionItemsRepository.find({ where: { inspection_id: inspectionId } });
+    const items = await this.inspectionItemsRepository.find({
+      where: { inspection_id: inspectionId, organization_id: scopedOrganizationId },
+    });
     const scores = this.computeScoreAndStatus(items, inspection.workflow_type);
     inspection.report_snapshot_key = randomUUID();
     inspection.generated_pdf_at = null;
@@ -535,14 +552,12 @@ export class InspectionsAdminService {
     inspection.status = scores.inspection_status;
     await this.inspectionsRepository.save(inspection);
 
-    return this.getWorkspace(inspectionId);
+    return this.getWorkspace(inspectionId, scopedOrganizationId);
   }
 
-  async generate(inspectionId: string) {
-    const inspection = await this.inspectionsRepository.findOne({ where: { id: inspectionId } });
-    if (!inspection) {
-      apiError(404, "inspection_not_found", "Inspection not found.");
-    }
+  async generate(inspectionId: string, organizationId: string) {
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
     if (inspection.locked_at) {
       apiError(409, "inspection_locked", "Inspection is locked and cannot be regenerated.");
     }
@@ -551,8 +566,10 @@ export class InspectionsAdminService {
     }
 
     const [items, requiredFields] = await Promise.all([
-      this.inspectionItemsRepository.find({ where: { inspection_id: inspectionId } }),
-      this.inspectionRequiredFieldsRepository.find({ where: { inspection_id: inspectionId } }),
+      this.inspectionItemsRepository.find({ where: { inspection_id: inspectionId, organization_id: scopedOrganizationId } }),
+      this.inspectionRequiredFieldsRepository.find({
+        where: { inspection_id: inspectionId, organization_id: scopedOrganizationId },
+      }),
     ]);
 
     const gate = this.workflowService.validateGenerateGate({
@@ -589,14 +606,12 @@ export class InspectionsAdminService {
     inspection.status = scores.inspection_status;
     await this.inspectionsRepository.save(inspection);
 
-    return this.getWorkspace(inspectionId);
+    return this.getWorkspace(inspectionId, scopedOrganizationId);
   }
 
-  async send(inspectionId: string) {
-    const inspection = await this.inspectionsRepository.findOne({ where: { id: inspectionId } });
-    if (!inspection) {
-      apiError(404, "inspection_not_found", "Inspection not found.");
-    }
+  async send(inspectionId: string, organizationId: string) {
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
     if (!inspection.generated_pdf_at) {
       apiError(400, "inspection_not_generated", "Generate the report PDF before sending.");
     }
@@ -605,8 +620,10 @@ export class InspectionsAdminService {
     }
 
     const [items, requiredFields] = await Promise.all([
-      this.inspectionItemsRepository.find({ where: { inspection_id: inspectionId } }),
-      this.inspectionRequiredFieldsRepository.find({ where: { inspection_id: inspectionId } }),
+      this.inspectionItemsRepository.find({ where: { inspection_id: inspectionId, organization_id: scopedOrganizationId } }),
+      this.inspectionRequiredFieldsRepository.find({
+        where: { inspection_id: inspectionId, organization_id: scopedOrganizationId },
+      }),
     ]);
 
     const gate = this.workflowService.validateGenerateGate({
@@ -639,14 +656,12 @@ export class InspectionsAdminService {
     }
     await this.inspectionsRepository.save(inspection);
 
-    return this.getWorkspace(inspectionId);
+    return this.getWorkspace(inspectionId, scopedOrganizationId);
   }
 
-  async unlockForCorrection(inspectionId: string) {
-    const inspection = await this.inspectionsRepository.findOne({ where: { id: inspectionId } });
-    if (!inspection) {
-      apiError(404, "inspection_not_found", "Inspection not found.");
-    }
+  async unlockForCorrection(inspectionId: string, organizationId: string) {
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
     if (!inspection.locked_at) {
       apiError(409, "inspection_not_locked", "Inspection is already unlocked.");
     }
@@ -662,23 +677,20 @@ export class InspectionsAdminService {
     }
     await this.inspectionsRepository.save(inspection);
 
-    return this.getWorkspace(inspectionId);
+    return this.getWorkspace(inspectionId, scopedOrganizationId);
   }
 
   async patchRequiredField(
     inspectionId: string,
     fieldId: string,
     input: { field_value?: string | null; is_satisfied?: boolean },
+    organizationId: string,
   ) {
-    const [inspection, field] = await Promise.all([
-      this.inspectionsRepository.findOne({ where: { id: inspectionId } }),
-      this.inspectionRequiredFieldsRepository.findOne({
-        where: { id: fieldId, inspection_id: inspectionId },
-      }),
-    ]);
-    if (!inspection) {
-      apiError(404, "inspection_not_found", "Inspection not found.");
-    }
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
+    const field = await this.inspectionRequiredFieldsRepository.findOne({
+      where: { id: fieldId, inspection_id: inspectionId, organization_id: scopedOrganizationId },
+    });
     if (inspection.locked_at) {
       apiError(409, "inspection_locked", "Inspection is locked and cannot be edited.");
     }
@@ -702,7 +714,7 @@ export class InspectionsAdminService {
     inspection.report_generated_at = new Date();
     inspection.sent_to_customer_at = null;
     await this.inspectionsRepository.save(inspection);
-    return this.getWorkspace(inspectionId);
+    return this.getWorkspace(inspectionId, scopedOrganizationId);
   }
 
   async patchInspectionMeta(
@@ -711,11 +723,10 @@ export class InspectionsAdminService {
       gas_license_number?: string | null;
       gas_license_holder_name?: string | null;
     },
+    organizationId: string,
   ) {
-    const inspection = await this.inspectionsRepository.findOne({ where: { id: inspectionId } });
-    if (!inspection) {
-      apiError(404, "inspection_not_found", "Inspection not found.");
-    }
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
     if (inspection.locked_at) {
       apiError(409, "inspection_locked", "Inspection is locked and cannot be edited.");
     }
@@ -733,7 +744,7 @@ export class InspectionsAdminService {
     inspection.report_generated_at = new Date();
     inspection.sent_to_customer_at = null;
     await this.inspectionsRepository.save(inspection);
-    return this.getWorkspace(inspectionId);
+    return this.getWorkspace(inspectionId, scopedOrganizationId);
   }
 
   async assignPhoto(
@@ -742,15 +753,18 @@ export class InspectionsAdminService {
     itemId: string,
     assignmentType: "required_photo" | "unsatisfactory_evidence" | null,
     makePrimary: boolean,
+    organizationId: string,
   ) {
-    const [inspection, photo, item] = await Promise.all([
-      this.inspectionsRepository.findOne({ where: { id: inspectionId } }),
-      this.inspectionPhotosRepository.findOne({ where: { id: photoId, inspection_id: inspectionId } }),
-      this.inspectionItemsRepository.findOne({ where: { id: itemId, inspection_id: inspectionId } }),
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
+    const [photo, item] = await Promise.all([
+      this.inspectionPhotosRepository.findOne({
+        where: { id: photoId, inspection_id: inspectionId, organization_id: scopedOrganizationId },
+      }),
+      this.inspectionItemsRepository.findOne({
+        where: { id: itemId, inspection_id: inspectionId, organization_id: scopedOrganizationId },
+      }),
     ]);
-    if (!inspection) {
-      apiError(404, "inspection_not_found", "Inspection not found.");
-    }
     if (inspection.locked_at) {
       apiError(409, "inspection_locked", "Inspection is locked and cannot be edited.");
     }
@@ -766,7 +780,10 @@ export class InspectionsAdminService {
       await this.inspectionPhotosRepository.createQueryBuilder()
         .update(InspectionPhotoEntity)
         .set({ is_primary_for_item: false })
-        .where("inspection_id = :inspectionId AND assignment_item_id = :itemId", { inspectionId, itemId })
+        .where(
+          "inspection_id = :inspectionId AND assignment_item_id = :itemId AND organization_id = :organizationId",
+          { inspectionId, itemId, organizationId: scopedOrganizationId },
+        )
         .execute();
     }
 
@@ -782,14 +799,16 @@ export class InspectionsAdminService {
     inspection.sent_to_customer_at = null;
     await this.inspectionsRepository.save(inspection);
 
-    return this.getWorkspace(inspectionId);
+    return this.getWorkspace(inspectionId, scopedOrganizationId);
   }
 
-  async uploadPhotos(inspectionId: string, files: Array<{ originalname: string; mimetype: string; buffer: Buffer }>) {
-    const inspection = await this.inspectionsRepository.findOne({ where: { id: inspectionId } });
-    if (!inspection) {
-      apiError(404, "inspection_not_found", "Inspection not found.");
-    }
+  async uploadPhotos(
+    inspectionId: string,
+    files: Array<{ originalname: string; mimetype: string; buffer: Buffer }>,
+    organizationId: string,
+  ) {
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
     if (inspection.locked_at) {
       apiError(409, "inspection_locked", "Inspection is locked and cannot be edited.");
     }
@@ -812,6 +831,7 @@ export class InspectionsAdminService {
 
       const photo = await this.inspectionPhotosRepository.save(
         this.inspectionPhotosRepository.create({
+          organization_id: scopedOrganizationId,
           inspection_id: inspectionId,
           photo_type: "finding",
           caption: null,
@@ -835,7 +855,7 @@ export class InspectionsAdminService {
     inspection.sent_to_customer_at = null;
     await this.inspectionsRepository.save(inspection);
 
-    return this.getWorkspace(inspectionId);
+    return this.getWorkspace(inspectionId, scopedOrganizationId);
   }
 
   async getPhotoAssetStream(fileName: string) {
@@ -2426,12 +2446,15 @@ export class InspectionsAdminService {
     return hash.toString(36).toUpperCase().padStart(7, "0").slice(-7);
   }
 
-  private async buildPublicJobCodeMap() {
-    const jobRows = await this.jobsRepository.createQueryBuilder("job")
+  private async buildPublicJobCodeMap(organizationId?: string) {
+    const jobsQuery = this.jobsRepository.createQueryBuilder("job")
       .select(["job.id", "job.created_at"])
       .orderBy("job.created_at", "ASC")
-      .addOrderBy("job.id", "ASC")
-      .getMany();
+      .addOrderBy("job.id", "ASC");
+    if (organizationId) {
+      jobsQuery.where("job.organization_id = :organizationId", { organizationId });
+    }
+    const jobRows = await jobsQuery.getMany();
 
     const reserved = new Set<string>();
     const codeMap = new Map<string, string>();
@@ -2478,9 +2501,11 @@ export class InspectionsAdminService {
     propertyAddress: string,
     reportType: InspectionReportType,
     actor: ActorContext,
+    organizationId: string,
   ) {
     return this.jobsRepository.save(
       this.jobsRepository.create({
+        organization_id: organizationId,
         customer_id: customer.id,
         service_id: null,
         assigned_technician_id: null,
@@ -2503,13 +2528,16 @@ export class InspectionsAdminService {
     );
   }
 
-  private async resolveOrCreateDraftCustomer() {
-    const existing = await this.customersRepository.findOne({ where: { email: "internal-draft@phoenix.local" } });
+  private async resolveOrCreateDraftCustomer(organizationId: string) {
+    const existing = await this.customersRepository.findOne({
+      where: { email: "internal-draft@phoenix.local", organization_id: organizationId },
+    });
     if (existing) {
       return existing;
     }
     return this.customersRepository.save(
       this.customersRepository.create({
+        organization_id: organizationId,
         full_name: "Internal Draft",
         phone: "0000000000",
         email: "internal-draft@phoenix.local",
@@ -2525,5 +2553,22 @@ export class InspectionsAdminService {
         notes: "System draft customer for inspection demos.",
       }),
     );
+  }
+
+  private requireOrganizationId(organizationId: string | null | undefined) {
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required for inspections.");
+    }
+    return organizationId;
+  }
+
+  private async loadInspectionOrFail(inspectionId: string, organizationId: string) {
+    const inspection = await this.inspectionsRepository.findOne({
+      where: { id: inspectionId, organization_id: organizationId },
+    });
+    if (!inspection) {
+      apiError(404, "inspection_not_found", "Inspection not found.");
+    }
+    return inspection;
   }
 }

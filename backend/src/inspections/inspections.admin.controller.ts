@@ -85,9 +85,17 @@ export class InspectionsAdminController {
     );
   }
 
+  private requireActiveOrganizationId(actor: ActorContext, message = "An active organization is required for inspections.") {
+    if (!actor.organization_id) {
+      apiError(400, "organization_context_missing", message);
+    }
+    return actor.organization_id;
+  }
+
   @Post()
   async createInspection(@Req() request: RequestWithActor, @Body() body: CreateInspectionPayload) {
     const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
     if (!body.report_type || !(inspectionReportTypes as readonly string[]).includes(body.report_type)) {
       apiError(400, "invalid_report_type", "report_type is invalid.");
     }
@@ -126,6 +134,7 @@ export class InspectionsAdminController {
         : null,
       property_address: body.property_address?.trim() || null,
       actor,
+      organizationId,
     });
 
     return apiSuccess(workspace);
@@ -133,15 +142,17 @@ export class InspectionsAdminController {
 
   @Get("customers/search")
   async searchCustomers(@Req() request: RequestWithActor, @Query("q") query?: string) {
-    this.requireOfficeActor(request);
-    const rows = await this.inspectionsAdminService.searchCustomers(query ?? "");
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const rows = await this.inspectionsAdminService.searchCustomers(query ?? "", organizationId);
     return apiSuccess(rows);
   }
 
   @Get("jobs/search")
   async searchJobs(@Req() request: RequestWithActor, @Query("q") query?: string) {
-    this.requireOfficeActor(request);
-    const rows = await this.inspectionsAdminService.searchJobs(query ?? "");
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const rows = await this.inspectionsAdminService.searchJobs(query ?? "", organizationId);
     return apiSuccess(rows);
   }
 
@@ -153,20 +164,23 @@ export class InspectionsAdminController {
     @Query("status") status?: string,
     @Query("customerId") customerId?: string,
   ) {
-    this.requireOfficeActor(request);
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
     const rows = await this.inspectionsAdminService.listInspections({
       query,
       report_type: reportType,
       status,
       customer_id: customerId,
+      organizationId,
     });
     return apiSuccess(rows);
   }
 
   @Get(":inspectionId/workspace")
   async getWorkspace(@Req() request: RequestWithActor, @Param("inspectionId") inspectionId: string) {
-    this.requireOfficeActor(request);
-    const workspace = await this.inspectionsAdminService.getWorkspace(inspectionId);
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const workspace = await this.inspectionsAdminService.getWorkspace(inspectionId, organizationId);
     return apiSuccess(workspace);
   }
 
@@ -178,6 +192,7 @@ export class InspectionsAdminController {
     @Body() body: PatchInspectionItemPayload,
   ) {
     const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
     if (body.status && !(inspectionItemStatuses as readonly string[]).includes(body.status)) {
       apiError(400, "invalid_item_status", "status must be satisfactory, unsatisfactory, or na.");
     }
@@ -190,6 +205,7 @@ export class InspectionsAdminController {
         recommendation_text: body.recommendation_text,
       },
       actor,
+      organizationId,
     );
     return apiSuccess(workspace);
   }
@@ -201,8 +217,9 @@ export class InspectionsAdminController {
     @Param("fieldId") fieldId: string,
     @Body() body: PatchRequiredFieldPayload,
   ) {
-    this.requireOfficeActor(request);
-    const workspace = await this.inspectionsAdminService.patchRequiredField(inspectionId, fieldId, body);
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const workspace = await this.inspectionsAdminService.patchRequiredField(inspectionId, fieldId, body, organizationId);
     return apiSuccess(workspace);
   }
 
@@ -212,8 +229,9 @@ export class InspectionsAdminController {
     @Param("inspectionId") inspectionId: string,
     @Body() body: PatchInspectionMetaPayload,
   ) {
-    this.requireOfficeActor(request);
-    const workspace = await this.inspectionsAdminService.patchInspectionMeta(inspectionId, body);
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const workspace = await this.inspectionsAdminService.patchInspectionMeta(inspectionId, body, organizationId);
     return apiSuccess(workspace);
   }
 
@@ -223,7 +241,8 @@ export class InspectionsAdminController {
     @Param("inspectionId") inspectionId: string,
     @Body() body: AssignPhotoPayload,
   ) {
-    this.requireOfficeActor(request);
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
     if (!body.photo_id?.trim()) {
       apiError(400, "invalid_photo_id", "photo_id is required.");
     }
@@ -236,6 +255,7 @@ export class InspectionsAdminController {
       body.item_id.trim(),
       body.assignment_type ?? null,
       body.make_primary === true,
+      organizationId,
     );
     return apiSuccess(workspace);
   }
@@ -247,8 +267,9 @@ export class InspectionsAdminController {
     @Param("inspectionId") inspectionId: string,
     @UploadedFiles() files: Array<{ originalname: string; mimetype: string; buffer: Buffer }>,
   ) {
-    this.requireOfficeActor(request);
-    const workspace = await this.inspectionsAdminService.uploadPhotos(inspectionId, files ?? []);
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const workspace = await this.inspectionsAdminService.uploadPhotos(inspectionId, files ?? [], organizationId);
     return apiSuccess(workspace);
   }
 
@@ -265,22 +286,25 @@ export class InspectionsAdminController {
 
   @Post(":inspectionId/generate")
   async generate(@Req() request: RequestWithActor, @Param("inspectionId") inspectionId: string) {
-    this.requireOfficeActor(request);
-    const workspace = await this.inspectionsAdminService.generate(inspectionId);
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const workspace = await this.inspectionsAdminService.generate(inspectionId, organizationId);
     return apiSuccess(workspace);
   }
 
   @Post(":inspectionId/send")
   async send(@Req() request: RequestWithActor, @Param("inspectionId") inspectionId: string) {
-    this.requireOfficeActor(request);
-    const workspace = await this.inspectionsAdminService.send(inspectionId);
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const workspace = await this.inspectionsAdminService.send(inspectionId, organizationId);
     return apiSuccess(workspace);
   }
 
   @Post(":inspectionId/unlock")
   async unlockForCorrection(@Req() request: RequestWithActor, @Param("inspectionId") inspectionId: string) {
-    this.requireCorrectionAdminActor(request);
-    const workspace = await this.inspectionsAdminService.unlockForCorrection(inspectionId);
+    const actor = this.requireCorrectionAdminActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const workspace = await this.inspectionsAdminService.unlockForCorrection(inspectionId, organizationId);
     return apiSuccess(workspace);
   }
 
@@ -291,7 +315,8 @@ export class InspectionsAdminController {
     @Query("download") download: string | undefined,
     @Res({ passthrough: true }) response: Response,
   ) {
-    this.requireOfficeActor(request);
+    const actor = this.requireOfficeActor(request);
+    this.requireActiveOrganizationId(actor);
     const pdfBuffer = await this.inspectionsAdminService.renderInspectionPdf(inspectionId);
     const shouldDownload = download === "1" || download === "true";
     response.setHeader("Content-Type", "application/pdf");
