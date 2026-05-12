@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { DataSource } from "typeorm";
 
 import { apiError } from "../../common/api-response";
+import { assertTablesExist } from "../../database/schema-readiness";
 
 type UpsertOwnedPhoneNumberInput = {
   phoneNumber: string;
@@ -542,86 +543,8 @@ export class OwnedPhoneNumbersService implements OnModuleInit {
       return;
     }
 
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS owned_phone_numbers (
-        id char(36) NOT NULL,
-        provider varchar(32) NOT NULL DEFAULT 'telnyx',
-        provider_number_id varchar(255) NULL,
-        phone_number varchar(64) NOT NULL,
-        phone_number_normalized varchar(32) NOT NULL,
-        label varchar(255) NULL,
-        market_key varchar(64) NULL,
-        market_label varchar(128) NULL,
-        default_source varchar(64) NULL,
-        source_mapping_id varchar(128) NULL,
-        campaign_name varchar(255) NULL,
-        purpose varchar(16) NOT NULL DEFAULT 'both',
-        sms_enabled tinyint(1) NOT NULL DEFAULT 1,
-        voice_enabled tinyint(1) NOT NULL DEFAULT 1,
-        is_active tinyint(1) NOT NULL DEFAULT 1,
-        tenant_id char(36) NULL,
-        company_id char(36) NULL,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        UNIQUE KEY ux_owned_phone_numbers_normalized (phone_number_normalized),
-        KEY ix_owned_phone_numbers_active_sms (is_active, sms_enabled),
-        KEY ix_owned_phone_numbers_active_voice (is_active, voice_enabled),
-        KEY ix_owned_phone_numbers_market_key (market_key),
-        KEY ix_owned_phone_numbers_provider_id (provider, provider_number_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await this.ensureColumn("market_key", "ALTER TABLE owned_phone_numbers ADD COLUMN market_key varchar(64) NULL AFTER label");
-    await this.ensureColumn("market_label", "ALTER TABLE owned_phone_numbers ADD COLUMN market_label varchar(128) NULL AFTER market_key");
-    await this.ensureColumn("default_source", "ALTER TABLE owned_phone_numbers ADD COLUMN default_source varchar(64) NULL AFTER market_label");
-    await this.ensureColumn("source_mapping_id", "ALTER TABLE owned_phone_numbers ADD COLUMN source_mapping_id varchar(128) NULL AFTER default_source");
-    await this.ensureColumn("campaign_name", "ALTER TABLE owned_phone_numbers ADD COLUMN campaign_name varchar(255) NULL AFTER source_mapping_id");
-    await this.ensureIndex(
-      "ix_owned_phone_numbers_active_voice",
-      "CREATE INDEX ix_owned_phone_numbers_active_voice ON owned_phone_numbers (is_active, voice_enabled)",
-    );
-    await this.ensureIndex(
-      "ix_owned_phone_numbers_market_key",
-      "CREATE INDEX ix_owned_phone_numbers_market_key ON owned_phone_numbers (market_key)",
-    );
+    await assertTablesExist(this.dataSource, ["owned_phone_numbers"]);
 
     this.schemaEnsured = true;
-  }
-
-  private async ensureColumn(columnName: string, alterSql: string) {
-    const rows = await this.dataSource.query(
-      `
-        SELECT COLUMN_NAME
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'owned_phone_numbers'
-          AND COLUMN_NAME = ?
-        LIMIT 1
-      `,
-      [columnName],
-    ) as Array<{ COLUMN_NAME?: string }>;
-
-    if (rows.length === 0) {
-      await this.dataSource.query(alterSql);
-    }
-  }
-
-  private async ensureIndex(indexName: string, createSql: string) {
-    const rows = await this.dataSource.query(
-      `
-        SELECT INDEX_NAME
-        FROM INFORMATION_SCHEMA.STATISTICS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'owned_phone_numbers'
-          AND INDEX_NAME = ?
-        LIMIT 1
-      `,
-      [indexName],
-    ) as Array<{ INDEX_NAME?: string }>;
-
-    if (rows.length === 0) {
-      await this.dataSource.query(createSql);
-    }
   }
 }

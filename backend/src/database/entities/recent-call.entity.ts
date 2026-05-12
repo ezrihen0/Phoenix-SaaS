@@ -2,11 +2,16 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
 
-@Entity({ name: "recent_calls", synchronize: false })
+@Entity({ name: "recent_calls" })
+@Index("ux_recent_calls_provider_event_id", ["provider", "provider_event_id"], { unique: true })
+@Index("ix_recent_calls_created_at", ["created_at"])
+@Index("ix_recent_calls_from_number_normalized", ["from_number_normalized"])
+@Index("ix_recent_calls_to_number_normalized", ["to_number_normalized"])
 export class RecentCallEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;

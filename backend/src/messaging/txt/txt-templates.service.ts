@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { DataSource } from "typeorm";
 
 import { apiError } from "../../common/api-response";
+import { assertTablesExist } from "../../database/schema-readiness";
 
 type TxtTemplateRecord = {
   id: string;
@@ -310,39 +311,7 @@ export class TxtTemplatesService {
       return;
     }
 
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS sms_templates (
-        id CHAR(36) NOT NULL,
-        name VARCHAR(160) NOT NULL,
-        body TEXT NOT NULL,
-        is_active TINYINT(1) NOT NULL DEFAULT 1,
-        sort_order INT NOT NULL DEFAULT 0,
-        quick_pick_order INT NULL,
-        created_by_user_id VARCHAR(64) NULL,
-        created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        KEY idx_sms_templates_active_sort (is_active, sort_order, created_at),
-        KEY idx_sms_templates_quick_pick (is_active, quick_pick_order, created_at)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-
-    const quickPickColumnRows = await this.dataSource.query(
-      `
-        SELECT COLUMN_NAME
-        FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'sms_templates'
-          AND COLUMN_NAME = 'quick_pick_order'
-      `,
-    ) as Array<Record<string, unknown>>;
-
-    if (!quickPickColumnRows.length) {
-      await this.dataSource.query(`
-        ALTER TABLE sms_templates
-        ADD COLUMN quick_pick_order INT NULL AFTER sort_order
-      `);
-    }
+    await assertTablesExist(this.dataSource, ["sms_templates"]);
 
     this.schemaEnsured = true;
   }

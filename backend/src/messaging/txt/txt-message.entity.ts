@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
@@ -11,6 +12,12 @@ export type TxtMessageDirection = "inbound" | "outbound";
 export type TxtMessageStatus = "pending" | "sent" | "delivered" | "failed" | "received";
 
 @Entity({ name: "txt_messages" })
+@Index("ix_txt_messages_conversation", ["conversation_id"])
+@Index("ix_txt_messages_conversation_created_at", ["conversation_id", "created_at"])
+@Index("ix_txt_messages_created_at", ["created_at"])
+@Index("ix_txt_messages_read_at", ["read_at"])
+@Index("ix_txt_messages_status", ["status"])
+@Index("ix_txt_messages_sent_by_user", ["sent_by_user_id"])
 export class TxtMessageEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;

@@ -2,13 +2,21 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
+  Unique,
   UpdateDateColumn,
 } from "typeorm";
 
 export type TxtConversationLastDirection = "inbound" | "outbound";
 
 @Entity({ name: "txt_conversations" })
+@Unique("ux_txt_conversations_active_pair", ["owned_phone_number_normalized", "customer_phone_number_normalized", "is_archived"])
+@Index("ix_txt_conversations_customer", ["customer_id"])
+@Index("ix_txt_conversations_last_message_at", ["last_message_at"])
+@Index("ix_txt_conversations_unread_count", ["unread_count"])
+@Index("ix_txt_conversations_owned_number", ["owned_phone_number_id"])
+@Index("ix_txt_conversations_customer_phone_lookup", ["customer_phone_number_normalized", "is_archived"])
 export class TxtConversationEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;

@@ -5,6 +5,7 @@ import { DataSource, In, Repository } from "typeorm";
 import { apiError } from "../common/api-response";
 import { ProfileEntity } from "../database/entities/profile.entity";
 import { RecentCallEntity } from "../database/entities/recent-call.entity";
+import { assertTablesExist } from "../database/schema-readiness";
 
 export type CallbackTaskStatus = "open" | "in_progress" | "completed" | "cancelled";
 export type CallbackTaskPriority = "high" | "normal" | "low";
@@ -293,34 +294,7 @@ export class CallbackTaskService {
       return;
     }
 
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS callback_tasks (
-        id char(36) NOT NULL,
-        recent_call_id char(36) NOT NULL,
-        client_id char(36) NULL,
-        lead_id char(36) NULL,
-        phone_number varchar(64) NULL,
-        source varchar(64) NOT NULL DEFAULT 'unknown',
-        priority varchar(32) NOT NULL DEFAULT 'normal',
-        due_at datetime(6) NULL,
-        assigned_to_profile_id char(36) NULL,
-        status varchar(32) NOT NULL DEFAULT 'open',
-        notes longtext NULL,
-        created_by_auth_user_id char(36) NULL,
-        completed_at datetime(6) NULL,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        KEY ix_callback_tasks_recent_call_id (recent_call_id),
-        KEY ix_callback_tasks_assigned_to_profile_id (assigned_to_profile_id),
-        KEY ix_callback_tasks_status (status),
-        KEY ix_callback_tasks_due_at (due_at)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-    `);
-
-    await this.dataSource.query(`
-      ALTER TABLE callback_tasks CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    `);
+    await assertTablesExist(this.dataSource, ["callback_tasks"]);
 
     this.callbackTasksSchemaEnsured = true;
   }

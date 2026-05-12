@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { DataSource } from "typeorm";
 
 import { apiError } from "../../common/api-response";
+import { assertTablesExist } from "../../database/schema-readiness";
 
 type PersistTxtMessageInput = {
   conversationId: string;
@@ -482,90 +483,8 @@ export class TxtMessagesService {
       return;
     }
 
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS txt_messages (
-        id char(36) NOT NULL,
-        conversation_id char(36) NOT NULL,
-        direction varchar(16) NOT NULL,
-        sent_by_user_id char(36) NULL,
-        provider varchar(32) NOT NULL DEFAULT 'telnyx',
-        provider_message_id varchar(255) NULL,
-        provider_status varchar(64) NULL,
-        from_number varchar(64) NOT NULL,
-        from_number_normalized varchar(32) NOT NULL,
-        to_number varchar(64) NOT NULL,
-        to_number_normalized varchar(32) NOT NULL,
-        body longtext NOT NULL,
-        status varchar(16) NOT NULL,
-        error_code varchar(128) NULL,
-        error_message longtext NULL,
-        sent_at datetime(6) NULL,
-        received_at datetime(6) NULL,
-        delivered_at datetime(6) NULL,
-        read_at datetime(6) NULL,
-        raw_payload longtext NULL,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        UNIQUE KEY ux_txt_messages_provider_message (provider_message_id),
-        KEY ix_txt_messages_conversation (conversation_id),
-        KEY ix_txt_messages_conversation_created_at (conversation_id, created_at),
-        KEY ix_txt_messages_created_at (created_at),
-        KEY ix_txt_messages_read_at (read_at),
-        KEY ix_txt_messages_status (status),
-        KEY ix_txt_messages_sent_by_user (sent_by_user_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await this.ensureColumn(
-      "sent_by_user_id",
-      "ALTER TABLE txt_messages ADD COLUMN sent_by_user_id char(36) NULL AFTER direction",
-    );
-    await this.ensureIndex(
-      "ix_txt_messages_conversation_created_at",
-      "ALTER TABLE txt_messages ADD KEY ix_txt_messages_conversation_created_at (conversation_id, created_at)",
-    );
-    await this.ensureIndex(
-      "ix_txt_messages_sent_by_user",
-      "ALTER TABLE txt_messages ADD KEY ix_txt_messages_sent_by_user (sent_by_user_id)",
-    );
+    await assertTablesExist(this.dataSource, ["txt_messages"]);
 
     this.schemaEnsured = true;
-  }
-
-  private async ensureColumn(columnName: string, ddl: string) {
-    const rows = await this.dataSource.query(
-      `
-        SELECT 1
-        FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'txt_messages'
-          AND COLUMN_NAME = ?
-        LIMIT 1
-      `,
-      [columnName],
-    ) as Array<Record<string, unknown>>;
-
-    if (!rows[0]) {
-      await this.dataSource.query(ddl);
-    }
-  }
-
-  private async ensureIndex(indexName: string, ddl: string) {
-    const rows = await this.dataSource.query(
-      `
-        SELECT 1
-        FROM information_schema.STATISTICS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'txt_messages'
-          AND INDEX_NAME = ?
-        LIMIT 1
-      `,
-      [indexName],
-    ) as Array<Record<string, unknown>>;
-
-    if (!rows[0]) {
-      await this.dataSource.query(ddl);
-    }
   }
 }

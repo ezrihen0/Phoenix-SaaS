@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
@@ -9,6 +10,10 @@ import {
 export type OwnedPhoneNumberPurpose = "txt" | "voice" | "both";
 
 @Entity({ name: "owned_phone_numbers" })
+@Index("ix_owned_phone_numbers_active_sms", ["is_active", "sms_enabled"])
+@Index("ix_owned_phone_numbers_active_voice", ["is_active", "voice_enabled"])
+@Index("ix_owned_phone_numbers_market_key", ["market_key"])
+@Index("ix_owned_phone_numbers_provider_id", ["provider", "provider_number_id"])
 export class OwnedPhoneNumberEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;

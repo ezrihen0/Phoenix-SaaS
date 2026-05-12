@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { DataSource } from "typeorm";
 
 import { apiError } from "../../common/api-response";
+import { assertTablesExist } from "../../database/schema-readiness";
 import { OwnedPhoneNumbersService } from "../phone-numbers/owned-phone-numbers.service";
 
 type FindOrCreateTxtConversationInput = {
@@ -524,58 +525,8 @@ export class TxtConversationsService {
       return;
     }
 
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS txt_conversations (
-        id char(36) NOT NULL,
-        public_conversation_code char(7) NOT NULL,
-        customer_id char(36) NULL,
-        customer_phone_number varchar(64) NOT NULL,
-        customer_phone_number_normalized varchar(32) NOT NULL,
-        owned_phone_number_id char(36) NOT NULL,
-        owned_phone_number varchar(64) NOT NULL,
-        owned_phone_number_normalized varchar(32) NOT NULL,
-        title varchar(255) NULL,
-        display_name varchar(255) NULL,
-        last_message_preview varchar(500) NULL,
-        last_message_direction varchar(16) NULL,
-        last_message_at datetime(6) NULL,
-        unread_count int NOT NULL DEFAULT 0,
-        is_archived tinyint(1) NOT NULL DEFAULT 0,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        UNIQUE KEY ux_txt_conversations_public_code (public_conversation_code),
-        UNIQUE KEY ux_txt_conversations_active_pair (owned_phone_number_normalized, customer_phone_number_normalized, is_archived),
-        KEY ix_txt_conversations_customer (customer_id),
-        KEY ix_txt_conversations_last_message_at (last_message_at),
-        KEY ix_txt_conversations_unread_count (unread_count),
-        KEY ix_txt_conversations_owned_number (owned_phone_number_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await this.ensureIndex(
-      "ix_txt_conversations_customer_phone_lookup",
-      "ALTER TABLE txt_conversations ADD KEY ix_txt_conversations_customer_phone_lookup (customer_phone_number_normalized, is_archived)",
-    );
+    await assertTablesExist(this.dataSource, ["txt_conversations"]);
 
     this.schemaEnsured = true;
-  }
-
-  private async ensureIndex(indexName: string, ddl: string) {
-    const rows = await this.dataSource.query(
-      `
-        SELECT 1
-        FROM information_schema.STATISTICS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'txt_conversations'
-          AND INDEX_NAME = ?
-        LIMIT 1
-      `,
-      [indexName],
-    ) as Array<Record<string, unknown>>;
-
-    if (!rows[0]) {
-      await this.dataSource.query(ddl);
-    }
   }
 }

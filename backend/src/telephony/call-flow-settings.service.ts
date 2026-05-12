@@ -4,6 +4,7 @@ import { Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 
 import { apiError } from "../common/api-response";
+import { assertTablesExist } from "../database/schema-readiness";
 
 export type CallFlowDayKey =
   | "monday"
@@ -293,141 +294,13 @@ export class CallFlowSettingsService {
       return;
     }
 
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS call_flow_configs (
-        id char(36) NOT NULL,
-        config_name varchar(100) NOT NULL,
-        is_active tinyint(1) NOT NULL DEFAULT 1,
-        time_zone varchar(64) NOT NULL DEFAULT 'America/Edmonton',
-        greeting_mode varchar(32) NOT NULL DEFAULT 'standard_greeting',
-        greeting_text longtext NULL,
-        open_hours_action varchar(64) NOT NULL DEFAULT 'standard_answer',
-        open_hours_route_target varchar(255) NULL,
-        after_hours_action varchar(64) NOT NULL DEFAULT 'voicemail',
-        after_hours_route_target varchar(255) NULL,
-        whisper_message longtext NULL,
-        missed_call_sms_template_key varchar(64) NULL,
-        updated_by_auth_user_id char(36) NULL,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        KEY ix_call_flow_configs_is_active (is_active)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS call_flow_business_hours (
-        id char(36) NOT NULL,
-        call_flow_config_id char(36) NOT NULL,
-        day_key varchar(16) NOT NULL,
-        is_enabled tinyint(1) NOT NULL DEFAULT 1,
-        open_time varchar(5) NOT NULL,
-        close_time varchar(5) NOT NULL,
-        sort_order int NOT NULL DEFAULT 0,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        UNIQUE KEY ux_call_flow_business_hours_config_day (call_flow_config_id, day_key),
-        KEY ix_call_flow_business_hours_sort_order (call_flow_config_id, sort_order)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    await this.dataSource.query(`
-      CREATE TABLE IF NOT EXISTS call_flow_ivr_options (
-        id char(36) NOT NULL,
-        call_flow_config_id char(36) NOT NULL,
-        digit varchar(4) NOT NULL,
-        option_label varchar(120) NOT NULL,
-        service_type varchar(64) NULL,
-        route_target varchar(255) NULL,
-        sort_order int NOT NULL DEFAULT 0,
-        created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-        PRIMARY KEY (id),
-        UNIQUE KEY ux_call_flow_ivr_options_config_digit (call_flow_config_id, digit),
-        KEY ix_call_flow_ivr_options_sort_order (call_flow_config_id, sort_order)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-
-    const existing = await this.dataSource.query(
-      `
-        SELECT id
-        FROM call_flow_configs
-        WHERE is_active = 1
-        LIMIT 1
-      `,
-    ) as Array<{ id?: string }>;
-
-    if (!existing[0]?.id) {
-      await this.seedDefaultConfig();
-    }
+    await assertTablesExist(this.dataSource, [
+      "call_flow_configs",
+      "call_flow_business_hours",
+      "call_flow_ivr_options",
+    ]);
 
     this.schemaEnsured = true;
-  }
-
-  private async seedDefaultConfig() {
-    const configId = randomUUID();
-
-    await this.dataSource.query(
-      `
-        INSERT INTO call_flow_configs (
-          id,
-          config_name,
-          is_active,
-          time_zone,
-          greeting_mode,
-          greeting_text,
-          open_hours_action,
-          open_hours_route_target,
-          after_hours_action,
-          after_hours_route_target,
-          whisper_message,
-          missed_call_sms_template_key,
-          updated_by_auth_user_id,
-          created_at,
-          updated_at
-        ) VALUES (?, 'Phoenix Main Call Flow', 1, 'America/Edmonton', 'standard_greeting', NULL, 'standard_answer', 'office-main', 'voicemail', 'after-hours-voicemail', NULL, NULL, NULL, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
-      `,
-      [configId],
-    );
-
-    for (const [index, item] of DEFAULT_BUSINESS_HOURS.entries()) {
-      await this.dataSource.query(
-        `
-          INSERT INTO call_flow_business_hours (
-            id,
-            call_flow_config_id,
-            day_key,
-            is_enabled,
-            open_time,
-            close_time,
-            sort_order,
-            created_at,
-            updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
-        `,
-        [randomUUID(), configId, item.dayKey, item.enabled ? 1 : 0, item.openTime, item.closeTime, index],
-      );
-    }
-
-    for (const [index, item] of DEFAULT_IVR_OPTIONS.entries()) {
-      await this.dataSource.query(
-        `
-          INSERT INTO call_flow_ivr_options (
-            id,
-            call_flow_config_id,
-            digit,
-            option_label,
-            service_type,
-            route_target,
-            sort_order,
-            created_at,
-            updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
-        `,
-        [randomUUID(), configId, item.digit, item.label, item.serviceType, item.routeTarget, index],
-      );
-    }
   }
 
   private async getActiveConfigRow() {

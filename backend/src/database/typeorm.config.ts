@@ -5,6 +5,9 @@ import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectio
 import type { PostgresConnectionOptions } from "typeorm/driver/postgres/PostgresConnectionOptions";
 import { join } from "path";
 
+import { OwnedPhoneNumberEntity } from "../messaging/phone-numbers/owned-phone-number.entity";
+import { TxtConversationEntity } from "../messaging/txt/txt-conversation.entity";
+import { TxtMessageEntity } from "../messaging/txt/txt-message.entity";
 import { getDatabaseDefaults, resolveDatabaseType, type SupportedDatabaseType } from "./database-dialect";
 import { AutomationLogEntity } from "./entities/automation-log.entity";
 import { AutomationPendingActionEntity } from "./entities/automation-pending-action.entity";
@@ -90,6 +93,9 @@ export const typeOrmEntities = [
   PricebookItemEntity,
   PricebookBundleEntity,
   PricebookBundleItemEntity,
+  OwnedPhoneNumberEntity,
+  TxtConversationEntity,
+  TxtMessageEntity,
 ];
 
 function readBooleanFlag(value: string | undefined, fallback: boolean) {
@@ -122,11 +128,11 @@ function buildBaseTypeOrmOptions(readEnv: (key: string) => string | undefined): 
     database: readEnv("DB_NAME") ?? "phoenix_crm",
     entities: typeOrmEntities,
     migrations: [
-      join(__dirname, "migrations", "*.ts"),
-      join(__dirname, "migrations", "*.js"),
+      join(__dirname, "migrations", "active", "*.ts"),
+      join(__dirname, "migrations", "active", "*.js"),
     ],
     migrationsTableName: "typeorm_migrations",
-    synchronize: readBooleanFlag(readEnv("DB_SYNCHRONIZE"), true),
+    synchronize: readBooleanFlag(readEnv("DB_SYNCHRONIZE"), false),
     migrationsRun: readBooleanFlag(readEnv("DB_MIGRATIONS_RUN"), false),
     logging: readBooleanFlag(readEnv("DB_LOGGING"), false),
   };
