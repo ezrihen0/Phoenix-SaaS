@@ -274,8 +274,14 @@ export class InspectionsAdminController {
   }
 
   @Get("photos/:fileName/asset")
-  async getPhotoAsset(@Param("fileName") fileName: string, @Res({ passthrough: true }) response: Response) {
-    const stream = await this.inspectionsAdminService.getPhotoAssetStream(fileName);
+  async getPhotoAsset(
+    @Req() request: RequestWithActor,
+    @Param("fileName") fileName: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const stream = await this.inspectionsAdminService.getPhotoAssetStream(fileName, organizationId);
     const lower = fileName.toLowerCase();
     if (lower.endsWith(".png")) response.setHeader("content-type", "image/png");
     else if (lower.endsWith(".webp")) response.setHeader("content-type", "image/webp");
@@ -316,8 +322,8 @@ export class InspectionsAdminController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const actor = this.requireOfficeActor(request);
-    this.requireActiveOrganizationId(actor);
-    const pdfBuffer = await this.inspectionsAdminService.renderInspectionPdf(inspectionId);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const pdfBuffer = await this.inspectionsAdminService.renderInspectionPdf(inspectionId, organizationId);
     const shouldDownload = download === "1" || download === "true";
     response.setHeader("Content-Type", "application/pdf");
     response.setHeader(

@@ -4,6 +4,7 @@ import "reflect-metadata";
 import { randomUUID } from "crypto";
 import { access, rm } from "fs/promises";
 import { join } from "path";
+import { Readable } from "stream";
 
 import mysql from "mysql2/promise";
 import { HttpException } from "@nestjs/common";
@@ -172,6 +173,14 @@ async function expectApiError(
   }
 }
 
+async function streamToBuffer(stream: NodeJS.ReadableStream) {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream as AsyncIterable<Buffer | string>) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
 function buildActor(organization: OrganizationEntity, user: UserEntity, membership: MembershipEntity): ActorContext {
   return {
     user,
@@ -326,6 +335,7 @@ async function runIsolationChecks(summary: SmokeSummary, context: HarnessContext
   let existingJobWorkspaceId: string | null = null;
   let newCustomerWorkspaceId: string | null = null;
   let internalDraftWorkspaceAId: string | null = null;
+  let uploadedPhotoStorageKey: string | null = null;
 
   await expectApiError(
     summary,
@@ -630,12 +640,60 @@ async function runIsolationChecks(summary: SmokeSummary, context: HarnessContext
         throw new Error("Inspection photo row was not stamped with Org A.");
       }
     }
+    uploadedPhotoStorageKey = photos[0]?.storage_key ?? null;
 
     return {
       inspectionId: workspaceId,
       photoCount: photos.length,
     };
   });
+
+  await expectPass(summary, "Same-org photo asset still loads", async () => {
+    if (!uploadedPhotoStorageKey) {
+      throw new Error("No uploaded photo storage key available for same-org asset verification.");
+    }
+    const stream = await context.service.getPhotoAssetStream(uploadedPhotoStorageKey, orgA.organization.id);
+    if (!(stream instanceof Readable)) {
+      throw new Error("Photo asset stream did not return a readable stream.");
+    }
+    const buffer = await streamToBuffer(stream);
+    if (buffer.byteLength === 0) {
+      throw new Error("Same-org photo asset stream returned no bytes.");
+    }
+    return { bytes: buffer.byteLength };
+  });
+
+  await expectApiError(
+    summary,
+    "Cross-org photo asset is blocked",
+    ["inspection_photo_asset_not_found", "inspection_not_found"],
+    async () => {
+      if (!uploadedPhotoStorageKey) {
+        throw new Error("No uploaded photo storage key available for cross-org asset verification.");
+      }
+      const stream = await context.service.getPhotoAssetStream(uploadedPhotoStorageKey, orgB.organization.id);
+      await streamToBuffer(stream);
+    },
+  );
+
+  await expectPass(summary, "Same-org PDF render still works", async () => {
+    const workspaceId = newCustomerWorkspaceId ?? existingJobWorkspaceId ?? existingCustomerWorkspaceId;
+    if (!workspaceId) {
+      throw new Error("No same-org inspection available for PDF render verification.");
+    }
+    const pdfBuffer = await context.service.renderInspectionPdf(workspaceId, orgA.organization.id);
+    if (!Buffer.isBuffer(pdfBuffer) || pdfBuffer.byteLength === 0) {
+      throw new Error("Same-org PDF render did not return a PDF buffer.");
+    }
+    return { bytes: pdfBuffer.byteLength };
+  });
+
+  await expectApiError(
+    summary,
+    "Cross-org PDF render is blocked",
+    ["inspection_not_found"],
+    () => context.service.renderInspectionPdf(orgBWorkspace.inspectionMeta.id, orgA.organization.id),
+  );
 }
 
 async function removeUploadedPhotoFiles(storageKeys: Iterable<string>) {

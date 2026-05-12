@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { createReadStream } from "fs";
 import { promises as fs } from "fs";
 import { join } from "path";
-import { Repository } from "typeorm";
+import { IsNull, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import type { ActorContext } from "../common/request-types";
@@ -858,8 +858,14 @@ export class InspectionsAdminService {
     return this.getWorkspace(inspectionId, scopedOrganizationId);
   }
 
-  async getPhotoAssetStream(fileName: string) {
+  async getPhotoAssetStream(fileName: string, organizationId: string) {
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
     const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "");
+    if (!safeName) {
+      apiError(404, "inspection_photo_asset_not_found", "Inspection photo asset not found.");
+    }
+    const photo = await this.loadPhotoAssetOrFail(safeName, scopedOrganizationId);
+    await this.loadInspectionOrFail(photo.inspection_id, scopedOrganizationId);
     const absolutePath = join(this.uploadsRoot, safeName);
     try {
       await fs.access(absolutePath);
@@ -869,23 +875,30 @@ export class InspectionsAdminService {
     return createReadStream(absolutePath);
   }
 
-  async renderInspectionPdf(inspectionId: string) {
-    const inspection = await this.inspectionsRepository.findOne({ where: { id: inspectionId } });
-    if (!inspection) {
-      apiError(404, "inspection_not_found", "Inspection not found.");
-    }
+  async renderInspectionPdf(inspectionId: string, organizationId: string) {
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
 
     const [rawItems, photos, requiredFields] = await Promise.all([
       this.inspectionItemsRepository.find({
-        where: { inspection_id: inspectionId },
+        where: [
+          { inspection_id: inspectionId, organization_id: scopedOrganizationId },
+          { inspection_id: inspectionId, organization_id: IsNull() },
+        ],
         order: { section_key: "ASC", sort_order: "ASC" },
       }),
       this.inspectionPhotosRepository.find({
-        where: { inspection_id: inspectionId },
+        where: [
+          { inspection_id: inspectionId, organization_id: scopedOrganizationId },
+          { inspection_id: inspectionId, organization_id: IsNull() },
+        ],
         order: { created_at: "ASC" },
       }),
       this.inspectionRequiredFieldsRepository.find({
-        where: { inspection_id: inspectionId },
+        where: [
+          { inspection_id: inspectionId, organization_id: scopedOrganizationId },
+          { inspection_id: inspectionId, organization_id: IsNull() },
+        ],
       }),
     ]);
 
@@ -902,7 +915,7 @@ export class InspectionsAdminService {
     const generatedAt = inspection.generated_pdf_at ?? inspection.report_generated_at ?? new Date();
     const reportVersion = inspection.report_snapshot_key ? `v-${inspection.report_snapshot_key.slice(0, 8).toUpperCase()}` : "v-draft";
     const publicJobCode = inspection.job_id
-      ? (await this.buildPublicJobCodeMap()).get(inspection.job_id) ?? this.buildPublicJobCodeAttempt(inspection.job_id, 0)
+      ? (await this.buildPublicJobCodeMap(scopedOrganizationId)).get(inspection.job_id) ?? this.buildPublicJobCodeAttempt(inspection.job_id, 0)
       : null;
     const wettCustomerReportNumber = inspection.workflow_type === "compliance_wett" && publicJobCode
       ? this.buildReportNumber(publicJobCode)
@@ -2570,5 +2583,23 @@ export class InspectionsAdminService {
       apiError(404, "inspection_not_found", "Inspection not found.");
     }
     return inspection;
+  }
+
+  private async loadPhotoAssetOrFail(storageKey: string, organizationId: string) {
+    const sameOrgPhoto = await this.inspectionPhotosRepository.findOne({
+      where: { storage_key: storageKey, organization_id: organizationId },
+    });
+    if (sameOrgPhoto) {
+      return sameOrgPhoto;
+    }
+
+    const legacyPhoto = await this.inspectionPhotosRepository.findOne({
+      where: { storage_key: storageKey, organization_id: IsNull() },
+    });
+    if (legacyPhoto) {
+      return legacyPhoto;
+    }
+
+    apiError(404, "inspection_photo_asset_not_found", "Inspection photo asset not found.");
   }
 }
