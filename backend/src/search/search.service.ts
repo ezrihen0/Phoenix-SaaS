@@ -19,10 +19,10 @@ export class SearchService {
     private readonly observability: SearchObservability,
   ) {}
 
-  async search(rawQuery: string | undefined): Promise<GlobalSearchResponse> {
+  async search(rawQuery: string | undefined, organizationId: string): Promise<GlobalSearchResponse> {
     const requestId = randomUUID();
     const startedAt = Date.now();
-    const queryContext = this.parseQuery(rawQuery);
+    const queryContext = this.parseQuery(rawQuery, organizationId);
     const entityTiming: SearchEntityTiming[] = [];
     const errors: SearchMetaError[] = [];
 
@@ -79,7 +79,7 @@ export class SearchService {
     return response;
   }
 
-  private parseQuery(rawQuery: string | undefined): SearchQueryContext {
+  private parseQuery(rawQuery: string | undefined, organizationId: string): SearchQueryContext {
     const normalized = (rawQuery ?? "").trim().toLowerCase();
 
     if (!normalized || normalized.length < SEARCH_LIMITS.minQueryLength) {
@@ -94,6 +94,7 @@ export class SearchService {
     const cappedQuery = normalized.slice(0, SEARCH_LIMITS.maxQueryLength);
 
     return {
+      organizationId,
       normalized: cappedQuery,
       likeToken: `%${cappedQuery}%`,
       digits: cappedQuery.replace(/\D+/g, ""),

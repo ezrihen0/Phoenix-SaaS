@@ -52,6 +52,31 @@ export type ClientSession = {
     is_active: boolean;
     last_seen_at: string | null;
   } | null;
+  active_membership: {
+    id: string;
+    organization_id: string;
+    role: "owner" | "admin" | "office_admin" | "dispatcher" | "csr" | "technician" | "viewer";
+    status: "active" | "invited" | "suspended";
+  } | null;
+  active_organization: {
+    id: string;
+    name: string;
+    slug: string;
+    is_active: boolean;
+  } | null;
+  memberships: Array<{
+    id: string;
+    organization_id: string;
+    role: "owner" | "admin" | "office_admin" | "dispatcher" | "csr" | "technician" | "viewer";
+    status: "active" | "invited" | "suspended";
+    organization: {
+      id: string;
+      name: string;
+      slug: string;
+      is_active: boolean;
+    } | null;
+  }>;
+  permissions: string[];
 };
 
 export async function loginWithPassword(email: string, password: string) {
@@ -69,6 +94,17 @@ export async function logoutSession() {
 
 export async function getClientSession() {
   return authFetch<ClientSession>("/api/auth/session");
+}
+
+export async function listClientOrganizations() {
+  return authFetch<ClientSession["memberships"]>("/api/auth/organizations");
+}
+
+export async function setClientActiveOrganization(organizationId: string) {
+  return authFetch<ClientSession>("/api/auth/active-organization", {
+    method: "POST",
+    body: JSON.stringify({ organizationId }),
+  });
 }
 
 export async function getClientDestination() {

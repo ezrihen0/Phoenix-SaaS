@@ -40,6 +40,10 @@ type RoleUpdatePayload = {
   role?: unknown;
 };
 
+type ActiveOrganizationPayload = {
+  organizationId?: unknown;
+};
+
 function parseLoginPayload(payload: LoginPayload) {
   if (typeof payload.email !== "string" || !payload.email.trim()) {
     apiError(400, "invalid_login_payload", "email is required.");
@@ -101,6 +105,16 @@ function parseCreateStaffPayload(payload: CreateStaffPayload) {
   };
 }
 
+function parseActiveOrganizationPayload(payload: ActiveOrganizationPayload) {
+  if (typeof payload.organizationId !== "string" || !payload.organizationId.trim()) {
+    apiError(400, "organization_id_required", "organizationId is required.");
+  }
+
+  return {
+    organizationId: payload.organizationId.trim(),
+  };
+}
+
 @Controller("api/auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -129,14 +143,7 @@ export class AuthController {
       });
     }
 
-    return apiSuccess({
-      user: {
-        id: actor.user.id,
-        email: actor.user.email,
-      },
-      profile: actor.profile,
-      technician: actor.technician,
-    });
+    return apiSuccess(this.authService.buildSessionResponse(actor));
   }
 
   @Post("logout")
@@ -163,24 +170,60 @@ export class AuthController {
       });
     }
 
-    return apiSuccess({
-      user: {
-        id: actor.user.id,
-        email: actor.user.email,
-      },
-      profile: actor.profile,
-      technician: actor.technician,
-    });
+    return apiSuccess(this.authService.buildSessionResponse(actor));
   }
 
   @Get("destination")
   @UseGuards(SessionGuard)
   async destination(@Req() request: RequestWithActor) {
-    const role = request.actor?.profile?.role;
+    const role = request.actor?.role ?? request.actor?.profile?.role;
 
     return apiSuccess({
       destination: role === "technician" ? "/technician" : "/jobs",
     });
+  }
+
+  @Get("organizations")
+  @UseGuards(SessionGuard)
+  async organizations(@Req() request: RequestWithActor) {
+    const actor = request.actor;
+
+    if (!actor) {
+      throw new UnauthorizedException({
+        error: {
+          code: "unauthenticated",
+          message: "Sign in to continue.",
+        },
+      });
+    }
+
+    return apiSuccess(this.authService.buildSessionResponse(actor).memberships);
+  }
+
+  @Post("active-organization")
+  @UseGuards(SessionGuard)
+  async setActiveOrganization(
+    @Body() payload: ActiveOrganizationPayload,
+    @Req() request: RequestWithActor,
+  ) {
+    const actor = request.actor;
+
+    if (!actor) {
+      throw new UnauthorizedException({
+        error: {
+          code: "unauthenticated",
+          message: "Sign in to continue.",
+        },
+      });
+    }
+
+    const nextActor = await this.authService.switchActiveOrganization(
+      request,
+      actor.user.id,
+      parseActiveOrganizationPayload(payload).organizationId,
+    );
+
+    return apiSuccess(this.authService.buildSessionResponse(nextActor));
   }
 
   @Patch("password")
@@ -209,14 +252,14 @@ export class AuthController {
   @Get("staff")
   @UseGuards(SessionGuard)
   async listStaff(@Req() request: RequestWithActor) {
-    requirePermission(
+    const actor = requirePermission(
       request.actor,
       "system.roles.manage",
       "role_management_forbidden",
       "Only owners can manage staff roles.",
     );
 
-    return apiSuccess(await this.authService.listStaffProfiles());
+    return apiSuccess(await this.authService.listStaffProfiles(actor));
   }
 
   @Post("staff")
@@ -225,14 +268,14 @@ export class AuthController {
     @Body() payload: CreateStaffPayload,
     @Req() request: RequestWithActor,
   ) {
-    requirePermission(
+    const actor = requirePermission(
       request.actor,
       "system.roles.manage",
       "role_management_forbidden",
       "Only owners can manage staff roles.",
     );
 
-    return apiSuccess(await this.authService.createStaffProfile(parseCreateStaffPayload(payload)));
+    return apiSuccess(await this.authService.createStaffProfile(parseCreateStaffPayload(payload), actor));
   }
 
   @Patch("staff/:profileId/role")
@@ -253,6 +296,6 @@ export class AuthController {
       apiError(400, "cannot_change_own_role", "Owners cannot change their own role from this panel.");
     }
 
-    return apiSuccess(await this.authService.updateStaffRole(profileId, parseStaffRole(payload.role)));
+    return apiSuccess(await this.authService.updateStaffRole(profileId, parseStaffRole(payload.role), actor));
   }
 }

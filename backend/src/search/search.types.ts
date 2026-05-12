@@ -49,6 +49,7 @@ export type SearchResultItem = {
 };
 
 export type SearchQueryContext = {
+  organizationId: string;
   normalized: string;
   likeToken: string;
   digits: string;

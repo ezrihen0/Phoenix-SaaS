@@ -2,6 +2,8 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from "typeorm";
 
@@ -9,11 +11,15 @@ import {
   inventoryMovementTypes,
   type InventoryMovementType,
 } from "../../inventory/constants";
+import { OrganizationEntity } from "./organization.entity";
 
 @Entity({ name: "inventory_movements" })
 export class InventoryMovementEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 36 })
   inventory_item_id!: string;
@@ -65,4 +71,11 @@ export class InventoryMovementEntity {
 
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

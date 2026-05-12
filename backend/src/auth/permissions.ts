@@ -149,7 +149,7 @@ export function normalizeRole(role: unknown): RoleModeRole | null {
 }
 
 export function readActorRole(actor: ActorContext | null | undefined) {
-  return normalizeRole(actor?.profile?.role);
+  return normalizeRole(actor?.membership?.role ?? actor?.role ?? actor?.profile?.role);
 }
 
 export function roleHasPermission(
@@ -165,6 +165,11 @@ export function actorHasPermission(
   permission: RoleModePermission,
 ) {
   return roleHasPermission(readActorRole(actor), permission);
+}
+
+export function listPermissionsForRole(role: unknown): RoleModePermission[] {
+  const normalizedRole = normalizeRole(role);
+  return normalizedRole ? [...rolePermissionMap[normalizedRole]] : [];
 }
 
 export function requireActorProfile(

@@ -2,6 +2,9 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -15,14 +18,19 @@ import {
   type PricebookItemType,
   type PricebookUnitOfMeasure,
 } from "../../pricebook/constants";
+import { OrganizationEntity } from "./organization.entity";
 import { PricebookBundleItemEntity } from "./pricebook-bundle-item.entity";
 
+@Index("ux_pricebook_items_org_sku", ["organization_id", "internal_sku"], { unique: true })
 @Entity({ name: "pricebook_items" })
 export class PricebookItemEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "varchar", length: 128, unique: true })
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
+
+  @Column({ type: "varchar", length: 128 })
   internal_sku!: string;
 
   @Column({ type: "varchar", length: 255 })
@@ -124,4 +132,11 @@ export class PricebookItemEntity {
 
   @OneToMany(() => PricebookBundleItemEntity, (bundleItem) => bundleItem.pricebook_item)
   bundle_items?: PricebookBundleItemEntity[];
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

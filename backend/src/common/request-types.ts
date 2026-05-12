@@ -1,5 +1,7 @@
 import type { Request } from "express";
 
+import type { MembershipEntity } from "../database/entities/membership.entity";
+import type { OrganizationEntity } from "../database/entities/organization.entity";
 import type { ProfileEntity } from "../database/entities/profile.entity";
 import type { PortalSessionEntity } from "../database/entities/portal-session.entity";
 import type { TechnicianEntity } from "../database/entities/technician.entity";
@@ -9,6 +11,13 @@ export type ActorContext = {
   user: UserEntity;
   profile: ProfileEntity | null;
   technician: TechnicianEntity | null;
+  memberships: MembershipEntity[];
+  membership: MembershipEntity | null;
+  organization: OrganizationEntity | null;
+  membership_id: string | null;
+  organization_id: string | null;
+  role: string | null;
+  permissions: string[];
 };
 
 export type RequestWithActor = Request & {

@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   Entity,
   JoinColumn,
+  ManyToOne,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -13,6 +14,7 @@ import { invoiceStatuses, type InvoiceStatus } from "../../crm/constants";
 import { InvoiceLineItemEntity } from "./invoice-line-item.entity";
 import { InvoicePaymentEntity } from "./invoice-payment.entity";
 import { JobEntity } from "./job.entity";
+import { OrganizationEntity } from "./organization.entity";
 
 @Entity({ name: "invoices" })
 export class InvoiceEntity {
@@ -21,6 +23,9 @@ export class InvoiceEntity {
 
   @Column({ type: "varchar", length: 36, unique: true })
   job_id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "text" })
   description!: string;
@@ -79,6 +84,13 @@ export class InvoiceEntity {
   })
   @JoinColumn({ name: "job_id", referencedColumnName: "id" })
   job?: JobEntity;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 
   @OneToMany(() => InvoiceLineItemEntity, (lineItem) => lineItem.invoice)
   line_items?: InvoiceLineItemEntity[];

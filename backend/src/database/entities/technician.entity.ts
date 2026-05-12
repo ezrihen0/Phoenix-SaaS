@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   Entity,
   JoinColumn,
+  ManyToOne,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -10,12 +11,16 @@ import {
 } from "typeorm";
 
 import { JobEntity } from "./job.entity";
+import { OrganizationEntity } from "./organization.entity";
 import { UserEntity } from "./user.entity";
 
 @Entity({ name: "technicians" })
 export class TechnicianEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 36, nullable: true })
   auth_user_id!: string | null;
@@ -49,4 +54,11 @@ export class TechnicianEntity {
 
   @OneToMany(() => JobEntity, (job) => job.technician)
   assigned_jobs?: JobEntity[];
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

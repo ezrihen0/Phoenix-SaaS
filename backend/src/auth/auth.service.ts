@@ -4,15 +4,22 @@ import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
 import { randomBytes, createHash } from "crypto";
 import type { Request, Response } from "express";
-import { DataSource, IsNull, MoreThan, Repository } from "typeorm";
+import { DataSource, EntityManager, IsNull, MoreThan, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import type { ActorContext } from "../common/request-types";
 import type { ProfileRole } from "../crm/constants";
+import { listPermissionsForRole } from "./permissions";
 import { AuthSessionEntity } from "../database/entities/auth-session.entity";
+import { MembershipEntity } from "../database/entities/membership.entity";
+import { OrganizationEntity } from "../database/entities/organization.entity";
 import { ProfileEntity } from "../database/entities/profile.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
 import { UserEntity } from "../database/entities/user.entity";
+
+const DEFAULT_ORGANIZATION_NAME = "Phoenix Chimney & Fireplace";
+const DEFAULT_ORGANIZATION_SLUG = "phoenix";
+const LEGACY_ORGANIZATION_SLUG = "phoenix-default";
 
 @Injectable()
 export class AuthService {
@@ -25,6 +32,10 @@ export class AuthService {
     private readonly profilesRepository: Repository<ProfileEntity>,
     @InjectRepository(TechnicianEntity)
     private readonly techniciansRepository: Repository<TechnicianEntity>,
+    @InjectRepository(OrganizationEntity)
+    private readonly organizationsRepository: Repository<OrganizationEntity>,
+    @InjectRepository(MembershipEntity)
+    private readonly membershipsRepository: Repository<MembershipEntity>,
     @InjectRepository(AuthSessionEntity)
     private readonly sessionsRepository: Repository<AuthSessionEntity>,
     private readonly configService: ConfigService,
@@ -35,6 +46,7 @@ export class AuthService {
     const adminEmail = (this.configService.get<string>("BACKEND_BOOTSTRAP_ADMIN_EMAIL") ?? "admin@phoenixcrm.local").trim().toLowerCase();
     const adminPassword = this.configService.get<string>("BACKEND_BOOTSTRAP_ADMIN_PASSWORD") ?? "Admin12345!";
     const adminName = this.configService.get<string>("BACKEND_BOOTSTRAP_ADMIN_NAME") ?? "Phoenix Admin";
+    const defaultOrganization = await this.ensureDefaultOrganization();
 
     if (!adminEmail || !adminPassword) {
       return;
@@ -68,6 +80,12 @@ export class AuthService {
         this.logger.log(`Bootstrap admin promoted to owner for ${adminEmail}`);
       }
 
+      await this.ensureMembershipForUser(
+        existingUser.id,
+        existingProfile?.role ?? "owner",
+        defaultOrganization.id,
+      );
+
       return;
     }
 
@@ -88,6 +106,8 @@ export class AuthService {
         role: "owner",
       }),
     );
+
+    await this.ensureMembershipForUser(user.id, "owner", defaultOrganization.id);
 
     this.logger.log(`Bootstrap admin ensured for ${adminEmail}`);
   }
@@ -121,9 +141,20 @@ export class AuthService {
       });
     }
 
-    await this.createSession(user.id, request, response);
+    const actor = await this.loadActorContextByUserId(user.id);
 
-    return this.loadActorContextByUserId(user.id);
+    if (!actor?.organization_id) {
+      throw new UnauthorizedException({
+        error: {
+          code: "organization_membership_missing",
+          message: "This account is not assigned to an active organization yet.",
+        },
+      });
+    }
+
+    await this.createSession(user.id, actor.organization_id, request, response);
+
+    return actor;
   }
 
   async logout(request: Request, response: Response) {
@@ -158,17 +189,44 @@ export class AuthService {
     await this.usersRepository.save(user);
   }
 
-  async listStaffProfiles() {
-    const profiles = await this.profilesRepository.find({
+  async listStaffProfiles(actor: ActorContext) {
+    if (!actor.organization_id) {
+      return [];
+    }
+
+    const memberships = await this.membershipsRepository.find({
+      where: {
+        organization_id: actor.organization_id,
+        status: "active",
+      },
       relations: {
         user: true,
       },
       order: {
-        full_name: "ASC",
+        created_at: "ASC",
       },
     });
 
-    return profiles.map((profile) => this.buildStaffProfileResponse(profile));
+    const userIds = memberships.map((membership) => membership.user_id);
+    const profiles = userIds.length
+      ? await this.profilesRepository.find({
+        where: userIds.map((userId) => ({ auth_user_id: userId })),
+      })
+      : [];
+    const profileMap = new Map(profiles.map((profile) => [profile.auth_user_id, profile]));
+
+    return memberships
+      .map((membership) => {
+        const profile = profileMap.get(membership.user_id);
+
+        if (!profile) {
+          return null;
+        }
+
+        profile.user = membership.user;
+        return this.buildStaffProfileResponse(profile, membership.role);
+      })
+      .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile));
   }
 
   async createStaffProfile(input: {
@@ -177,7 +235,13 @@ export class AuthService {
     fullName: string;
     phone: string | null;
     role: ProfileRole;
-  }) {
+  }, actor: ActorContext) {
+    const organizationId = actor.organization_id;
+
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required to create staff.");
+    }
+
     const existingUser = await this.usersRepository.findOne({
       where: {
         email: input.email,
@@ -191,6 +255,8 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(input.password, 10);
 
     const profile = await this.dataSource.transaction(async (manager) => {
+      const membershipRepository = manager.getRepository(MembershipEntity);
+      const profilesRepository = manager.getRepository(ProfileEntity);
       const user = await manager.getRepository(UserEntity).save(
         manager.getRepository(UserEntity).create({
           email: input.email,
@@ -199,14 +265,25 @@ export class AuthService {
         }),
       );
 
-      return manager.getRepository(ProfileEntity).save(
-        manager.getRepository(ProfileEntity).create({
+      const createdProfile = await profilesRepository.save(
+        profilesRepository.create({
           auth_user_id: user.id,
           full_name: input.fullName,
           phone: input.phone,
           role: input.role,
         }),
       );
+
+      await membershipRepository.save(
+        membershipRepository.create({
+          user_id: user.id,
+          organization_id: organizationId,
+          role: input.role,
+          status: "active",
+        }),
+      );
+
+      return createdProfile;
     });
 
     const createdProfile = await this.profilesRepository.findOne({
@@ -222,10 +299,14 @@ export class AuthService {
       apiError(500, "staff_create_failed", "The staff account was created but could not be loaded.");
     }
 
-    return this.buildStaffProfileResponse(createdProfile);
+    return this.buildStaffProfileResponse(createdProfile, input.role);
   }
 
-  async updateStaffRole(profileId: string, role: ProfileRole) {
+  async updateStaffRole(profileId: string, role: ProfileRole, actor: ActorContext) {
+    if (!actor.organization_id) {
+      apiError(400, "organization_context_missing", "An active organization is required to update staff roles.");
+    }
+
     const profile = await this.profilesRepository.findOne({
       where: {
         id: profileId,
@@ -239,11 +320,22 @@ export class AuthService {
       apiError(404, "staff_profile_not_found", "The staff profile could not be found.");
     }
 
-    profile.role = role;
-    const updatedProfile = await this.profilesRepository.save(profile);
-    updatedProfile.user = profile.user;
+    const membership = await this.membershipsRepository.findOne({
+      where: {
+        user_id: profile.auth_user_id,
+        organization_id: actor.organization_id,
+        status: "active",
+      },
+    });
 
-    return this.buildStaffProfileResponse(updatedProfile);
+    if (!membership) {
+      apiError(404, "staff_membership_not_found", "The staff member is not part of the active organization.");
+    }
+
+    membership.role = role;
+    await this.membershipsRepository.save(membership);
+
+    return this.buildStaffProfileResponse(profile, role);
   }
 
   async resolveActorFromRequest(request: Request): Promise<ActorContext | null> {
@@ -270,16 +362,132 @@ export class AuthService {
       return null;
     }
 
-    const actor = await this.loadActorContextByUserId(session.user_id);
+    const actor = await this.loadActorContextByUserId(session.user_id, session.active_organization_id);
 
     if (!actor) {
       return null;
     }
 
+    if (!session.active_organization_id && actor.organization_id) {
+      session.active_organization_id = actor.organization_id;
+      await this.sessionsRepository.save(session);
+    }
+
     return actor;
   }
 
-  private async createSession(userId: string, request: Request, response: Response) {
+  async switchActiveOrganization(request: Request, userId: string, organizationId: string) {
+    const normalizedOrganizationId = organizationId.trim();
+
+    if (!normalizedOrganizationId) {
+      apiError(400, "organization_id_required", "organizationId is required.");
+    }
+
+    const cookieName = this.getSessionCookieName();
+    const token = request.cookies?.[cookieName] as string | undefined;
+
+    if (!token) {
+      throw new UnauthorizedException({
+        error: {
+          code: "session_not_found",
+          message: "Your session is no longer valid.",
+        },
+      });
+    }
+
+    const actor = await this.loadActorContextByUserId(userId, normalizedOrganizationId, true);
+
+    if (!actor?.organization_id) {
+      apiError(403, "organization_access_forbidden", "This account cannot switch to the requested organization.");
+    }
+
+    const session = await this.sessionsRepository.findOne({
+      where: {
+        session_token_hash: this.hashSessionToken(token),
+        user_id: userId,
+        expires_at: MoreThan(new Date()),
+      },
+    });
+
+    if (!session) {
+      throw new UnauthorizedException({
+        error: {
+          code: "session_not_found",
+          message: "Your session is no longer valid.",
+        },
+      });
+    }
+
+    session.active_organization_id = actor.organization_id;
+    await this.sessionsRepository.save(session);
+
+    return actor;
+  }
+
+  buildSessionResponse(actor: ActorContext) {
+    return {
+      user: {
+        id: actor.user.id,
+        email: actor.user.email,
+      },
+      profile: actor.profile
+        ? {
+          id: actor.profile.id,
+          full_name: actor.profile.full_name,
+          phone: actor.profile.phone,
+          role: (actor.role ?? actor.profile.role) as ProfileRole,
+        }
+        : null,
+      technician: actor.technician
+        ? {
+          id: actor.technician.id,
+          display_name: actor.technician.display_name,
+          phone: actor.technician.phone,
+          specialties: actor.technician.specialties,
+          is_active: actor.technician.is_active,
+          last_seen_at: actor.technician.last_seen_at ? actor.technician.last_seen_at.toISOString() : null,
+        }
+        : null,
+      active_membership: actor.membership
+        ? {
+          id: actor.membership.id,
+          organization_id: actor.membership.organization_id,
+          role: actor.membership.role,
+          status: actor.membership.status,
+        }
+        : null,
+      active_organization: actor.organization
+        ? {
+          id: actor.organization.id,
+          name: actor.organization.name,
+          slug: actor.organization.slug,
+          is_active: actor.organization.is_active,
+        }
+        : null,
+      memberships: actor.memberships.map((membership) => ({
+        id: membership.id,
+        organization_id: membership.organization_id,
+        role: membership.role,
+        status: membership.status,
+        organization: membership.organization
+          ? {
+            id: membership.organization.id,
+            name: membership.organization.name,
+            slug: membership.organization.slug,
+            is_active: membership.organization.is_active,
+          }
+          : null,
+      })),
+      permissions: actor.permissions,
+    };
+  }
+
+  private async createSession(
+    userId: string,
+    activeOrganizationId: string | null,
+    request: Request,
+    response: Response,
+  ) {
     const rawSessionToken = randomBytes(48).toString("hex");
     const session_token_hash = this.hashSessionToken(rawSessionToken);
     const ttlHours = this.getSessionTtlHours();
@@ -288,6 +496,7 @@ export class AuthService {
     await this.sessionsRepository.insert({
       session_token_hash,
       user_id: userId,
+      active_organization_id: activeOrganizationId,
       expires_at,
       ip_address: request.ip ?? null,
       user_agent: request.get("user-agent") ?? null,
@@ -311,7 +520,11 @@ export class AuthService {
     });
   }
 
-  private async loadActorContextByUserId(userId: string): Promise<ActorContext | null> {
+  private async loadActorContextByUserId(
+    userId: string,
+    preferredOrganizationId: string | null = null,
+    requireExactPreferredOrganization = false,
+  ): Promise<ActorContext | null> {
     const [user, profile, technician] = await Promise.all([
       this.usersRepository.findOne({ where: { id: userId } }),
       this.profilesRepository.findOne({ where: { auth_user_id: userId } }),
@@ -330,10 +543,64 @@ export class AuthService {
       return null;
     }
 
+    let memberships = await this.membershipsRepository.find({
+      where: {
+        user_id: userId,
+        status: "active",
+      },
+      relations: {
+        organization: true,
+      },
+      order: {
+        created_at: "ASC",
+      },
+    });
+
+    if (memberships.length === 0 && profile) {
+      const defaultOrganization = await this.ensureDefaultOrganization();
+      await this.ensureMembershipForUser(userId, profile.role, defaultOrganization.id);
+      memberships = await this.membershipsRepository.find({
+        where: {
+          user_id: userId,
+          status: "active",
+        },
+        relations: {
+          organization: true,
+        },
+        order: {
+          created_at: "ASC",
+        },
+      });
+    }
+
+    if (memberships.length === 0) {
+      return null;
+    }
+
+    const preferredMembership = preferredOrganizationId
+      ? memberships.find((item) => item.organization_id === preferredOrganizationId) ?? null
+      : null;
+
+    if (requireExactPreferredOrganization && preferredOrganizationId && !preferredMembership) {
+      return null;
+    }
+
+    const membership = preferredMembership
+      ?? (memberships.length === 1 ? memberships[0] : null);
+    const organization = membership?.organization ?? null;
+    const role = membership?.role ?? null;
+
     return {
       user,
       profile,
       technician: technician?.auth_user_id === userId ? technician : null,
+      memberships,
+      membership,
+      organization,
+      membership_id: membership?.id ?? null,
+      organization_id: membership?.organization_id ?? null,
+      role,
+      permissions: listPermissionsForRole(role),
     };
   }
 
@@ -341,13 +608,13 @@ export class AuthService {
     return createHash("sha256").update(rawToken).digest("hex");
   }
 
-  private buildStaffProfileResponse(profile: ProfileEntity) {
+  private buildStaffProfileResponse(profile: ProfileEntity, role: ProfileRole) {
     return {
       id: profile.id,
       auth_user_id: profile.auth_user_id,
       full_name: profile.full_name,
       phone: profile.phone,
-      role: profile.role,
+      role,
       created_at: profile.created_at.toISOString(),
       updated_at: profile.updated_at.toISOString(),
       user: profile.user
@@ -358,6 +625,74 @@ export class AuthService {
         }
         : null,
     };
+  }
+
+  private async ensureDefaultOrganization(manager: EntityManager = this.dataSource.manager) {
+    const organizationsRepository = manager.getRepository(OrganizationEntity);
+    const existing = await organizationsRepository.findOne({
+      where: {
+        slug: DEFAULT_ORGANIZATION_SLUG,
+      },
+    });
+
+    if (existing) {
+      if (existing.name !== DEFAULT_ORGANIZATION_NAME || !existing.is_active) {
+        existing.name = DEFAULT_ORGANIZATION_NAME;
+        existing.is_active = true;
+        return organizationsRepository.save(existing);
+      }
+
+      return existing;
+    }
+
+    const legacy = await organizationsRepository.findOne({
+      where: {
+        slug: LEGACY_ORGANIZATION_SLUG,
+      },
+    });
+
+    if (legacy) {
+      legacy.slug = DEFAULT_ORGANIZATION_SLUG;
+      legacy.name = DEFAULT_ORGANIZATION_NAME;
+      legacy.is_active = true;
+      return organizationsRepository.save(legacy);
+    }
+
+    return organizationsRepository.save(
+      organizationsRepository.create({
+        name: DEFAULT_ORGANIZATION_NAME,
+        slug: DEFAULT_ORGANIZATION_SLUG,
+        is_active: true,
+      }),
+    );
+  }
+
+  private async ensureMembershipForUser(
+    userId: string,
+    role: ProfileRole,
+    organizationId: string,
+    manager: EntityManager = this.dataSource.manager,
+  ) {
+    const membershipsRepository = manager.getRepository(MembershipEntity);
+    const existing = await membershipsRepository.findOne({
+      where: {
+        user_id: userId,
+        organization_id: organizationId,
+      },
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    return membershipsRepository.save(
+      membershipsRepository.create({
+        user_id: userId,
+        organization_id: organizationId,
+        role,
+        status: "active",
+      }),
+    );
   }
 
   private getSessionCookieName() {

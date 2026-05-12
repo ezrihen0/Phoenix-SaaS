@@ -23,7 +23,7 @@ export type AutomationEventContract = {
 
 export const automationEventContractExample: AutomationEventContract = {
   eventId: "evt_123",
-  organizationId: "default",
+  organizationId: "org_123",
   source: "invoice",
   event: "invoice.balance_zero",
   entityType: "invoice",

@@ -38,8 +38,9 @@ export class InventoryService {
     private readonly inventoryMovementsRepository: Repository<InventoryMovementEntity>,
   ) {}
 
-  async listItems(query: InventoryItemListQuery) {
+  async listItems(organizationId: string, query: InventoryItemListQuery) {
     const itemQuery = this.inventoryItemsRepository.createQueryBuilder("item");
+    itemQuery.where("item.organization_id = :organizationId", { organizationId });
 
     this.applyItemActiveState(itemQuery, query.activeState);
 
@@ -65,10 +66,11 @@ export class InventoryService {
     };
   }
 
-  async createItem(payload: CreateInventoryItemPayload, actorUserId: string | null) {
-    await this.ensureItemSkuIsUnique(payload.internalSku);
+  async createItem(organizationId: string, payload: CreateInventoryItemPayload, actorUserId: string | null) {
+    await this.ensureItemSkuIsUnique(organizationId, payload.internalSku);
 
     const item = this.inventoryItemsRepository.create({
+      organization_id: organizationId,
       internal_sku: payload.internalSku,
       name: payload.name,
       item_type: payload.itemType,
@@ -89,11 +91,16 @@ export class InventoryService {
     return this.toInventoryItemResponse(await this.inventoryItemsRepository.save(item));
   }
 
-  async updateItem(itemId: string, payload: UpdateInventoryItemPayload, actorUserId: string | null) {
-    const item = await this.loadItemOrFail(itemId);
+  async updateItem(
+    organizationId: string,
+    itemId: string,
+    payload: UpdateInventoryItemPayload,
+    actorUserId: string | null,
+  ) {
+    const item = await this.loadItemOrFail(organizationId, itemId);
 
     if (payload.internalSku !== undefined && payload.internalSku !== item.internal_sku) {
-      await this.ensureItemSkuIsUnique(payload.internalSku, item.id);
+      await this.ensureItemSkuIsUnique(organizationId, payload.internalSku, item.id);
       item.internal_sku = payload.internalSku;
     }
 
@@ -147,8 +154,8 @@ export class InventoryService {
     return this.toInventoryItemResponse(await this.inventoryItemsRepository.save(item));
   }
 
-  async archiveItem(itemId: string, actorUserId: string | null) {
-    const item = await this.loadItemOrFail(itemId);
+  async archiveItem(organizationId: string, itemId: string, actorUserId: string | null) {
+    const item = await this.loadItemOrFail(organizationId, itemId);
     item.is_active = false;
     item.archived_at = item.archived_at ?? new Date();
     item.deleted_by_user_id = actorUserId;
@@ -157,8 +164,13 @@ export class InventoryService {
     return this.toInventoryItemResponse(await this.inventoryItemsRepository.save(item));
   }
 
-  async listLocations(query: InventoryLocationListQuery, viewerRole: string | null, viewerUserId: string) {
-    const locations = await this.loadVisibleLocations(viewerRole, viewerUserId, query.activeState);
+  async listLocations(
+    organizationId: string,
+    query: InventoryLocationListQuery,
+    viewerRole: string | null,
+    viewerUserId: string,
+  ) {
+    const locations = await this.loadVisibleLocations(organizationId, viewerRole, viewerUserId, query.activeState);
 
     return {
       locations: locations.map((location) => this.toInventoryLocationResponse(location)),
@@ -166,10 +178,11 @@ export class InventoryService {
     };
   }
 
-  async createLocation(payload: CreateInventoryLocationPayload, actorUserId: string | null) {
-    await this.ensureLocationNameIsUnique(payload.name);
+  async createLocation(organizationId: string, payload: CreateInventoryLocationPayload, actorUserId: string | null) {
+    await this.ensureLocationNameIsUnique(organizationId, payload.name);
 
     const location = this.inventoryLocationsRepository.create({
+      organization_id: organizationId,
       name: payload.name,
       location_type: payload.locationType,
       assigned_user_id: payload.assignedUserId,
@@ -186,11 +199,16 @@ export class InventoryService {
     return this.toInventoryLocationResponse(await this.inventoryLocationsRepository.save(location));
   }
 
-  async updateLocation(locationId: string, payload: UpdateInventoryLocationPayload, actorUserId: string | null) {
-    const location = await this.loadLocationOrFail(locationId);
+  async updateLocation(
+    organizationId: string,
+    locationId: string,
+    payload: UpdateInventoryLocationPayload,
+    actorUserId: string | null,
+  ) {
+    const location = await this.loadLocationOrFail(organizationId, locationId);
 
     if (payload.name !== undefined && payload.name !== location.name) {
-      await this.ensureLocationNameIsUnique(payload.name, location.id);
+      await this.ensureLocationNameIsUnique(organizationId, payload.name, location.id);
       location.name = payload.name;
     }
 
@@ -228,8 +246,8 @@ export class InventoryService {
     return this.toInventoryLocationResponse(await this.inventoryLocationsRepository.save(location));
   }
 
-  async archiveLocation(locationId: string, actorUserId: string | null) {
-    const location = await this.loadLocationOrFail(locationId);
+  async archiveLocation(organizationId: string, locationId: string, actorUserId: string | null) {
+    const location = await this.loadLocationOrFail(organizationId, locationId);
     location.is_active = false;
     location.archived_at = location.archived_at ?? new Date();
     location.deleted_by_user_id = actorUserId;
@@ -238,8 +256,13 @@ export class InventoryService {
     return this.toInventoryLocationResponse(await this.inventoryLocationsRepository.save(location));
   }
 
-  async listStock(query: InventoryStockListQuery, viewerRole: string | null, viewerUserId: string) {
-    const visibleLocations = await this.loadVisibleLocations(viewerRole, viewerUserId, "active");
+  async listStock(
+    organizationId: string,
+    query: InventoryStockListQuery,
+    viewerRole: string | null,
+    viewerUserId: string,
+  ) {
+    const visibleLocations = await this.loadVisibleLocations(organizationId, viewerRole, viewerUserId, "active");
     const locationMap = new Map(visibleLocations.map((location) => [location.id, location]));
     const locationIds = visibleLocations.map((location) => location.id);
 
@@ -256,6 +279,7 @@ export class InventoryService {
     }
 
     const itemQuery = this.inventoryItemsRepository.createQueryBuilder("item");
+    itemQuery.where("item.organization_id = :organizationId", { organizationId });
     this.applyItemActiveState(itemQuery, query.activeState);
 
     if (query.q) {
@@ -272,7 +296,11 @@ export class InventoryService {
 
     itemQuery.orderBy("item.name", "ASC");
     const items = await itemQuery.getMany();
-    const balances = await this.getBalanceMap(locationIds.length ? locationIds : null, items.map((item) => item.id));
+    const balances = await this.getBalanceMap(
+      organizationId,
+      locationIds.length ? locationIds : null,
+      items.map((item) => item.id),
+    );
     const selectedLocations = query.locationId ? [locationMap.get(query.locationId)!] : visibleLocations;
 
     const rows = items
@@ -345,14 +373,27 @@ export class InventoryService {
     };
   }
 
-  async listMovements(query: InventoryMovementListQuery, viewerRole: string | null, viewerUserId: string) {
-    const visibleLocations = await this.loadVisibleLocations(viewerRole, viewerUserId, "all");
+  async listMovements(
+    organizationId: string,
+    query: InventoryMovementListQuery,
+    viewerRole: string | null,
+    viewerUserId: string,
+  ) {
+    const visibleLocations = await this.loadVisibleLocations(organizationId, viewerRole, viewerUserId, "all");
     const locationIds = new Set(visibleLocations.map((location) => location.id));
     const locationMap = new Map(visibleLocations.map((location) => [location.id, location]));
-    const items = await this.inventoryItemsRepository.find({ where: { archived_at: IsNull() } });
+    const items = await this.inventoryItemsRepository.find({
+      where: {
+        organization_id: organizationId,
+        archived_at: IsNull(),
+      },
+    });
     const itemMap = new Map(items.map((item) => [item.id, item]));
 
     const movements = (await this.inventoryMovementsRepository.find({
+      where: {
+        organization_id: organizationId,
+      },
       order: { created_at: "DESC" },
     }))
       .filter((movement) => {
@@ -419,11 +460,12 @@ export class InventoryService {
     };
   }
 
-  async receiveStock(payload: ReceiveInventoryPayload, actorUserId: string | null) {
-    const location = await this.loadActiveLocationOrFail(payload.toLocationId, "receive destination");
-    const itemMap = await this.loadActiveItemMap(payload.lines.map((line) => line.inventoryItemId));
+  async receiveStock(organizationId: string, payload: ReceiveInventoryPayload, actorUserId: string | null) {
+    const location = await this.loadActiveLocationOrFail(organizationId, payload.toLocationId, "receive destination");
+    const itemMap = await this.loadActiveItemMap(organizationId, payload.lines.map((line) => line.inventoryItemId));
 
     const movements = payload.lines.map((line) => this.inventoryMovementsRepository.create({
+      organization_id: organizationId,
       inventory_item_id: this.ensureItemVisible(itemMap, line.inventoryItemId).id,
       movement_type: "received",
       quantity: line.quantity,
@@ -448,21 +490,22 @@ export class InventoryService {
     };
   }
 
-  async transferStock(payload: TransferInventoryPayload, actorUserId: string | null) {
+  async transferStock(organizationId: string, payload: TransferInventoryPayload, actorUserId: string | null) {
     if (payload.fromLocationId === payload.toLocationId) {
       apiError(400, "inventory_transfer_same_location", "Transfer source and destination must be different.");
     }
 
-    const fromLocation = await this.loadActiveLocationOrFail(payload.fromLocationId, "transfer source");
-    const toLocation = await this.loadActiveLocationOrFail(payload.toLocationId, "transfer destination");
+    const fromLocation = await this.loadActiveLocationOrFail(organizationId, payload.fromLocationId, "transfer source");
+    const toLocation = await this.loadActiveLocationOrFail(organizationId, payload.toLocationId, "transfer destination");
     const itemIds = payload.lines.map((line) => line.inventoryItemId);
-    const itemMap = await this.loadActiveItemMap(itemIds);
-    await this.assertLocationHasStock(fromLocation.id, payload.lines.map((line) => ({
+    const itemMap = await this.loadActiveItemMap(organizationId, itemIds);
+    await this.assertLocationHasStock(organizationId, fromLocation.id, payload.lines.map((line) => ({
       inventoryItemId: line.inventoryItemId,
       quantity: line.quantity,
     })));
 
     const created = await this.inventoryMovementsRepository.save(payload.lines.map((line) => this.inventoryMovementsRepository.create({
+      organization_id: organizationId,
       inventory_item_id: this.ensureItemVisible(itemMap, line.inventoryItemId).id,
       movement_type: "transfer",
       quantity: line.quantity,
@@ -491,15 +534,16 @@ export class InventoryService {
     };
   }
 
-  async useStock(payload: UseInventoryPayload, actorUserId: string | null) {
-    const fromLocation = await this.loadActiveLocationOrFail(payload.fromLocationId, "use source");
-    const itemMap = await this.loadActiveItemMap(payload.lines.map((line) => line.inventoryItemId));
-    await this.assertLocationHasStock(fromLocation.id, payload.lines.map((line) => ({
+  async useStock(organizationId: string, payload: UseInventoryPayload, actorUserId: string | null) {
+    const fromLocation = await this.loadActiveLocationOrFail(organizationId, payload.fromLocationId, "use source");
+    const itemMap = await this.loadActiveItemMap(organizationId, payload.lines.map((line) => line.inventoryItemId));
+    await this.assertLocationHasStock(organizationId, fromLocation.id, payload.lines.map((line) => ({
       inventoryItemId: line.inventoryItemId,
       quantity: line.quantity,
     })));
 
     const created = await this.inventoryMovementsRepository.save(payload.lines.map((line) => this.inventoryMovementsRepository.create({
+      organization_id: organizationId,
       inventory_item_id: this.ensureItemVisible(itemMap, line.inventoryItemId).id,
       movement_type: "used",
       quantity: line.quantity,
@@ -523,7 +567,7 @@ export class InventoryService {
     };
   }
 
-  async adjustStock(payload: AdjustInventoryPayload, actorUserId: string | null) {
+  async adjustStock(organizationId: string, payload: AdjustInventoryPayload, actorUserId: string | null) {
     if (!payload.fromLocationId && !payload.toLocationId) {
       apiError(400, "inventory_adjust_location_required", "Adjustments require a source or destination location.");
     }
@@ -536,18 +580,19 @@ export class InventoryService {
       apiError(400, "inventory_adjust_return_destination_required", "Returned inventory requires a destination location.");
     }
 
-    const fromLocation = payload.fromLocationId ? await this.loadActiveLocationOrFail(payload.fromLocationId, "adjust source") : null;
-    const toLocation = payload.toLocationId ? await this.loadActiveLocationOrFail(payload.toLocationId, "adjust destination") : null;
-    const itemMap = await this.loadActiveItemMap(payload.lines.map((line) => line.inventoryItemId));
+    const fromLocation = payload.fromLocationId ? await this.loadActiveLocationOrFail(organizationId, payload.fromLocationId, "adjust source") : null;
+    const toLocation = payload.toLocationId ? await this.loadActiveLocationOrFail(organizationId, payload.toLocationId, "adjust destination") : null;
+    const itemMap = await this.loadActiveItemMap(organizationId, payload.lines.map((line) => line.inventoryItemId));
 
     if (fromLocation && payload.movementType !== "returned") {
-      await this.assertLocationHasStock(fromLocation.id, payload.lines.map((line) => ({
+      await this.assertLocationHasStock(organizationId, fromLocation.id, payload.lines.map((line) => ({
         inventoryItemId: line.inventoryItemId,
         quantity: line.quantity,
       })));
     }
 
     const created = await this.inventoryMovementsRepository.save(payload.lines.map((line) => this.inventoryMovementsRepository.create({
+      organization_id: organizationId,
       inventory_item_id: this.ensureItemVisible(itemMap, line.inventoryItemId).id,
       movement_type: payload.movementType,
       quantity: line.quantity,
@@ -586,9 +631,9 @@ export class InventoryService {
     }
   }
 
-  private async ensureItemSkuIsUnique(internalSku: string, excludeItemId?: string) {
+  private async ensureItemSkuIsUnique(organizationId: string, internalSku: string, excludeItemId?: string) {
     const existingItem = await this.inventoryItemsRepository.findOne({
-      where: { internal_sku: internalSku },
+      where: { internal_sku: internalSku, organization_id: organizationId },
     });
 
     if (existingItem && existingItem.id !== excludeItemId) {
@@ -596,9 +641,9 @@ export class InventoryService {
     }
   }
 
-  private async ensureLocationNameIsUnique(name: string, excludeLocationId?: string) {
+  private async ensureLocationNameIsUnique(organizationId: string, name: string, excludeLocationId?: string) {
     const existingLocation = await this.inventoryLocationsRepository.findOne({
-      where: { name },
+      where: { name, organization_id: organizationId },
     });
 
     if (existingLocation && existingLocation.id !== excludeLocationId) {
@@ -606,8 +651,8 @@ export class InventoryService {
     }
   }
 
-  private async loadItemOrFail(itemId: string) {
-    const item = await this.inventoryItemsRepository.findOne({ where: { id: itemId } });
+  private async loadItemOrFail(organizationId: string, itemId: string) {
+    const item = await this.inventoryItemsRepository.findOne({ where: { id: itemId, organization_id: organizationId } });
 
     if (!item) {
       apiError(404, "inventory_item_not_found", "The inventory item could not be found.");
@@ -616,8 +661,8 @@ export class InventoryService {
     return item;
   }
 
-  private async loadLocationOrFail(locationId: string) {
-    const location = await this.inventoryLocationsRepository.findOne({ where: { id: locationId } });
+  private async loadLocationOrFail(organizationId: string, locationId: string) {
+    const location = await this.inventoryLocationsRepository.findOne({ where: { id: locationId, organization_id: organizationId } });
 
     if (!location) {
       apiError(404, "inventory_location_not_found", "The inventory location could not be found.");
@@ -626,8 +671,8 @@ export class InventoryService {
     return location;
   }
 
-  private async loadActiveLocationOrFail(locationId: string, label: string) {
-    const location = await this.loadLocationOrFail(locationId);
+  private async loadActiveLocationOrFail(organizationId: string, locationId: string, label: string) {
+    const location = await this.loadLocationOrFail(organizationId, locationId);
 
     if (!location.is_active || location.archived_at) {
       apiError(400, "inventory_location_inactive", `The ${label} location is archived and cannot be used.`);
@@ -636,9 +681,11 @@ export class InventoryService {
     return location;
   }
 
-  private async loadActiveItemMap(itemIds: string[]) {
+  private async loadActiveItemMap(organizationId: string, itemIds: string[]) {
     const uniqueItemIds = [...new Set(itemIds)];
-    const items = await this.inventoryItemsRepository.findBy(uniqueItemIds.map((id) => ({ id })));
+    const items = await this.inventoryItemsRepository.findBy(
+      uniqueItemIds.map((id) => ({ id, organization_id: organizationId })),
+    );
     const itemMap = new Map(items.map((item) => [item.id, item]));
 
     uniqueItemIds.forEach((itemId) => {
@@ -666,8 +713,14 @@ export class InventoryService {
     return item;
   }
 
-  private async loadVisibleLocations(viewerRole: string | null, viewerUserId: string, activeState: InventoryActiveState) {
+  private async loadVisibleLocations(
+    organizationId: string,
+    viewerRole: string | null,
+    viewerUserId: string,
+    activeState: InventoryActiveState,
+  ) {
     const locationQuery = this.inventoryLocationsRepository.createQueryBuilder("location");
+    locationQuery.where("location.organization_id = :organizationId", { organizationId });
 
     if (activeState === "active") {
       locationQuery.andWhere("location.is_active = :isActive", { isActive: true });
@@ -688,9 +741,13 @@ export class InventoryService {
     return locationQuery.getMany();
   }
 
-  private async getBalanceMap(locationIds: string[] | null, itemIds: string[] | null) {
+  private async getBalanceMap(organizationId: string, locationIds: string[] | null, itemIds: string[] | null) {
     const balanceMap = new Map<string, number>();
-    const movements = await this.inventoryMovementsRepository.find();
+    const movements = await this.inventoryMovementsRepository.find({
+      where: {
+        organization_id: organizationId,
+      },
+    });
     const locationFilter = locationIds ? new Set(locationIds) : null;
     const itemFilter = itemIds ? new Set(itemIds) : null;
 
@@ -715,8 +772,12 @@ export class InventoryService {
     return balanceMap;
   }
 
-  private async assertLocationHasStock(locationId: string, lines: Array<{ inventoryItemId: string; quantity: string }>) {
-    const balanceMap = await this.getBalanceMap([locationId], lines.map((line) => line.inventoryItemId));
+  private async assertLocationHasStock(
+    organizationId: string,
+    locationId: string,
+    lines: Array<{ inventoryItemId: string; quantity: string }>,
+  ) {
+    const balanceMap = await this.getBalanceMap(organizationId, [locationId], lines.map((line) => line.inventoryItemId));
     const pendingUsage = new Map<string, number>();
 
     lines.forEach((line) => {

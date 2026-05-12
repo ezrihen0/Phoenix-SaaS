@@ -28,8 +28,9 @@ export class PricebookService {
     private readonly pricebookBundleItemRepository: Repository<PricebookBundleItemEntity>,
   ) {}
 
-  async listItems(query: PricebookItemListQuery) {
+  async listItems(organizationId: string, query: PricebookItemListQuery) {
     const itemQuery = this.pricebookItemRepository.createQueryBuilder("item");
+    itemQuery.where("item.organization_id = :organizationId", { organizationId });
 
     if (query.activeState === "active") {
       itemQuery.andWhere("item.is_active = :isActive", { isActive: true });
@@ -81,10 +82,11 @@ export class PricebookService {
     };
   }
 
-  async createItem(payload: CreatePricebookItemPayload, actorUserId: string | null) {
-    await this.ensureSkuIsUnique(payload.internalSku);
+  async createItem(organizationId: string, payload: CreatePricebookItemPayload, actorUserId: string | null) {
+    await this.ensureSkuIsUnique(organizationId, payload.internalSku);
 
     const item = this.pricebookItemRepository.create({
+      organization_id: organizationId,
       internal_sku: payload.internalSku,
       name: payload.name,
       customer_description: payload.customerDescription,
@@ -118,15 +120,15 @@ export class PricebookService {
     return this.toPricebookItemResponse(await this.pricebookItemRepository.save(item));
   }
 
-  async getItem(itemId: string) {
-    return this.toPricebookItemResponse(await this.loadItemOrFail(itemId));
+  async getItem(organizationId: string, itemId: string) {
+    return this.toPricebookItemResponse(await this.loadItemOrFail(organizationId, itemId));
   }
 
-  async updateItem(itemId: string, payload: UpdatePricebookItemPayload, actorUserId: string | null) {
-    const item = await this.loadItemOrFail(itemId);
+  async updateItem(organizationId: string, itemId: string, payload: UpdatePricebookItemPayload, actorUserId: string | null) {
+    const item = await this.loadItemOrFail(organizationId, itemId);
 
     if (payload.internalSku && payload.internalSku !== item.internal_sku) {
-      await this.ensureSkuIsUnique(payload.internalSku, item.id);
+      await this.ensureSkuIsUnique(organizationId, payload.internalSku, item.id);
       item.internal_sku = payload.internalSku;
     }
 
@@ -230,11 +232,12 @@ export class PricebookService {
     return this.toPricebookItemResponse(await this.pricebookItemRepository.save(item));
   }
 
-  async duplicateItem(itemId: string, actorUserId: string | null) {
-    const sourceItem = await this.loadItemOrFail(itemId);
-    const duplicatedSku = await this.generateDuplicateSku(sourceItem.internal_sku);
+  async duplicateItem(organizationId: string, itemId: string, actorUserId: string | null) {
+    const sourceItem = await this.loadItemOrFail(organizationId, itemId);
+    const duplicatedSku = await this.generateDuplicateSku(organizationId, sourceItem.internal_sku);
 
     const duplicatedItem = this.pricebookItemRepository.create({
+      organization_id: organizationId,
       internal_sku: duplicatedSku,
       name: `${sourceItem.name} Copy`,
       customer_description: sourceItem.customer_description,
@@ -268,8 +271,8 @@ export class PricebookService {
     return this.toPricebookItemResponse(await this.pricebookItemRepository.save(duplicatedItem));
   }
 
-  async archiveItem(itemId: string, actorUserId: string | null) {
-    const item = await this.loadItemOrFail(itemId);
+  async archiveItem(organizationId: string, itemId: string, actorUserId: string | null) {
+    const item = await this.loadItemOrFail(organizationId, itemId);
     item.is_active = false;
     item.archived_at = item.archived_at ?? new Date();
     item.deleted_by_user_id = actorUserId;
@@ -278,8 +281,8 @@ export class PricebookService {
     return this.toPricebookItemResponse(await this.pricebookItemRepository.save(item));
   }
 
-  async restoreItem(itemId: string, actorUserId: string | null) {
-    const item = await this.loadItemOrFail(itemId);
+  async restoreItem(organizationId: string, itemId: string, actorUserId: string | null) {
+    const item = await this.loadItemOrFail(organizationId, itemId);
     item.is_active = true;
     item.archived_at = null;
     item.deleted_by_user_id = null;
@@ -288,8 +291,9 @@ export class PricebookService {
     return this.toPricebookItemResponse(await this.pricebookItemRepository.save(item));
   }
 
-  async listBundles(query: PricebookBundleListQuery) {
+  async listBundles(organizationId: string, query: PricebookBundleListQuery) {
     const bundleQuery = this.pricebookBundleRepository.createQueryBuilder("bundle");
+    bundleQuery.where("bundle.organization_id = :organizationId", { organizationId });
 
     if (query.activeState === "active") {
       bundleQuery.andWhere("bundle.is_active = :isActive", { isActive: true });
@@ -324,8 +328,9 @@ export class PricebookService {
     };
   }
 
-  async createBundle(payload: CreatePricebookBundlePayload, actorUserId: string | null) {
+  async createBundle(organizationId: string, payload: CreatePricebookBundlePayload, actorUserId: string | null) {
     const bundle = this.pricebookBundleRepository.create({
+      organization_id: organizationId,
       name: payload.name,
       description: payload.description,
       is_active: payload.isActive,
@@ -338,13 +343,18 @@ export class PricebookService {
     return this.toPricebookBundleResponse(await this.pricebookBundleRepository.save(bundle));
   }
 
-  async getBundle(bundleId: string) {
-    const bundle = await this.loadBundleWithItemsOrFail(bundleId);
+  async getBundle(organizationId: string, bundleId: string) {
+    const bundle = await this.loadBundleWithItemsOrFail(organizationId, bundleId);
     return this.toPricebookBundleDetailResponse(bundle);
   }
 
-  async updateBundle(bundleId: string, payload: UpdatePricebookBundlePayload, actorUserId: string | null) {
-    const bundle = await this.loadBundleOrFail(bundleId);
+  async updateBundle(
+    organizationId: string,
+    bundleId: string,
+    payload: UpdatePricebookBundlePayload,
+    actorUserId: string | null,
+  ) {
+    const bundle = await this.loadBundleOrFail(organizationId, bundleId);
 
     if (payload.name !== undefined) {
       bundle.name = payload.name;
@@ -366,8 +376,8 @@ export class PricebookService {
     return this.toPricebookBundleResponse(await this.pricebookBundleRepository.save(bundle));
   }
 
-  async archiveBundle(bundleId: string, actorUserId: string | null) {
-    const bundle = await this.loadBundleOrFail(bundleId);
+  async archiveBundle(organizationId: string, bundleId: string, actorUserId: string | null) {
+    const bundle = await this.loadBundleOrFail(organizationId, bundleId);
     bundle.is_active = false;
     bundle.archived_at = bundle.archived_at ?? new Date();
     bundle.deleted_by_user_id = actorUserId;
@@ -376,8 +386,8 @@ export class PricebookService {
     return this.toPricebookBundleResponse(await this.pricebookBundleRepository.save(bundle));
   }
 
-  async restoreBundle(bundleId: string, actorUserId: string | null) {
-    const bundle = await this.loadBundleOrFail(bundleId);
+  async restoreBundle(organizationId: string, bundleId: string, actorUserId: string | null) {
+    const bundle = await this.loadBundleOrFail(organizationId, bundleId);
     bundle.is_active = true;
     bundle.archived_at = null;
     bundle.deleted_by_user_id = null;
@@ -387,17 +397,18 @@ export class PricebookService {
   }
 
   async addItemToBundle(
+    organizationId: string,
     bundleId: string,
     payload: CreatePricebookBundleItemPayload,
     actorUserId: string | null,
   ) {
-    const bundle = await this.loadBundleOrFail(bundleId);
+    const bundle = await this.loadBundleOrFail(organizationId, bundleId);
 
     if (!bundle.is_active || bundle.archived_at) {
       apiError(409, "pricebook_bundle_archived", "Archived bundles cannot be modified.");
     }
 
-    const pricebookItem = await this.loadItemOrFail(payload.pricebookItemId);
+    const pricebookItem = await this.loadItemOrFail(organizationId, payload.pricebookItemId);
 
     if (!pricebookItem.is_active || pricebookItem.archived_at) {
       apiError(409, "pricebook_item_archived", "Archived pricebook items cannot be added to a bundle.");
@@ -405,6 +416,7 @@ export class PricebookService {
 
     const existingMembership = await this.pricebookBundleItemRepository.findOne({
       where: {
+        organization_id: organizationId,
         bundle_id: bundleId,
         pricebook_item_id: payload.pricebookItemId,
         archived_at: IsNull(),
@@ -416,6 +428,7 @@ export class PricebookService {
     }
 
     const bundleItem = this.pricebookBundleItemRepository.create({
+      organization_id: organizationId,
       bundle_id: bundleId,
       pricebook_item_id: payload.pricebookItemId,
       default_quantity: payload.defaultQuantity,
@@ -430,12 +443,13 @@ export class PricebookService {
   }
 
   async updateBundleItem(
+    organizationId: string,
     bundleId: string,
     bundleItemId: string,
     payload: UpdatePricebookBundleItemPayload,
     actorUserId: string | null,
   ) {
-    const bundleItem = await this.loadBundleItemOrFail(bundleId, bundleItemId);
+    const bundleItem = await this.loadBundleItemOrFail(organizationId, bundleId, bundleItemId);
 
     if (payload.defaultQuantity !== undefined) {
       bundleItem.default_quantity = payload.defaultQuantity;
@@ -448,23 +462,23 @@ export class PricebookService {
     bundleItem.updated_by_user_id = actorUserId;
 
     const saved = await this.pricebookBundleItemRepository.save(bundleItem);
-    const pricebookItem = saved.pricebook_item ?? await this.loadItemOrFail(saved.pricebook_item_id);
+    const pricebookItem = saved.pricebook_item ?? await this.loadItemOrFail(organizationId, saved.pricebook_item_id);
     return this.toPricebookBundleItemResponse(saved, pricebookItem);
   }
 
-  async removeBundleItem(bundleId: string, bundleItemId: string, actorUserId: string | null) {
-    const bundleItem = await this.loadBundleItemOrFail(bundleId, bundleItemId);
+  async removeBundleItem(organizationId: string, bundleId: string, bundleItemId: string, actorUserId: string | null) {
+    const bundleItem = await this.loadBundleItemOrFail(organizationId, bundleId, bundleItemId);
     bundleItem.archived_at = bundleItem.archived_at ?? new Date();
     bundleItem.deleted_by_user_id = actorUserId;
     bundleItem.updated_by_user_id = actorUserId;
 
     const saved = await this.pricebookBundleItemRepository.save(bundleItem);
-    const pricebookItem = saved.pricebook_item ?? await this.loadItemOrFail(saved.pricebook_item_id);
+    const pricebookItem = saved.pricebook_item ?? await this.loadItemOrFail(organizationId, saved.pricebook_item_id);
     return this.toPricebookBundleItemResponse(saved, pricebookItem);
   }
 
-  private async loadItemOrFail(itemId: string) {
-    const item = await this.pricebookItemRepository.findOne({ where: { id: itemId } });
+  private async loadItemOrFail(organizationId: string, itemId: string) {
+    const item = await this.pricebookItemRepository.findOne({ where: { id: itemId, organization_id: organizationId } });
 
     if (!item) {
       apiError(404, "pricebook_item_not_found", "The requested pricebook item could not be found.");
@@ -473,8 +487,8 @@ export class PricebookService {
     return item;
   }
 
-  private async loadBundleOrFail(bundleId: string) {
-    const bundle = await this.pricebookBundleRepository.findOne({ where: { id: bundleId } });
+  private async loadBundleOrFail(organizationId: string, bundleId: string) {
+    const bundle = await this.pricebookBundleRepository.findOne({ where: { id: bundleId, organization_id: organizationId } });
 
     if (!bundle) {
       apiError(404, "pricebook_bundle_not_found", "The requested pricebook bundle could not be found.");
@@ -483,9 +497,9 @@ export class PricebookService {
     return bundle;
   }
 
-  private async loadBundleWithItemsOrFail(bundleId: string) {
+  private async loadBundleWithItemsOrFail(organizationId: string, bundleId: string) {
     const bundle = await this.pricebookBundleRepository.findOne({
-      where: { id: bundleId },
+      where: { id: bundleId, organization_id: organizationId },
       relations: {
         items: {
           pricebook_item: true,
@@ -500,10 +514,11 @@ export class PricebookService {
     return bundle;
   }
 
-  private async loadBundleItemOrFail(bundleId: string, bundleItemId: string) {
+  private async loadBundleItemOrFail(organizationId: string, bundleId: string, bundleItemId: string) {
     const bundleItem = await this.pricebookBundleItemRepository.findOne({
       where: {
         id: bundleItemId,
+        organization_id: organizationId,
         bundle_id: bundleId,
       },
       relations: {
@@ -518,9 +533,9 @@ export class PricebookService {
     return bundleItem;
   }
 
-  private async ensureSkuIsUnique(internalSku: string, excludeItemId?: string) {
+  private async ensureSkuIsUnique(organizationId: string, internalSku: string, excludeItemId?: string) {
     const existingItem = await this.pricebookItemRepository.findOne({
-      where: { internal_sku: internalSku },
+      where: { internal_sku: internalSku, organization_id: organizationId },
       select: { id: true, internal_sku: true },
     });
 
@@ -529,7 +544,7 @@ export class PricebookService {
     }
   }
 
-  private async generateDuplicateSku(sourceSku: string) {
+  private async generateDuplicateSku(organizationId: string, sourceSku: string) {
     const baseSku = sourceSku.trim();
 
     for (let copyIndex = 1; copyIndex <= 1000; copyIndex += 1) {
@@ -537,7 +552,7 @@ export class PricebookService {
       const truncatedBase = baseSku.slice(0, Math.max(1, 128 - suffix.length));
       const candidateSku = `${truncatedBase}${suffix}`;
       const existingCandidate = await this.pricebookItemRepository.findOne({
-        where: { internal_sku: candidateSku },
+        where: { internal_sku: candidateSku, organization_id: organizationId },
         select: { id: true },
       });
 

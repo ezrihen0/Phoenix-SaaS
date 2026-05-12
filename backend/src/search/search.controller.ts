@@ -1,7 +1,7 @@
 import { Controller, Get, Query, Req, UseGuards } from "@nestjs/common";
 
 import { SessionGuard } from "../auth/session.guard";
-import { apiSuccess } from "../common/api-response";
+import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import type { GlobalSearchApiResponse } from "./search.contract";
 import { OfficeSearchAccessGuard } from "./guards/office-search-access.guard";
@@ -14,9 +14,15 @@ export class SearchController {
 
   @Get()
   async search(
-    @Req() _request: RequestWithActor,
+    @Req() request: RequestWithActor,
     @Query("q") query: string | undefined,
   ): Promise<GlobalSearchApiResponse> {
-    return apiSuccess(await this.searchService.search(query));
+    const organizationId = request.actor?.organization_id;
+
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required for search.");
+    }
+
+    return apiSuccess(await this.searchService.search(query, organizationId));
   }
 }

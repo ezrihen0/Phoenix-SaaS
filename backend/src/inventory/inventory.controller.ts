@@ -39,10 +39,13 @@ export class InventoryController {
 
   @Get("items")
   async listItems(@Req() request: RequestWithActor, @Query() query: Record<string, unknown>) {
-    this.requireOfficeInventoryActor(request);
+    const actor = this.requireOfficeInventoryActor(request);
 
     try {
-      return apiSuccess(await this.inventoryService.listItems(parseInventoryItemListQuery(query)));
+      return apiSuccess(await this.inventoryService.listItems(
+        this.requireOrganizationId(actor),
+        parseInventoryItemListQuery(query),
+      ));
     } catch (error) {
       this.handleValidationError(error, "inventory_items_query_invalid");
     }
@@ -50,12 +53,13 @@ export class InventoryController {
 
   @Post("items")
   async createItem(@Req() request: RequestWithActor, @Body() body: unknown) {
-    this.requireOfficeInventoryActor(request);
+    const actor = this.requireOfficeInventoryActor(request);
 
     try {
       return apiSuccess(await this.inventoryService.createItem(
+        this.requireOrganizationId(actor),
         parseCreateInventoryItemPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "inventory_item_invalid");
@@ -64,13 +68,14 @@ export class InventoryController {
 
   @Patch("items/:itemId")
   async updateItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string, @Body() body: unknown) {
-    this.requireOfficeInventoryActor(request);
+    const actor = this.requireOfficeInventoryActor(request);
 
     try {
       return apiSuccess(await this.inventoryService.updateItem(
+        this.requireOrganizationId(actor),
         parseUuidParam(itemId, "itemId"),
         parseUpdateInventoryItemPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "inventory_item_update_invalid");
@@ -79,11 +84,12 @@ export class InventoryController {
 
   @Delete("items/:itemId")
   async archiveItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
-    this.requireOfficeInventoryActor(request);
+    const actor = this.requireOfficeInventoryActor(request);
 
     return apiSuccess(await this.inventoryService.archiveItem(
+      this.requireOrganizationId(actor),
       parseUuidParam(itemId, "itemId"),
-      request.actor?.user.id ?? null,
+      actor.user.id,
     ));
   }
 
@@ -93,8 +99,9 @@ export class InventoryController {
 
     try {
       return apiSuccess(await this.inventoryService.listLocations(
+        this.requireOrganizationId(actor),
         parseInventoryLocationListQuery(query),
-        actor.profile?.role ?? null,
+        actor.role ?? actor.profile?.role ?? null,
         actor.user.id,
       ));
     } catch (error) {
@@ -104,12 +111,13 @@ export class InventoryController {
 
   @Post("locations")
   async createLocation(@Req() request: RequestWithActor, @Body() body: unknown) {
-    this.requireOfficeInventoryActor(request);
+    const actor = this.requireOfficeInventoryActor(request);
 
     try {
       return apiSuccess(await this.inventoryService.createLocation(
+        this.requireOrganizationId(actor),
         parseCreateInventoryLocationPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "inventory_location_invalid");
@@ -118,13 +126,14 @@ export class InventoryController {
 
   @Patch("locations/:locationId")
   async updateLocation(@Req() request: RequestWithActor, @Param("locationId") locationId: string, @Body() body: unknown) {
-    this.requireOfficeInventoryActor(request);
+    const actor = this.requireOfficeInventoryActor(request);
 
     try {
       return apiSuccess(await this.inventoryService.updateLocation(
+        this.requireOrganizationId(actor),
         parseUuidParam(locationId, "locationId"),
         parseUpdateInventoryLocationPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "inventory_location_update_invalid");
@@ -133,11 +142,12 @@ export class InventoryController {
 
   @Delete("locations/:locationId")
   async archiveLocation(@Req() request: RequestWithActor, @Param("locationId") locationId: string) {
-    this.requireOfficeInventoryActor(request);
+    const actor = this.requireOfficeInventoryActor(request);
 
     return apiSuccess(await this.inventoryService.archiveLocation(
+      this.requireOrganizationId(actor),
       parseUuidParam(locationId, "locationId"),
-      request.actor?.user.id ?? null,
+      actor.user.id,
     ));
   }
 
@@ -147,8 +157,9 @@ export class InventoryController {
 
     try {
       return apiSuccess(await this.inventoryService.listStock(
+        this.requireOrganizationId(actor),
         parseInventoryStockListQuery(query),
-        actor.profile?.role ?? null,
+        actor.role ?? actor.profile?.role ?? null,
         actor.user.id,
       ));
     } catch (error) {
@@ -162,8 +173,9 @@ export class InventoryController {
 
     try {
       return apiSuccess(await this.inventoryService.listMovements(
+        this.requireOrganizationId(actor),
         parseInventoryMovementListQuery(query),
-        actor.profile?.role ?? null,
+        actor.role ?? actor.profile?.role ?? null,
         actor.user.id,
       ));
     } catch (error) {
@@ -173,12 +185,13 @@ export class InventoryController {
 
   @Post("receive")
   async receiveStock(@Req() request: RequestWithActor, @Body() body: unknown) {
-    this.requireOfficeInventoryActor(request);
+    const actor = this.requireOfficeInventoryActor(request);
 
     try {
       return apiSuccess(await this.inventoryService.receiveStock(
+        this.requireOrganizationId(actor),
         parseReceiveInventoryPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "inventory_receive_invalid");
@@ -187,12 +200,13 @@ export class InventoryController {
 
   @Post("transfer")
   async transferStock(@Req() request: RequestWithActor, @Body() body: unknown) {
-    this.requireOfficeInventoryActor(request);
+    const actor = this.requireOfficeInventoryActor(request);
 
     try {
       return apiSuccess(await this.inventoryService.transferStock(
+        this.requireOrganizationId(actor),
         parseTransferInventoryPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "inventory_transfer_invalid");
@@ -201,12 +215,13 @@ export class InventoryController {
 
   @Post("use")
   async useStock(@Req() request: RequestWithActor, @Body() body: unknown) {
-    this.requireOfficeInventoryActor(request);
+    const actor = this.requireOfficeInventoryActor(request);
 
     try {
       return apiSuccess(await this.inventoryService.useStock(
+        this.requireOrganizationId(actor),
         parseUseInventoryPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "inventory_use_invalid");
@@ -215,12 +230,13 @@ export class InventoryController {
 
   @Post("adjust")
   async adjustStock(@Req() request: RequestWithActor, @Body() body: unknown) {
-    this.requireOfficeInventoryActor(request);
+    const actor = this.requireOfficeInventoryActor(request);
 
     try {
       return apiSuccess(await this.inventoryService.adjustStock(
+        this.requireOrganizationId(actor),
         parseAdjustInventoryPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "inventory_adjust_invalid");
@@ -229,7 +245,11 @@ export class InventoryController {
 
   private requireInventoryViewer(request: RequestWithActor) {
     const actor = request.actor;
-    const role = typeof actor?.profile?.role === "string" ? actor.profile.role.trim().toLowerCase() : "";
+    const role = typeof actor?.role === "string"
+      ? actor.role.trim().toLowerCase()
+      : typeof actor?.profile?.role === "string"
+        ? actor.profile.role.trim().toLowerCase()
+        : "";
 
     if (!actor?.user || (!isInventoryOfficeRole(role) && role !== "technician")) {
       apiError(403, "inventory_forbidden", "This inventory view is not available for the current account.");
@@ -240,13 +260,27 @@ export class InventoryController {
 
   private requireOfficeInventoryActor(request: RequestWithActor) {
     const actor = request.actor;
-    const role = typeof actor?.profile?.role === "string" ? actor.profile.role.trim().toLowerCase() : "";
+    const role = typeof actor?.role === "string"
+      ? actor.role.trim().toLowerCase()
+      : typeof actor?.profile?.role === "string"
+        ? actor.profile.role.trim().toLowerCase()
+        : "";
 
     if (!actor?.user || !canManageInventory(role)) {
       apiError(403, "inventory_office_required", "Only office inventory roles can change inventory records.");
     }
 
     return actor;
+  }
+
+  private requireOrganizationId(actor: RequestWithActor["actor"]) {
+    const organizationId = actor?.organization_id;
+
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required for inventory.");
+    }
+
+    return organizationId;
   }
 
   private handleValidationError(error: unknown, code: string): never {

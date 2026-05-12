@@ -31,6 +31,31 @@ type SessionData = {
     is_active: boolean;
     last_seen_at: string | null;
   } | null;
+  active_membership: {
+    id: string;
+    organization_id: string;
+    role: SessionRole;
+    status: "active" | "invited" | "suspended";
+  } | null;
+  active_organization: {
+    id: string;
+    name: string;
+    slug: string;
+    is_active: boolean;
+  } | null;
+  memberships: Array<{
+    id: string;
+    organization_id: string;
+    role: SessionRole;
+    status: "active" | "invited" | "suspended";
+    organization: {
+      id: string;
+      name: string;
+      slug: string;
+      is_active: boolean;
+    } | null;
+  }>;
+  permissions: string[];
 };
 
 function backendBaseUrl() {

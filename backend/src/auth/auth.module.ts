@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthSessionEntity } from "../database/entities/auth-session.entity";
+import { MembershipEntity } from "../database/entities/membership.entity";
+import { OrganizationEntity } from "../database/entities/organization.entity";
 import { ProfileEntity } from "../database/entities/profile.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
 import { UserEntity } from "../database/entities/user.entity";
@@ -15,6 +17,8 @@ import { SessionGuard } from "./session.guard";
       UserEntity,
       ProfileEntity,
       TechnicianEntity,
+      OrganizationEntity,
+      MembershipEntity,
       AuthSessionEntity,
     ]),
   ],

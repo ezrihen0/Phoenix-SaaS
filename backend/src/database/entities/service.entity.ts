@@ -2,6 +2,8 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -9,11 +11,15 @@ import {
 
 import { serviceTypes, type ServiceType } from "../../crm/constants";
 import { JobEntity } from "./job.entity";
+import { OrganizationEntity } from "./organization.entity";
 
 @Entity({ name: "services" })
 export class ServiceEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 255 })
   name!: string;
@@ -47,4 +53,11 @@ export class ServiceEntity {
 
   @OneToMany(() => JobEntity, (job) => job.service)
   jobs?: JobEntity[];
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

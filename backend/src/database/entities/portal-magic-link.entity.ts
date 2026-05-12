@@ -9,6 +9,7 @@ import {
 } from "typeorm";
 
 import { CustomerEntity } from "./customer.entity";
+import { OrganizationEntity } from "./organization.entity";
 
 export const portalMagicLinkStatuses = ["sent", "opened", "expired", "used"] as const;
 export type PortalMagicLinkStatus = (typeof portalMagicLinkStatuses)[number];
@@ -20,6 +21,9 @@ export type PortalMagicLinkDeliveryMethod = (typeof portalMagicLinkDeliveryMetho
 export class PortalMagicLinkEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 36 })
   customer_id!: string;
@@ -73,4 +77,11 @@ export class PortalMagicLinkEntity {
   })
   @JoinColumn({ name: "customer_id", referencedColumnName: "id" })
   customer?: CustomerEntity;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

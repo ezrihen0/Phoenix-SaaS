@@ -2,6 +2,8 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -14,6 +16,7 @@ import {
   type ServiceType,
 } from "../../crm/constants";
 import { JobEntity } from "./job.entity";
+import { OrganizationEntity } from "./organization.entity";
 
 @Entity({ name: "customers" })
 export class CustomerEntity {
@@ -22,6 +25,9 @@ export class CustomerEntity {
 
   @Column({ type: "varchar", length: 120, nullable: true })
   external_client_number!: string | null;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 255 })
   full_name!: string;
@@ -78,4 +84,11 @@ export class CustomerEntity {
 
   @OneToMany(() => JobEntity, (job) => job.customer)
   jobs?: JobEntity[];
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

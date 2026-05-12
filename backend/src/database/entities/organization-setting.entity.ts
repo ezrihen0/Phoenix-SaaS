@@ -2,14 +2,21 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   PrimaryColumn,
   UpdateDateColumn,
 } from "typeorm";
+
+import { OrganizationEntity } from "./organization.entity";
 
 @Entity({ name: "organization_settings" })
 export class OrganizationSettingEntity {
   @PrimaryColumn({ type: "varchar", length: 64 })
   settings_key!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 255, nullable: true })
   business_name!: string | null;
@@ -55,4 +62,11 @@ export class OrganizationSettingEntity {
 
   @UpdateDateColumn({ type: "datetime", precision: 6 })
   updated_at!: Date;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

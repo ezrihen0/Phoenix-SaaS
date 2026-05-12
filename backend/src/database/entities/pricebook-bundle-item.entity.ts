@@ -8,6 +8,7 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
+import { OrganizationEntity } from "./organization.entity";
 import { PricebookBundleEntity } from "./pricebook-bundle.entity";
 import { PricebookItemEntity } from "./pricebook-item.entity";
 
@@ -15,6 +16,9 @@ import { PricebookItemEntity } from "./pricebook-item.entity";
 export class PricebookBundleItemEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 36 })
   bundle_id!: string;
@@ -57,4 +61,11 @@ export class PricebookBundleItemEntity {
   })
   @JoinColumn({ name: "pricebook_item_id", referencedColumnName: "id" })
   pricebook_item?: PricebookItemEntity;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

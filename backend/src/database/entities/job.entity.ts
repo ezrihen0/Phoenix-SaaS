@@ -23,6 +23,7 @@ import { InvoiceEntity } from "./invoice.entity";
 import { JobNoteEntity } from "./job-note.entity";
 import { JobStatusEventEntity } from "./job-status-event.entity";
 import { LeadEntity } from "./lead.entity";
+import { OrganizationEntity } from "./organization.entity";
 import { QuoteEntity } from "./quote.entity";
 import { ServiceEntity } from "./service.entity";
 import { TechnicianEntity } from "./technician.entity";
@@ -31,6 +32,9 @@ import { TechnicianEntity } from "./technician.entity";
 export class JobEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 36 })
   customer_id!: string;
@@ -129,6 +133,13 @@ export class JobEntity {
   })
   @JoinColumn({ name: "customer_id", referencedColumnName: "id" })
   customer?: CustomerEntity;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 
   @ManyToOne(() => ServiceEntity, (service) => service.jobs, {
     nullable: true,

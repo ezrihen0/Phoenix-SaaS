@@ -26,7 +26,7 @@ export class OutboundDialController {
   @Get("dialer-options")
   async dialerOptions(@Req() request: RequestWithActor) {
     const actor = request.actor;
-    if (!actor || !canDialFromTelephony(actor.profile?.role ?? null)) {
+    if (!actor || !canDialFromTelephony(actor.role ?? actor.profile?.role ?? null)) {
       apiError(403, "forbidden", "Only office users can access dialer options.");
     }
 
@@ -36,7 +36,7 @@ export class OutboundDialController {
   @Get("webrtc-config")
   webrtcConfig(@Req() request: RequestWithActor) {
     const actor = request.actor;
-    if (!actor || !canDialFromTelephony(actor.profile?.role ?? null)) {
+    if (!actor || !canDialFromTelephony(actor.role ?? actor.profile?.role ?? null)) {
       apiError(403, "forbidden", "Only office users can access web dial configuration.");
     }
 
@@ -49,7 +49,7 @@ export class OutboundDialController {
     @Body() body: DialBody,
   ) {
     const actor = request.actor;
-    if (!actor || !canDialFromTelephony(actor.profile?.role ?? null)) {
+    if (!actor || !canDialFromTelephony(actor.role ?? actor.profile?.role ?? null)) {
       apiError(403, "forbidden", "Only office users can place outbound calls.");
     }
 

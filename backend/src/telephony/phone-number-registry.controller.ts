@@ -62,7 +62,7 @@ export class PhoneNumberRegistryController {
   private requireOfficeRole(request: RequestWithActor) {
     const actor = request.actor;
 
-    if (!actor || !canManageTelephonySettings(actor.profile?.role ?? null)) {
+    if (!actor || !canManageTelephonySettings(actor.role ?? actor.profile?.role ?? null)) {
       apiError(403, "forbidden", "Only office roles can manage phone number registry settings.");
     }
 

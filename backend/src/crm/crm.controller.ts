@@ -164,6 +164,24 @@ export class CrmController {
     return requirePermission(request.actor, permission, code, message);
   }
 
+  private requireActiveOrganizationId(
+    actor: ActorContext,
+    message = "An active organization is required for this CRM action.",
+  ) {
+    if (!actor.organization_id) {
+      apiError(400, "organization_context_missing", message);
+    }
+
+    return actor.organization_id;
+  }
+
+  private withOrganizationId<T extends object>(organizationId: string, value: T) {
+    return {
+      ...value,
+      organization_id: organizationId,
+    };
+  }
+
   private requireTechnicianActor(request: RequestWithActor) {
     const actor = this.requireActor(request);
 
@@ -279,10 +297,11 @@ export class CrmController {
     return date;
   }
 
-  private async loadJobDetail(jobId: string) {
+  private async loadJobDetail(jobId: string, organizationId: string) {
     const job = await this.jobsRepository.findOne({
       where: {
         id: jobId,
+        organization_id: organizationId,
       },
       relations: {
         customer: true,
@@ -371,12 +390,13 @@ export class CrmController {
 
   @Get("dashboard")
   async getDashboard(@Req() request: RequestWithActor) {
-    this.requireCrmPermissionActor(
+    const actor = this.requireCrmPermissionActor(
       request,
       "dashboard.office.view",
       "dashboard_view_forbidden",
       "This account cannot view the office dashboard.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const todayStart = this.startOfToday();
@@ -398,22 +418,25 @@ export class CrmController {
         todaysScheduledJobs,
         recentCompletedJobs,
       ] = await Promise.all([
-        this.leadsRepository.countBy({ status: "new_lead" }),
-        this.leadsRepository.countBy({ status: "contacted" }),
+        this.leadsRepository.countBy({ status: "new_lead", organization_id: organizationId }),
+        this.leadsRepository.countBy({ status: "contacted", organization_id: organizationId }),
         this.jobsRepository.count({
           where: {
+            organization_id: organizationId,
             status: In(openJobStatuses),
           },
         }),
         this.jobsRepository
           .createQueryBuilder("job")
-          .where("job.scheduled_for >= :todayStart", { todayStart })
+          .where("job.organization_id = :organizationId", { organizationId })
+          .andWhere("job.scheduled_for >= :todayStart", { todayStart })
           .andWhere("job.scheduled_for <= :todayEnd", { todayEnd })
           .andWhere("job.status != :status", { status: "cancelled" })
           .getCount(),
-        this.invoicesRepository.countBy({ status: "unpaid" }),
+        this.invoicesRepository.countBy({ status: "unpaid", organization_id: organizationId }),
         this.leadsRepository.find({
           where: {
+            organization_id: organizationId,
             status: Not("converted"),
           },
           order: {
@@ -423,6 +446,7 @@ export class CrmController {
         }),
         this.jobsRepository.find({
           where: {
+            organization_id: organizationId,
             status: Not("cancelled"),
           },
           relations: {
@@ -439,12 +463,16 @@ export class CrmController {
           take: 60,
         }),
         this.techniciansRepository.find({
+          where: {
+            organization_id: organizationId,
+          },
           order: {
             display_name: "ASC",
           },
         }),
         this.servicesRepository.find({
           where: {
+            organization_id: organizationId,
             is_active: true,
           },
           order: {
@@ -453,6 +481,7 @@ export class CrmController {
         }),
         this.quotesRepository.find({
           where: {
+            organization_id: organizationId,
             status: "sent",
           },
           relations: {
@@ -468,6 +497,7 @@ export class CrmController {
         }),
         this.invoicesRepository.find({
           where: {
+            organization_id: organizationId,
             status: "unpaid",
           },
           relations: {
@@ -483,6 +513,7 @@ export class CrmController {
         }),
         this.jobsRepository.find({
           where: {
+            organization_id: organizationId,
             status: "contacted",
           },
           relations: {
@@ -498,7 +529,8 @@ export class CrmController {
           .createQueryBuilder("job")
           .leftJoinAndSelect("job.customer", "customer")
           .leftJoinAndSelect("job.technician", "technician")
-          .where("job.scheduled_for >= :todayStart", { todayStart })
+          .where("job.organization_id = :organizationId", { organizationId })
+          .andWhere("job.scheduled_for >= :todayStart", { todayStart })
           .andWhere("job.scheduled_for <= :todayEnd", { todayEnd })
           .andWhere("job.status != :cancelledStatus", { cancelledStatus: "cancelled" })
           .orderBy("job.scheduled_for", "ASC")
@@ -506,6 +538,7 @@ export class CrmController {
           .getMany(),
         this.jobsRepository.find({
           where: {
+            organization_id: organizationId,
             status: In(["completed", "paid"]),
           },
           relations: {
@@ -552,6 +585,7 @@ export class CrmController {
   @Get("technician/dashboard")
   async getTechnicianDashboard(@Req() request: RequestWithActor) {
     const actor = this.requireTechnicianActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const todayStart = this.startOfToday();
@@ -559,25 +593,29 @@ export class CrmController {
       const [openCount, inProgressCount, waitingApprovalCount, completedTodayCount, jobs] = await Promise.all([
         this.jobsRepository.count({
           where: {
+            organization_id: organizationId,
             assigned_technician_id: actor.technician.id,
             status: In(openJobStatuses),
           },
         }),
         this.jobsRepository.count({
           where: {
+            organization_id: organizationId,
             assigned_technician_id: actor.technician.id,
             status: "in_progress",
           },
         }),
         this.jobsRepository.count({
           where: {
+            organization_id: organizationId,
             assigned_technician_id: actor.technician.id,
             status: "waiting_for_approval",
           },
         }),
         this.jobsRepository
           .createQueryBuilder("job")
-          .where("job.assigned_technician_id = :technicianId", {
+          .where("job.organization_id = :organizationId", { organizationId })
+          .andWhere("job.assigned_technician_id = :technicianId", {
             technicianId: actor.technician.id,
           })
           .andWhere("job.status = :status", { status: "completed" })
@@ -585,6 +623,7 @@ export class CrmController {
           .getCount(),
         this.jobsRepository.find({
           where: {
+            organization_id: organizationId,
             assigned_technician_id: actor.technician.id,
             status: Not("cancelled"),
           },
@@ -635,12 +674,13 @@ export class CrmController {
     @Query("status") status?: string,
     @Query("technicianId") technicianId?: string,
   ) {
-    this.requireCrmPermissionActor(
+    const actor = this.requireCrmPermissionActor(
       request,
       "jobs.view",
       "job_list_forbidden",
       "This account cannot view the job board.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const queryBuilder = this.jobsRepository
@@ -650,6 +690,7 @@ export class CrmController {
         .leftJoinAndSelect("job.technician", "technician")
         .leftJoinAndSelect("job.quote", "quote")
         .leftJoinAndSelect("job.invoice", "invoice")
+        .where("job.organization_id = :organizationId", { organizationId })
         .orderBy("job.scheduled_for", "ASC")
         .addOrderBy("job.created_at", "DESC");
 
@@ -681,6 +722,7 @@ export class CrmController {
       "job_create_forbidden",
       "This account cannot create jobs.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseCreateJobPayload(body);
@@ -694,6 +736,7 @@ export class CrmController {
         const lead = await this.leadsRepository.findOne({
           where: {
             id: payload.leadId,
+            organization_id: organizationId,
           },
         });
 
@@ -705,7 +748,7 @@ export class CrmController {
           apiError(400, "lead_already_converted", "This lead has already been converted into a job.");
         }
 
-        const customerInsert = this.customersRepository.create({
+        const customerInsert = this.customersRepository.create(this.withOrganizationId(organizationId, {
           full_name: lead.full_name,
           phone: lead.phone,
           email: lead.email,
@@ -717,7 +760,7 @@ export class CrmController {
           source: lead.source,
           preferred_service_type: lead.service_type,
           notes: lead.description,
-        });
+        }));
 
         const customer = await this.customersRepository.save(customerInsert);
 
@@ -730,6 +773,7 @@ export class CrmController {
         const customer = await this.customersRepository.findOne({
           where: {
             id: customerId,
+            organization_id: organizationId,
           },
         });
 
@@ -747,6 +791,7 @@ export class CrmController {
 
       const job = await this.jobsRepository.save(
         this.jobsRepository.create({
+          organization_id: organizationId,
           customer_id: customerId,
           service_id: null,
           assigned_technician_id: payload.assignedTechnicianId,
@@ -772,6 +817,7 @@ export class CrmController {
         await this.leadsRepository.update(
           {
             id: leadToConvertId,
+            organization_id: organizationId,
           },
           {
             status: "converted",
@@ -782,6 +828,7 @@ export class CrmController {
 
       await this.jobStatusEventsRepository.save(
         this.jobStatusEventsRepository.create({
+          organization_id: organizationId,
           job_id: job.id,
           author_profile_id: actor.profile.id,
           status: "scheduled",
@@ -791,7 +838,7 @@ export class CrmController {
         }),
       );
 
-      const detail = await this.loadJobDetail(job.id);
+      const detail = await this.loadJobDetail(job.id, organizationId);
 
       return apiSuccess({ job: detail ? this.buildJobDetailResponse(detail) : job });
     } catch (error) {
@@ -805,9 +852,10 @@ export class CrmController {
     @Param("jobId") jobId: string,
   ) {
     const actor = this.requireActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
-      const job = await this.loadJobDetail(jobId);
+      const job = await this.loadJobDetail(jobId, organizationId);
 
       if (!job) {
         apiError(404, "job_not_found", "The job could not be found.");
@@ -835,12 +883,14 @@ export class CrmController {
       "job_update_forbidden",
       "This account cannot update jobs.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseUpdateJobPayload(body);
       const job = await this.jobsRepository.findOne({
         where: {
           id: jobId,
+          organization_id: organizationId,
         },
       });
 
@@ -876,8 +926,8 @@ export class CrmController {
         updates.scheduled_window = payload.scheduledWindow;
       }
 
-      await this.jobsRepository.update({ id: jobId }, updates);
-      const detail = await this.loadJobDetail(jobId);
+      await this.jobsRepository.update({ id: jobId, organization_id: organizationId }, updates);
+      const detail = await this.loadJobDetail(jobId, organizationId);
 
       return apiSuccess(detail ? this.buildJobDetailResponse(detail) : null);
     } catch (error) {
@@ -892,12 +942,14 @@ export class CrmController {
     @Body() body: unknown,
   ) {
     const actor = this.requireActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseJobStatusPayload(body);
       const job = await this.jobsRepository.findOne({
         where: {
           id: jobId,
+          organization_id: organizationId,
         },
       });
 
@@ -953,7 +1005,7 @@ export class CrmController {
       const statusTimestampUpdates = getJobStatusTimestampUpdates(payload.status, timestamp);
 
       await this.jobsRepository.update(
-        { id: jobId },
+        { id: jobId, organization_id: organizationId },
         {
           status: payload.status,
           updated_by_auth_user_id: actor.user.id,
@@ -969,18 +1021,19 @@ export class CrmController {
       );
 
       await this.jobStatusEventsRepository.save(
-        this.jobStatusEventsRepository.create({
+        this.jobStatusEventsRepository.create(this.withOrganizationId(organizationId, {
           job_id: jobId,
           author_profile_id: actor.profile?.id ?? null,
           status: payload.status,
           note: payload.status === "cancelled" ? cancellationReason : payload.note,
-        }),
+        })),
       );
 
       if (payload.status === "paid") {
         await this.invoicesRepository.update(
           {
             job_id: jobId,
+            organization_id: organizationId,
           },
           {
             status: "paid",
@@ -989,7 +1042,7 @@ export class CrmController {
         );
       }
 
-      const detail = await this.loadJobDetail(jobId);
+      const detail = await this.loadJobDetail(jobId, organizationId);
 
       return apiSuccess(detail ? this.buildJobDetailResponse(detail) : null);
     } catch (error) {
@@ -1003,18 +1056,20 @@ export class CrmController {
     @Param("jobId") jobId: string,
     @Body() body: unknown,
   ) {
-    this.requireCrmPermissionActor(
+    const actor = this.requireCrmPermissionActor(
       request,
       "estimates.manage",
       "estimate_manage_forbidden",
       "This account cannot change estimates.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseUpsertQuotePayload(body);
       const job = await this.jobsRepository.findOne({
         where: {
           id: jobId,
+          organization_id: organizationId,
         },
       });
 
@@ -1025,6 +1080,7 @@ export class CrmController {
       const existingQuote = await this.quotesRepository.findOne({
         where: {
           job_id: jobId,
+          organization_id: organizationId,
         },
       });
 
@@ -1074,7 +1130,7 @@ export class CrmController {
       }
 
       const result = await this.quotesRepository.save(
-        this.quotesRepository.create({
+        this.quotesRepository.create(this.withOrganizationId(organizationId, {
           job_id: jobId,
           description: payload.description,
           price_cents: quoteTotals.totalCents,
@@ -1085,7 +1141,7 @@ export class CrmController {
           status: payload.status,
           sent_at,
           approved_at,
-        }),
+        })),
       );
 
       await this.documentSnapshotService.replaceQuoteLineItems(
@@ -1178,6 +1234,7 @@ export class CrmController {
     job: JobEntity,
     actor: ActorContext & { profile: ProfileEntity },
   ) {
+    const organizationId = this.requireActiveOrganizationId(actor);
     const legacyState = this.deriveLegacyInvoiceStatusFromLedger(invoice);
 
     if (invoice.status !== legacyState.status || this.toIsoString(invoice.paid_at) !== this.toIsoString(legacyState.paidAt)) {
@@ -1190,6 +1247,7 @@ export class CrmController {
       await this.jobsRepository.update(
         {
           id: job.id,
+          organization_id: organizationId,
         },
         {
           status: "paid",
@@ -1200,6 +1258,7 @@ export class CrmController {
 
       await this.jobStatusEventsRepository.save(
         this.jobStatusEventsRepository.create({
+          organization_id: organizationId,
           job_id: job.id,
           author_profile_id: actor.profile.id,
           status: "paid",
@@ -1212,6 +1271,7 @@ export class CrmController {
       await this.jobsRepository.update(
         {
           id: job.id,
+          organization_id: organizationId,
         },
         {
           status: "completed",
@@ -1222,6 +1282,7 @@ export class CrmController {
 
       await this.jobStatusEventsRepository.save(
         this.jobStatusEventsRepository.create({
+          organization_id: organizationId,
           job_id: job.id,
           author_profile_id: actor.profile.id,
           status: "completed",
@@ -1310,6 +1371,7 @@ export class CrmController {
     @Query("customerId") customerId?: string,
   ) {
     const actor = this.requireActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     if (!actorHasPermission(actor, "invoices.view") && !actorHasPermission(actor, "invoices.assigned.view")) {
       apiError(403, "invoice_view_forbidden", "This account cannot view invoices.");
@@ -1317,6 +1379,9 @@ export class CrmController {
 
     try {
       const invoices = await this.invoicesRepository.find({
+        where: {
+          organization_id: organizationId,
+        },
         relations: {
           job: {
             customer: true,
@@ -1358,11 +1423,13 @@ export class CrmController {
     @Param("invoiceId") invoiceId: string,
   ) {
     const actor = this.requireActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const invoice = await this.invoicesRepository.findOne({
         where: {
           id: invoiceId,
+          organization_id: organizationId,
         },
         relations: {
           job: {
@@ -1450,12 +1517,14 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Param("invoiceId") invoiceId: string,
   ) {
-    this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+    const actor = this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const invoice = await this.invoicesRepository.findOne({
         where: {
           id: invoiceId,
+          organization_id: organizationId,
         },
       });
 
@@ -1478,12 +1547,14 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Param("invoiceId") invoiceId: string,
   ) {
-    this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+    const actor = this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const invoice = await this.invoicesRepository.findOne({
         where: {
           id: invoiceId,
+          organization_id: organizationId,
         },
       });
 
@@ -1508,12 +1579,14 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Param("invoiceId") invoiceId: string,
   ) {
-    this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+    const actor = this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const invoice = await this.invoicesRepository.findOne({
         where: {
           id: invoiceId,
+          organization_id: organizationId,
         },
       });
 
@@ -1537,13 +1610,15 @@ export class CrmController {
     @Param("invoiceId") invoiceId: string,
     @Body() body: unknown,
   ) {
-    this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+    const actor = this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseSignDocumentPayload(body);
       const invoice = await this.invoicesRepository.findOne({
         where: {
           id: invoiceId,
+          organization_id: organizationId,
         },
       });
 
@@ -1571,12 +1646,14 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Param("invoiceId") invoiceId: string,
   ) {
-    this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+    const actor = this.requireCrmPermissionActor(request, "invoices.manage", "invoice_manage_forbidden", "This account cannot change invoices.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const invoice = await this.invoicesRepository.findOne({
         where: {
           id: invoiceId,
+          organization_id: organizationId,
         },
       });
 
@@ -1610,6 +1687,7 @@ export class CrmController {
       "invoice_payment_manage_forbidden",
       "This account cannot record invoice payments.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseRecordInvoicePaymentPayload(body);
@@ -1621,6 +1699,7 @@ export class CrmController {
       const invoice = await this.invoicesRepository.findOne({
         where: {
           id: invoiceId,
+          organization_id: organizationId,
         },
         relations: {
           payments: true,
@@ -1643,7 +1722,7 @@ export class CrmController {
         : new Date();
 
       await this.invoicePaymentsRepository.save(
-        this.invoicePaymentsRepository.create({
+        this.invoicePaymentsRepository.create(this.withOrganizationId(organizationId, {
           invoice_id: invoice.id,
           entry_type: payload.entryType,
           amount_cents: payload.amountCents,
@@ -1652,12 +1731,13 @@ export class CrmController {
           note: payload.note,
           occurred_at: occurredAt,
           created_by_auth_user_id: actor.user.id,
-        }),
+        })),
       );
 
       const refreshedInvoice = await this.invoicesRepository.findOne({
         where: {
           id: invoice.id,
+          organization_id: organizationId,
         },
         relations: {
           payments: true,
@@ -1689,6 +1769,7 @@ export class CrmController {
     @Query("jobId") jobId?: string,
   ) {
     const actor = this.requireActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     if (!actorHasPermission(actor, "estimates.view") && !actorHasPermission(actor, "estimates.assigned.view")) {
       apiError(403, "estimate_view_forbidden", "This account cannot view estimates.");
@@ -1696,6 +1777,9 @@ export class CrmController {
 
     try {
       const quotes = await this.quotesRepository.find({
+        where: {
+          organization_id: organizationId,
+        },
         relations: {
           job: {
             customer: true,
@@ -1806,11 +1890,13 @@ export class CrmController {
     @Param("estimateId") estimateId: string,
   ) {
     const actor = this.requireActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const quote = await this.quotesRepository.findOne({
         where: {
           id: estimateId,
+          organization_id: organizationId,
         },
         relations: {
           job: {
@@ -1882,12 +1968,14 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Param("estimateId") estimateId: string,
   ) {
-    this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+    const actor = this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const quote = await this.quotesRepository.findOne({
         where: {
           id: estimateId,
+          organization_id: organizationId,
         },
       });
 
@@ -1910,12 +1998,14 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Param("estimateId") estimateId: string,
   ) {
-    this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+    const actor = this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const quote = await this.quotesRepository.findOne({
         where: {
           id: estimateId,
+          organization_id: organizationId,
         },
       });
 
@@ -1940,12 +2030,14 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Param("estimateId") estimateId: string,
   ) {
-    this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+    const actor = this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const quote = await this.quotesRepository.findOne({
         where: {
           id: estimateId,
+          organization_id: organizationId,
         },
       });
 
@@ -1969,13 +2061,15 @@ export class CrmController {
     @Param("estimateId") estimateId: string,
     @Body() body: unknown,
   ) {
-    this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+    const actor = this.requireCrmPermissionActor(request, "estimates.manage", "estimate_manage_forbidden", "This account cannot change estimates.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseSignDocumentPayload(body);
       const quote = await this.quotesRepository.findOne({
         where: {
           id: estimateId,
+          organization_id: organizationId,
         },
       });
 
@@ -2010,12 +2104,14 @@ export class CrmController {
       "invoice_manage_forbidden",
       "This account cannot change invoices.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseUpsertInvoicePayload(body);
       const job = await this.jobsRepository.findOne({
         where: {
           id: jobId,
+          organization_id: organizationId,
         },
       });
 
@@ -2026,6 +2122,7 @@ export class CrmController {
       const existingInvoice = await this.invoicesRepository.findOne({
         where: {
           job_id: jobId,
+          organization_id: organizationId,
         },
         relations: {
           payments: true,
@@ -2074,7 +2171,7 @@ export class CrmController {
         invoice = await this.invoicesRepository.save(existingInvoice);
       } else {
         invoice = await this.invoicesRepository.save(
-          this.invoicesRepository.create({
+          this.invoicesRepository.create(this.withOrganizationId(organizationId, {
             job_id: jobId,
             description: invoiceDescription,
             amount_cents: invoiceTotals.totalCents,
@@ -2084,7 +2181,7 @@ export class CrmController {
             total_cents: invoiceTotals.totalCents,
             status: payload.status,
             paid_at,
-          }),
+          })),
         );
       }
 
@@ -2106,6 +2203,7 @@ export class CrmController {
         await this.jobsRepository.update(
           {
             id: jobId,
+            organization_id: organizationId,
           },
           {
             status: "paid",
@@ -2116,6 +2214,7 @@ export class CrmController {
 
         await this.jobStatusEventsRepository.save(
           this.jobStatusEventsRepository.create({
+            organization_id: organizationId,
             job_id: jobId,
             author_profile_id: actor.profile.id,
             status: "paid",
@@ -2128,6 +2227,7 @@ export class CrmController {
         await this.jobsRepository.update(
           {
             id: jobId,
+            organization_id: organizationId,
           },
           {
             status: "completed",
@@ -2138,6 +2238,7 @@ export class CrmController {
 
         await this.jobStatusEventsRepository.save(
           this.jobStatusEventsRepository.create({
+            organization_id: organizationId,
             job_id: jobId,
             author_profile_id: actor.profile.id,
             status: "completed",
@@ -2165,12 +2266,14 @@ export class CrmController {
       "job_note_create_forbidden",
       "This account cannot create job notes.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseCreateJobNotePayload(body);
       const job = await this.jobsRepository.findOne({
         where: {
           id: jobId,
+          organization_id: organizationId,
         },
       });
 
@@ -2187,13 +2290,13 @@ export class CrmController {
       }
 
       const result = await this.jobNotesRepository.save(
-        this.jobNotesRepository.create({
+        this.jobNotesRepository.create(this.withOrganizationId(organizationId, {
           job_id: jobId,
           author_profile_id: actor.profile?.id ?? null,
           findings: payload.findings,
           recommendations: payload.recommendations,
           photo_urls: payload.photoUrls,
-        }),
+        })),
       );
       result.author_profile = actor.profile ?? null;
 
@@ -2208,11 +2311,14 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Query("status") status?: string,
   ) {
-    this.requireCrmPermissionActor(request, "leads.view", "lead_view_forbidden", "This account cannot view leads.");
+    const actor = this.requireCrmPermissionActor(request, "leads.view", "lead_view_forbidden", "This account cannot view leads.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const leads = await this.leadsRepository.find({
-        where: status ? { status: status as LeadEntity["status"] } : {},
+        where: status
+          ? { status: status as LeadEntity["status"], organization_id: organizationId }
+          : { organization_id: organizationId },
         order: {
           created_at: "DESC",
         },
@@ -2232,11 +2338,12 @@ export class CrmController {
       "lead_manage_forbidden",
       "This account cannot change leads.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseCreateLeadPayload(body);
       const lead = await this.leadsRepository.save(
-        this.leadsRepository.create({
+        this.leadsRepository.create(this.withOrganizationId(organizationId, {
           full_name: payload.fullName,
           phone: payload.phone,
           email: payload.email,
@@ -2249,7 +2356,7 @@ export class CrmController {
           service_type: payload.serviceType,
           description: payload.description,
           created_by_auth_user_id: actor.user.id,
-        }),
+        })),
       );
 
       return apiSuccess(lead);
@@ -2260,12 +2367,14 @@ export class CrmController {
 
   @Get("leads/:leadId")
   async getLead(@Req() request: RequestWithActor, @Param("leadId") leadId: string) {
-    this.requireCrmPermissionActor(request, "leads.view", "lead_view_forbidden", "This account cannot view leads.");
+    const actor = this.requireCrmPermissionActor(request, "leads.view", "lead_view_forbidden", "This account cannot view leads.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const lead = await this.leadsRepository.findOne({
         where: {
           id: leadId,
+          organization_id: organizationId,
         },
         relations: {
           converted_job: true,
@@ -2298,7 +2407,8 @@ export class CrmController {
     @Param("leadId") leadId: string,
     @Body() body: unknown,
   ) {
-    this.requireCrmPermissionActor(request, "leads.manage", "lead_manage_forbidden", "This account cannot change leads.");
+    const actor = this.requireCrmPermissionActor(request, "leads.manage", "lead_manage_forbidden", "This account cannot change leads.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseUpdateLeadPayload(body);
@@ -2314,6 +2424,7 @@ export class CrmController {
       const lead = await this.leadsRepository.findOne({
         where: {
           id: leadId,
+          organization_id: organizationId,
         },
       });
 
@@ -2389,12 +2500,14 @@ export class CrmController {
       "lead_manage_forbidden",
       "This account cannot change leads.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseConvertLeadPayload(body);
       const lead = await this.leadsRepository.findOne({
         where: {
           id: leadId,
+          organization_id: organizationId,
         },
       });
 
@@ -2407,7 +2520,7 @@ export class CrmController {
       }
 
       const customer = await this.customersRepository.save(
-        this.customersRepository.create({
+        this.customersRepository.create(this.withOrganizationId(organizationId, {
           full_name: lead.full_name,
           phone: lead.phone,
           email: lead.email,
@@ -2419,11 +2532,12 @@ export class CrmController {
           source: lead.source,
           preferred_service_type: lead.service_type,
           notes: lead.description,
-        }),
+        })),
       );
 
       const job = await this.jobsRepository.save(
         this.jobsRepository.create({
+          organization_id: organizationId,
           customer_id: customer.id,
           service_id: payload.serviceId,
           assigned_technician_id: payload.assignedTechnicianId,
@@ -2451,6 +2565,7 @@ export class CrmController {
 
       await this.jobStatusEventsRepository.save(
         this.jobStatusEventsRepository.create({
+          organization_id: organizationId,
           job_id: job.id,
           author_profile_id: actor.profile.id,
           status: "scheduled",
@@ -2458,7 +2573,7 @@ export class CrmController {
         }),
       );
 
-      const detail = await this.loadJobDetail(job.id);
+      const detail = await this.loadJobDetail(job.id, organizationId);
 
       return apiSuccess({
         lead: updatedLead,
@@ -2475,18 +2590,21 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Query("active") active?: string,
   ) {
-    this.requireCrmPermissionActor(
+    const actor = this.requireCrmPermissionActor(
       request,
       "jobs.update",
       "technician_list_forbidden",
       "This account cannot view the technician roster.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const activeOnly = active === undefined ? true : active === "true";
 
       const technicians = await this.techniciansRepository.find({
-        where: activeOnly ? { is_active: true } : {},
+        where: activeOnly
+          ? { organization_id: organizationId, is_active: true }
+          : { organization_id: organizationId },
         order: {
           display_name: "ASC",
         },
@@ -2500,10 +2618,14 @@ export class CrmController {
 
   @Get("customers")
   async listCustomers(@Req() request: RequestWithActor) {
-    this.requireCrmPermissionActor(request, "customers.view", "customer_view_forbidden", "This account cannot view customers.");
+    const actor = this.requireCrmPermissionActor(request, "customers.view", "customer_view_forbidden", "This account cannot view customers.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const customers = await this.customersRepository.find({
+        where: {
+          organization_id: organizationId,
+        },
         order: {
           updated_at: "DESC",
         },
@@ -2517,6 +2639,7 @@ export class CrmController {
       const jobs = await this.jobsRepository.find({
         where: {
           customer_id: In(customerIds),
+          organization_id: organizationId,
         },
         relations: {
           technician: true,
@@ -2551,18 +2674,21 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Param("customerId") customerId: string,
   ) {
-    this.requireCrmPermissionActor(request, "customers.view", "customer_view_forbidden", "This account cannot view customers.");
+    const actor = this.requireCrmPermissionActor(request, "customers.view", "customer_view_forbidden", "This account cannot view customers.");
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const [customer, relatedJobs] = await Promise.all([
         this.customersRepository.findOne({
           where: {
             id: customerId,
+            organization_id: organizationId,
           },
         }),
         this.jobsRepository.find({
           where: {
             customer_id: customerId,
+            organization_id: organizationId,
           },
           relations: {
             technician: true,
@@ -2910,7 +3036,7 @@ export class CrmController {
     };
   }
 
-  private async loadDuplicateCandidates(rows: PreviewRowAnalysis[]) {
+  private async loadDuplicateCandidates(rows: PreviewRowAnalysis[], organizationId: string) {
     const exactClientNumbers = Array.from(new Set(
       rows.map((row) => row.insertValue?.external_client_number).filter((value): value is string => Boolean(value)),
     ));
@@ -2927,6 +3053,7 @@ export class CrmController {
     if (exactClientNumbers.length > 0) {
       queries.push(this.customersRepository.find({
         where: {
+          organization_id: organizationId,
           external_client_number: In(exactClientNumbers),
         },
       }));
@@ -2935,6 +3062,7 @@ export class CrmController {
     if (exactPhones.length > 0) {
       queries.push(this.customersRepository.find({
         where: {
+          organization_id: organizationId,
           phone: In(exactPhones),
         },
       }));
@@ -2943,6 +3071,7 @@ export class CrmController {
     if (exactEmails.length > 0) {
       queries.push(this.customersRepository.find({
         where: {
+          organization_id: organizationId,
           email: In(exactEmails),
         },
       }));
@@ -2951,6 +3080,7 @@ export class CrmController {
     if (exactAddressLines.length > 0) {
       queries.push(this.customersRepository.find({
         where: {
+          organization_id: organizationId,
           service_address_line_1: In(exactAddressLines),
         },
       }));
@@ -2974,9 +3104,13 @@ export class CrmController {
 
   private async buildPreviewResponse(
     rows: CustomerImportRowInput[],
+    organizationId: string,
   ): Promise<CustomerImportPreviewResponse & { analyzedRows: PreviewRowAnalysis[] }> {
     const analyzedRows = rows.map((row) => this.analyzeRow(row));
-    const existingCustomers = await this.loadDuplicateCandidates(analyzedRows.filter((row) => row.insertValue));
+    const existingCustomers = await this.loadDuplicateCandidates(
+      analyzedRows.filter((row) => row.insertValue),
+      organizationId,
+    );
 
     for (const row of analyzedRows) {
       if (!row.insertValue) {
@@ -3122,12 +3256,13 @@ export class CrmController {
 
   @Post("admin/customers/import")
   async importCustomers(@Req() request: RequestWithActor, @Body() body: unknown) {
-    this.requireCrmPermissionActor(
+    const actor = this.requireCrmPermissionActor(
       request,
       "customers.manage",
       "customer_import_forbidden",
       "This account cannot import customers.",
     );
+    const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = this.parseImportPayload(body);
@@ -3136,7 +3271,7 @@ export class CrmController {
         apiError(400, "empty_customer_import", "Upload and parse at least one CSV row before importing customers.");
       }
 
-      const preview = await this.buildPreviewResponse(payload.rows);
+      const preview = await this.buildPreviewResponse(payload.rows, organizationId);
 
       if (payload.mode === "preview") {
         return apiSuccess<CustomerImportPreviewResponse>({
@@ -3158,7 +3293,7 @@ export class CrmController {
       }
 
       const insertResult = await this.customersRepository.save(
-        importableRows.map((row) => this.customersRepository.create(row)),
+        importableRows.map((row) => this.customersRepository.create(this.withOrganizationId(organizationId, row))),
       );
 
       return apiSuccess<CustomerImportResult>({

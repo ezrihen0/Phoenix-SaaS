@@ -15,11 +15,15 @@ import {
   type InvoicePaymentMethod,
 } from "../../crm/constants";
 import { InvoiceEntity } from "./invoice.entity";
+import { OrganizationEntity } from "./organization.entity";
 
 @Entity({ name: "invoice_payments" })
 export class InvoicePaymentEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 36 })
   invoice_id!: string;
@@ -63,4 +67,11 @@ export class InvoicePaymentEntity {
   })
   @JoinColumn({ name: "invoice_id", referencedColumnName: "id" })
   invoice?: InvoiceEntity;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

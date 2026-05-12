@@ -10,6 +10,7 @@ import {
 
 import { InspectionItemEntity, type InspectionPhotoAssignmentType } from "./inspection-item.entity";
 import { InspectionEntity } from "./inspection.entity";
+import { OrganizationEntity } from "./organization.entity";
 
 export const inspectionPhotoTypes = ["overview", "finding", "before", "after"] as const;
 export type InspectionPhotoType = (typeof inspectionPhotoTypes)[number];
@@ -18,6 +19,9 @@ export type InspectionPhotoType = (typeof inspectionPhotoTypes)[number];
 export class InspectionPhotoEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 36 })
   inspection_id!: string;
@@ -71,6 +75,13 @@ export class InspectionPhotoEntity {
   })
   @JoinColumn({ name: "inspection_id", referencedColumnName: "id" })
   inspection?: InspectionEntity;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 
   @ManyToOne(() => InspectionItemEntity, (item) => item.assigned_photos, {
     nullable: true,

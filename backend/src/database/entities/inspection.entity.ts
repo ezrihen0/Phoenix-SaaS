@@ -15,6 +15,7 @@ import { InspectionItemEntity } from "./inspection-item.entity";
 import { InspectionPhotoEntity } from "./inspection-photo.entity";
 import { InspectionRequiredFieldEntity } from "./inspection-required-field.entity";
 import { JobEntity } from "./job.entity";
+import { OrganizationEntity } from "./organization.entity";
 
 export const inspectionStatuses = ["pass", "warning", "fail"] as const;
 export type InspectionStatus = (typeof inspectionStatuses)[number];
@@ -40,6 +41,9 @@ export type InspectionWorkflowType = (typeof inspectionWorkflowTypes)[number];
 export class InspectionEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 36 })
   customer_id!: string;
@@ -150,6 +154,13 @@ export class InspectionEntity {
   })
   @JoinColumn({ name: "job_id", referencedColumnName: "id" })
   job?: JobEntity | null;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 
   @OneToMany(() => InspectionPhotoEntity, (photo) => photo.inspection)
   photos?: InspectionPhotoEntity[];

@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   Entity,
   JoinColumn,
+  ManyToOne,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -11,6 +12,7 @@ import {
 
 import { quoteStatuses, type QuoteStatus } from "../../crm/constants";
 import { JobEntity } from "./job.entity";
+import { OrganizationEntity } from "./organization.entity";
 import { QuoteLineItemEntity } from "./quote-line-item.entity";
 
 @Entity({ name: "quotes" })
@@ -20,6 +22,9 @@ export class QuoteEntity {
 
   @Column({ type: "varchar", length: 36, unique: true })
   job_id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "text" })
   description!: string;
@@ -75,6 +80,13 @@ export class QuoteEntity {
   })
   @JoinColumn({ name: "job_id", referencedColumnName: "id" })
   job?: JobEntity;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 
   @OneToMany(() => QuoteLineItemEntity, (lineItem) => lineItem.quote)
   line_items?: QuoteLineItemEntity[];

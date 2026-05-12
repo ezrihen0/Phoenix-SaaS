@@ -9,12 +9,16 @@ import {
 
 import { jobStatuses, type JobStatus } from "../../crm/constants";
 import { JobEntity } from "./job.entity";
+import { OrganizationEntity } from "./organization.entity";
 import { ProfileEntity } from "./profile.entity";
 
 @Entity({ name: "job_status_events" })
 export class JobStatusEventEntity {
   @PrimaryGeneratedColumn({ type: "int" })
   id!: number;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 36 })
   job_id!: string;
@@ -46,4 +50,11 @@ export class JobStatusEventEntity {
   })
   @JoinColumn({ name: "author_profile_id", referencedColumnName: "id" })
   author_profile?: ProfileEntity | null;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

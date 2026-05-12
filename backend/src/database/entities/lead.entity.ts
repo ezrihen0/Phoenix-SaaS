@@ -17,11 +17,15 @@ import {
   type ServiceType,
 } from "../../crm/constants";
 import { JobEntity } from "./job.entity";
+import { OrganizationEntity } from "./organization.entity";
 
 @Entity({ name: "leads" })
 export class LeadEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 255 })
   full_name!: string;
@@ -88,4 +92,11 @@ export class LeadEntity {
   })
   @JoinColumn({ name: "converted_job_id", referencedColumnName: "id" })
   converted_job?: JobEntity | null;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

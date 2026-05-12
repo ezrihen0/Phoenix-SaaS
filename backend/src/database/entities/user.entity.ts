@@ -9,6 +9,7 @@ import {
 } from "typeorm";
 
 import { AuthSessionEntity } from "./auth-session.entity";
+import { MembershipEntity } from "./membership.entity";
 import { ProfileEntity } from "./profile.entity";
 import { TechnicianEntity } from "./technician.entity";
 
@@ -40,4 +41,7 @@ export class UserEntity {
 
   @OneToMany(() => AuthSessionEntity, (session) => session.user)
   sessions?: AuthSessionEntity[];
+
+  @OneToMany(() => MembershipEntity, (membership) => membership.user)
+  memberships?: MembershipEntity[];
 }

@@ -1,4 +1,6 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+
+import { OrganizationEntity } from "./organization.entity";
 
 export const portalAccessEventTypes = [
   "link_generated",
@@ -16,6 +18,9 @@ export type PortalAccessEventType = (typeof portalAccessEventTypes)[number];
 export class PortalAccessEventEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 36 })
   customer_id!: string;
@@ -49,4 +54,11 @@ export class PortalAccessEventEntity {
 
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

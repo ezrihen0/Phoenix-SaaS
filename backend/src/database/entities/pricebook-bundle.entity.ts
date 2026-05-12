@@ -2,17 +2,23 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
 
+import { OrganizationEntity } from "./organization.entity";
 import { PricebookBundleItemEntity } from "./pricebook-bundle-item.entity";
 
 @Entity({ name: "pricebook_bundles" })
 export class PricebookBundleEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 255 })
   name!: string;
@@ -43,4 +49,11 @@ export class PricebookBundleEntity {
 
   @OneToMany(() => PricebookBundleItemEntity, (bundleItem) => bundleItem.bundle)
   items?: PricebookBundleItemEntity[];
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

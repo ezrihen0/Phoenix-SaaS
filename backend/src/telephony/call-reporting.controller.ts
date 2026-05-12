@@ -20,7 +20,7 @@ export class CallReportingController {
   ) {
     const actor = request.actor;
 
-    if (!actor || !isTelephonyOfficeRole(actor.profile?.role ?? null)) {
+    if (!actor || !isTelephonyOfficeRole(actor.role ?? actor.profile?.role ?? null)) {
       apiError(403, "forbidden", "Only office roles can access call reporting.");
     }
 

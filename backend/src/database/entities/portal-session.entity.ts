@@ -9,11 +9,15 @@ import {
 } from "typeorm";
 
 import { CustomerEntity } from "./customer.entity";
+import { OrganizationEntity } from "./organization.entity";
 
 @Entity({ name: "portal_sessions" })
 export class PortalSessionEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 128, unique: true })
   session_token_hash!: string;
@@ -50,4 +54,11 @@ export class PortalSessionEntity {
   })
   @JoinColumn({ name: "customer_id", referencedColumnName: "id" })
   customer?: CustomerEntity;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

@@ -44,10 +44,11 @@ export class SettingsService {
     private readonly organizationSettingsRepository: Repository<OrganizationSettingEntity>,
   ) {}
 
-  async getOrganizationSettings(): Promise<OrganizationSettingsResponse> {
+  async getOrganizationSettings(organizationId: string): Promise<OrganizationSettingsResponse> {
     const settings = await this.organizationSettingsRepository.findOne({
       where: {
-        settings_key: ORGANIZATION_SETTINGS_KEY,
+        settings_key: this.buildOrganizationSettingsKey(organizationId),
+        organization_id: organizationId,
       },
     });
 
@@ -73,15 +74,20 @@ export class SettingsService {
     return this.buildOrganizationSettingsResponse(settings);
   }
 
-  async updateOrganizationSettings(input: OrganizationSettingsUpdateInput): Promise<OrganizationSettingsResponse> {
+  async updateOrganizationSettings(
+    organizationId: string,
+    input: OrganizationSettingsUpdateInput,
+  ): Promise<OrganizationSettingsResponse> {
     const existing = await this.organizationSettingsRepository.findOne({
       where: {
-        settings_key: ORGANIZATION_SETTINGS_KEY,
+        settings_key: this.buildOrganizationSettingsKey(organizationId),
+        organization_id: organizationId,
       },
     });
 
     const settings = existing ?? this.organizationSettingsRepository.create({
-      settings_key: ORGANIZATION_SETTINGS_KEY,
+      settings_key: this.buildOrganizationSettingsKey(organizationId),
+      organization_id: organizationId,
       company_description: null,
       address: null,
       city: null,
@@ -140,5 +146,9 @@ export class SettingsService {
 
     const parsed = Number(raw);
     return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  private buildOrganizationSettingsKey(organizationId: string) {
+    return `${organizationId}:${ORGANIZATION_SETTINGS_KEY}`;
   }
 }

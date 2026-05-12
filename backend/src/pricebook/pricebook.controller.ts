@@ -35,10 +35,13 @@ export class PricebookController {
 
   @Get("items")
   async listItems(@Req() request: RequestWithActor, @Query() query: Record<string, unknown>) {
-    this.requirePricebookViewer(request);
+    const actor = this.requirePricebookViewer(request);
 
     try {
-      return apiSuccess(await this.pricebookService.listItems(parsePricebookItemListQuery(query)));
+      return apiSuccess(await this.pricebookService.listItems(
+        this.requireOrganizationId(actor),
+        parsePricebookItemListQuery(query),
+      ));
     } catch (error) {
       this.handleValidationError(error, "pricebook_items_query_invalid");
     }
@@ -46,12 +49,13 @@ export class PricebookController {
 
   @Post("items")
   async createItem(@Req() request: RequestWithActor, @Body() body: unknown) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     try {
       return apiSuccess(await this.pricebookService.createItem(
+        this.requireOrganizationId(actor),
         parseCreatePricebookItemPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "pricebook_item_invalid");
@@ -60,9 +64,12 @@ export class PricebookController {
 
   @Get("items/:itemId")
   async getItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
-    this.requirePricebookViewer(request);
+    const actor = this.requirePricebookViewer(request);
 
-    return apiSuccess(await this.pricebookService.getItem(parseUuidParam(itemId, "itemId")));
+    return apiSuccess(await this.pricebookService.getItem(
+      this.requireOrganizationId(actor),
+      parseUuidParam(itemId, "itemId"),
+    ));
   }
 
   @Patch("items/:itemId")
@@ -71,13 +78,14 @@ export class PricebookController {
     @Param("itemId") itemId: string,
     @Body() body: unknown,
   ) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     try {
       return apiSuccess(await this.pricebookService.updateItem(
+        this.requireOrganizationId(actor),
         parseUuidParam(itemId, "itemId"),
         parseUpdatePricebookItemPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "pricebook_item_update_invalid");
@@ -86,40 +94,46 @@ export class PricebookController {
 
   @Post("items/:itemId/duplicate")
   async duplicateItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     return apiSuccess(await this.pricebookService.duplicateItem(
+      this.requireOrganizationId(actor),
       parseUuidParam(itemId, "itemId"),
-      request.actor?.user.id ?? null,
+      actor.user.id,
     ));
   }
 
   @Delete("items/:itemId")
   async archiveItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     return apiSuccess(await this.pricebookService.archiveItem(
+      this.requireOrganizationId(actor),
       parseUuidParam(itemId, "itemId"),
-      request.actor?.user.id ?? null,
+      actor.user.id,
     ));
   }
 
   @Post("items/:itemId/restore")
   async restoreItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     return apiSuccess(await this.pricebookService.restoreItem(
+      this.requireOrganizationId(actor),
       parseUuidParam(itemId, "itemId"),
-      request.actor?.user.id ?? null,
+      actor.user.id,
     ));
   }
 
   @Get("bundles")
   async listBundles(@Req() request: RequestWithActor, @Query() query: Record<string, unknown>) {
-    this.requirePricebookViewer(request);
+    const actor = this.requirePricebookViewer(request);
 
     try {
-      return apiSuccess(await this.pricebookService.listBundles(parsePricebookBundleListQuery(query)));
+      return apiSuccess(await this.pricebookService.listBundles(
+        this.requireOrganizationId(actor),
+        parsePricebookBundleListQuery(query),
+      ));
     } catch (error) {
       this.handleValidationError(error, "pricebook_bundles_query_invalid");
     }
@@ -127,12 +141,13 @@ export class PricebookController {
 
   @Post("bundles")
   async createBundle(@Req() request: RequestWithActor, @Body() body: unknown) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     try {
       return apiSuccess(await this.pricebookService.createBundle(
+        this.requireOrganizationId(actor),
         parseCreatePricebookBundlePayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "pricebook_bundle_invalid");
@@ -141,9 +156,12 @@ export class PricebookController {
 
   @Get("bundles/:bundleId")
   async getBundle(@Req() request: RequestWithActor, @Param("bundleId") bundleId: string) {
-    this.requirePricebookViewer(request);
+    const actor = this.requirePricebookViewer(request);
 
-    return apiSuccess(await this.pricebookService.getBundle(parseUuidParam(bundleId, "bundleId")));
+    return apiSuccess(await this.pricebookService.getBundle(
+      this.requireOrganizationId(actor),
+      parseUuidParam(bundleId, "bundleId"),
+    ));
   }
 
   @Patch("bundles/:bundleId")
@@ -152,13 +170,14 @@ export class PricebookController {
     @Param("bundleId") bundleId: string,
     @Body() body: unknown,
   ) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     try {
       return apiSuccess(await this.pricebookService.updateBundle(
+        this.requireOrganizationId(actor),
         parseUuidParam(bundleId, "bundleId"),
         parseUpdatePricebookBundlePayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "pricebook_bundle_update_invalid");
@@ -167,21 +186,23 @@ export class PricebookController {
 
   @Delete("bundles/:bundleId")
   async archiveBundle(@Req() request: RequestWithActor, @Param("bundleId") bundleId: string) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     return apiSuccess(await this.pricebookService.archiveBundle(
+      this.requireOrganizationId(actor),
       parseUuidParam(bundleId, "bundleId"),
-      request.actor?.user.id ?? null,
+      actor.user.id,
     ));
   }
 
   @Post("bundles/:bundleId/restore")
   async restoreBundle(@Req() request: RequestWithActor, @Param("bundleId") bundleId: string) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     return apiSuccess(await this.pricebookService.restoreBundle(
+      this.requireOrganizationId(actor),
       parseUuidParam(bundleId, "bundleId"),
-      request.actor?.user.id ?? null,
+      actor.user.id,
     ));
   }
 
@@ -191,13 +212,14 @@ export class PricebookController {
     @Param("bundleId") bundleId: string,
     @Body() body: unknown,
   ) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     try {
       return apiSuccess(await this.pricebookService.addItemToBundle(
+        this.requireOrganizationId(actor),
         parseUuidParam(bundleId, "bundleId"),
         parseCreatePricebookBundleItemPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "pricebook_bundle_item_invalid");
@@ -211,14 +233,15 @@ export class PricebookController {
     @Param("bundleItemId") bundleItemId: string,
     @Body() body: unknown,
   ) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     try {
       return apiSuccess(await this.pricebookService.updateBundleItem(
+        this.requireOrganizationId(actor),
         parseUuidParam(bundleId, "bundleId"),
         parseUuidParam(bundleItemId, "bundleItemId"),
         parseUpdatePricebookBundleItemPayload(body),
-        request.actor?.user.id ?? null,
+        actor.user.id,
       ));
     } catch (error) {
       this.handleValidationError(error, "pricebook_bundle_item_update_invalid");
@@ -231,12 +254,13 @@ export class PricebookController {
     @Param("bundleId") bundleId: string,
     @Param("bundleItemId") bundleItemId: string,
   ) {
-    this.requirePricebookManager(request);
+    const actor = this.requirePricebookManager(request);
 
     return apiSuccess(await this.pricebookService.removeBundleItem(
+      this.requireOrganizationId(actor),
       parseUuidParam(bundleId, "bundleId"),
       parseUuidParam(bundleItemId, "bundleItemId"),
-      request.actor?.user.id ?? null,
+      actor.user.id,
     ));
   }
 
@@ -264,5 +288,15 @@ export class PricebookController {
       "pricebook_manage_forbidden",
       "This account cannot change pricebook records.",
     );
+  }
+
+  private requireOrganizationId(actor: RequestWithActor["actor"]) {
+    const organizationId = actor?.organization_id;
+
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required for pricebook.");
+    }
+
+    return organizationId;
   }
 }

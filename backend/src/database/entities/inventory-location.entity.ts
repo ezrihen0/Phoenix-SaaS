@@ -2,6 +2,9 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
@@ -10,13 +13,18 @@ import {
   inventoryLocationTypes,
   type InventoryLocationType,
 } from "../../inventory/constants";
+import { OrganizationEntity } from "./organization.entity";
 
+@Index("ux_inventory_locations_org_name", ["organization_id", "name"], { unique: true })
 @Entity({ name: "inventory_locations" })
 export class InventoryLocationEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "varchar", length: 255, unique: true })
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
+
+  @Column({ type: "varchar", length: 255 })
   name!: string;
 
   @Column({
@@ -60,4 +68,11 @@ export class InventoryLocationEntity {
 
   @Column({ type: "datetime", precision: 6, nullable: true })
   archived_at!: Date | null;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

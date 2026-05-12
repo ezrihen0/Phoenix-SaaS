@@ -68,8 +68,14 @@ export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
   @Get("organization")
-  async getOrganizationSettings() {
-    return apiSuccess(await this.settingsService.getOrganizationSettings());
+  async getOrganizationSettings(@Req() request: RequestWithActor) {
+    const actor = request.actor;
+
+    if (!actor?.organization_id) {
+      apiError(400, "organization_context_missing", "An active organization is required to load settings.");
+    }
+
+    return apiSuccess(await this.settingsService.getOrganizationSettings(actor.organization_id));
   }
 
   @Put("organization")
@@ -77,15 +83,22 @@ export class SettingsController {
     @Req() request: RequestWithActor,
     @Body() payload: OrganizationSettingsPayload | null | undefined,
   ) {
-    requirePermission(
+    const actor = requirePermission(
       request.actor,
       "settings.manage",
       "settings_manage_forbidden",
       "This account cannot change organization settings.",
     );
 
+    if (!actor.organization_id) {
+      apiError(400, "organization_context_missing", "An active organization is required to update settings.");
+    }
+
     return apiSuccess(
-      await this.settingsService.updateOrganizationSettings(parseOrganizationSettingsPayload(payload ?? {})),
+      await this.settingsService.updateOrganizationSettings(
+        actor.organization_id,
+        parseOrganizationSettingsPayload(payload ?? {}),
+      ),
     );
   }
 }

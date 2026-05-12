@@ -68,7 +68,7 @@ export class RecentTextsController {
   private requireOfficeActor(request: RequestWithActor) {
     const actor = request.actor;
 
-    if (!actor || !isTelephonyOfficeRole(actor.profile?.role ?? null)) {
+    if (!actor || !isTelephonyOfficeRole(actor.role ?? actor.profile?.role ?? null)) {
       apiError(403, "forbidden", "Only office roles can access recent texts.");
     }
   }

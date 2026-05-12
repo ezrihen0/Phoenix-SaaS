@@ -29,7 +29,8 @@ export class CustomersSearchAdapter {
       .orderBy("customer.updated_at", "DESC")
       .limit(SEARCH_LIMITS.customersCandidateLimit);
 
-    qb.where(new Brackets((q) => {
+    qb.where("customer.organization_id = :organizationId", { organizationId: context.organizationId });
+    qb.andWhere(new Brackets((q) => {
       q.where("LOWER(customer.id) = :exact", { exact: context.normalized })
         .orWhere("LOWER(customer.full_name) LIKE :likeToken", { likeToken: context.likeToken })
         .orWhere("LOWER(customer.email) LIKE :likeToken", { likeToken: context.likeToken })

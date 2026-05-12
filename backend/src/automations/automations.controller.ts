@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Req, UseGuards } from 
 
 import { requirePermission } from "../auth/permissions";
 import { SessionGuard } from "../auth/session.guard";
-import { apiSuccess } from "../common/api-response";
+import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { AutomationsService } from "./automations.service";
 
@@ -37,8 +37,8 @@ export class AutomationsController {
 
   @Get("rules")
   async listRules(@Req() request: RequestWithActor) {
-    this.requireAutomationAccess(request);
-    return apiSuccess(await this.automationsService.listRules());
+    const actor = this.requireAutomationAccess(request);
+    return apiSuccess(await this.automationsService.listRules(this.requireOrganizationId(actor)));
   }
 
   @Post("rules/validate")
@@ -55,9 +55,13 @@ export class AutomationsController {
     @Req() request: RequestWithActor,
     @Body() payload: Record<string, unknown> | null | undefined,
   ) {
-    this.requireAutomationManage(request);
+    const actor = this.requireAutomationManage(request);
     return apiSuccess(
-      await this.automationsService.createRule(payload ?? {}, request.actor?.user.id ?? null),
+      await this.automationsService.createRule(
+        this.requireOrganizationId(actor),
+        payload ?? {},
+        actor.user.id,
+      ),
     );
   }
 
@@ -67,8 +71,8 @@ export class AutomationsController {
     @Param("ruleId") ruleId: string,
     @Body() payload: Record<string, unknown> | null | undefined,
   ) {
-    this.requireAutomationManage(request);
-    return apiSuccess(await this.automationsService.updateRule(ruleId, payload ?? {}));
+    const actor = this.requireAutomationManage(request);
+    return apiSuccess(await this.automationsService.updateRule(this.requireOrganizationId(actor), ruleId, payload ?? {}));
   }
 
   @Post("rules/:ruleId/disable")
@@ -76,8 +80,8 @@ export class AutomationsController {
     @Req() request: RequestWithActor,
     @Param("ruleId") ruleId: string,
   ) {
-    this.requireAutomationManage(request);
-    return apiSuccess(await this.automationsService.disableRule(ruleId));
+    const actor = this.requireAutomationManage(request);
+    return apiSuccess(await this.automationsService.disableRule(this.requireOrganizationId(actor), ruleId));
   }
 
   @Delete("rules/:ruleId")
@@ -85,8 +89,8 @@ export class AutomationsController {
     @Req() request: RequestWithActor,
     @Param("ruleId") ruleId: string,
   ) {
-    this.requireAutomationManage(request);
-    return apiSuccess(await this.automationsService.deleteRule(ruleId));
+    const actor = this.requireAutomationManage(request);
+    return apiSuccess(await this.automationsService.deleteRule(this.requireOrganizationId(actor), ruleId));
   }
 
   @Get("event-contract")
@@ -103,8 +107,8 @@ export class AutomationsController {
 
   @Get("settings")
   async getSettings(@Req() request: RequestWithActor) {
-    this.requireAutomationAccess(request);
-    return apiSuccess(await this.automationsService.getAutomationSettings());
+    const actor = this.requireAutomationAccess(request);
+    return apiSuccess(await this.automationsService.getAutomationSettings(this.requireOrganizationId(actor)));
   }
 
   @Put("settings")
@@ -112,8 +116,8 @@ export class AutomationsController {
     @Req() request: RequestWithActor,
     @Body() payload: Record<string, unknown> | null | undefined,
   ) {
-    this.requireAutomationSettingsManage(request);
-    return apiSuccess(await this.automationsService.updateAutomationSettings(payload ?? {}));
+    const actor = this.requireAutomationSettingsManage(request);
+    return apiSuccess(await this.automationsService.updateAutomationSettings(this.requireOrganizationId(actor), payload ?? {}));
   }
 
   private requireAutomationAccess(request: RequestWithActor) {
@@ -141,5 +145,15 @@ export class AutomationsController {
       "automations_settings_manage_forbidden",
       "This account cannot manage Automation Store safety settings.",
     );
+  }
+
+  private requireOrganizationId(actor: RequestWithActor["actor"]) {
+    const organizationId = actor?.organization_id;
+
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required for automations.");
+    }
+
+    return organizationId;
   }
 }

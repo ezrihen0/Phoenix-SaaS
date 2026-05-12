@@ -10,12 +10,16 @@ import {
 } from "typeorm";
 
 import { InspectionEntity } from "./inspection.entity";
+import { OrganizationEntity } from "./organization.entity";
 
 @Entity({ name: "inspection_required_fields" })
 @Unique("UQ_inspection_required_fields_inspection_field_key", ["inspection_id", "field_key"])
 export class InspectionRequiredFieldEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "varchar", length: 36 })
   inspection_id!: string;
@@ -46,4 +50,11 @@ export class InspectionRequiredFieldEntity {
   })
   @JoinColumn({ name: "inspection_id", referencedColumnName: "id" })
   inspection?: InspectionEntity;
+
+  @ManyToOne(() => OrganizationEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
+  organization?: OrganizationEntity | null;
 }

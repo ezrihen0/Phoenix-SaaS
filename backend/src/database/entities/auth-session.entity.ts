@@ -8,6 +8,7 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
+import { OrganizationEntity } from "./organization.entity";
 import { UserEntity } from "./user.entity";
 
 @Entity({ name: "auth_sessions" })
@@ -20,6 +21,9 @@ export class AuthSessionEntity {
 
   @Column({ type: "varchar", length: 36 })
   user_id!: string;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  active_organization_id!: string | null;
 
   @Column({ type: "datetime", precision: 6 })
   expires_at!: Date;
@@ -41,4 +45,10 @@ export class AuthSessionEntity {
   })
   @JoinColumn({ name: "user_id", referencedColumnName: "id" })
   user?: UserEntity;
+
+  @ManyToOne(() => OrganizationEntity, {
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "active_organization_id", referencedColumnName: "id" })
+  active_organization?: OrganizationEntity | null;
 }

@@ -30,7 +30,8 @@ export class JobsSearchAdapter {
       .orderBy("job.updated_at", "DESC")
       .limit(SEARCH_LIMITS.jobsCandidateLimit);
 
-    qb.where(new Brackets((q) => {
+    qb.where("job.organization_id = :organizationId", { organizationId: context.organizationId });
+    qb.andWhere(new Brackets((q) => {
       q.where("LOWER(job.id) = :exact", { exact: context.normalized })
         .orWhere("LOWER(job.title) LIKE :likeToken", { likeToken: context.likeToken })
         .orWhere("LOWER(customer.full_name) LIKE :likeToken", { likeToken: context.likeToken })

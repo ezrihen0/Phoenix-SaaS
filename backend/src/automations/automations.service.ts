@@ -31,8 +31,6 @@ type AutomationRulePayload = {
   approval?: unknown;
 };
 
-const DEFAULT_ORGANIZATION_ID = "default";
-
 @Injectable()
 export class AutomationsService {
   constructor(
@@ -100,10 +98,10 @@ export class AutomationsService {
     });
   }
 
-  async listRules() {
+  async listRules(organizationId: string) {
     return this.rulesRepository.find({
       where: {
-        organization_id: DEFAULT_ORGANIZATION_ID,
+        organization_id: organizationId,
       },
       order: {
         updated_at: "DESC",
@@ -111,12 +109,12 @@ export class AutomationsService {
     });
   }
 
-  async getAutomationSettings() {
-    return this.ensureAutomationSettings();
+  async getAutomationSettings(organizationId: string) {
+    return this.ensureAutomationSettings(organizationId);
   }
 
-  async updateAutomationSettings(payload: Record<string, unknown>) {
-    const settings = await this.ensureAutomationSettings();
+  async updateAutomationSettings(organizationId: string, payload: Record<string, unknown>) {
+    const settings = await this.ensureAutomationSettings(organizationId);
 
     settings.pause_all = this.readOptionalBoolean(payload.pauseAll, settings.pause_all);
     settings.disable_customer_facing_sends = this.readOptionalBoolean(
@@ -148,7 +146,11 @@ export class AutomationsService {
     };
   }
 
-  async createRule(payload: AutomationRulePayload, createdByUserId: string | null) {
+  async createRule(
+    organizationId: string,
+    payload: AutomationRulePayload,
+    createdByUserId: string | null,
+  ) {
     const validation = this.validateRulePayload(payload);
 
     if (!validation.valid) {
@@ -156,7 +158,7 @@ export class AutomationsService {
     }
 
     const rule = this.rulesRepository.create({
-      organization_id: DEFAULT_ORGANIZATION_ID,
+      organization_id: organizationId,
       template_key: this.readOptionalString(payload.templateKey, "Template key", 160),
       name: this.readString(payload.name, "Automation name", 180),
       status: "active",
@@ -174,8 +176,8 @@ export class AutomationsService {
     return this.rulesRepository.save(rule);
   }
 
-  async updateRule(ruleId: string, payload: AutomationRulePayload) {
-    const existing = await this.getRuleOrThrow(ruleId);
+  async updateRule(organizationId: string, ruleId: string, payload: AutomationRulePayload) {
+    const existing = await this.getRuleOrThrow(organizationId, ruleId);
     const validation = this.validateRulePayload(payload);
 
     if (!validation.valid) {
@@ -197,8 +199,8 @@ export class AutomationsService {
     return this.rulesRepository.save(existing);
   }
 
-  async disableRule(ruleId: string) {
-    const existing = await this.getRuleOrThrow(ruleId);
+  async disableRule(organizationId: string, ruleId: string) {
+    const existing = await this.getRuleOrThrow(organizationId, ruleId);
 
     existing.status = "disabled";
     existing.enabled = false;
@@ -207,8 +209,8 @@ export class AutomationsService {
     return this.rulesRepository.save(existing);
   }
 
-  async deleteRule(ruleId: string) {
-    const existing = await this.getRuleOrThrow(ruleId);
+  async deleteRule(organizationId: string, ruleId: string) {
+    const existing = await this.getRuleOrThrow(organizationId, ruleId);
     await this.rulesRepository.remove(existing);
 
     return {
@@ -217,7 +219,7 @@ export class AutomationsService {
     };
   }
 
-  private async getRuleOrThrow(ruleId: string) {
+  private async getRuleOrThrow(organizationId: string, ruleId: string) {
     const id = ruleId.trim();
 
     if (!id) {
@@ -227,7 +229,7 @@ export class AutomationsService {
     const rule = await this.rulesRepository.findOne({
       where: {
         id,
-        organization_id: DEFAULT_ORGANIZATION_ID,
+        organization_id: organizationId,
       },
     });
 
@@ -238,10 +240,10 @@ export class AutomationsService {
     return rule;
   }
 
-  private async ensureAutomationSettings() {
+  private async ensureAutomationSettings(organizationId: string) {
     const existing = await this.settingsRepository.findOne({
       where: {
-        organization_id: DEFAULT_ORGANIZATION_ID,
+        organization_id: organizationId,
       },
     });
 
@@ -251,7 +253,7 @@ export class AutomationsService {
 
     return this.settingsRepository.save(
       this.settingsRepository.create({
-        organization_id: DEFAULT_ORGANIZATION_ID,
+        organization_id: organizationId,
         pause_all: false,
         disable_customer_facing_sends: false,
         disable_review_requests: false,
