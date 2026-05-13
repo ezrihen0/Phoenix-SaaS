@@ -1090,7 +1090,7 @@ export class CrmController {
 
       const hasSnapshotLineItems = payload.lineItems !== undefined;
       const quoteLineDrafts = hasSnapshotLineItems
-        ? await this.buildDocumentLineDrafts(payload.lineItems ?? [])
+        ? await this.buildDocumentLineDrafts(payload.lineItems ?? [], organizationId)
         : [];
       const quoteTotals = hasSnapshotLineItems
         ? this.documentPricingService.computeSnapshotTotals(
@@ -1361,8 +1361,8 @@ export class CrmController {
     }));
   }
 
-  private async buildDocumentLineDrafts(lineItems: DocumentLineItemInput[]) {
-    return this.documentSnapshotService.buildLineDrafts(lineItems);
+  private async buildDocumentLineDrafts(lineItems: DocumentLineItemInput[], organizationId: string) {
+    return this.documentSnapshotService.buildLineDrafts(lineItems, organizationId);
   }
 
   @Get("invoices")
@@ -2135,7 +2135,7 @@ export class CrmController {
 
       const hasSnapshotLineItems = payload.lineItems !== undefined;
       const invoiceLineDrafts = hasSnapshotLineItems
-        ? await this.buildDocumentLineDrafts(payload.lineItems ?? [])
+        ? await this.buildDocumentLineDrafts(payload.lineItems ?? [], organizationId)
         : [];
       const invoiceTotals = hasSnapshotLineItems
         ? this.documentPricingService.computeSnapshotTotals(

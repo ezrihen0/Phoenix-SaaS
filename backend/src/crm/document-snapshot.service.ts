@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
+import { apiError } from "../common/api-response";
 import { InvoiceLineItemEntity } from "../database/entities/invoice-line-item.entity";
 import { PricebookBundleItemEntity } from "../database/entities/pricebook-bundle-item.entity";
 import { PricebookBundleEntity } from "../database/entities/pricebook-bundle.entity";
@@ -78,13 +79,14 @@ export class DocumentSnapshotService {
     );
   }
 
-  async buildLineDrafts(lineItems: DocumentLineItemInput[]) {
+  async buildLineDrafts(lineItems: DocumentLineItemInput[], organizationId: string) {
     const drafts: SnapshotLineDraft[] = [];
 
     for (const lineItem of lineItems) {
       if (lineItem.kind === "pricebook_item") {
         drafts.push(
           await this.buildPricebookItemSnapshot(
+            organizationId,
             lineItem.pricebookItemId,
             lineItem.quantity,
             lineItem.sortOrder,
@@ -98,6 +100,7 @@ export class DocumentSnapshotService {
       if (lineItem.kind === "pricebook_bundle") {
         drafts.push(
           ...(await this.buildBundleSnapshots(
+            organizationId,
             lineItem.pricebookBundleId,
             lineItem.sortOrder,
             lineItem.quantityMultiplier ?? "1",
@@ -121,6 +124,7 @@ export class DocumentSnapshotService {
   }
 
   async buildPricebookItemSnapshot(
+    organizationId: string,
     pricebookItemId: string,
     quantity: string,
     sortOrder: number,
@@ -130,11 +134,12 @@ export class DocumentSnapshotService {
     const item = await this.pricebookItemsRepository.findOne({
       where: {
         id: pricebookItemId,
+        organization_id: organizationId,
       },
     });
 
     if (!item || !item.is_active || item.archived_at) {
-      throw new Error("The selected pricebook item could not be found.");
+      apiError(404, "pricebook_item_not_found", "The selected pricebook item could not be found.");
     }
 
     const unitPriceCents = unitPriceCentsOverride ?? item.customer_price_cents;
@@ -159,6 +164,7 @@ export class DocumentSnapshotService {
   }
 
   async buildBundleSnapshots(
+    organizationId: string,
     pricebookBundleId: string,
     sortOrder: number,
     quantityMultiplier = "1",
@@ -166,11 +172,12 @@ export class DocumentSnapshotService {
     const bundle = await this.pricebookBundlesRepository.findOne({
       where: {
         id: pricebookBundleId,
+        organization_id: organizationId,
       },
     });
 
     if (!bundle || !bundle.is_active || bundle.archived_at) {
-      throw new Error("The selected pricebook bundle could not be found.");
+      apiError(404, "pricebook_bundle_not_found", "The selected pricebook bundle could not be found.");
     }
 
     const bundleItems = await this.pricebookBundleItemsRepository.find({
@@ -191,8 +198,16 @@ export class DocumentSnapshotService {
       .map((bundleItem, index) => {
         const item = bundleItem.pricebook_item as PricebookItemEntity;
 
+        if (item.organization_id !== organizationId) {
+          apiError(
+            400,
+            "pricebook_bundle_item_org_mismatch",
+            "This bundle references a catalog item that does not belong to your organization.",
+          );
+        }
+
         if (!item.is_active || item.archived_at) {
-          throw new Error("One or more bundle items are no longer available.");
+          apiError(400, "pricebook_bundle_item_unavailable", "One or more bundle items are no longer available.");
         }
 
         const quantity = this.multiplyQuantities(bundleItem.default_quantity, quantityMultiplier);
