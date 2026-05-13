@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from "@nestjs/common";
+import { Body, Controller, Param, Post } from "@nestjs/common";
 
 import { apiError, apiSuccess } from "../common/api-response";
 import { PublicBookingsService, type PublicBookingInput } from "./public-bookings.service";
@@ -21,10 +21,14 @@ type BookingPayload = {
 export class PublicBookingsController {
   constructor(private readonly publicBookingsService: PublicBookingsService) {}
 
-  @Post("bookings")
-  async createBooking(@Body() body: unknown) {
+  @Post("orgs/:organizationSlug/bookings")
+  async createBooking(
+    @Param("organizationSlug") organizationSlug: string,
+    @Body() body: unknown,
+  ) {
+    const organization = await this.publicBookingsService.resolveActiveOrganizationBySlug(organizationSlug);
     const payload = this.parsePayload(body);
-    return apiSuccess(await this.publicBookingsService.createBooking(payload));
+    return apiSuccess(await this.publicBookingsService.createBooking(organization.id, payload));
   }
 
   private parsePayload(body: unknown): PublicBookingInput {
