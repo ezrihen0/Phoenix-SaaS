@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AutomationsModule } from "./automations/automations.module";
+import { BillingModule } from "./billing/billing.module";
 import { AuthModule } from "./auth/auth.module";
 import { AuthService } from "./auth/auth.service";
 import { CrmModule } from "./crm/crm.module";
@@ -38,6 +39,7 @@ import { TelephonyModule } from "./telephony/telephony.module";
     PricebookModule,
     TelephonyModule,
     AutomationsModule,
+    BillingModule,
   ],
 })
 export class AppModule implements OnModuleInit {

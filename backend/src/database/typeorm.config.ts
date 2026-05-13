@@ -35,6 +35,7 @@ import { JobStatusEventEntity } from "./entities/job-status-event.entity";
 import { LeadEntity } from "./entities/lead.entity";
 import { MembershipEntity } from "./entities/membership.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
+import { OrganizationBillingEntity } from "./entities/organization-billing.entity";
 import { OrganizationSettingEntity } from "./entities/organization-setting.entity";
 import { PortalAccessEventEntity } from "./entities/portal-access-event.entity";
 import { PortalMagicLinkEntity } from "./entities/portal-magic-link.entity";
@@ -60,6 +61,7 @@ export const typeOrmEntities = [
   CustomerEntity,
   LeadEntity,
   OrganizationEntity,
+  OrganizationBillingEntity,
   MembershipEntity,
   JobEntity,
   QuoteEntity,

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Req, UseGuards } from 
 
 import { requirePermission } from "../auth/permissions";
 import { SessionGuard } from "../auth/session.guard";
+import { EntitlementService } from "../billing/entitlement.service";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { AutomationsService } from "./automations.service";
@@ -9,44 +10,54 @@ import { AutomationsService } from "./automations.service";
 @Controller("api/automations")
 @UseGuards(SessionGuard)
 export class AutomationsController {
-  constructor(private readonly automationsService: AutomationsService) {}
+  constructor(
+    private readonly automationsService: AutomationsService,
+    private readonly entitlementService: EntitlementService,
+  ) {}
 
   @Get()
-  getFoundationOverview(@Req() request: RequestWithActor) {
-    this.requireAutomationAccess(request);
+  async getFoundationOverview(@Req() request: RequestWithActor) {
+    const actor = this.requireAutomationAccess(request);
+    await this.entitlementService.requireAutomationsEntitled(this.requireOrganizationId(actor));
     return apiSuccess(this.automationsService.getFoundationOverview());
   }
 
   @Get("registry")
-  getRegistry(@Req() request: RequestWithActor) {
-    this.requireAutomationAccess(request);
+  async getRegistry(@Req() request: RequestWithActor) {
+    const actor = this.requireAutomationAccess(request);
+    await this.entitlementService.requireAutomationsEntitled(this.requireOrganizationId(actor));
     return apiSuccess(this.automationsService.getRegistry());
   }
 
   @Get("builder-options")
-  getBuilderOptions(@Req() request: RequestWithActor) {
-    this.requireAutomationAccess(request);
+  async getBuilderOptions(@Req() request: RequestWithActor) {
+    const actor = this.requireAutomationAccess(request);
+    await this.entitlementService.requireAutomationsEntitled(this.requireOrganizationId(actor));
     return apiSuccess(this.automationsService.getBuilderOptions());
   }
 
   @Get("templates")
   async listTemplates(@Req() request: RequestWithActor) {
-    this.requireAutomationAccess(request);
+    const actor = this.requireAutomationAccess(request);
+    await this.entitlementService.requireAutomationsEntitled(this.requireOrganizationId(actor));
     return apiSuccess(await this.automationsService.listTemplates());
   }
 
   @Get("rules")
   async listRules(@Req() request: RequestWithActor) {
     const actor = this.requireAutomationAccess(request);
-    return apiSuccess(await this.automationsService.listRules(this.requireOrganizationId(actor)));
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireAutomationsEntitled(organizationId);
+    return apiSuccess(await this.automationsService.listRules(organizationId));
   }
 
   @Post("rules/validate")
-  validateRule(
+  async validateRule(
     @Req() request: RequestWithActor,
     @Body() payload: Record<string, unknown> | null | undefined,
   ) {
-    this.requireAutomationManage(request);
+    const actor = this.requireAutomationManage(request);
+    await this.entitlementService.requireAutomationsEntitled(this.requireOrganizationId(actor));
     return apiSuccess(this.automationsService.validateRulePayload(payload ?? {}));
   }
 
@@ -56,9 +67,11 @@ export class AutomationsController {
     @Body() payload: Record<string, unknown> | null | undefined,
   ) {
     const actor = this.requireAutomationManage(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireAutomationsEntitled(organizationId);
     return apiSuccess(
       await this.automationsService.createRule(
-        this.requireOrganizationId(actor),
+        organizationId,
         payload ?? {},
         actor.user.id,
       ),
@@ -72,7 +85,9 @@ export class AutomationsController {
     @Body() payload: Record<string, unknown> | null | undefined,
   ) {
     const actor = this.requireAutomationManage(request);
-    return apiSuccess(await this.automationsService.updateRule(this.requireOrganizationId(actor), ruleId, payload ?? {}));
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireAutomationsEntitled(organizationId);
+    return apiSuccess(await this.automationsService.updateRule(organizationId, ruleId, payload ?? {}));
   }
 
   @Post("rules/:ruleId/disable")
@@ -81,7 +96,9 @@ export class AutomationsController {
     @Param("ruleId") ruleId: string,
   ) {
     const actor = this.requireAutomationManage(request);
-    return apiSuccess(await this.automationsService.disableRule(this.requireOrganizationId(actor), ruleId));
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireAutomationsEntitled(organizationId);
+    return apiSuccess(await this.automationsService.disableRule(organizationId, ruleId));
   }
 
   @Delete("rules/:ruleId")
@@ -90,25 +107,31 @@ export class AutomationsController {
     @Param("ruleId") ruleId: string,
   ) {
     const actor = this.requireAutomationManage(request);
-    return apiSuccess(await this.automationsService.deleteRule(this.requireOrganizationId(actor), ruleId));
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireAutomationsEntitled(organizationId);
+    return apiSuccess(await this.automationsService.deleteRule(organizationId, ruleId));
   }
 
   @Get("event-contract")
-  getEventContract(@Req() request: RequestWithActor) {
-    this.requireAutomationAccess(request);
+  async getEventContract(@Req() request: RequestWithActor) {
+    const actor = this.requireAutomationAccess(request);
+    await this.entitlementService.requireAutomationsEntitled(this.requireOrganizationId(actor));
     return apiSuccess(this.automationsService.getEventContract());
   }
 
   @Get("safety-model")
-  getSafetyModel(@Req() request: RequestWithActor) {
-    this.requireAutomationAccess(request);
+  async getSafetyModel(@Req() request: RequestWithActor) {
+    const actor = this.requireAutomationAccess(request);
+    await this.entitlementService.requireAutomationsEntitled(this.requireOrganizationId(actor));
     return apiSuccess(this.automationsService.getSafetyModel());
   }
 
   @Get("settings")
   async getSettings(@Req() request: RequestWithActor) {
     const actor = this.requireAutomationAccess(request);
-    return apiSuccess(await this.automationsService.getAutomationSettings(this.requireOrganizationId(actor)));
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireAutomationsEntitled(organizationId);
+    return apiSuccess(await this.automationsService.getAutomationSettings(organizationId));
   }
 
   @Put("settings")
@@ -117,7 +140,9 @@ export class AutomationsController {
     @Body() payload: Record<string, unknown> | null | undefined,
   ) {
     const actor = this.requireAutomationSettingsManage(request);
-    return apiSuccess(await this.automationsService.updateAutomationSettings(this.requireOrganizationId(actor), payload ?? {}));
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireAutomationsEntitled(organizationId);
+    return apiSuccess(await this.automationsService.updateAutomationSettings(organizationId, payload ?? {}));
   }
 
   private requireAutomationAccess(request: RequestWithActor) {

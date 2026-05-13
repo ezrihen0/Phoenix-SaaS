@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthModule } from "../auth/auth.module";
+import { BillingModule } from "../billing/billing.module";
 import { PricebookBundleItemEntity } from "../database/entities/pricebook-bundle-item.entity";
 import { PricebookBundleEntity } from "../database/entities/pricebook-bundle.entity";
 import { PricebookItemEntity } from "../database/entities/pricebook-item.entity";
@@ -11,6 +12,7 @@ import { PricebookService } from "./pricebook.service";
 @Module({
   imports: [
     AuthModule,
+    BillingModule,
     TypeOrmModule.forFeature([
       PricebookItemEntity,
       PricebookBundleEntity,

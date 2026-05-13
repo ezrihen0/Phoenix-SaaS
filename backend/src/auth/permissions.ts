@@ -45,6 +45,7 @@ export const roleModePermissions = [
   "automations.approve",
   "automations.settings.manage",
   "inspections.admin",
+  "billing.manage",
 ] as const;
 
 export type RoleModePermission = (typeof roleModePermissions)[number];
@@ -59,6 +60,7 @@ const ownerPermissions = allPermissions;
 
 const adminPermissions = withoutPermissions(allPermissions, [
   "system.roles.manage",
+  "billing.manage",
 ]);
 
 const officeAdminPermissions = withoutPermissions(allPermissions, [
@@ -70,6 +72,7 @@ const officeAdminPermissions = withoutPermissions(allPermissions, [
   "inventory.assigned.view",
   "automations.manage",
   "automations.settings.manage",
+  "billing.manage",
 ]);
 
 const rolePermissionMap: Record<RoleModeRole, ReadonlySet<RoleModePermission>> = {

@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthModule } from "../auth/auth.module";
+import { BillingModule } from "../billing/billing.module";
 import { AutomationRuleEntity } from "../database/entities/automation-rule.entity";
 import { AutomationSettingEntity } from "../database/entities/automation-setting.entity";
 import { AutomationTemplateEntity } from "../database/entities/automation-template.entity";
@@ -17,6 +18,7 @@ import { AutomationsService } from "./automations.service";
 @Module({
   imports: [
     AuthModule,
+    BillingModule,
     TypeOrmModule.forFeature([
       AutomationTemplateEntity,
       AutomationRuleEntity,

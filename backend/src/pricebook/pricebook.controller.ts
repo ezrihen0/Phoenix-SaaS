@@ -13,6 +13,7 @@ import {
 
 import { SessionGuard } from "../auth/session.guard";
 import { requirePermission } from "../auth/permissions";
+import { EntitlementService } from "../billing/entitlement.service";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { PricebookService } from "./pricebook.service";
@@ -31,7 +32,10 @@ import {
 @UseGuards(SessionGuard)
 @Controller("api/pricebook")
 export class PricebookController {
-  constructor(private readonly pricebookService: PricebookService) {}
+  constructor(
+    private readonly pricebookService: PricebookService,
+    private readonly entitlementService: EntitlementService,
+  ) {}
 
   @Get("items")
   async listItems(@Req() request: RequestWithActor, @Query() query: Record<string, unknown>) {
@@ -49,11 +53,11 @@ export class PricebookController {
 
   @Post("items")
   async createItem(@Req() request: RequestWithActor, @Body() body: unknown) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     try {
       return apiSuccess(await this.pricebookService.createItem(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseCreatePricebookItemPayload(body),
         actor.user.id,
       ));
@@ -78,11 +82,11 @@ export class PricebookController {
     @Param("itemId") itemId: string,
     @Body() body: unknown,
   ) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     try {
       return apiSuccess(await this.pricebookService.updateItem(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseUuidParam(itemId, "itemId"),
         parseUpdatePricebookItemPayload(body),
         actor.user.id,
@@ -94,10 +98,10 @@ export class PricebookController {
 
   @Post("items/:itemId/duplicate")
   async duplicateItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     return apiSuccess(await this.pricebookService.duplicateItem(
-      this.requireOrganizationId(actor),
+      organizationId,
       parseUuidParam(itemId, "itemId"),
       actor.user.id,
     ));
@@ -105,10 +109,10 @@ export class PricebookController {
 
   @Delete("items/:itemId")
   async archiveItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     return apiSuccess(await this.pricebookService.archiveItem(
-      this.requireOrganizationId(actor),
+      organizationId,
       parseUuidParam(itemId, "itemId"),
       actor.user.id,
     ));
@@ -116,10 +120,10 @@ export class PricebookController {
 
   @Post("items/:itemId/restore")
   async restoreItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     return apiSuccess(await this.pricebookService.restoreItem(
-      this.requireOrganizationId(actor),
+      organizationId,
       parseUuidParam(itemId, "itemId"),
       actor.user.id,
     ));
@@ -141,11 +145,11 @@ export class PricebookController {
 
   @Post("bundles")
   async createBundle(@Req() request: RequestWithActor, @Body() body: unknown) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     try {
       return apiSuccess(await this.pricebookService.createBundle(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseCreatePricebookBundlePayload(body),
         actor.user.id,
       ));
@@ -170,11 +174,11 @@ export class PricebookController {
     @Param("bundleId") bundleId: string,
     @Body() body: unknown,
   ) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     try {
       return apiSuccess(await this.pricebookService.updateBundle(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseUuidParam(bundleId, "bundleId"),
         parseUpdatePricebookBundlePayload(body),
         actor.user.id,
@@ -186,10 +190,10 @@ export class PricebookController {
 
   @Delete("bundles/:bundleId")
   async archiveBundle(@Req() request: RequestWithActor, @Param("bundleId") bundleId: string) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     return apiSuccess(await this.pricebookService.archiveBundle(
-      this.requireOrganizationId(actor),
+      organizationId,
       parseUuidParam(bundleId, "bundleId"),
       actor.user.id,
     ));
@@ -197,10 +201,10 @@ export class PricebookController {
 
   @Post("bundles/:bundleId/restore")
   async restoreBundle(@Req() request: RequestWithActor, @Param("bundleId") bundleId: string) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     return apiSuccess(await this.pricebookService.restoreBundle(
-      this.requireOrganizationId(actor),
+      organizationId,
       parseUuidParam(bundleId, "bundleId"),
       actor.user.id,
     ));
@@ -212,11 +216,11 @@ export class PricebookController {
     @Param("bundleId") bundleId: string,
     @Body() body: unknown,
   ) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     try {
       return apiSuccess(await this.pricebookService.addItemToBundle(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseUuidParam(bundleId, "bundleId"),
         parseCreatePricebookBundleItemPayload(body),
         actor.user.id,
@@ -233,11 +237,11 @@ export class PricebookController {
     @Param("bundleItemId") bundleItemId: string,
     @Body() body: unknown,
   ) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     try {
       return apiSuccess(await this.pricebookService.updateBundleItem(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseUuidParam(bundleId, "bundleId"),
         parseUuidParam(bundleItemId, "bundleItemId"),
         parseUpdatePricebookBundleItemPayload(body),
@@ -254,10 +258,10 @@ export class PricebookController {
     @Param("bundleId") bundleId: string,
     @Param("bundleItemId") bundleItemId: string,
   ) {
-    const actor = this.requirePricebookManager(request);
+    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
 
     return apiSuccess(await this.pricebookService.removeBundleItem(
-      this.requireOrganizationId(actor),
+      organizationId,
       parseUuidParam(bundleId, "bundleId"),
       parseUuidParam(bundleItemId, "bundleItemId"),
       actor.user.id,
@@ -288,6 +292,13 @@ export class PricebookController {
       "pricebook_manage_forbidden",
       "This account cannot change pricebook records.",
     );
+  }
+
+  private async requirePricebookManageWithPlan(request: RequestWithActor) {
+    const actor = this.requirePricebookManager(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requirePricebookManageEntitled(organizationId);
+    return { actor, organizationId };
   }
 
   private requireOrganizationId(actor: RequestWithActor["actor"]) {

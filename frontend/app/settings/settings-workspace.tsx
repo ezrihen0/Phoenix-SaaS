@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Palette, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+import { Building2, CreditCard, Palette, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { useState } from "react";
 
 import { ThemeAppearanceSelector } from "@/components/theme-appearance-selector";
@@ -8,6 +8,8 @@ import type { SessionRole } from "@/lib/auth/server-session";
 
 import { OrganizationProfilePanel, type OrganizationSettings } from "./organization-profile-panel";
 import { RoleManagementPanel } from "./role-management-panel";
+import type { BillingSummaryPayload } from "./billing-panel";
+import { BillingPanel } from "./billing-panel";
 
 type StaffProfile = {
   id: string;
@@ -24,7 +26,7 @@ type StaffProfile = {
   } | null;
 };
 
-type SettingsTopic = "business" | "profile" | "appearance" | "roles";
+type SettingsTopic = "business" | "profile" | "appearance" | "roles" | "billing";
 
 type SettingsWorkspaceProps = {
   role: SessionRole;
@@ -33,14 +35,17 @@ type SettingsWorkspaceProps = {
   staffProfiles: StaffProfile[];
   staffLoadError: string | null;
   organizationSettings: OrganizationSettings;
+  billingSummary: BillingSummaryPayload | null;
+  billingLoadError: string | null;
 };
 
-const topics: Array<{
+const allTopics: Array<{
   id: SettingsTopic;
   label: string;
   title: string;
   helper: string;
   Icon: typeof UserRound;
+  ownerOnly?: boolean;
 }> = [
   {
     id: "business",
@@ -70,6 +75,14 @@ const topics: Array<{
     helper: "Create staff logins and assign fixed Role Mode V1 roles.",
     Icon: ShieldCheck,
   },
+  {
+    id: "billing",
+    label: "Billing",
+    title: "PhoenixOS subscription",
+    helper: "View plan, billing status, and sync organization-level Clover subscription state.",
+    Icon: CreditCard,
+    ownerOnly: true,
+  },
 ];
 
 function formatRoleLabel(role: string) {
@@ -83,8 +96,11 @@ export function SettingsWorkspace({
   staffProfiles,
   staffLoadError,
   organizationSettings,
+  billingSummary,
+  billingLoadError,
 }: SettingsWorkspaceProps) {
   const [selectedTopic, setSelectedTopic] = useState<SettingsTopic | null>(null);
+  const topics = ownerMode ? allTopics : allTopics.filter((t) => !t.ownerOnly);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -193,6 +209,10 @@ export function SettingsWorkspace({
                 <ThemeAppearanceSelector />
               </div>
             </article>
+          ) : null}
+
+          {selectedTopic === "billing" ? (
+            <BillingPanel initial={billingSummary} loadError={billingLoadError} />
           ) : null}
 
           {selectedTopic === "roles" ? (

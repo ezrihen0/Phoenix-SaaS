@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { handleLogout } from "@/lib/auth/logout";
+import { OrganizationSwitcher } from "@/components/organization-switcher";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import {
   canTransitionJobStatus,
@@ -422,7 +423,7 @@ export default function TechnicianWorkspace() {
 
       <div className="relative mx-auto max-w-[1500px] px-5 py-6 lg:px-8">
         <header className="rounded-[34px] border border-[color:rgba(212,175,55,0.18)] bg-[linear-gradient(180deg,rgba(9,9,9,0.94),rgba(18,18,18,0.88))] p-6 shadow-[0_34px_120px_rgba(0,0,0,0.42)] backdrop-blur-2xl">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
                 Phoenix Fireplace CRM
@@ -435,23 +436,26 @@ export default function TechnicianWorkspace() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <button
-                type="button"
-                onClick={() => {
-                  void runAction(
-                    "logout",
-                    async () => {
-                      await handleLogout(router);
-                    },
-                    "Signing out...",
-                  );
-                }}
-                className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
-              >
-                <LogOut className="h-4 w-4" />
-                Sign out
-              </button>
+            <div className="flex w-full flex-col gap-4 sm:w-auto sm:items-end">
+              <OrganizationSwitcher variant="technician" />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void runAction(
+                      "logout",
+                      async () => {
+                        await handleLogout(router);
+                      },
+                      "Signing out...",
+                    );
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </button>
+              </div>
             </div>
           </div>
 

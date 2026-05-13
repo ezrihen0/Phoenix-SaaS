@@ -3,6 +3,7 @@ export const requiredTables = [
   "profiles",
   "auth_sessions",
   "organizations",
+  "organization_billing",
   "memberships",
   "customers",
   "leads",
@@ -55,6 +56,7 @@ export const requiredTables = [
 
 export const requiredColumns = [
   { table: "memberships", columns: ["user_id", "organization_id", "role", "status"] },
+  { table: "organization_billing", columns: ["organization_id", "plan_key", "billing_status"] },
   { table: "auth_sessions", columns: ["user_id", "active_organization_id", "session_token_hash"] },
   { table: "customers", columns: ["organization_id", "full_name", "phone"] },
   { table: "jobs", columns: ["organization_id", "customer_id", "status"] },
@@ -115,6 +117,7 @@ export const requiredIndexes = [
 export const requiredForeignKeys = [
   { table: "memberships", column: "user_id", referencedTable: "users", referencedColumn: "id" },
   { table: "memberships", column: "organization_id", referencedTable: "organizations", referencedColumn: "id" },
+  { table: "organization_billing", column: "organization_id", referencedTable: "organizations", referencedColumn: "id" },
   { table: "auth_sessions", column: "user_id", referencedTable: "users", referencedColumn: "id" },
   { table: "auth_sessions", column: "active_organization_id", referencedTable: "organizations", referencedColumn: "id" },
   { table: "customers", column: "organization_id", referencedTable: "organizations", referencedColumn: "id" },

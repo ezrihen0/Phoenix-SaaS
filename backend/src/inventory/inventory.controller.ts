@@ -12,6 +12,7 @@ import {
 } from "@nestjs/common";
 
 import { SessionGuard } from "../auth/session.guard";
+import { EntitlementService } from "../billing/entitlement.service";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { canManageInventory, isInventoryOfficeRole } from "./constants";
@@ -35,7 +36,10 @@ import {
 @UseGuards(SessionGuard)
 @Controller("api/inventory")
 export class InventoryController {
-  constructor(private readonly inventoryService: InventoryService) {}
+  constructor(
+    private readonly inventoryService: InventoryService,
+    private readonly entitlementService: EntitlementService,
+  ) {}
 
   @Get("items")
   async listItems(@Req() request: RequestWithActor, @Query() query: Record<string, unknown>) {
@@ -54,10 +58,12 @@ export class InventoryController {
   @Post("items")
   async createItem(@Req() request: RequestWithActor, @Body() body: unknown) {
     const actor = this.requireOfficeInventoryActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireInventoryManageEntitled(organizationId);
 
     try {
       return apiSuccess(await this.inventoryService.createItem(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseCreateInventoryItemPayload(body),
         actor.user.id,
       ));
@@ -69,10 +75,12 @@ export class InventoryController {
   @Patch("items/:itemId")
   async updateItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string, @Body() body: unknown) {
     const actor = this.requireOfficeInventoryActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireInventoryManageEntitled(organizationId);
 
     try {
       return apiSuccess(await this.inventoryService.updateItem(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseUuidParam(itemId, "itemId"),
         parseUpdateInventoryItemPayload(body),
         actor.user.id,
@@ -85,9 +93,11 @@ export class InventoryController {
   @Delete("items/:itemId")
   async archiveItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
     const actor = this.requireOfficeInventoryActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireInventoryManageEntitled(organizationId);
 
     return apiSuccess(await this.inventoryService.archiveItem(
-      this.requireOrganizationId(actor),
+      organizationId,
       parseUuidParam(itemId, "itemId"),
       actor.user.id,
     ));
@@ -112,10 +122,12 @@ export class InventoryController {
   @Post("locations")
   async createLocation(@Req() request: RequestWithActor, @Body() body: unknown) {
     const actor = this.requireOfficeInventoryActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireInventoryManageEntitled(organizationId);
 
     try {
       return apiSuccess(await this.inventoryService.createLocation(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseCreateInventoryLocationPayload(body),
         actor.user.id,
       ));
@@ -127,10 +139,12 @@ export class InventoryController {
   @Patch("locations/:locationId")
   async updateLocation(@Req() request: RequestWithActor, @Param("locationId") locationId: string, @Body() body: unknown) {
     const actor = this.requireOfficeInventoryActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireInventoryManageEntitled(organizationId);
 
     try {
       return apiSuccess(await this.inventoryService.updateLocation(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseUuidParam(locationId, "locationId"),
         parseUpdateInventoryLocationPayload(body),
         actor.user.id,
@@ -143,9 +157,11 @@ export class InventoryController {
   @Delete("locations/:locationId")
   async archiveLocation(@Req() request: RequestWithActor, @Param("locationId") locationId: string) {
     const actor = this.requireOfficeInventoryActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireInventoryManageEntitled(organizationId);
 
     return apiSuccess(await this.inventoryService.archiveLocation(
-      this.requireOrganizationId(actor),
+      organizationId,
       parseUuidParam(locationId, "locationId"),
       actor.user.id,
     ));
@@ -186,10 +202,12 @@ export class InventoryController {
   @Post("receive")
   async receiveStock(@Req() request: RequestWithActor, @Body() body: unknown) {
     const actor = this.requireOfficeInventoryActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireInventoryManageEntitled(organizationId);
 
     try {
       return apiSuccess(await this.inventoryService.receiveStock(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseReceiveInventoryPayload(body),
         actor.user.id,
       ));
@@ -201,10 +219,12 @@ export class InventoryController {
   @Post("transfer")
   async transferStock(@Req() request: RequestWithActor, @Body() body: unknown) {
     const actor = this.requireOfficeInventoryActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireInventoryManageEntitled(organizationId);
 
     try {
       return apiSuccess(await this.inventoryService.transferStock(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseTransferInventoryPayload(body),
         actor.user.id,
       ));
@@ -216,10 +236,12 @@ export class InventoryController {
   @Post("use")
   async useStock(@Req() request: RequestWithActor, @Body() body: unknown) {
     const actor = this.requireOfficeInventoryActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireInventoryManageEntitled(organizationId);
 
     try {
       return apiSuccess(await this.inventoryService.useStock(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseUseInventoryPayload(body),
         actor.user.id,
       ));
@@ -231,10 +253,12 @@ export class InventoryController {
   @Post("adjust")
   async adjustStock(@Req() request: RequestWithActor, @Body() body: unknown) {
     const actor = this.requireOfficeInventoryActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    await this.entitlementService.requireInventoryManageEntitled(organizationId);
 
     try {
       return apiSuccess(await this.inventoryService.adjustStock(
-        this.requireOrganizationId(actor),
+        organizationId,
         parseAdjustInventoryPayload(body),
         actor.user.id,
       ));

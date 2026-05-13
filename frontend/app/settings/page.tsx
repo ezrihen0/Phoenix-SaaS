@@ -2,6 +2,7 @@ import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerSession } from "@/lib/auth/server-session";
 import type { SessionRole } from "@/lib/auth/server-session";
 
+import type { BillingSummaryPayload } from "./billing-panel";
 import type { OrganizationSettings } from "./organization-profile-panel";
 import { SettingsWorkspace } from "./settings-workspace";
 
@@ -55,6 +56,17 @@ export default async function SettingsPage() {
     }
   }
 
+  let billingSummary: BillingSummaryPayload | null = null;
+  let billingLoadError: string | null = null;
+
+  if (ownerMode) {
+    try {
+      billingSummary = await serverApiFetch<BillingSummaryPayload>("/api/billing/summary");
+    } catch (error) {
+      billingLoadError = error instanceof Error ? error.message : "Billing summary could not be loaded.";
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
       <SettingsWorkspace
@@ -64,6 +76,8 @@ export default async function SettingsPage() {
         staffProfiles={staffProfiles}
         staffLoadError={staffLoadError}
         organizationSettings={organizationSettings}
+        billingSummary={billingSummary}
+        billingLoadError={billingLoadError}
       />
     </main>
   );
