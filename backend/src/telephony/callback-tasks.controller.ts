@@ -4,6 +4,7 @@ import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { canManageCallbackTasks } from "./telephony-role";
+import { requireTelephonyOrganizationId } from "./telephony-org-scope";
 import { CallbackTaskService } from "./callback-task.service";
 
 type CreateCallbackTaskPayload = {
@@ -29,8 +30,9 @@ export class CallbackTasksController {
 
   @Get("callback-task-assignees")
   async listAssignees(@Req() request: RequestWithActor) {
-    this.requireOfficeActor(request);
-    return apiSuccess(await this.callbackTaskService.listAssignableProfiles());
+    const actor = this.requireOfficeActor(request);
+    const organizationId = requireTelephonyOrganizationId(actor);
+    return apiSuccess(await this.callbackTaskService.listAssignableProfiles(organizationId));
   }
 
   @Post("callback-tasks")
@@ -39,12 +41,14 @@ export class CallbackTasksController {
     @Body() payload: CreateCallbackTaskPayload,
   ) {
     const actor = this.requireOfficeActor(request);
+    const organizationId = requireTelephonyOrganizationId(actor);
 
     if (typeof payload.recentCallId !== "string" || !payload.recentCallId.trim()) {
       apiError(400, "callback_task_recent_call_required", "Recent call id is required.");
     }
 
     return apiSuccess(await this.callbackTaskService.createCallbackTask({
+      organizationId,
       recentCallId: payload.recentCallId.trim(),
       priority: typeof payload.priority === "string" ? payload.priority as never : undefined,
       dueAt: this.parseOptionalDate(payload.dueAt),
@@ -62,9 +66,10 @@ export class CallbackTasksController {
     @Param("taskId") taskId: string,
     @Body() payload: UpdateCallbackTaskPayload,
   ) {
-    this.requireOfficeActor(request);
+    const actor = this.requireOfficeActor(request);
+    const organizationId = requireTelephonyOrganizationId(actor);
 
-    return apiSuccess(await this.callbackTaskService.updateCallbackTask(taskId, {
+    return apiSuccess(await this.callbackTaskService.updateCallbackTask(taskId, organizationId, {
       status: typeof payload.status === "string" ? payload.status as never : undefined,
       priority: typeof payload.priority === "string" ? payload.priority as never : undefined,
       dueAt: payload.dueAt === undefined ? undefined : this.parseOptionalDate(payload.dueAt),

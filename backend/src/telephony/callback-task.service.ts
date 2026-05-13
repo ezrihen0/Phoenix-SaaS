@@ -1,11 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, In, Repository } from "typeorm";
+import { DataSource, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import { ProfileEntity } from "../database/entities/profile.entity";
 import { RecentCallEntity } from "../database/entities/recent-call.entity";
 import { assertTablesExist } from "../database/schema-readiness";
+import { recentCallBelongsToOrgParams, recentCallBelongsToOrgSql } from "./telephony-org-scope";
 
 export type CallbackTaskStatus = "open" | "in_progress" | "completed" | "cancelled";
 export type CallbackTaskPriority = "high" | "normal" | "low";
@@ -35,6 +36,7 @@ export type CallbackTaskSummary = {
 };
 
 type CreateCallbackTaskInput = {
+  organizationId: string;
   recentCallId: string;
   priority?: CallbackTaskPriority;
   dueAt?: Date | null;
@@ -74,24 +76,27 @@ export class CallbackTaskService {
     private readonly profilesRepository: Repository<ProfileEntity>,
   ) {}
 
-  async listAssignableProfiles() {
+  async listAssignableProfiles(organizationId: string) {
     await this.ensureSchema();
 
-    const profiles = await this.profilesRepository.find({
-      select: {
-        id: true,
-        full_name: true,
-        role: true,
-      },
-      where: {
-        role: In(CALLBACK_TASK_ASSIGNABLE_ROLES),
-      },
-      order: {
-        full_name: "ASC",
-      },
-    });
+    const rolePlaceholders = CALLBACK_TASK_ASSIGNABLE_ROLES.map(() => "?").join(", ");
+    const rows = await this.dataSource.query(
+      `
+        SELECT DISTINCT
+          p.id,
+          p.full_name,
+          p.role
+        FROM profiles p
+        INNER JOIN memberships m ON m.user_id = p.auth_user_id
+        WHERE m.organization_id = ?
+          AND m.status = 'active'
+          AND p.role IN (${rolePlaceholders})
+        ORDER BY p.full_name ASC
+      `,
+      [organizationId, ...CALLBACK_TASK_ASSIGNABLE_ROLES],
+    ) as Array<{ id: string; full_name: string; role: ProfileEntity["role"] }>;
 
-    return profiles.map((profile) => ({
+    return rows.map((profile) => ({
       id: profile.id,
       fullName: profile.full_name,
       role: profile.role,
@@ -148,16 +153,18 @@ export class CallbackTaskService {
     return output;
   }
 
-  async countOpenCallbackTasks() {
+  async countOpenCallbackTasks(organizationId: string) {
     await this.ensureSchema();
 
     const rows = await this.dataSource.query(
       `
         SELECT COUNT(*) AS total
-        FROM callback_tasks
-        WHERE status IN (?, ?)
+        FROM callback_tasks task
+        INNER JOIN recent_calls rc ON BINARY rc.id = BINARY task.recent_call_id
+        WHERE task.status IN (?, ?)
+          AND ${recentCallBelongsToOrgSql("rc")}
       `,
-      ["open", "in_progress"],
+      ["open", "in_progress", ...recentCallBelongsToOrgParams(organizationId)],
     ) as Array<Record<string, unknown>>;
 
     const value = rows[0]?.total;
@@ -178,6 +185,8 @@ export class CallbackTaskService {
       apiError(404, "recent_call_not_found", "The recent call could not be found.");
     }
 
+    await this.assertRecentCallInOrganization(recentCall.id, input.organizationId);
+
     const existingOpenTask = await this.findActiveCallbackTaskByRecentCallId(recentCall.id);
     if (existingOpenTask) {
       return existingOpenTask;
@@ -186,7 +195,7 @@ export class CallbackTaskService {
     const priority = this.validatePriority(input.priority ?? this.defaultPriorityForCallStatus(recentCall.call_status));
     const dueAt = input.dueAt ?? this.defaultDueAtForCallStatus(recentCall.call_status);
     const notes = this.normalizeNotes(input.notes);
-    const assignee = await this.validateAssignedProfile(input.assignedToProfileId ?? null);
+    const assignee = await this.validateAssignedProfile(input.assignedToProfileId ?? null, input.organizationId);
     const createdAt = new Date();
     const id = crypto.randomUUID();
 
@@ -238,12 +247,18 @@ export class CallbackTaskService {
       return null;
     }
 
+    const organizationId = await this.resolveOrganizationIdForRecentCall(recentCall.id);
+    if (!organizationId) {
+      return null;
+    }
+
     const existingOpenTask = await this.findActiveCallbackTaskByRecentCallId(recentCall.id);
     if (existingOpenTask) {
       return existingOpenTask;
     }
 
     return this.createCallbackTask({
+      organizationId,
       recentCallId: recentCall.id,
       priority: this.defaultPriorityForCallStatus(recentCall.call_status),
       dueAt: this.defaultDueAtForCallStatus(recentCall.call_status),
@@ -253,7 +268,7 @@ export class CallbackTaskService {
     });
   }
 
-  async updateCallbackTask(taskId: string, input: UpdateCallbackTaskInput) {
+  async updateCallbackTask(taskId: string, organizationId: string, input: UpdateCallbackTaskInput) {
     await this.ensureSchema();
 
     const current = await this.getRawCallbackTaskById(taskId);
@@ -261,13 +276,20 @@ export class CallbackTaskService {
       apiError(404, "callback_task_not_found", "The callback task could not be found.");
     }
 
+    const recentCallId = this.readString(current.recent_call_id);
+    if (!recentCallId) {
+      apiError(404, "callback_task_not_found", "The callback task could not be found.");
+    }
+
+    await this.assertRecentCallInOrganization(recentCallId, organizationId);
+
     const nextStatus = this.validateStatus(input.status ?? this.readString(current.status) ?? "open");
     const nextPriority = this.validatePriority(input.priority ?? this.readString(current.priority) ?? "normal");
     const nextDueAt = input.dueAt === undefined ? this.asDate(current.due_at) : input.dueAt;
     const nextNotes = input.notes === undefined ? this.normalizeNotes(this.readString(current.notes)) : this.normalizeNotes(input.notes);
     const nextAssignee = input.assignedToProfileId === undefined
-      ? await this.validateAssignedProfile(this.readString(current.assigned_to_profile_id))
-      : await this.validateAssignedProfile(input.assignedToProfileId);
+      ? await this.validateAssignedProfile(this.readString(current.assigned_to_profile_id), organizationId)
+      : await this.validateAssignedProfile(input.assignedToProfileId, organizationId);
     const completedAt = nextStatus === "completed" ? new Date() : null;
 
     await this.dataSource.query(
@@ -408,21 +430,25 @@ export class CallbackTaskService {
     };
   }
 
-  private async validateAssignedProfile(profileId: string | null) {
+  private async validateAssignedProfile(profileId: string | null, organizationId: string) {
     if (!profileId) {
       return null;
     }
 
-    const profile = await this.profilesRepository.findOne({
-      where: {
-        id: profileId,
-      },
-      select: {
-        id: true,
-        full_name: true,
-        role: true,
-      },
-    });
+    const rows = await this.dataSource.query(
+      `
+        SELECT p.id, p.full_name, p.role
+        FROM profiles p
+        INNER JOIN memberships m ON m.user_id = p.auth_user_id
+        WHERE p.id = ?
+          AND m.organization_id = ?
+          AND m.status = 'active'
+        LIMIT 1
+      `,
+      [profileId, organizationId],
+    ) as Array<{ id: string; full_name: string; role: ProfileEntity["role"] }>;
+
+    const profile = rows[0] ?? null;
 
     if (!profile || !CALLBACK_TASK_ASSIGNABLE_ROLES.includes(profile.role)) {
       apiError(400, "callback_task_assignee_invalid", "The selected callback assignee is not available.");
@@ -433,6 +459,49 @@ export class CallbackTaskService {
       fullName: profile.full_name,
       role: profile.role,
     } satisfies CallbackTaskAssignee;
+  }
+
+  private async assertRecentCallInOrganization(recentCallId: string, organizationId: string) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT rc.id
+        FROM recent_calls rc
+        WHERE BINARY rc.id = BINARY ?
+          AND ${recentCallBelongsToOrgSql("rc")}
+        LIMIT 1
+      `,
+      [recentCallId, ...recentCallBelongsToOrgParams(organizationId)],
+    ) as Array<{ id: string }>;
+
+    if (!rows[0]?.id) {
+      apiError(404, "recent_call_not_found", "The recent call could not be found.");
+    }
+  }
+
+  private async resolveOrganizationIdForRecentCall(recentCallId: string): Promise<string | null> {
+    const rows = await this.dataSource.query(
+      `
+        SELECT
+          COALESCE(
+            NULLIF(TRIM(opn.tenant_id), ''),
+            NULLIF(TRIM(c.organization_id), ''),
+            NULLIF(TRIM(l.organization_id), '')
+          ) AS organization_id
+        FROM recent_calls rc
+        LEFT JOIN owned_phone_numbers opn
+          ON BINARY opn.id = BINARY rc.inbound_owned_phone_number_id
+        LEFT JOIN customers c
+          ON BINARY c.id = BINARY rc.matched_client_id
+        LEFT JOIN leads l
+          ON BINARY l.id = BINARY rc.matched_lead_id
+        WHERE BINARY rc.id = BINARY ?
+        LIMIT 1
+      `,
+      [recentCallId],
+    ) as Array<{ organization_id: string | null }>;
+
+    const value = rows[0]?.organization_id;
+    return typeof value === "string" && value.trim() ? value.trim() : null;
   }
 
   private validateStatus(status: string): CallbackTaskStatus {

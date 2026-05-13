@@ -14,7 +14,8 @@
     "schema:verify": "node -r ts-node/register src/database/verify-schema.ts",
     "schema:smoke": "node -r ts-node/register src/database/schema-smoke-test.ts",
     "inspections:isolation:smoke": "node -r ts-node/register src/database/inspections-org-isolation-smoke.ts",
-    "document-snapshot:isolation:smoke": "node -r ts-node/register src/database/document-snapshot-org-isolation-smoke.ts"
+    "document-snapshot:isolation:smoke": "node -r ts-node/register src/database/document-snapshot-org-isolation-smoke.ts",
+    "telephony-messaging:isolation:smoke": "node -r ts-node/register src/database/telephony-messaging-org-isolation-smoke.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

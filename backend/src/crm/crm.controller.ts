@@ -182,6 +182,46 @@ export class CrmController {
     };
   }
 
+  private async requireTechnicianInOrganization(
+    technicianId: string | null | undefined,
+    organizationId: string,
+  ) {
+    if (technicianId == null) {
+      return;
+    }
+
+    const technician = await this.techniciansRepository.findOne({
+      where: {
+        id: technicianId,
+        organization_id: organizationId,
+      },
+    });
+
+    if (!technician) {
+      apiError(404, "technician_not_found", "The technician could not be found.");
+    }
+  }
+
+  private async requireServiceInOrganization(
+    serviceId: string | null | undefined,
+    organizationId: string,
+  ) {
+    if (serviceId == null) {
+      return;
+    }
+
+    const service = await this.servicesRepository.findOne({
+      where: {
+        id: serviceId,
+        organization_id: organizationId,
+      },
+    });
+
+    if (!service) {
+      apiError(404, "service_not_found", "The service could not be found.");
+    }
+  }
+
   private requireTechnicianActor(request: RequestWithActor) {
     const actor = this.requireActor(request);
 
@@ -701,6 +741,7 @@ export class CrmController {
       }
 
       if (technicianId) {
+        await this.requireTechnicianInOrganization(technicianId, organizationId);
         queryBuilder.andWhere("job.assigned_technician_id = :technicianId", {
           technicianId,
         });
@@ -788,6 +829,8 @@ export class CrmController {
       if (!customerId) {
         apiError(400, "job_source_missing", "A customer or lead is required to create a job.");
       }
+
+      await this.requireTechnicianInOrganization(payload.assignedTechnicianId, organizationId);
 
       const job = await this.jobsRepository.save(
         this.jobsRepository.create({
@@ -911,10 +954,12 @@ export class CrmController {
       }
 
       if (payload.assignedTechnicianId !== undefined) {
+        await this.requireTechnicianInOrganization(payload.assignedTechnicianId, organizationId);
         updates.assigned_technician_id = payload.assignedTechnicianId;
       }
 
       if (payload.serviceId !== undefined) {
+        await this.requireServiceInOrganization(payload.serviceId, organizationId);
         updates.service_id = payload.serviceId;
       }
 
@@ -2534,6 +2579,9 @@ export class CrmController {
           notes: lead.description,
         })),
       );
+
+      await this.requireServiceInOrganization(payload.serviceId, organizationId);
+      await this.requireTechnicianInOrganization(payload.assignedTechnicianId, organizationId);
 
       const job = await this.jobsRepository.save(
         this.jobsRepository.create({

@@ -16,6 +16,14 @@ import { OwnedPhoneNumbersService } from "../messaging/phone-numbers/owned-phone
 import { CallFlowSettingsService } from "./call-flow-settings.service";
 import { CallbackTaskService, type CallbackTaskSummary } from "./callback-task.service";
 import { TelephonyExecutionService } from "./telephony-execution.service";
+import {
+  recentCallBelongsToOrgSql,
+  recentCallBelongsToOrgSqlNamed,
+  recentCallBelongsToOrgParams,
+  smsLogBelongsToOrgParams,
+  smsLogBelongsToOrgSql,
+  TELEPHONY_ORG_QUERY_PARAM,
+} from "./telephony-org-scope";
 
 type TelnyxEnvelope = {
   data?: {
@@ -27,6 +35,7 @@ type TelnyxEnvelope = {
 };
 
 type RecentCallsFilter = {
+  organizationId: string;
   query?: string | null;
   callStatus?: string | null;
   processingStatus?: string | null;
@@ -230,6 +239,8 @@ type ResolvedRecentCallSource = {
   marketKey: string | null;
   marketLabel: string | null;
   matched: boolean;
+  /** When set, CRM customer matching for this inbound call should be limited to this organization. */
+  matchOrganizationId: string | null;
 };
 
 const DEFAULT_MISSED_CALL_SMS_TEMPLATE =
@@ -331,7 +342,7 @@ export class TelnyxWebhookService {
     const fromNumberNormalized = this.normalizePhone(fromNumber);
     const toNumberNormalized = this.normalizePhone(toNumber);
     const sourceContext = await this.resolveRecentCallSource(toNumber);
-    const matchedClient = await this.matchCustomerByPhone(fromNumberNormalized);
+    const matchedClient = await this.matchCustomerByPhone(fromNumberNormalized, sourceContext.matchOrganizationId);
     const providerCallId = this.readFirstString(eventPayload, [
       ["call_control_id"],
       ["call_session_id"],
@@ -430,6 +441,11 @@ export class TelnyxWebhookService {
     const queryBuilder = this.recentCallsRepository.createQueryBuilder("recent_call");
     const query = (input.query ?? "").trim();
 
+    queryBuilder.andWhere(
+      recentCallBelongsToOrgSqlNamed("recent_call", TELEPHONY_ORG_QUERY_PARAM),
+    );
+    queryBuilder.setParameter(TELEPHONY_ORG_QUERY_PARAM, input.organizationId.trim());
+
     if (query) {
       queryBuilder.andWhere(
         "(recent_call.from_number LIKE :query OR recent_call.to_number LIKE :query OR recent_call.matched_client_display_name LIKE :query)",
@@ -510,40 +526,44 @@ export class TelnyxWebhookService {
     }));
   }
 
-  async getDashboardCallSummary(input: { todayStart: Date; todayEnd: Date }): Promise<DashboardCallSummary> {
+  async getDashboardCallSummary(input: { organizationId: string; todayStart: Date; todayEnd: Date }): Promise<DashboardCallSummary> {
     await this.ensureRecentCallsSchema();
+
+    const orgParams = recentCallBelongsToOrgParams(input.organizationId);
 
     const [countRows, sourceRows, openCallbackTasks] = await Promise.all([
       this.dataSource.query(
         `
           SELECT
             COUNT(*) AS incoming_calls_today,
-            SUM(CASE WHEN call_answered_at IS NOT NULL OR call_status IN ('answered', 'completed') THEN 1 ELSE 0 END) AS answered_calls_today,
-            SUM(CASE WHEN call_status = 'missed' THEN 1 ELSE 0 END) AS missed_calls_today,
-            SUM(CASE WHEN call_status = 'voicemail' THEN 1 ELSE 0 END) AS voicemails_today,
-            SUM(CASE WHEN matched_lead_id IS NOT NULL THEN 1 ELSE 0 END) AS leads_created_from_calls_today
-          FROM recent_calls
-          WHERE COALESCE(call_started_at, created_at) >= ?
-            AND COALESCE(call_started_at, created_at) <= ?
+            SUM(CASE WHEN rc.call_answered_at IS NOT NULL OR rc.call_status IN ('answered', 'completed') THEN 1 ELSE 0 END) AS answered_calls_today,
+            SUM(CASE WHEN rc.call_status = 'missed' THEN 1 ELSE 0 END) AS missed_calls_today,
+            SUM(CASE WHEN rc.call_status = 'voicemail' THEN 1 ELSE 0 END) AS voicemails_today,
+            SUM(CASE WHEN rc.matched_lead_id IS NOT NULL THEN 1 ELSE 0 END) AS leads_created_from_calls_today
+          FROM recent_calls rc
+          WHERE COALESCE(rc.call_started_at, rc.created_at) >= ?
+            AND COALESCE(rc.call_started_at, rc.created_at) <= ?
+            AND ${recentCallBelongsToOrgSql("rc")}
         `,
-        [input.todayStart, input.todayEnd],
+        [...orgParams, input.todayStart, input.todayEnd],
       ) as Promise<Array<Record<string, unknown>>>,
       this.dataSource.query(
         `
           SELECT
-            source,
-            campaign_name,
+            rc.source,
+            rc.campaign_name,
             COUNT(*) AS total
-          FROM recent_calls
-          WHERE COALESCE(call_started_at, created_at) >= ?
-            AND COALESCE(call_started_at, created_at) <= ?
-          GROUP BY source, campaign_name
-          ORDER BY total DESC, source ASC, campaign_name ASC
+          FROM recent_calls rc
+          WHERE COALESCE(rc.call_started_at, rc.created_at) >= ?
+            AND COALESCE(rc.call_started_at, rc.created_at) <= ?
+            AND ${recentCallBelongsToOrgSql("rc")}
+          GROUP BY rc.source, rc.campaign_name
+          ORDER BY total DESC, rc.source ASC, rc.campaign_name ASC
           LIMIT 5
         `,
-        [input.todayStart, input.todayEnd],
+        [...orgParams, input.todayStart, input.todayEnd],
       ) as Promise<Array<Record<string, unknown>>>,
-      this.callbackTaskService.countOpenCallbackTasks(),
+      this.callbackTaskService.countOpenCallbackTasks(input.organizationId),
     ]);
 
     const countRow = countRows[0] ?? {};
@@ -656,8 +676,10 @@ export class TelnyxWebhookService {
     );
   }
 
-  async requestQueueCallback(recentCallId: string, input: QueueCallbackRequestInput) {
+  async requestQueueCallback(recentCallId: string, organizationId: string, input: QueueCallbackRequestInput) {
     await this.ensureRecentCallsSchema();
+
+    await this.assertRecentCallInOrganization(recentCallId, organizationId);
 
     const recentCall = await this.recentCallsRepository.findOne({
       where: {
@@ -678,6 +700,7 @@ export class TelnyxWebhookService {
     await this.recentCallsRepository.save(recentCall);
 
     const callbackTask = await this.callbackTaskService.createCallbackTask({
+      organizationId,
       recentCallId: recentCall.id,
       priority: input.priority === "high" || input.priority === "normal" || input.priority === "low" ? input.priority : undefined,
       dueAt: requestedAt,
@@ -699,8 +722,10 @@ export class TelnyxWebhookService {
     return this.toRelatedCallSummary(recentCall, [callbackTask], latestSmsLogMap.get(recentCall.id) ?? null);
   }
 
-  async submitAiEnrichment(recentCallId: string, input: AiEnrichmentInput) {
+  async submitAiEnrichment(recentCallId: string, organizationId: string, input: AiEnrichmentInput) {
     await this.ensureRecentCallsSchema();
+
+    await this.assertRecentCallInOrganization(recentCallId, organizationId);
 
     const recentCall = await this.recentCallsRepository.findOne({
       where: {
@@ -830,10 +855,11 @@ export class TelnyxWebhookService {
     return this.getMissedCallSmsSettings();
   }
 
-  async listRecentTexts(limitRaw?: number): Promise<RecentTextsResponse> {
+  async listRecentTexts(organizationId: string, limitRaw?: number): Promise<RecentTextsResponse> {
     await this.ensureRecentCallsSchema();
 
     const limit = Math.max(1, Math.min(limitRaw ?? 6, 20));
+    const smsParams = smsLogBelongsToOrgParams(organizationId);
     const [rows, unreadRows] = await Promise.all([
       this.dataSource.query(
         `
@@ -849,10 +875,11 @@ export class TelnyxWebhookService {
           LEFT JOIN customers customer
             ON BINARY customer.id = BINARY log.customer_id
           WHERE log.direction = 'inbound'
+            AND ${smsLogBelongsToOrgSql("log", "rc_txt")}
           ORDER BY log.created_at DESC
           LIMIT ?
         `,
-        [limit],
+        [...smsParams, limit],
       ) as Promise<Array<{
         id: string;
         customer_id: string | null;
@@ -865,10 +892,12 @@ export class TelnyxWebhookService {
       this.dataSource.query(
         `
           SELECT COUNT(*) AS unread_count
-          FROM recent_call_sms_logs
-          WHERE direction = 'inbound'
-            AND read_at IS NULL
+          FROM recent_call_sms_logs log
+          WHERE log.direction = 'inbound'
+            AND log.read_at IS NULL
+            AND ${smsLogBelongsToOrgSql("log", "rc_unread")}
         `,
+        smsParams,
       ) as Promise<Array<{ unread_count: number | string }>>,
     ]);
 
@@ -886,25 +915,29 @@ export class TelnyxWebhookService {
     };
   }
 
-  async markAllRecentTextsRead(limitRaw?: number): Promise<RecentTextsResponse> {
+  async markAllRecentTextsRead(organizationId: string, limitRaw?: number): Promise<RecentTextsResponse> {
     await this.ensureRecentCallsSchema();
 
+    const smsParams = smsLogBelongsToOrgParams(organizationId);
     await this.dataSource.query(
       `
-        UPDATE recent_call_sms_logs
+        UPDATE recent_call_sms_logs log
         SET read_at = CURRENT_TIMESTAMP(6)
-        WHERE direction = 'inbound'
-          AND read_at IS NULL
+        WHERE log.direction = 'inbound'
+          AND log.read_at IS NULL
+          AND ${smsLogBelongsToOrgSql("log", "rc_mr")}
       `,
+      smsParams,
     );
 
-    return this.listRecentTexts(limitRaw);
+    return this.listRecentTexts(organizationId, limitRaw);
   }
 
-  async listMessagingDashboard(limitRaw?: number): Promise<MessagingDashboardResponse> {
+  async listMessagingDashboard(organizationId: string, limitRaw?: number): Promise<MessagingDashboardResponse> {
     await this.ensureRecentCallsSchema();
 
     const limit = Math.max(1, Math.min(limitRaw ?? 100, 250));
+    const smsParams = smsLogBelongsToOrgParams(organizationId);
     const [customerRows, unknownRows] = await Promise.all([
       this.dataSource.query(
         `
@@ -923,11 +956,12 @@ export class TelnyxWebhookService {
           LEFT JOIN customers customer
             ON BINARY customer.id = BINARY log.customer_id
           WHERE log.customer_id IS NOT NULL
+            AND ${smsLogBelongsToOrgSql("log", "rc_dash_c")}
           GROUP BY log.customer_id, customer.full_name
           ORDER BY last_message_at DESC
           LIMIT ?
         `,
-        [limit],
+        [...smsParams, limit],
       ) as Promise<Array<{
         customer_id: string;
         customer_name: string | null;
@@ -951,11 +985,12 @@ export class TelnyxWebhookService {
           FROM recent_call_sms_logs log
           WHERE log.customer_id IS NULL
             AND COALESCE(NULLIF(log.phone_number_normalized, ''), NULLIF(log.phone_number, '')) IS NOT NULL
+            AND ${smsLogBelongsToOrgSql("log", "rc_dash_u")}
           GROUP BY phone_key
           ORDER BY last_message_at DESC
           LIMIT ?
         `,
-        [limit],
+        [...smsParams, limit],
       ) as Promise<Array<{
         phone_key: string;
         phone_number: string | null;
@@ -984,7 +1019,7 @@ export class TelnyxWebhookService {
     };
   }
 
-  async listUnknownTextThread(phoneKeyRaw: string, limitRaw?: number): Promise<UnknownTextThreadResponse> {
+  async listUnknownTextThread(organizationId: string, phoneKeyRaw: string, limitRaw?: number): Promise<UnknownTextThreadResponse> {
     await this.ensureRecentCallsSchema();
 
     const normalizedPhone = this.normalizePhone(phoneKeyRaw);
@@ -995,6 +1030,7 @@ export class TelnyxWebhookService {
     }
 
     const limit = Math.max(1, Math.min(limitRaw ?? 200, 400));
+    const smsParams = smsLogBelongsToOrgParams(organizationId);
     const [rows, unreadRows] = await Promise.all([
       this.dataSource.query(
         `
@@ -1016,10 +1052,11 @@ export class TelnyxWebhookService {
               COALESCE(NULLIF(log.phone_number_normalized, ''), NULLIF(log.phone_number, '')) = ?
               OR log.phone_number = ?
             )
+            AND ${smsLogBelongsToOrgSql("log", "rc_unk")}
           ORDER BY log.created_at DESC
           LIMIT ?
         `,
-        [phoneKey, phoneKeyRaw.trim(), limit],
+        [...smsParams, phoneKey, phoneKeyRaw.trim(), limit],
       ) as Promise<Array<{
         id: string;
         direction: "inbound" | "outbound";
@@ -1044,8 +1081,9 @@ export class TelnyxWebhookService {
               COALESCE(NULLIF(log.phone_number_normalized, ''), NULLIF(log.phone_number, '')) = ?
               OR log.phone_number = ?
             )
+            AND ${smsLogBelongsToOrgSql("log", "rc_unk_u")}
         `,
-        [phoneKey, phoneKeyRaw.trim()],
+        [...smsParams, phoneKey, phoneKeyRaw.trim()],
       ) as Promise<Array<{ unread_count: number | string }>>,
     ]);
 
@@ -1068,9 +1106,9 @@ export class TelnyxWebhookService {
     };
   }
 
-  async listCustomerTextThread(customerId: string, limitRaw?: number): Promise<CustomerTextThreadResponse> {
+  async listCustomerTextThread(customerId: string, organizationId: string, limitRaw?: number): Promise<CustomerTextThreadResponse> {
     await this.ensureRecentCallsSchema();
-    await this.requireCustomerForTexting(customerId);
+    await this.requireCustomerForTexting(customerId, organizationId);
 
     const limit = Math.max(1, Math.min(limitRaw ?? 50, 200));
     const [rows, unreadRows] = await Promise.all([
@@ -1091,10 +1129,15 @@ export class TelnyxWebhookService {
             log.read_at
           FROM recent_call_sms_logs log
           WHERE log.customer_id = ?
+            AND EXISTS (
+              SELECT 1 FROM customers c
+              WHERE BINARY c.id = BINARY log.customer_id
+                AND c.organization_id = ?
+            )
           ORDER BY log.created_at DESC
           LIMIT ?
         `,
-        [customerId, limit],
+        [customerId, organizationId, limit],
       ) as Promise<Array<{
         id: string;
         customer_id: string;
@@ -1112,12 +1155,17 @@ export class TelnyxWebhookService {
       this.dataSource.query(
         `
           SELECT COUNT(*) AS unread_count
-          FROM recent_call_sms_logs
-          WHERE customer_id = ?
-            AND direction = 'inbound'
-            AND read_at IS NULL
+          FROM recent_call_sms_logs log
+          WHERE log.customer_id = ?
+            AND log.direction = 'inbound'
+            AND log.read_at IS NULL
+            AND EXISTS (
+              SELECT 1 FROM customers c
+              WHERE BINARY c.id = BINARY log.customer_id
+                AND c.organization_id = ?
+            )
         `,
-        [customerId],
+        [customerId, organizationId],
       ) as Promise<Array<{ unread_count: number | string }>>,
     ]);
 
@@ -1140,28 +1188,33 @@ export class TelnyxWebhookService {
     };
   }
 
-  async markCustomerTextThreadRead(customerId: string, limitRaw?: number): Promise<CustomerTextThreadResponse> {
+  async markCustomerTextThreadRead(customerId: string, organizationId: string, limitRaw?: number): Promise<CustomerTextThreadResponse> {
     await this.ensureRecentCallsSchema();
-    await this.requireCustomerForTexting(customerId);
+    await this.requireCustomerForTexting(customerId, organizationId);
 
     await this.dataSource.query(
       `
-        UPDATE recent_call_sms_logs
+        UPDATE recent_call_sms_logs log
         SET read_at = CURRENT_TIMESTAMP(6)
-        WHERE customer_id = ?
-          AND direction = 'inbound'
-          AND read_at IS NULL
+        WHERE log.customer_id = ?
+          AND log.direction = 'inbound'
+          AND log.read_at IS NULL
+          AND EXISTS (
+            SELECT 1 FROM customers c
+            WHERE BINARY c.id = BINARY log.customer_id
+              AND c.organization_id = ?
+          )
       `,
-      [customerId],
+      [customerId, organizationId],
     );
 
-    return this.listCustomerTextThread(customerId, limitRaw);
+    return this.listCustomerTextThread(customerId, organizationId, limitRaw);
   }
 
-  async sendCustomerText(customerId: string, messageBody: string) {
+  async sendCustomerText(customerId: string, organizationId: string, messageBody: string) {
     await this.ensureRecentCallsSchema();
 
-    const customer = await this.requireCustomerForTexting(customerId);
+    const customer = await this.requireCustomerForTexting(customerId, organizationId);
     const normalizedPhone = this.normalizePhone(customer.phone);
     const phoneNumber = customer.phone?.trim() ?? "";
     const phoneNumberE164 = this.toE164Phone(customer.phone);
@@ -1200,10 +1253,10 @@ export class TelnyxWebhookService {
       readAt: new Date(),
     });
 
-    return this.listCustomerTextThread(customer.id);
+    return this.listCustomerTextThread(customer.id, organizationId);
   }
 
-  async sendUnknownText(phoneRaw: string, messageBody: string) {
+  async sendUnknownText(organizationId: string, phoneRaw: string, messageBody: string) {
     await this.ensureRecentCallsSchema();
 
     const trimmedPhone = phoneRaw.trim();
@@ -1244,7 +1297,7 @@ export class TelnyxWebhookService {
       readAt: new Date(),
     });
 
-    return this.listUnknownTextThread(normalizedPhone);
+    return this.listUnknownTextThread(organizationId, normalizedPhone);
   }
 
   async processTwilioMessageWebhook(payload: Record<string, unknown>) {
@@ -1294,7 +1347,12 @@ export class TelnyxWebhookService {
     }
 
     const phoneNumberNormalized = this.normalizePhone(fromNumber);
-    const matchedCustomer = await this.matchCustomerByPhone(phoneNumberNormalized);
+    const toNumber = this.asTrimmedString(payload.To);
+    const smsOwnedNumber = toNumber
+      ? await this.ownedPhoneNumbersService.findActiveSmsOwnedNumberByNormalized(toNumber)
+      : null;
+    const matchOrganizationId = smsOwnedNumber?.tenantId?.trim() ?? null;
+    const matchedCustomer = await this.matchCustomerByPhone(phoneNumberNormalized, matchOrganizationId);
 
     await this.insertMissedCallSmsLog({
       recentCallId: null,
@@ -1937,7 +1995,7 @@ export class TelnyxWebhookService {
     }
   }
 
-  private async matchCustomerByPhone(normalizedPhone: string | null) {
+  private async matchCustomerByPhone(normalizedPhone: string | null, organizationId: string | null) {
     if (!normalizedPhone) {
       return null;
     }
@@ -1949,6 +2007,7 @@ export class TelnyxWebhookService {
         phone: true,
         updated_at: true,
       },
+      where: organizationId ? { organization_id: organizationId } : {},
       take: 5000,
       order: {
         updated_at: "DESC",
@@ -1963,10 +2022,11 @@ export class TelnyxWebhookService {
     }) ?? null;
   }
 
-  private async requireCustomerForTexting(customerId: string) {
+  private async requireCustomerForTexting(customerId: string, organizationId: string) {
     const customer = await this.customersRepository.findOne({
       where: {
         id: customerId,
+        organization_id: organizationId,
       },
     });
 
@@ -1975,6 +2035,23 @@ export class TelnyxWebhookService {
     }
 
     return customer;
+  }
+
+  private async assertRecentCallInOrganization(recentCallId: string, organizationId: string) {
+    const rows = await this.dataSource.query(
+      `
+        SELECT rc.id
+        FROM recent_calls rc
+        WHERE BINARY rc.id = BINARY ?
+          AND ${recentCallBelongsToOrgSql("rc")}
+        LIMIT 1
+      `,
+      [recentCallId, ...recentCallBelongsToOrgParams(organizationId)],
+    ) as Array<{ id: string }>;
+
+    if (!rows[0]?.id) {
+      apiError(404, "recent_call_not_found", "The recent call could not be found.");
+    }
   }
 
   private normalizePhone(value: string | null) {
@@ -2030,6 +2107,7 @@ export class TelnyxWebhookService {
         marketKey: ownedPhoneNumber.marketKey,
         marketLabel: ownedPhoneNumber.marketLabel,
         matched: true,
+        matchOrganizationId: ownedPhoneNumber.tenantId?.trim() ?? null,
       };
     }
 
@@ -2043,6 +2121,7 @@ export class TelnyxWebhookService {
         marketKey: null,
         marketLabel: null,
         matched: false,
+        matchOrganizationId: null,
       };
     }
 
@@ -2055,6 +2134,7 @@ export class TelnyxWebhookService {
       marketKey: null,
       marketLabel: null,
       matched: true,
+      matchOrganizationId: null,
     };
   }
 

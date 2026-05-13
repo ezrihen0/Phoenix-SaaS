@@ -4,6 +4,7 @@ import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { isTelephonyOfficeRole } from "./telephony-role";
+import { requireTelephonyOrganizationId } from "./telephony-org-scope";
 import { CallReportingService } from "./call-reporting.service";
 
 @UseGuards(SessionGuard)
@@ -31,7 +32,9 @@ export class CallReportingController {
       apiError(400, "call_reporting_window_invalid", "The reporting window start must be before the end.");
     }
 
-    return apiSuccess(await this.callReportingService.getSummary({ from, to }));
+    const organizationId = requireTelephonyOrganizationId(actor);
+
+    return apiSuccess(await this.callReportingService.getSummary({ organizationId, from, to }));
   }
 
   private parseOptionalDate(value: string | undefined) {

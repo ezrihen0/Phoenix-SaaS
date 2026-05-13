@@ -4,6 +4,7 @@ import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { isTelephonyOfficeRole } from "./telephony-role";
+import { requireTelephonyOrganizationId } from "./telephony-org-scope";
 import { TelnyxWebhookService } from "./telnyx-webhook.service";
 
 type SendCustomerTextPayload = {
@@ -21,11 +22,12 @@ export class CustomerTextConversationsController {
     @Param("customerId") customerId: string,
     @Query("limit") limitRaw: string | undefined,
   ) {
-    this.requireOfficeActor(request);
+    const organizationId = this.requireOfficeActor(request);
 
     const parsedLimit = limitRaw ? Number(limitRaw) : undefined;
     return apiSuccess(await this.telnyxWebhookService.listCustomerTextThread(
       customerId,
+      organizationId,
       Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     ));
   }
@@ -36,11 +38,12 @@ export class CustomerTextConversationsController {
     @Param("customerId") customerId: string,
     @Query("limit") limitRaw: string | undefined,
   ) {
-    this.requireOfficeActor(request);
+    const organizationId = this.requireOfficeActor(request);
 
     const parsedLimit = limitRaw ? Number(limitRaw) : undefined;
     return apiSuccess(await this.telnyxWebhookService.markCustomerTextThreadRead(
       customerId,
+      organizationId,
       Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     ));
   }
@@ -51,20 +54,22 @@ export class CustomerTextConversationsController {
     @Param("customerId") customerId: string,
     @Body() payload: SendCustomerTextPayload,
   ) {
-    this.requireOfficeActor(request);
+    const organizationId = this.requireOfficeActor(request);
 
     if (typeof payload.body !== "string") {
       apiError(400, "customer_sms_body_required", "Text message body is required.");
     }
 
-    return apiSuccess(await this.telnyxWebhookService.sendCustomerText(customerId, payload.body));
+    return apiSuccess(await this.telnyxWebhookService.sendCustomerText(customerId, organizationId, payload.body));
   }
 
-  private requireOfficeActor(request: RequestWithActor) {
+  private requireOfficeActor(request: RequestWithActor): string {
     const actor = request.actor;
 
     if (!actor || !isTelephonyOfficeRole(actor.role ?? actor.profile?.role ?? null)) {
       apiError(403, "forbidden", "Only office roles can access customer text conversations.");
     }
+
+    return requireTelephonyOrganizationId(actor);
   }
 }

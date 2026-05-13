@@ -1,7 +1,10 @@
 import { Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 
+import { recentCallBelongsToOrgParams, recentCallBelongsToOrgSql } from "./telephony-org-scope";
+
 type CallReportingWindow = {
+  organizationId: string;
   from: Date;
   to: Date;
 };
@@ -63,8 +66,8 @@ export class CallReportingService {
             COALESCE(SUM(invoiced_rollup.invoice_amount_cents), 0) AS invoiced_revenue_cents,
             COALESCE(SUM(invoiced_rollup.paid_amount_cents), 0) AS paid_revenue_cents
           FROM recent_calls rc
-          LEFT JOIN leads lead ON lead.id = rc.matched_lead_id
-          LEFT JOIN jobs job ON job.id = lead.converted_job_id
+          LEFT JOIN leads crm_lead ON crm_lead.id = rc.matched_lead_id
+          LEFT JOIN jobs crm_job ON crm_job.id = crm_lead.converted_job_id
           LEFT JOIN (
             SELECT
               recent_call_id,
@@ -79,11 +82,12 @@ export class CallReportingService {
               MAX(CASE WHEN status = 'paid' OR paid_at IS NOT NULL THEN amount_cents ELSE 0 END) AS paid_amount_cents
             FROM invoices
             GROUP BY job_id
-          ) invoiced_rollup ON invoiced_rollup.job_id = job.id
+          ) invoiced_rollup ON invoiced_rollup.job_id = crm_job.id
           WHERE COALESCE(rc.call_started_at, rc.created_at) >= ?
             AND COALESCE(rc.call_started_at, rc.created_at) <= ?
+            AND ${recentCallBelongsToOrgSql("rc")}
         `,
-        [input.from, input.to],
+        [input.from, input.to, ...recentCallBelongsToOrgParams(input.organizationId)],
       ) as Promise<Array<Record<string, unknown>>>,
       this.queryBreakdown(
         "source_key",
@@ -95,8 +99,8 @@ export class CallReportingService {
       this.queryBreakdown(
         "service_key",
         "service_label",
-        `COALESCE(NULLIF(rc.selected_service_type, ''), lead.service_type, job.requested_service_type, 'unknown')`,
-        `COALESCE(NULLIF(rc.selected_service_type, ''), lead.service_type, job.requested_service_type, 'Unknown')`,
+        `COALESCE(NULLIF(rc.selected_service_type, ''), crm_lead.service_type, crm_job.requested_service_type, 'unknown')`,
+        `COALESCE(NULLIF(rc.selected_service_type, ''), crm_lead.service_type, crm_job.requested_service_type, 'Unknown')`,
         input,
       ),
     ]);
@@ -150,8 +154,8 @@ export class CallReportingService {
           COALESCE(SUM(invoiced_rollup.invoice_amount_cents), 0) AS invoiced_revenue_cents,
           COALESCE(SUM(invoiced_rollup.paid_amount_cents), 0) AS paid_revenue_cents
         FROM recent_calls rc
-        LEFT JOIN leads lead ON lead.id = rc.matched_lead_id
-        LEFT JOIN jobs job ON job.id = lead.converted_job_id
+        LEFT JOIN leads crm_lead ON crm_lead.id = rc.matched_lead_id
+        LEFT JOIN jobs crm_job ON crm_job.id = crm_lead.converted_job_id
         LEFT JOIN (
           SELECT
             recent_call_id,
@@ -166,14 +170,15 @@ export class CallReportingService {
             MAX(CASE WHEN status = 'paid' OR paid_at IS NOT NULL THEN amount_cents ELSE 0 END) AS paid_amount_cents
           FROM invoices
           GROUP BY job_id
-        ) invoiced_rollup ON invoiced_rollup.job_id = job.id
+        ) invoiced_rollup ON invoiced_rollup.job_id = crm_job.id
         WHERE COALESCE(rc.call_started_at, rc.created_at) >= ?
           AND COALESCE(rc.call_started_at, rc.created_at) <= ?
+          AND ${recentCallBelongsToOrgSql("rc")}
         GROUP BY ${keyAlias}, ${labelAlias}
         ORDER BY total_calls DESC, ${labelAlias} ASC
         LIMIT 12
       `,
-      [input.from, input.to],
+      [input.from, input.to, ...recentCallBelongsToOrgParams(input.organizationId)],
     ) as Array<Record<string, unknown>>;
 
     return rows.map((row) => ({

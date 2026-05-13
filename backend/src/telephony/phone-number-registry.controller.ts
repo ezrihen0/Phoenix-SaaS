@@ -4,6 +4,7 @@ import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { OwnedPhoneNumbersService } from "../messaging/phone-numbers/owned-phone-numbers.service";
+import { requireTelephonyOrganizationId } from "./telephony-org-scope";
 import { canManageTelephonySettings } from "./telephony-role";
 
 type PhoneNumberRegistryPayload = {
@@ -28,13 +29,15 @@ export class PhoneNumberRegistryController {
 
   @Get("phone-numbers")
   async listPhoneNumbers(@Req() request: RequestWithActor) {
-    this.requireOfficeRole(request);
-    return apiSuccess(await this.ownedPhoneNumbersService.listOwnedPhoneNumbers());
+    const actor = this.requireOfficeRole(request);
+    const organizationId = requireTelephonyOrganizationId(actor);
+    return apiSuccess(await this.ownedPhoneNumbersService.listOwnedPhoneNumbers(organizationId));
   }
 
   @Put("phone-numbers")
   async upsertPhoneNumber(@Req() request: RequestWithActor, @Body() payload: PhoneNumberRegistryPayload) {
-    this.requireOfficeRole(request);
+    const actor = this.requireOfficeRole(request);
+    const organizationId = requireTelephonyOrganizationId(actor);
 
     if (typeof payload.phoneNumber !== "string") {
       apiError(400, "phone_registry_phone_invalid", "Phone number must be a string.");
@@ -54,6 +57,7 @@ export class PhoneNumberRegistryController {
       smsEnabled: this.readBoolean(payload.smsEnabled, true),
       voiceEnabled: this.readBoolean(payload.voiceEnabled, true),
       isActive: this.readBoolean(payload.isActive, true),
+      actingOrganizationId: organizationId,
     });
 
     return apiSuccess(updated);

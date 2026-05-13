@@ -4,6 +4,7 @@ import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { canManageCallbackTasks, isTelephonyOfficeRole } from "./telephony-role";
+import { requireTelephonyOrganizationId } from "./telephony-org-scope";
 import { TelnyxWebhookService } from "./telnyx-webhook.service";
 
 type QueueCallbackPayload = {
@@ -40,8 +41,11 @@ export class RecentCallsController {
       apiError(403, "forbidden", "Only office roles can access recent calls.");
     }
 
+    const organizationId = requireTelephonyOrganizationId(actor);
+
     const parsedLimit = limitRaw ? Number(limitRaw) : undefined;
     const records = await this.telnyxWebhookService.listRecentCalls({
+      organizationId,
       query: query ?? null,
       callStatus: callStatus ?? null,
       processingStatus: processingStatus ?? null,
@@ -63,7 +67,9 @@ export class RecentCallsController {
       apiError(403, "forbidden", "Only office roles can request queue callbacks.");
     }
 
-    return apiSuccess(await this.telnyxWebhookService.requestQueueCallback(recentCallId, {
+    const organizationId = requireTelephonyOrganizationId(actor);
+
+    return apiSuccess(await this.telnyxWebhookService.requestQueueCallback(recentCallId, organizationId, {
       priority: typeof payload.priority === "string" ? payload.priority : null,
       notes: typeof payload.notes === "string" ? payload.notes : null,
       requestedByAuthUserId: actor.user.id,
@@ -82,7 +88,9 @@ export class RecentCallsController {
       apiError(403, "forbidden", "Only office roles can update call AI enrichment.");
     }
 
-    return apiSuccess(await this.telnyxWebhookService.submitAiEnrichment(recentCallId, {
+    const organizationId = requireTelephonyOrganizationId(actor);
+
+    return apiSuccess(await this.telnyxWebhookService.submitAiEnrichment(recentCallId, organizationId, {
       voicemailTranscription: this.optionalString(payload.voicemailTranscription),
       aiSummary: this.optionalString(payload.aiSummary),
       aiSentiment: this.optionalString(payload.aiSentiment),

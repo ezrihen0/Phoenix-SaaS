@@ -22,6 +22,8 @@ type UpsertOwnedPhoneNumberInput = {
   isActive?: boolean;
   tenantId?: string | null;
   companyId?: string | null;
+  /** When set (registry API), `tenant_id` is forced to this organization and client `tenantId` is ignored. */
+  actingOrganizationId?: string | null;
 };
 
 type OwnedPhoneNumberRecord = {
@@ -97,14 +99,18 @@ export class OwnedPhoneNumbersService implements OnModuleInit {
 
     const existing = await this.dataSource.query(
       `
-        SELECT id
+        SELECT id, tenant_id
         FROM owned_phone_numbers
         WHERE phone_number_normalized = ?
         LIMIT 1
       `,
       [phoneNumberNormalized],
-    ) as Array<{ id: string }>;
+    ) as Array<{ id: string; tenant_id: string | null }>;
 
+    const actingOrg = input.actingOrganizationId?.trim() ?? null;
+    if (actingOrg && existing[0]?.tenant_id?.trim() && existing[0].tenant_id.trim() !== actingOrg) {
+      apiError(404, "owned_phone_number_not_found", "The phone number could not be found in your organization registry.");
+    }
     const provider = input.provider ?? "telnyx";
     const providerNumberId = this.asTrimmedString(input.providerNumberId);
     const label = this.asTrimmedString(input.label);
@@ -117,7 +123,8 @@ export class OwnedPhoneNumbersService implements OnModuleInit {
     const smsEnabled = input.smsEnabled ?? true;
     const voiceEnabled = input.voiceEnabled ?? true;
     const isActive = input.isActive ?? true;
-    const tenantId = this.asTrimmedString(input.tenantId);
+    const tenantId = input.actingOrganizationId?.trim()
+      ?? this.asTrimmedString(input.tenantId);
     const companyId = this.asTrimmedString(input.companyId);
 
     if (existing[0]?.id) {
@@ -216,7 +223,7 @@ export class OwnedPhoneNumbersService implements OnModuleInit {
     return this.getOwnedPhoneNumberById(id);
   }
 
-  async listOwnedPhoneNumbers() {
+  async listOwnedPhoneNumbers(organizationId: string) {
     await this.ensureSchema();
 
     const rows = await this.dataSource.query(
@@ -242,8 +249,10 @@ export class OwnedPhoneNumbersService implements OnModuleInit {
           created_at,
           updated_at
         FROM owned_phone_numbers
+        WHERE tenant_id = ?
         ORDER BY is_active DESC, voice_enabled DESC, sms_enabled DESC, market_label ASC, label ASC, phone_number ASC
       `,
+      [organizationId.trim()],
     ) as Array<Record<string, unknown>>;
 
     return rows.map((row) => this.toOwnedPhoneNumber(row));

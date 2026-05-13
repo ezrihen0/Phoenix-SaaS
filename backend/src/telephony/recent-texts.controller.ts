@@ -4,6 +4,7 @@ import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { isTelephonyOfficeRole } from "./telephony-role";
+import { requireTelephonyOrganizationId } from "./telephony-org-scope";
 import { TelnyxWebhookService } from "./telnyx-webhook.service";
 
 @UseGuards(SessionGuard)
@@ -16,10 +17,11 @@ export class RecentTextsController {
     @Req() request: RequestWithActor,
     @Query("limit") limitRaw: string | undefined,
   ) {
-    this.requireOfficeActor(request);
+    const organizationId = this.requireOfficeActor(request);
 
     const parsedLimit = limitRaw ? Number(limitRaw) : undefined;
     return apiSuccess(await this.telnyxWebhookService.listRecentTexts(
+      organizationId,
       Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     ));
   }
@@ -29,10 +31,11 @@ export class RecentTextsController {
     @Req() request: RequestWithActor,
     @Query("limit") limitRaw: string | undefined,
   ) {
-    this.requireOfficeActor(request);
+    const organizationId = this.requireOfficeActor(request);
 
     const parsedLimit = limitRaw ? Number(limitRaw) : undefined;
     return apiSuccess(await this.telnyxWebhookService.listMessagingDashboard(
+      organizationId,
       Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     ));
   }
@@ -43,10 +46,11 @@ export class RecentTextsController {
     @Param("phoneKey") phoneKey: string,
     @Query("limit") limitRaw: string | undefined,
   ) {
-    this.requireOfficeActor(request);
+    const organizationId = this.requireOfficeActor(request);
 
     const parsedLimit = limitRaw ? Number(limitRaw) : undefined;
     return apiSuccess(await this.telnyxWebhookService.listUnknownTextThread(
+      organizationId,
       phoneKey,
       Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     ));
@@ -57,19 +61,22 @@ export class RecentTextsController {
     @Req() request: RequestWithActor,
     @Query("limit") limitRaw: string | undefined,
   ) {
-    this.requireOfficeActor(request);
+    const organizationId = this.requireOfficeActor(request);
 
     const parsedLimit = limitRaw ? Number(limitRaw) : undefined;
     return apiSuccess(await this.telnyxWebhookService.markAllRecentTextsRead(
+      organizationId,
       Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     ));
   }
 
-  private requireOfficeActor(request: RequestWithActor) {
+  private requireOfficeActor(request: RequestWithActor): string {
     const actor = request.actor;
 
     if (!actor || !isTelephonyOfficeRole(actor.role ?? actor.profile?.role ?? null)) {
       apiError(403, "forbidden", "Only office roles can access recent texts.");
     }
+
+    return requireTelephonyOrganizationId(actor);
   }
 }
