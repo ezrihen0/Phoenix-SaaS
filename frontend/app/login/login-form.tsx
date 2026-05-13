@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
@@ -21,7 +22,7 @@ function getStatusMessage(nextPath: string | null) {
     return "Sign in to open the technician board and update field progress in real time.";
   }
 
-  return "Sign in to manage leads, jobs, scheduling, estimates, invoices, and follow-up from one workspace.";
+  return "Sign in to run leads, jobs, dispatch, estimates, invoices, and customer history in one PhoenixOS workspace.";
 }
 
 export default function LoginForm() {
@@ -41,7 +42,7 @@ export default function LoginForm() {
 
     if (!destination) {
       throw new Error(
-        "This account authenticated successfully, but no supported Phoenix Fireplace CRM dashboard is assigned yet.",
+        "This account authenticated successfully, but no supported PhoenixOS dashboard destination is assigned yet.",
       );
     }
 
@@ -111,13 +112,14 @@ export default function LoginForm() {
       <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-12 px-6 py-10 lg:grid-cols-[minmax(0,1.1fr)_480px] lg:px-10">
         <section className="max-w-2xl">
           <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
-            Phoenix Fireplace CRM
+            PhoenixOS
           </p>
           <h1 className="mt-5 max-w-xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] md:text-7xl">
             Dispatch the workday before the first truck rolls.
           </h1>
           <p className="mt-6 max-w-xl text-base leading-7 text-white/62 md:text-lg">
-            One operational workspace for lead intake, job scheduling, technician dispatch, field findings, estimates, invoices, and customer follow-up.
+            A field-service operating system for owners who are tired of losing calls, jobs, estimates, invoices, and
+            customer history — in one operational workspace.
           </p>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-3">
@@ -125,7 +127,7 @@ export default function LoginForm() {
               {
                 icon: Flame,
                 title: "Lead to Paid",
-                body: "Track each fireplace job from first contact through completion and payment.",
+                body: "Track each job from first contact through completion and payment without losing the thread.",
               },
               {
                 icon: ShieldCheck,
@@ -238,6 +240,32 @@ export default function LoginForm() {
           >
             {isSendingRecovery ? "Sending reset link..." : "Reset password"}
           </button>
+
+          <div className="mt-8 border-t border-white/10 pt-6 text-xs leading-5 text-white/45">
+            <p>
+              Need access? PhoenixOS does not offer in-app self-serve signup yet — use{" "}
+              <Link href="/contact" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
+                Contact
+              </Link>{" "}
+              or read the{" "}
+              <Link href="/landing" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
+                overview
+              </Link>
+              ,{" "}
+              <Link href="/pricing" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
+                pricing model
+              </Link>
+              ,{" "}
+              <Link href="/terms" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
+                Terms
+              </Link>
+              , and{" "}
+              <Link href="/privacy" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
+                Privacy
+              </Link>
+              .
+            </p>
+          </div>
         </section>
       </div>
     </main>

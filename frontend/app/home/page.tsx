@@ -73,10 +73,12 @@ export default async function HomePage() {
         <section className="theme-surface-modal rounded-[34px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-7 sm:p-8">
           <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Home</p>
           <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
-            CRM Operations Home
+            Operations home
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-            Central snapshot of today&apos;s work across leads, jobs, scheduling, and billing.
+            Your PhoenixOS snapshot for today: leads, jobs, scheduling, and billing in one place. Next: open{" "}
+            <strong className="font-medium text-[color:var(--sem-text-primary)]">Jobs</strong> to dispatch work or{" "}
+            <strong className="font-medium text-[color:var(--sem-text-primary)]">Leads</strong> to qualify new intake.
           </p>
           <p className="mt-4 inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-secondary)]">
             Live dashboard snapshot
