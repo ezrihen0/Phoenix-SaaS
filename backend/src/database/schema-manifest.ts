@@ -1,5 +1,6 @@
 export const requiredTables = [
   "users",
+  "billing_accounts",
   "profiles",
   "auth_sessions",
   "organizations",
@@ -55,8 +56,24 @@ export const requiredTables = [
 ] as const;
 
 export const requiredColumns = [
+  {
+    table: "billing_accounts",
+    columns: [
+      "id",
+      "owner_user_id",
+      "anchor_organization_id",
+      "plan_key",
+      "billing_status",
+      "organization_limit",
+      "billing_provider",
+      "provider_customer_id",
+      "provider_subscription_id",
+      "provider_price_id",
+      "last_provider_sync_at",
+    ],
+  },
   { table: "memberships", columns: ["user_id", "organization_id", "role", "status"] },
-  { table: "organization_billing", columns: ["organization_id", "plan_key", "billing_status"] },
+  { table: "organization_billing", columns: ["organization_id", "billing_account_id", "plan_key", "billing_status"] },
   { table: "auth_sessions", columns: ["user_id", "active_organization_id", "session_token_hash"] },
   { table: "customers", columns: ["organization_id", "full_name", "phone"] },
   { table: "jobs", columns: ["organization_id", "customer_id", "status"] },
@@ -115,9 +132,12 @@ export const requiredIndexes = [
 ] as const;
 
 export const requiredForeignKeys = [
+  { table: "billing_accounts", column: "owner_user_id", referencedTable: "users", referencedColumn: "id" },
+  { table: "billing_accounts", column: "anchor_organization_id", referencedTable: "organizations", referencedColumn: "id" },
   { table: "memberships", column: "user_id", referencedTable: "users", referencedColumn: "id" },
   { table: "memberships", column: "organization_id", referencedTable: "organizations", referencedColumn: "id" },
   { table: "organization_billing", column: "organization_id", referencedTable: "organizations", referencedColumn: "id" },
+  { table: "organization_billing", column: "billing_account_id", referencedTable: "billing_accounts", referencedColumn: "id" },
   { table: "auth_sessions", column: "user_id", referencedTable: "users", referencedColumn: "id" },
   { table: "auth_sessions", column: "active_organization_id", referencedTable: "organizations", referencedColumn: "id" },
   { table: "customers", column: "organization_id", referencedTable: "organizations", referencedColumn: "id" },

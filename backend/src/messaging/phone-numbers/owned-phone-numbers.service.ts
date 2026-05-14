@@ -20,6 +20,9 @@ type UpsertOwnedPhoneNumberInput = {
   smsEnabled?: boolean;
   voiceEnabled?: boolean;
   isActive?: boolean;
+  /** Preferred caller-facing name for the telephony owner id. */
+  organizationId?: string | null;
+  /** Legacy alias for `organizationId`. */
   tenantId?: string | null;
   companyId?: string | null;
   /** When set (registry API), `tenant_id` is forced to this organization and client `tenantId` is ignored. */
@@ -42,6 +45,7 @@ type OwnedPhoneNumberRecord = {
   smsEnabled: boolean;
   voiceEnabled: boolean;
   isActive: boolean;
+  organizationId: string | null;
   tenantId: string | null;
   companyId: string | null;
   createdAt: Date;
@@ -123,8 +127,7 @@ export class OwnedPhoneNumbersService implements OnModuleInit {
     const smsEnabled = input.smsEnabled ?? true;
     const voiceEnabled = input.voiceEnabled ?? true;
     const isActive = input.isActive ?? true;
-    const tenantId = input.actingOrganizationId?.trim()
-      ?? this.asTrimmedString(input.tenantId);
+    const organizationId = this.resolveOwnedNumberOrganizationId(input);
     const companyId = this.asTrimmedString(input.companyId);
 
     if (existing[0]?.id) {
@@ -164,7 +167,7 @@ export class OwnedPhoneNumbersService implements OnModuleInit {
           smsEnabled ? 1 : 0,
           voiceEnabled ? 1 : 0,
           isActive ? 1 : 0,
-          tenantId,
+          organizationId,
           companyId,
           existing[0].id,
         ],
@@ -215,7 +218,7 @@ export class OwnedPhoneNumbersService implements OnModuleInit {
         smsEnabled ? 1 : 0,
         voiceEnabled ? 1 : 0,
         isActive ? 1 : 0,
-        tenantId,
+        organizationId,
         companyId,
       ],
     );
@@ -496,6 +499,7 @@ export class OwnedPhoneNumbersService implements OnModuleInit {
       voiceEnabled: this.asBoolean(row.voice_enabled),
       isActive: this.asBoolean(row.is_active),
       tenantId: this.asTrimmedString(row.tenant_id),
+      organizationId: this.asTrimmedString(row.tenant_id),
       companyId: this.asTrimmedString(row.company_id),
       createdAt: this.asDate(row.created_at) ?? new Date(),
       updatedAt: this.asDate(row.updated_at) ?? new Date(),
@@ -545,6 +549,12 @@ export class OwnedPhoneNumbersService implements OnModuleInit {
       .replace(/^_+|_+$/g, "");
 
     return normalized || null;
+  }
+
+  private resolveOwnedNumberOrganizationId(input: UpsertOwnedPhoneNumberInput) {
+    return input.actingOrganizationId?.trim()
+      ?? this.asTrimmedString(input.organizationId)
+      ?? this.asTrimmedString(input.tenantId);
   }
 
   private async ensureSchema() {

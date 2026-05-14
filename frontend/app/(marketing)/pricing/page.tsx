@@ -1,50 +1,74 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { getServerSession } from "@/lib/auth/server-session";
+
+import { PricingPlans } from "./pricing-plans";
+
 export const metadata: Metadata = {
   title: "Pricing — PhoenixOS",
-  description: "How PhoenixOS billing aligns with Clover recurring and your organization.",
+  description: "Shared billing-account plans for Stripe Checkout and multi-business PhoenixOS entitlements.",
 };
 
-export default function PricingPage() {
+type PricingPageContext = {
+  searchParams: Promise<{
+    checkout?: string;
+  }>;
+};
+
+export default async function PricingPage({ searchParams }: PricingPageContext) {
+  const resolvedSearchParams = await searchParams;
+  const session = await getServerSession();
+  const authenticated = Boolean(session?.user?.id);
+  const ownerMode = session?.profile?.role === "owner" && Boolean(session.active_organization?.id);
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 lg:px-10 lg:py-20">
       <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--flat-gold)]">Pricing</p>
       <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[#f5ecd2] sm:text-5xl">
-        Plans, trials, and founding customers
+        Shared billing-account plans
       </h1>
       <p className="mt-5 text-base leading-7 text-white/65">
-        Commercial terms for your rollout are agreed at onboarding. The product&apos;s technical billing model follows the
-        locked Gate 13 strategy: hybrid, reconciliation-first Clover recurring under a single merchant, with each
-        PhoenixOS organization mapped to one Clover customer and an optional subscription.
+        PhoenixOS uses one shared billing account per payer, and one subscription can cover multiple businesses under the
+        same entitlement. Stripe Checkout is the active subscription checkout path; tenant invoice payments remain
+        separate from PhoenixOS SaaS billing.
       </p>
 
       <section className="mt-10 space-y-4 rounded-[28px] border border-white/10 bg-white/[0.04] p-6 sm:p-8">
         <h2 className="font-[family:var(--font-flat-display)] text-xl text-[#f5ecd2]">What the product implements</h2>
         <ul className="list-disc space-y-2 pl-5 text-sm leading-7 text-white/60">
           <li>
-            <strong className="text-white/80">Authoritative writes:</strong> after PhoenixOS-initiated Clover
-            subscription create, update, or deactivate, IDs and fields from the API response are stored with{" "}
-            <code className="rounded bg-black/40 px-1.5 py-0.5 text-xs">last_clover_sync_at</code>.
+            <strong className="text-white/80">Shared payer authority:</strong> the local{" "}
+            <code className="rounded bg-black/40 px-1.5 py-0.5 text-xs">billing_accounts</code> table remains the
+            source of truth for subscription and payer state.
           </li>
           <li>
-            <strong className="text-white/80">Reconciliation:</strong> owner-only{" "}
-            <code className="rounded bg-black/40 px-1.5 py-0.5 text-xs">POST /api/billing/reconcile</code> can refresh
-            state from Clover when merchant credentials and a stored subscription id are configured.
+            <strong className="text-white/80">Checkout:</strong> owner-authenticated Stripe Checkout Sessions create the
+            hosted subscription flow without collecting raw card details inside PhoenixOS.
           </li>
           <li>
-            <strong className="text-white/80">Single merchant:</strong> one Clover merchant; each organization is a
-            Clover customer under that merchant — not per-tenant merchant sprawl.
+            <strong className="text-white/80">Webhook activation:</strong> PhoenixOS waits for verified Stripe webhook
+            events before local billing state is treated as active.
+          </li>
+          <li>
+            <strong className="text-white/80">Business-count entitlements:</strong> Starter covers 1 business, Pro
+            covers up to 3 businesses, and Business can cover more businesses under the same shared account.
           </li>
         </ul>
       </section>
 
+      <PricingPlans
+        ownerMode={ownerMode}
+        authenticated={authenticated}
+        checkoutCancelled={resolvedSearchParams.checkout === "cancelled"}
+      />
+
       <section className="mt-8 rounded-[28px] border border-[color:rgba(212,175,55,0.22)] bg-[color:rgba(212,175,55,0.06)] p-6 sm:p-8">
-        <h2 className="font-[family:var(--font-flat-display)] text-xl text-[#f5ecd2]">Founding customer / trial</h2>
+        <h2 className="font-[family:var(--font-flat-display)] text-xl text-[#f5ecd2]">Founding customer / rollout notes</h2>
         <p className="mt-3 text-sm leading-7 text-white/65">
-          Trial length, founding discounts, and contract minimums are not listed here because they are set with your
-          team during onboarding. This page exists so paid acquisition and sales conversations stay aligned with the
-          real integration model — not invented list prices on the website.
+          Trial length, discounts, and rollout terms still need owner-level commercial confirmation. This page now
+          reflects the real technical checkout model and current shared-business entitlement behavior without inventing a
+          public contract that the product does not yet enforce elsewhere.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
@@ -60,8 +84,7 @@ export default function PricingPage() {
       </section>
 
       <p className="mt-10 text-xs text-white/40">
-        Source: internal Gate 13 billing sync strategy (Clover recurring). No webhook-dependent assumptions for recurring
-        lifecycle unless separately proven in sandbox.
+        Activation is confirmed by verified Stripe webhook processing, not by a success-page redirect alone.
       </p>
     </main>
   );

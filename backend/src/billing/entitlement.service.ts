@@ -11,9 +11,9 @@ export class EntitlementService {
   constructor(private readonly organizationBillingService: OrganizationBillingService) {}
 
   async requireAutomationsEntitled(organizationId: string) {
-    const row = await this.organizationBillingService.getOrCreateProfile(organizationId);
-    this.assertSubscriptionPaid(row.billing_status);
-    if (row.plan_key !== "business") {
+    const row = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
+    this.assertSubscriptionPaid(row.account.billing_status);
+    if (row.account.plan_key !== "business") {
       apiError(
         403,
         "plan_automations_forbidden",
@@ -23,9 +23,9 @@ export class EntitlementService {
   }
 
   async requireInventoryManageEntitled(organizationId: string) {
-    const row = await this.organizationBillingService.getOrCreateProfile(organizationId);
-    this.assertSubscriptionPaid(row.billing_status);
-    if (row.plan_key !== "business") {
+    const row = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
+    this.assertSubscriptionPaid(row.account.billing_status);
+    if (row.account.plan_key !== "business") {
       apiError(
         403,
         "plan_inventory_manage_forbidden",
@@ -35,9 +35,9 @@ export class EntitlementService {
   }
 
   async requirePricebookManageEntitled(organizationId: string) {
-    const row = await this.organizationBillingService.getOrCreateProfile(organizationId);
-    this.assertSubscriptionPaid(row.billing_status);
-    if (!this.planAllowsPricebookManage(row.plan_key)) {
+    const row = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
+    this.assertSubscriptionPaid(row.account.billing_status);
+    if (!this.planAllowsPricebookManage(row.account.plan_key)) {
       apiError(
         403,
         "plan_pricebook_manage_forbidden",
@@ -48,6 +48,11 @@ export class EntitlementService {
 
   planAllowsPricebookManage(planKey: PhoenixPlanKey) {
     return planKey === "pro" || planKey === "business";
+  }
+
+  async requireOrganizationCreationEntitled(organizationId: string) {
+    const context = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
+    await this.organizationBillingService.requireOrganizationSlotAvailable(context.account.id);
   }
 
   private assertSubscriptionPaid(status: string) {

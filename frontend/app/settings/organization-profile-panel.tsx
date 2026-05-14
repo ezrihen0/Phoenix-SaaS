@@ -4,6 +4,10 @@ import { Building2, Save } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
 
+import { createClientOrganization } from "@/lib/auth/client-auth";
+
+import type { BillingSummaryPayload } from "./billing-panel";
+
 export type OrganizationSettings = {
   businessName: string | null;
   displayInitials: string | null;
@@ -26,6 +30,8 @@ type ApiEnvelope<T> = {
 
 type OrganizationProfilePanelProps = {
   initialSettings: OrganizationSettings;
+  ownerMode: boolean;
+  billingSummary: BillingSummaryPayload | null;
 };
 
 async function organizationSettingsFetch<T>(input: string, init?: RequestInit) {
@@ -53,7 +59,11 @@ function valueOrEmpty(value: string | null) {
   return value ?? "";
 }
 
-export function OrganizationProfilePanel({ initialSettings }: OrganizationProfilePanelProps) {
+export function OrganizationProfilePanel({
+  initialSettings,
+  ownerMode,
+  billingSummary,
+}: OrganizationProfilePanelProps) {
   const [businessName, setBusinessName] = useState(valueOrEmpty(initialSettings.businessName));
   const [displayInitials, setDisplayInitials] = useState(valueOrEmpty(initialSettings.displayInitials));
   const [phone, setPhone] = useState(valueOrEmpty(initialSettings.phone));
@@ -62,6 +72,10 @@ export function OrganizationProfilePanel({ initialSettings }: OrganizationProfil
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [newOrganizationName, setNewOrganizationName] = useState("");
+  const [addingBusiness, setAddingBusiness] = useState(false);
+  const [addBusinessMessage, setAddBusinessMessage] = useState<string | null>(null);
+  const [addBusinessError, setAddBusinessError] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -94,8 +108,30 @@ export function OrganizationProfilePanel({ initialSettings }: OrganizationProfil
     }
   }
 
+  async function handleAddBusiness(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAddingBusiness(true);
+    setAddBusinessMessage(null);
+    setAddBusinessError(null);
+
+    try {
+      await createClientOrganization(newOrganizationName.trim());
+      setAddBusinessMessage("Business created. Opening the new workspace…");
+      window.location.assign("/settings");
+    } catch (error) {
+      setAddBusinessError(error instanceof Error ? error.message : "The business could not be created.");
+    } finally {
+      setAddingBusiness(false);
+    }
+  }
+
+  const businessLimit = billingSummary?.billing.organization_limit ?? null;
+  const businessCount = billingSummary?.billing.covered_organization_count ?? 0;
+  const canAddBusiness = ownerMode && Boolean(billingSummary?.billing.can_add_organization);
+
   return (
-    <section className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6">
+    <section className="space-y-6">
+      <section className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6">
       <div className="flex items-start gap-3">
         <div className="theme-control-surface-soft inline-flex h-12 w-12 items-center justify-center rounded-[18px] border">
           <Building2 className="h-5 w-5 text-[color:var(--sem-accent-primary)]" />
@@ -175,6 +211,70 @@ export function OrganizationProfilePanel({ initialSettings }: OrganizationProfil
           {errorMessage ? <p className="text-sm text-red-400">{errorMessage}</p> : null}
         </div>
       </form>
+      </section>
+
+      {ownerMode ? (
+        <section className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6">
+          <div className="flex items-start gap-3">
+            <div className="theme-control-surface-soft inline-flex h-12 w-12 items-center justify-center rounded-[18px] border">
+              <Building2 className="h-5 w-5 text-[color:var(--sem-accent-primary)]" />
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Add Business</p>
+              <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Create another workspace</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+                New businesses attach to the same shared PhoenixOS billing account and count against the current plan
+                entitlement, regardless of which covered workspace started the Stripe-backed subscription.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="theme-control-surface-soft rounded-[20px] border px-4 py-4">
+              <p className="text-sm text-[color:var(--sem-text-muted)]">Businesses covered</p>
+              <p className="mt-2 text-xl font-semibold text-[color:var(--sem-text-primary)]">
+                {businessCount}
+                {businessLimit === null ? " / unlimited" : ` / ${businessLimit}`}
+              </p>
+            </div>
+            <div className="theme-control-surface-soft rounded-[20px] border px-4 py-4">
+              <p className="text-sm text-[color:var(--sem-text-muted)]">Add-business status</p>
+              <p className="mt-2 text-sm font-semibold text-[color:var(--sem-text-primary)]">
+                {billingSummary
+                  ? canAddBusiness
+                    ? "Another business is allowed on this billing account."
+                    : "This billing account is at its current limit."
+                  : "Billing state unavailable."}
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleAddBusiness} className="mt-6 grid gap-4 rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
+            <label className="space-y-2 text-sm">
+              <span className="text-[color:var(--sem-text-secondary)]">New business name</span>
+              <input
+                value={newOrganizationName}
+                onChange={(event) => setNewOrganizationName(event.target.value)}
+                className="theme-control-surface w-full rounded-[16px] border px-4 py-3 text-[color:var(--sem-text-primary)] outline-none"
+                placeholder="Second service brand"
+              />
+            </label>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <button
+                type="submit"
+                disabled={addingBusiness || !canAddBusiness || !newOrganizationName.trim()}
+                className="theme-control-surface inline-flex items-center justify-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition hover:border-[color:var(--cmp-border-accent)] disabled:opacity-60"
+              >
+                <Building2 className="h-4 w-4" />
+                {addingBusiness ? "Creating..." : "Create business"}
+              </button>
+              {addBusinessMessage ? <p className="text-sm text-[color:var(--sem-accent-primary)]">{addBusinessMessage}</p> : null}
+              {addBusinessError ? <p className="text-sm text-red-400">{addBusinessError}</p> : null}
+            </div>
+          </form>
+        </section>
+      ) : null}
     </section>
   );
 }

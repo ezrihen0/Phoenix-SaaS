@@ -7,6 +7,7 @@ export type RoleModeRole = ProfileRole;
 
 export const roleModePermissions = [
   "system.roles.manage",
+  "organizations.manage",
   "dashboard.office.view",
   "search.global",
   "calls.view",
@@ -60,11 +61,13 @@ const ownerPermissions = allPermissions;
 
 const adminPermissions = withoutPermissions(allPermissions, [
   "system.roles.manage",
+  "organizations.manage",
   "billing.manage",
 ]);
 
 const officeAdminPermissions = withoutPermissions(allPermissions, [
   "system.roles.manage",
+  "organizations.manage",
   "jobs.assigned.view",
   "jobs.assigned.status.update",
   "estimates.assigned.view",

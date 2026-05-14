@@ -86,6 +86,25 @@ export async function loginWithPassword(email: string, password: string) {
   });
 }
 
+export async function registerWithPassword(input: {
+  email: string;
+  password: string;
+  fullName: string;
+  phone?: string | null;
+  organizationName: string;
+}) {
+  return authFetch<ClientSession>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
+      password: input.password,
+      fullName: input.fullName,
+      phone: input.phone ?? null,
+      organizationName: input.organizationName,
+    }),
+  });
+}
+
 export async function logoutSession() {
   return authFetch<{ cleared: boolean }>("/api/auth/logout", {
     method: "POST",
@@ -98,6 +117,13 @@ export async function getClientSession() {
 
 export async function listClientOrganizations() {
   return authFetch<ClientSession["memberships"]>("/api/auth/organizations");
+}
+
+export async function createClientOrganization(organizationName: string) {
+  return authFetch<ClientSession>("/api/auth/organizations", {
+    method: "POST",
+    body: JSON.stringify({ organizationName }),
+  });
 }
 
 export async function setClientActiveOrganization(organizationId: string) {

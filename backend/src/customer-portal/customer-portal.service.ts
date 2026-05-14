@@ -47,11 +47,22 @@ export class CustomerPortalService {
       return { ok: false as const, code: "invalid_link" };
     }
 
+    const organizationId = await this.resolvePortalOrganizationId(link.customer_id, link.organization_id);
+
     if (link.expires_at <= now) {
       if (link.status !== "expired") {
         link.status = "expired";
         await this.linksRepository.save(link);
-        await this.logEvent(link.customer_id, link.id, "link_expired", null, null);
+        await this.logEvent({
+          customerId: link.customer_id,
+          organizationId,
+          portalMagicLinkId: link.id,
+          portalSessionId: null,
+          eventType: "link_expired",
+          actorUserId: null,
+          deliveryMethod: null,
+          request,
+        });
       }
       return { ok: false as const, code: "expired_link" };
     }
@@ -64,12 +75,22 @@ export class CustomerPortalService {
       link.opened_at = now;
       link.status = "opened";
       await this.linksRepository.save(link);
-      await this.logEvent(link.customer_id, link.id, "link_opened", null, link.delivery_method);
+      await this.logEvent({
+        customerId: link.customer_id,
+        organizationId,
+        portalMagicLinkId: link.id,
+        portalSessionId: null,
+        eventType: "link_opened",
+        actorUserId: null,
+        deliveryMethod: link.delivery_method,
+        request,
+      });
     }
 
     const rawSessionToken = randomBytes(48).toString("hex");
     const session = await this.sessionsRepository.save(
       this.sessionsRepository.create({
+        organization_id: organizationId,
         session_token_hash: this.hashToken(rawSessionToken),
         customer_id: link.customer_id,
         portal_magic_link_id: link.id,
@@ -84,9 +105,28 @@ export class CustomerPortalService {
     link.status = "used";
     link.used_at = now;
     await this.linksRepository.save(link);
-    await this.logEvent(link.customer_id, link.id, "link_used", null, link.delivery_method);
-    await this.logEvent(link.customer_id, link.id, "session_created", null, link.delivery_method, {
-      portal_session_id: session.id,
+    await this.logEvent({
+      customerId: link.customer_id,
+      organizationId,
+      portalMagicLinkId: link.id,
+      portalSessionId: session.id,
+      eventType: "link_used",
+      actorUserId: null,
+      deliveryMethod: link.delivery_method,
+      request,
+    });
+    await this.logEvent({
+      customerId: link.customer_id,
+      organizationId,
+      portalMagicLinkId: link.id,
+      portalSessionId: session.id,
+      eventType: "session_created",
+      actorUserId: null,
+      deliveryMethod: link.delivery_method,
+      metadata: {
+        portal_session_id: session.id,
+      },
+      request,
     });
 
     response.cookie(this.getPortalSessionCookieName(), rawSessionToken, {
@@ -197,27 +237,48 @@ export class CustomerPortalService {
     return normalized?.length ? normalized : null;
   }
 
-  private async logEvent(
-    customerId: string,
-    portalMagicLinkId: string | null,
-    eventType: PortalAccessEventEntity["event_type"],
-    actorUserId: string | null,
-    deliveryMethod: string | null,
-    metadata: Record<string, unknown> | null = null,
-  ) {
+  private async logEvent(input: {
+    customerId: string;
+    organizationId: string | null;
+    portalMagicLinkId: string | null;
+    portalSessionId: string | null;
+    eventType: PortalAccessEventEntity["event_type"];
+    actorUserId: string | null;
+    deliveryMethod: string | null;
+    metadata?: Record<string, unknown> | null;
+    request: Request;
+  }) {
     await this.eventsRepository.save(
       this.eventsRepository.create({
-        customer_id: customerId,
-        portal_magic_link_id: portalMagicLinkId,
-        portal_session_id: null,
-        event_type: eventType,
-        actor_user_id: actorUserId,
-        delivery_method: deliveryMethod,
-        ip_address: null,
-        user_agent: null,
-        metadata: metadata ?? null,
+        organization_id: input.organizationId,
+        customer_id: input.customerId,
+        portal_magic_link_id: input.portalMagicLinkId,
+        portal_session_id: input.portalSessionId,
+        event_type: input.eventType,
+        actor_user_id: input.actorUserId,
+        delivery_method: input.deliveryMethod,
+        ip_address: input.request.ip ?? null,
+        user_agent: input.request.get("user-agent") ?? null,
+        metadata: input.metadata ?? null,
       }),
     );
+  }
+
+  private async resolvePortalOrganizationId(customerId: string, linkOrganizationId: string | null) {
+    const normalizedLinkOrganizationId = linkOrganizationId?.trim() ?? null;
+    if (normalizedLinkOrganizationId) {
+      return normalizedLinkOrganizationId;
+    }
+
+    const customer = await this.customersRepository.findOne({
+      where: { id: customerId },
+      select: {
+        id: true,
+        organization_id: true,
+      },
+    });
+
+    return customer?.organization_id?.trim() ?? null;
   }
 
   private hashToken(rawToken: string) {

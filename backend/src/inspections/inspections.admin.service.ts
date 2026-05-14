@@ -2593,9 +2593,13 @@ export class InspectionsAdminService {
       return sameOrgPhoto;
     }
 
-    const legacyPhoto = await this.inspectionPhotosRepository.findOne({
-      where: { storage_key: storageKey, organization_id: IsNull() },
-    });
+    const legacyPhoto = await this.inspectionPhotosRepository
+      .createQueryBuilder("photo")
+      .innerJoin("photo.inspection", "inspection")
+      .where("photo.storage_key = :storageKey", { storageKey })
+      .andWhere("photo.organization_id IS NULL")
+      .andWhere("inspection.organization_id = :organizationId", { organizationId })
+      .getOne();
     if (legacyPhoto) {
       return legacyPhoto;
     }

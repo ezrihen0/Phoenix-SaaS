@@ -78,19 +78,19 @@ export class BillingLifecycleService {
       );
     }
 
-    const row = await this.organizationBillingService.getOrCreateProfile(organizationId);
+    const row = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
     if (
-      row.clover_subscription_id?.trim()
-      && blockingSubscribeStatuses.includes(row.billing_status)
+      row.account.clover_subscription_id?.trim()
+      && blockingSubscribeStatuses.includes(row.account.billing_status)
     ) {
       apiError(
         409,
         "billing_subscription_already_active",
-        "This organization already has a subscription in a billable state. Use change plan or cancel first.",
+        "This billing account already has a subscription in a billable state. Use change plan or cancel first.",
       );
     }
 
-    let customerId = row.clover_customer_id?.trim() ?? null;
+    let customerId = row.account.clover_customer_id?.trim() ?? null;
     if (!customerId) {
       const created = await this.cloverEcommerceClient.createCustomerWithSource({
         source: input.source,
@@ -146,24 +146,24 @@ export class BillingLifecycleService {
       cancel_at_period_end: false,
     });
 
-    return this.organizationBillingService.getOrCreateProfile(organizationId);
+    return this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
   }
 
   async changePlan(organizationId: string, nextPlanKey: PhoenixPlanKey) {
-    const row = await this.organizationBillingService.getOrCreateProfile(organizationId);
-    if (row.plan_key === nextPlanKey) {
+    const row = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
+    if (row.account.plan_key === nextPlanKey) {
       return row;
     }
 
     this.assertCloverStackReady();
-    const oldSubId = row.clover_subscription_id?.trim();
+    const oldSubId = row.account.clover_subscription_id?.trim();
     if (!oldSubId) {
-      apiError(400, "billing_subscription_missing", "No Clover subscription is stored for this organization yet.");
+      apiError(400, "billing_subscription_missing", "No Clover subscription is stored for this billing account yet.");
     }
 
-    const customerId = row.clover_customer_id?.trim();
+    const customerId = row.account.clover_customer_id?.trim();
     if (!customerId) {
-      apiError(400, "billing_customer_missing", "No Clover customer id is stored for this organization.");
+      apiError(400, "billing_customer_missing", "No Clover customer id is stored for this billing account.");
     }
 
     const newPlanId = resolveCloverPlanIdForPhoenixPlan(this.configService, nextPlanKey);
@@ -213,16 +213,16 @@ export class BillingLifecycleService {
       deactivated_at: remote?.active === false ? now : null,
     });
 
-    return this.organizationBillingService.getOrCreateProfile(organizationId);
+    return this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
   }
 
   async cancelSubscription(organizationId: string) {
     this.assertRecurringReady();
 
-    const row = await this.organizationBillingService.getOrCreateProfile(organizationId);
-    const subId = row.clover_subscription_id?.trim();
+    const row = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
+    const subId = row.account.clover_subscription_id?.trim();
     if (!subId) {
-      apiError(400, "billing_subscription_missing", "No Clover subscription id is stored for this organization.");
+      apiError(400, "billing_subscription_missing", "No Clover subscription id is stored for this billing account.");
     }
 
     const updated = await this.cloverRecurringClient.updateSubscription(subId, { active: false });
@@ -239,7 +239,7 @@ export class BillingLifecycleService {
       canceled_at: now,
     });
 
-    return this.organizationBillingService.getOrCreateProfile(organizationId);
+    return this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
   }
 
   private assertCloverStackReady() {

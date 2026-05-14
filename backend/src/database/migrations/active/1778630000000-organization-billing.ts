@@ -4,6 +4,7 @@ export class OrganizationBilling1778630000000 implements MigrationInterface {
   name = "OrganizationBilling1778630000000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Inherit the database default collation so the FK matches organizations.id on MySQL 8.
     await queryRunner.query(`
       CREATE TABLE \`organization_billing\` (
         \`organization_id\` varchar(36) NOT NULL,
@@ -26,7 +27,7 @@ export class OrganizationBilling1778630000000 implements MigrationInterface {
         \`updated_at\` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
         PRIMARY KEY (\`organization_id\`),
         CONSTRAINT \`FK_organization_billing_org\` FOREIGN KEY (\`organization_id\`) REFERENCES \`organizations\`(\`id\`) ON DELETE CASCADE ON UPDATE NO ACTION
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      ) ENGINE=InnoDB
     `);
 
     await queryRunner.query(`

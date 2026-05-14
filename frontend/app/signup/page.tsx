@@ -1,107 +1,58 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import {
-  ArrowRight,
-  Flame,
-  LockKeyhole,
-  Mail,
-  ShieldCheck,
-} from "lucide-react";
+import { ArrowRight, Building2, Mail, ShieldCheck, UserRound } from "lucide-react";
 
 import {
   getClientDestination,
-  loginWithPassword,
+  registerWithPassword,
 } from "@/lib/auth/client-auth";
 
-function getStatusMessage(nextPath: string | null) {
-  if (nextPath === "/technician") {
-    return "Sign in to open the technician board and update field progress in real time.";
-  }
-
-  return "Sign in to run leads, jobs, dispatch, estimates, invoices, and customer history in one PhoenixOS workspace.";
-}
-
-export default function LoginForm() {
+export default function SignupPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSendingRecovery, setIsSendingRecovery] = useState(false);
 
-  async function completePasswordLogin() {
+  async function completeSignup() {
     const response = await getClientDestination();
     const destination = response.destination as string | null;
 
     if (!destination) {
       throw new Error(
-        "This account authenticated successfully, but no supported PhoenixOS dashboard destination is assigned yet.",
+        "Your account was created, but no supported PhoenixOS dashboard destination is assigned yet.",
       );
     }
 
-    const nextDestination = nextPath && nextPath === destination
-      ? nextPath
-      : destination;
-
-    router.replace(nextDestination);
+    router.replace(destination);
     router.refresh();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (!normalizedEmail) {
-      setErrorMessage("Enter your email address to continue.");
-      return;
-    }
-
-    if (!password) {
-      setErrorMessage("Enter your password to continue.");
-      return;
-    }
-
     setIsSubmitting(true);
     setErrorMessage(null);
-    setStatusMessage(null);
 
     try {
-      await loginWithPassword(normalizedEmail, password);
-      await completePasswordLogin();
+      await registerWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+        fullName: fullName.trim(),
+        phone: phone.trim() || null,
+        organizationName: organizationName.trim(),
+      });
+      await completeSignup();
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Unable to sign in right now.",
-      );
+      setErrorMessage(error instanceof Error ? error.message : "Unable to create your account right now.");
     } finally {
       setIsSubmitting(false);
-    }
-  }
-
-  async function handlePasswordRecovery() {
-    setErrorMessage(null);
-    setStatusMessage(null);
-
-    setIsSendingRecovery(true);
-
-    try {
-      setStatusMessage(
-        "Sign in, then open Reset Password to set a new password. If you are locked out, contact an administrator.",
-      );
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to send a password reset link right now.",
-      );
-    } finally {
-      setIsSendingRecovery(false);
     }
   }
 
@@ -109,35 +60,35 @@ export default function LoginForm() {
     <main className="relative min-h-screen overflow-hidden bg-[color:var(--flat-canvas)] text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.18),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(191,87,0,0.12),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_32%)]" />
 
-      <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-12 px-6 py-10 lg:grid-cols-[minmax(0,1.1fr)_480px] lg:px-10">
+      <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-12 px-6 py-10 lg:grid-cols-[minmax(0,1.05fr)_520px] lg:px-10">
         <section className="max-w-2xl">
           <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
             PhoenixOS
           </p>
           <h1 className="mt-5 max-w-xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] md:text-7xl">
-            Dispatch the workday before the first truck rolls.
+            Start your first PhoenixOS workspace.
           </h1>
           <p className="mt-6 max-w-xl text-base leading-7 text-white/62 md:text-lg">
-            A field-service operating system for owners who are tired of losing calls, jobs, estimates, invoices, and
-            customer history — in one operational workspace.
+            Create your owner account, create your first business, and land inside the workspace immediately. Billing is
+            managed through a shared PhoenixOS billing account, with Stripe as the active checkout provider.
           </p>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-3">
             {[
               {
-                icon: Flame,
-                title: "Lead to Paid",
-                body: "Track each job from first contact through completion and payment without losing the thread.",
+                icon: UserRound,
+                title: "Owner account",
+                body: "Create a secure login tied to one global user identity.",
+              },
+              {
+                icon: Building2,
+                title: "First business",
+                body: "Your first organization becomes the active workspace on sign-up.",
               },
               {
                 icon: ShieldCheck,
-                title: "Office Control",
-                body: "Schedule work, assign technicians, and keep notes, quotes, and invoices attached to the same record.",
-              },
-              {
-                icon: LockKeyhole,
-                title: "Field Ready",
-                body: "Technicians update status and findings without juggling spreadsheets or text threads.",
+                title: "Shared billing model",
+                body: "New workspaces link to the same shared billing account and count against the current business entitlement.",
               },
             ].map(({ icon: Icon, title, body }) => (
               <article
@@ -160,10 +111,10 @@ export default function LoginForm() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-[11px] uppercase tracking-[0.38em] text-white/40">
-                Secure Login
+                Create Account
               </p>
               <h2 className="mt-3 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[#f5ecd2]">
-                Open the operations board
+                Open your first workspace
               </h2>
             </div>
             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[color:rgba(212,175,55,0.22)] bg-[color:rgba(212,175,55,0.1)] text-[color:var(--flat-gold)]">
@@ -171,11 +122,35 @@ export default function LoginForm() {
             </span>
           </div>
 
-          <p className="mt-5 text-sm leading-6 text-white/58">
-            {getStatusMessage(nextPath)}
-          </p>
-
           <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+            <label className="block space-y-2 text-sm text-white/68">
+              <span>Full name</span>
+              <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
+                <UserRound className="h-4 w-4 text-[color:var(--flat-gold)]" />
+                <input
+                  required
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  className="w-full bg-transparent text-white outline-none placeholder:text-white/28"
+                  placeholder="Jordan Smith"
+                />
+              </div>
+            </label>
+
+            <label className="block space-y-2 text-sm text-white/68">
+              <span>Business name</span>
+              <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
+                <Building2 className="h-4 w-4 text-[color:var(--flat-gold)]" />
+                <input
+                  required
+                  value={organizationName}
+                  onChange={(event) => setOrganizationName(event.target.value)}
+                  className="w-full bg-transparent text-white outline-none placeholder:text-white/28"
+                  placeholder="Jordan Chimney & Fireplace"
+                />
+              </div>
+            </label>
+
             <label className="block space-y-2 text-sm text-white/68">
               <span>Email</span>
               <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
@@ -187,7 +162,7 @@ export default function LoginForm() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   className="w-full bg-transparent text-white outline-none placeholder:text-white/28"
-                  placeholder="office@phoenixfireplace.com"
+                  placeholder="owner@example.com"
                 />
               </div>
             </label>
@@ -195,15 +170,30 @@ export default function LoginForm() {
             <label className="block space-y-2 text-sm text-white/68">
               <span>Password</span>
               <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
-                <LockKeyhole className="h-4 w-4 text-[color:var(--flat-gold)]" />
+                <ShieldCheck className="h-4 w-4 text-[color:var(--flat-gold)]" />
                 <input
                   required
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   type="password"
+                  minLength={8}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   className="w-full bg-transparent text-white outline-none placeholder:text-white/28"
-                  placeholder="Enter your password"
+                  placeholder="Use at least 8 characters"
+                />
+              </div>
+            </label>
+
+            <label className="block space-y-2 text-sm text-white/68">
+              <span>Phone (optional)</span>
+              <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
+                <UserRound className="h-4 w-4 text-[color:var(--flat-gold)]" />
+                <input
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  className="w-full bg-transparent text-white outline-none placeholder:text-white/28"
+                  placeholder="(555) 555-5555"
                 />
               </div>
             </label>
@@ -214,58 +204,29 @@ export default function LoginForm() {
               </div>
             ) : null}
 
-            {statusMessage ? (
-              <div className="rounded-[22px] border border-[color:rgba(212,175,55,0.28)] bg-[color:rgba(212,175,55,0.1)] px-4 py-3 text-sm text-[#f5d980]">
-                {statusMessage}
-              </div>
-            ) : null}
-
             <button
               type="submit"
               disabled={isSubmitting}
               className="inline-flex w-full items-center justify-center gap-2 rounded-[22px] border border-[color:rgba(212,175,55,0.28)] bg-[linear-gradient(135deg,rgba(212,175,55,0.24),rgba(212,175,55,0.08))] px-5 py-3.5 text-sm font-medium text-[#f7df97] transition hover:bg-[linear-gradient(135deg,rgba(212,175,55,0.3),rgba(212,175,55,0.12))] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span>{isSubmitting ? "Signing in..." : "Sign in"}</span>
+              <span>{isSubmitting ? "Creating account..." : "Create account"}</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </form>
 
-          <button
-            type="button"
-            onClick={() => {
-              void handlePasswordRecovery();
-            }}
-            disabled={isSendingRecovery}
-            className="mt-4 text-sm text-white/54 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSendingRecovery ? "Sending reset link..." : "Reset password"}
-          </button>
-
           <div className="mt-8 border-t border-white/10 pt-6 text-xs leading-5 text-white/45">
             <p>
-              Need access? You can{" "}
-              <Link href="/signup" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
-                create an account
+              Already have a workspace?{" "}
+              <Link href="/login" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
+                Sign in
               </Link>
-              {" "}or use{" "}
-              <Link href="/contact" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
-                Contact
-              </Link>{" "}
-              or read the{" "}
-              <Link href="/landing" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
-                overview
-              </Link>
-              ,{" "}
+              . Need pricing context first? Visit{" "}
               <Link href="/pricing" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
-                pricing model
+                pricing
               </Link>
-              ,{" "}
-              <Link href="/terms" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
-                Terms
-              </Link>
-              , and{" "}
-              <Link href="/privacy" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
-                Privacy
+              {" "}or{" "}
+              <Link href="/contact" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
+                contact
               </Link>
               .
             </p>

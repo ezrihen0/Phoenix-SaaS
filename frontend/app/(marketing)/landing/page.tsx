@@ -24,14 +24,20 @@ export default function LandingPage() {
         </p>
         <div className="mt-10 flex flex-wrap gap-4">
           <Link
-            href="/login"
+            href="/signup"
             className="inline-flex items-center justify-center rounded-full border border-[color:rgba(212,175,55,0.35)] bg-[linear-gradient(135deg,rgba(212,175,55,0.28),rgba(212,175,55,0.1))] px-6 py-3 text-sm font-medium text-[#f7df97] transition hover:border-[color:rgba(212,175,55,0.5)]"
+          >
+            Create your workspace
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/[0.06] px-6 py-3 text-sm font-medium text-white/85 transition hover:border-white/25"
           >
             Sign in to your workspace
           </Link>
           <Link
             href="/pricing"
-            className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/[0.06] px-6 py-3 text-sm font-medium text-white/85 transition hover:border-white/25"
+            className="inline-flex items-center justify-center rounded-full border border-white/15 px-6 py-3 text-sm font-medium text-white/85 transition hover:border-white/25"
           >
             View pricing and trial model
           </Link>
@@ -43,11 +49,15 @@ export default function LandingPage() {
           </Link>
         </div>
         <p className="mt-8 max-w-xl text-sm leading-6 text-white/45">
-          Self-serve account creation is not available in-product yet. Use{" "}
+          Self-serve account creation now covers your first workspace. Use{" "}
+          <Link href="/signup" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
+            Create your workspace
+          </Link>
+          {" "}to start, or use{" "}
           <Link href="/contact" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
             Contact
           </Link>{" "}
-          for founding access, or{" "}
+          for assisted onboarding, or{" "}
           <Link href="/login" className="text-[color:var(--flat-gold)] underline-offset-2 hover:underline">
             Sign in
           </Link>{" "}

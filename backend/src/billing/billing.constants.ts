@@ -1,6 +1,15 @@
 export const phoenixPlanKeys = ["starter", "pro", "business"] as const;
 export type PhoenixPlanKey = (typeof phoenixPlanKeys)[number];
 
+export const billingProviders = ["stripe", "clover"] as const;
+export type BillingProvider = (typeof billingProviders)[number];
+
+export const phoenixPlanOrganizationLimits: Record<PhoenixPlanKey, number | null> = {
+  starter: 1,
+  pro: 3,
+  business: null,
+};
+
 export const organizationBillingStatuses = [
   "trialing",
   "active",
@@ -17,4 +26,8 @@ export function parsePhoenixPlanKey(value: unknown): PhoenixPlanKey | null {
   }
   const v = value.trim().toLowerCase();
   return phoenixPlanKeys.includes(v as PhoenixPlanKey) ? (v as PhoenixPlanKey) : null;
+}
+
+export function resolveOrganizationLimitForPlan(planKey: PhoenixPlanKey) {
+  return phoenixPlanOrganizationLimits[planKey];
 }

@@ -545,7 +545,7 @@ export class TelnyxWebhookService {
             AND COALESCE(rc.call_started_at, rc.created_at) <= ?
             AND ${recentCallBelongsToOrgSql("rc")}
         `,
-        [...orgParams, input.todayStart, input.todayEnd],
+        [input.todayStart, input.todayEnd, ...orgParams],
       ) as Promise<Array<Record<string, unknown>>>,
       this.dataSource.query(
         `
@@ -561,7 +561,7 @@ export class TelnyxWebhookService {
           ORDER BY total DESC, rc.source ASC, rc.campaign_name ASC
           LIMIT 5
         `,
-        [...orgParams, input.todayStart, input.todayEnd],
+        [input.todayStart, input.todayEnd, ...orgParams],
       ) as Promise<Array<Record<string, unknown>>>,
       this.callbackTaskService.countOpenCallbackTasks(input.organizationId),
     ]);

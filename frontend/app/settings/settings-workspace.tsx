@@ -79,7 +79,7 @@ const allTopics: Array<{
     id: "billing",
     label: "Billing",
     title: "PhoenixOS subscription",
-    helper: "View plan, billing status, and sync organization-level Clover subscription state.",
+    helper: "View plan, business-count entitlement, and launch Stripe checkout for the shared billing account.",
     Icon: CreditCard,
     ownerOnly: true,
   },
@@ -191,7 +191,11 @@ export function SettingsWorkspace({
           ) : null}
 
           {selectedTopic === "business" ? (
-            <OrganizationProfilePanel initialSettings={organizationSettings} />
+            <OrganizationProfilePanel
+              initialSettings={organizationSettings}
+              ownerMode={ownerMode}
+              billingSummary={billingSummary}
+            />
           ) : null}
 
           {selectedTopic === "appearance" ? (

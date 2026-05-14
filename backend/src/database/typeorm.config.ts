@@ -16,6 +16,7 @@ import { AutomationRunEntity } from "./entities/automation-run.entity";
 import { AutomationScheduledRunEntity } from "./entities/automation-scheduled-run.entity";
 import { AutomationSettingEntity } from "./entities/automation-setting.entity";
 import { AutomationTemplateEntity } from "./entities/automation-template.entity";
+import { BillingAccountEntity } from "./entities/billing-account.entity";
 import { AuthSessionEntity } from "./entities/auth-session.entity";
 import { CrmTaskEntity } from "./entities/crm-task.entity";
 import { CustomerEntity } from "./entities/customer.entity";
@@ -55,6 +56,7 @@ type ConfigLookup = Pick<ConfigService, "get">;
 
 export const typeOrmEntities = [
   UserEntity,
+  BillingAccountEntity,
   ProfileEntity,
   TechnicianEntity,
   ServiceEntity,

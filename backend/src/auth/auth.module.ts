@@ -1,6 +1,7 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
+import { BillingModule } from "../billing/billing.module";
 import { AuthSessionEntity } from "../database/entities/auth-session.entity";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
@@ -13,6 +14,7 @@ import { SessionGuard } from "./session.guard";
 
 @Module({
   imports: [
+    forwardRef(() => BillingModule),
     TypeOrmModule.forFeature([
       UserEntity,
       ProfileEntity,

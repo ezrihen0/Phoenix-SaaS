@@ -24,6 +24,14 @@ type LoginPayload = {
   password?: unknown;
 };
 
+type RegisterPayload = {
+  email?: unknown;
+  password?: unknown;
+  fullName?: unknown;
+  phone?: unknown;
+  organizationName?: unknown;
+};
+
 type PasswordUpdatePayload = {
   password?: unknown;
 };
@@ -44,6 +52,10 @@ type ActiveOrganizationPayload = {
   organizationId?: unknown;
 };
 
+type CreateOrganizationPayload = {
+  organizationName?: unknown;
+};
+
 function parseLoginPayload(payload: LoginPayload) {
   if (typeof payload.email !== "string" || !payload.email.trim()) {
     apiError(400, "invalid_login_payload", "email is required.");
@@ -56,6 +68,36 @@ function parseLoginPayload(payload: LoginPayload) {
   return {
     email: payload.email.trim().toLowerCase(),
     password: payload.password,
+  };
+}
+
+function parseRegisterPayload(payload: RegisterPayload) {
+  if (typeof payload.email !== "string" || !payload.email.trim()) {
+    apiError(400, "invalid_signup_payload", "email is required.");
+  }
+
+  if (typeof payload.password !== "string" || payload.password.length < 8) {
+    apiError(400, "invalid_signup_payload", "Use at least 8 characters for the password.");
+  }
+
+  if (typeof payload.fullName !== "string" || !payload.fullName.trim()) {
+    apiError(400, "invalid_signup_payload", "fullName is required.");
+  }
+
+  if (typeof payload.organizationName !== "string" || !payload.organizationName.trim()) {
+    apiError(400, "invalid_signup_payload", "organizationName is required.");
+  }
+
+  const phone = typeof payload.phone === "string" && payload.phone.trim()
+    ? payload.phone.trim()
+    : null;
+
+  return {
+    email: payload.email.trim().toLowerCase(),
+    password: payload.password,
+    fullName: payload.fullName.trim(),
+    phone,
+    organizationName: payload.organizationName.trim(),
   };
 }
 
@@ -115,6 +157,16 @@ function parseActiveOrganizationPayload(payload: ActiveOrganizationPayload) {
   };
 }
 
+function parseCreateOrganizationPayload(payload: CreateOrganizationPayload) {
+  if (typeof payload.organizationName !== "string" || !payload.organizationName.trim()) {
+    apiError(400, "organization_name_required", "organizationName is required.");
+  }
+
+  return {
+    organizationName: payload.organizationName.trim(),
+  };
+}
+
 @Controller("api/auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -130,6 +182,30 @@ export class AuthController {
     const actor = await this.authService.login(
       loginPayload.email,
       loginPayload.password,
+      request,
+      response,
+    );
+
+    if (!actor || !actor.profile) {
+      throw new UnauthorizedException({
+        error: {
+          code: "profile_missing",
+          message: "The authenticated account does not have an assigned CRM profile.",
+        },
+      });
+    }
+
+    return apiSuccess(this.authService.buildSessionResponse(actor));
+  }
+
+  @Post("register")
+  async register(
+    @Body() payload: RegisterPayload,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const actor = await this.authService.register(
+      parseRegisterPayload(payload),
       request,
       response,
     );
@@ -198,6 +274,28 @@ export class AuthController {
     }
 
     return apiSuccess(this.authService.buildSessionResponse(actor).memberships);
+  }
+
+  @Post("organizations")
+  @UseGuards(SessionGuard)
+  async createOrganization(
+    @Body() payload: CreateOrganizationPayload,
+    @Req() request: RequestWithActor,
+  ) {
+    const actor = requirePermission(
+      request.actor,
+      "organizations.manage",
+      "organizations_manage_forbidden",
+      "Only an organization owner can add another business.",
+    );
+
+    const nextActor = await this.authService.createOrganizationForActiveAccount(
+      actor,
+      parseCreateOrganizationPayload(payload).organizationName,
+      request,
+    );
+
+    return apiSuccess(this.authService.buildSessionResponse(nextActor));
   }
 
   @Post("active-organization")

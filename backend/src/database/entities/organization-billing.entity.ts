@@ -3,12 +3,14 @@ import {
   CreateDateColumn,
   Entity,
   JoinColumn,
+  ManyToOne,
   OneToOne,
   PrimaryColumn,
   UpdateDateColumn,
 } from "typeorm";
 
 import type { OrganizationBillingStatus, PhoenixPlanKey } from "../../billing/billing.constants";
+import { BillingAccountEntity } from "./billing-account.entity";
 import { OrganizationEntity } from "./organization.entity";
 
 @Entity({ name: "organization_billing" })
@@ -19,6 +21,16 @@ export class OrganizationBillingEntity {
   @OneToOne(() => OrganizationEntity, { onDelete: "CASCADE" })
   @JoinColumn({ name: "organization_id" })
   organization!: OrganizationEntity;
+
+  @Column({ type: "varchar", length: 36 })
+  billing_account_id!: string;
+
+  @ManyToOne(() => BillingAccountEntity, (billingAccount) => billingAccount.organization_coverages, {
+    nullable: false,
+    onDelete: "CASCADE",
+  })
+  @JoinColumn({ name: "billing_account_id", referencedColumnName: "id" })
+  billing_account!: BillingAccountEntity;
 
   @Column({ type: "varchar", length: 64, nullable: true })
   clover_customer_id!: string | null;
