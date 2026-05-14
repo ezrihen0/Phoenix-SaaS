@@ -2,10 +2,11 @@ import { Injectable } from "@nestjs/common";
 
 import { MarketingChannelsService } from "./marketing-channels.service";
 import { MarketingContentService } from "./marketing-content.service";
+import { MarketingOpportunityService } from "./marketing-opportunity.service";
 import { MarketingProfileService } from "./marketing-profile.service";
 
 export type MarketingFoundationResponse = {
-  phase: "phase_3_publishing_integrations";
+  phase: "phase_4_crm_intelligence";
   organization: {
     id: string;
     name: string | null;
@@ -14,6 +15,7 @@ export type MarketingFoundationResponse = {
   capabilities: {
     can_manage_channels: boolean;
     can_enqueue_publishing: boolean;
+    can_refresh_opportunities: boolean;
   };
   profile_saved: boolean;
   profile_hint_complete: boolean;
@@ -23,6 +25,16 @@ export type MarketingFoundationResponse = {
     approved: number;
     scheduled_metadata_next_14d: number;
   };
+  opportunities: {
+    open_count: number;
+  };
+  recommended_next_action: {
+    opportunity_type: string | null;
+    opportunity_id: string | null;
+    headline: string;
+    subheadline: string;
+    href: string | null;
+  } | null;
   recent_drafts: Array<{
     id: string;
     title: string;
@@ -44,6 +56,7 @@ export class MarketingService {
     private readonly profileService: MarketingProfileService,
     private readonly contentService: MarketingContentService,
     private readonly channelsService: MarketingChannelsService,
+    private readonly opportunityService: MarketingOpportunityService,
   ) {}
 
   async buildFoundationResponse(input: {
@@ -60,6 +73,8 @@ export class MarketingService {
     const profileRecordPromise = this.profileService.loadProfileRecord(organizationId);
     const recentPromise = this.contentService.recentDraftSnapshots(organizationId, 5);
     const connectedChannelsPromise = this.channelsService.countConnectedPublishingTargets(organizationId);
+    const opportunityOpenPromise = this.opportunityService.countOpenForOrganization(organizationId);
+    const opportunityRowsPromise = this.opportunityService.loadOpenSuggestedForRecommendation(organizationId);
 
     const counts = await countsPromise;
     const scheduledSoon = await scheduledPromise;
@@ -67,14 +82,20 @@ export class MarketingService {
     const profileRecord = await profileRecordPromise;
     const recentSnapshots = await recentPromise;
     const connectedChannels = await connectedChannelsPromise;
+    const opportunityOpenCount = await opportunityOpenPromise;
+    const opportunityRows = await opportunityRowsPromise;
 
     const profileHintComplete =
       Boolean(profileSaved) && this.profileService.profileCompletenessApprox(profileRecord);
 
     const role = input.role;
 
+    const canPublish = role === "owner" || role === "admin" || role === "office_admin";
+
+    const recommendedNext = this.opportunityService.recommendNextAction(opportunityRows);
+
     return {
-      phase: "phase_3_publishing_integrations",
+      phase: "phase_4_crm_intelligence",
       organization: {
         id: organizationId,
         name: input.organizationName,
@@ -82,7 +103,8 @@ export class MarketingService {
       },
       capabilities: {
         can_manage_channels: role === "owner" || role === "admin",
-        can_enqueue_publishing: role === "owner" || role === "admin" || role === "office_admin",
+        can_enqueue_publishing: canPublish,
+        can_refresh_opportunities: canPublish,
       },
       profile_saved: profileSaved,
       profile_hint_complete: profileHintComplete,
@@ -92,6 +114,10 @@ export class MarketingService {
         approved: counts.approved,
         scheduled_metadata_next_14d: scheduledSoon,
       },
+      opportunities: {
+        open_count: opportunityOpenCount,
+      },
+      recommended_next_action: recommendedNext,
       recent_drafts: recentSnapshots.map((draft) => ({
         id: draft.id,
         title: draft.title,
@@ -117,9 +143,10 @@ export class MarketingService {
             "Editorial placeholders on drafts. Execution time always comes from explicit publish jobs (`publish_job.scheduled_at` in UTC).",
         },
         {
-          label: "Opportunities Detected",
-          value: "0",
-          helper: "CRM-backed opportunity routing remains in a future Growth Center milestone.",
+          label: "Open opportunities",
+          value: `${opportunityOpenCount}`,
+          helper:
+            "CRM-backed suggestions from recent jobs and inspections. Refresh lists explicitly or open Opportunities — dispatchers can review but cannot refresh or convert.",
         },
       ],
       publishing_disclaimer:
@@ -128,7 +155,7 @@ export class MarketingService {
         "Marketing records stay organization scoped",
         "Session-derived organization context drives every marketing query",
         "Instagram variants remain seeded while outbound IG publishing waits for V1.5",
-        "Dispatcher roles cannot enqueue publishes or mutate OAuth integrations",
+        "Dispatcher roles cannot enqueue publishes, mutate OAuth integrations, refresh opportunities, dismiss, archive, or convert to drafts",
       ],
     };
   }

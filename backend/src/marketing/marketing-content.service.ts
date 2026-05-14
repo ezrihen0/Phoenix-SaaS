@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Between, Repository } from "typeorm";
+import { Between, EntityManager, Repository } from "typeorm";
 import { randomUUID } from "crypto";
 
 import { apiError } from "../common/api-response";
@@ -323,6 +323,53 @@ export class MarketingContentService {
     await this.variantsRepository.save(variants);
     await this.ensureTripleVariantsInvariant(organizationId, draftId);
     return this.getDraftDetail(organizationId, draftId);
+  }
+
+  /**
+   * Creates draft + variants inside an existing transaction (e.g. opportunity convert).
+   */
+  async createDraftWithManager(
+    manager: EntityManager,
+    organizationId: string,
+    actorUserId: string,
+    body: Record<string, unknown>,
+  ): Promise<string> {
+    const draftId = randomUUID();
+    const draftRepo = manager.getRepository(MarketingContentDraftEntity);
+    const variantRepo = manager.getRepository(MarketingContentVariantEntity);
+
+    const draft = draftRepo.create({
+      id: draftId,
+      organization_id: organizationId,
+      created_by_user_id: actorUserId,
+      updated_by_user_id: actorUserId,
+      title: coerceTitle(body.title ?? "") ?? "",
+      intent: coerceIntent(body.intent),
+      notes: coerceNotes(body.notes) ?? null,
+      workflow_state: "draft",
+      scheduled_at: null,
+    });
+
+    await draftRepo.save(draft);
+
+    const variants = MARKETING_PLATFORM_KEYS.map((platform) =>
+      variantRepo.create({
+        id: randomUUID(),
+        organization_id: organizationId,
+        draft_id: draftId,
+        platform_key: platform,
+        body_json: stringifyBody({ ...DEFAULT_VARIANT_BODY }),
+      }),
+    );
+
+    await variantRepo.save(variants);
+
+    const variantRows = await variantRepo.find({
+      where: { organization_id: organizationId, draft_id: draftId },
+    });
+    assertTripleVariants(variantRows);
+
+    return draftId;
   }
 
   async patchDraft(organizationId: string, actorUserId: string, draftId: string, body: Record<string, unknown>) {

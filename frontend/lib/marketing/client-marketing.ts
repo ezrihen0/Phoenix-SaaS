@@ -284,3 +284,89 @@ export async function publishMarketingDraftSchedule(draftId: string, scheduledAt
     },
   );
 }
+
+export type SerializedMarketingOpportunity = {
+  id: string;
+  organization_id: string;
+  opportunity_type: string;
+  dedupe_key: string;
+  signal_version: number;
+  status: string;
+  title: string;
+  summary: string | null;
+  source: string | null;
+  source_entity_type: string | null;
+  source_entity_id: string | null;
+  payload: Record<string, unknown>;
+  occurred_at: string | null;
+  converted_draft_id: string | null;
+  dismissed_at: string | null;
+  archived_at: string | null;
+  last_refreshed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function fetchMarketingOpportunities(query?: {
+  limit?: number;
+  offset?: number;
+  status?: string;
+  opportunity_type?: string;
+  warmUp?: boolean;
+}) {
+  const params = new URLSearchParams();
+
+  if (query?.limit !== undefined) {
+    params.set("limit", `${query.limit}`);
+  }
+
+  if (query?.offset !== undefined) {
+    params.set("offset", `${query.offset}`);
+  }
+
+  if (query?.status) {
+    params.set("status", query.status);
+  }
+
+  if (query?.opportunity_type) {
+    params.set("opportunity_type", query.opportunity_type);
+  }
+
+  if (query?.warmUp) {
+    params.set("warm_up", "true");
+  }
+
+  const qs = params.toString();
+  const suffix = qs ? `?${qs}` : "";
+
+  return marketingFetch<{ opportunities: SerializedMarketingOpportunity[]; total: number }>(
+    `/api/marketing/opportunities${suffix}`,
+  );
+}
+
+export async function refreshMarketingOpportunities() {
+  return marketingFetch<{ upserted: number }>("/api/marketing/opportunities/refresh", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function patchMarketingOpportunity(opportunityId: string, body: { action: "dismiss" | "archive" }) {
+  return marketingFetch<SerializedMarketingOpportunity>(
+    `/api/marketing/opportunities/${encodeURIComponent(opportunityId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export async function convertMarketingOpportunityToDraft(opportunityId: string, body?: { title?: string; notes?: string }) {
+  return marketingFetch<DraftDetailPayload>(
+    `/api/marketing/opportunities/${encodeURIComponent(opportunityId)}/convert-draft`,
+    {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    },
+  );
+}

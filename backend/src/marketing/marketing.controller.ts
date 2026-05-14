@@ -3,8 +3,9 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
-import { requireMarketingOfficeActor } from "./marketing-access";
+import { assertMarketingPublisher, requireMarketingOfficeActor } from "./marketing-access";
 import { MarketingContentService } from "./marketing-content.service";
+import { MarketingOpportunityService } from "./marketing-opportunity.service";
 import { MarketingProfileService } from "./marketing-profile.service";
 import { MarketingService } from "./marketing.service";
 
@@ -54,6 +55,7 @@ export class MarketingController {
     private readonly marketingService: MarketingService,
     private readonly profileService: MarketingProfileService,
     private readonly contentService: MarketingContentService,
+    private readonly opportunityService: MarketingOpportunityService,
   ) {}
 
   @Get("foundation")
@@ -66,6 +68,98 @@ export class MarketingController {
         organizationName: actor.organization?.name ?? null,
         organizationSlug: actor.organization?.slug ?? null,
         role: actor.role,
+      }),
+    );
+  }
+
+  @Post("opportunities/refresh")
+  async refreshOpportunities(@Req() request: RequestWithActor) {
+    const actor = requireMarketingOfficeActor(request);
+    assertMarketingPublisher(actor);
+
+    return apiSuccess(await this.opportunityService.refreshOpportunities(actor.organization_id!));
+  }
+
+  @Get("opportunities")
+  async listOpportunities(
+    @Req() request: RequestWithActor,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
+    @Query("status") status?: string,
+    @Query("opportunity_type") opportunityType?: string,
+    @Query("warm_up") warmUp?: string,
+  ) {
+    const actor = requireMarketingOfficeActor(request);
+
+    return apiSuccess(
+      await this.opportunityService.listOpportunities({
+        organizationId: actor.organization_id!,
+        role: actor.role,
+        warmUp: warmUp === "true" || warmUp === "1",
+        limit: Math.min(readPositiveInt(limit, 50), 100),
+        offset: readPositiveInt(offset, 0),
+        status: status ?? undefined,
+        opportunity_type: opportunityType ?? undefined,
+      }),
+    );
+  }
+
+  @Get("opportunities/:opportunityId")
+  async getOpportunity(@Req() request: RequestWithActor, @Param("opportunityId") opportunityId: string) {
+    const actor = requireMarketingOfficeActor(request);
+
+    return apiSuccess(await this.opportunityService.getOpportunity(actor.organization_id!, opportunityId.trim()));
+  }
+
+  @Patch("opportunities/:opportunityId")
+  async patchOpportunity(
+    @Req() request: RequestWithActor,
+    @Param("opportunityId") opportunityId: string,
+    @Body() body: unknown,
+  ) {
+    const actor = requireMarketingOfficeActor(request);
+    assertMarketingPublisher(actor);
+    const payload = this.readObjectBody(body);
+    const actionRaw = payload.action;
+    const action =
+      typeof actionRaw === "string"
+        ? actionRaw.trim().toLowerCase()
+        : "";
+
+    if (action !== "dismiss" && action !== "archive") {
+      apiError(400, "marketing_opportunity_action_invalid", 'Provide action "dismiss" or "archive".');
+    }
+
+    return apiSuccess(
+      await this.opportunityService.patchLifecycle({
+        organizationId: actor.organization_id!,
+        actorUserId: actor.user.id,
+        opportunityId: opportunityId.trim(),
+        action,
+      }),
+    );
+  }
+
+  @Post("opportunities/:opportunityId/convert-draft")
+  async convertOpportunityToDraft(
+    @Req() request: RequestWithActor,
+    @Param("opportunityId") opportunityId: string,
+    @Body() body: unknown,
+  ) {
+    const actor = requireMarketingOfficeActor(request);
+    assertMarketingPublisher(actor);
+    const payload = body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+
+    const titleOverride = typeof payload.title === "string" ? payload.title : undefined;
+    const notesOverride = typeof payload.notes === "string" ? payload.notes : undefined;
+
+    return apiSuccess(
+      await this.opportunityService.convertToDraft({
+        organizationId: actor.organization_id!,
+        actorUserId: actor.user.id,
+        opportunityId: opportunityId.trim(),
+        titleOverride,
+        notesOverride,
       }),
     );
   }

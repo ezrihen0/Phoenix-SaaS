@@ -15,6 +15,7 @@ import {
 import { MarketingCalendarPanel } from "./marketing-calendar-panel";
 import { MarketingChannelsPanel } from "./marketing-channels-panel";
 import { MarketingContentStudio } from "./marketing-content-studio";
+import { MarketingOpportunitiesPanel } from "./marketing-opportunities-panel";
 import { MarketingProfileSettingsPanel } from "./marketing-profile-settings";
 
 export type MarketingRouteKey =
@@ -29,10 +30,11 @@ export type MarketingRouteKey =
   | "settings";
 
 export type MarketingFoundationData = {
-  phase: "phase_2_content_studio" | "phase_3_publishing_integrations";
+  phase: "phase_2_content_studio" | "phase_3_publishing_integrations" | "phase_4_crm_intelligence";
   capabilities?: {
     can_manage_channels: boolean;
     can_enqueue_publishing: boolean;
+    can_refresh_opportunities?: boolean;
   };
   organization: {
     id: string;
@@ -47,6 +49,16 @@ export type MarketingFoundationData = {
     approved: number;
     scheduled_metadata_next_14d: number;
   };
+  opportunities?: {
+    open_count: number;
+  };
+  recommended_next_action?: {
+    opportunity_type: string | null;
+    opportunity_id: string | null;
+    headline: string;
+    subheadline: string;
+    href: string | null;
+  } | null;
   recent_drafts: Array<{
     id: string;
     title: string;
@@ -107,19 +119,20 @@ const routeDefinitions: RouteDefinition[] = [
     key: "opportunities",
     href: "/marketing/opportunities",
     label: "Opportunities",
-    eyebrow: "Future CRM Intelligence",
-    title: "Opportunity queue is scaffolded only",
-    description: "This page exists to anchor the future CRM-powered opportunity engine without detecting or generating anything yet.",
+    eyebrow: "Phase 4 · CRM Intelligence",
+    title: "Operational signals → marketing drafts",
+    description:
+      "WizField scans recent jobs and inspection photo types (no media URLs surfaced) to suggest opportunities. Owners, admins, and office admins refresh, dismiss, archive, or convert to Content Studio drafts — dispatchers read only.",
     icon: Lightbulb,
     includedNow: [
-      "Protected route and workspace shell",
-      "Organization-scoped empty state",
-      "Phase boundary reminder for future CRM intelligence",
+      "Four Core V1 detectors: work showcase, service momentum, local geographic density, before/after signal",
+      "Convert to Draft opens Content Studio with empty platform variants",
+      "Tenant-safe dedupe keyed per organization",
     ],
     laterPhaseWork: [
-      "Job, photo, review, and schedule-gap detection",
-      "Suggested-to-draft lifecycle",
-      "Actionable opportunity acceptance flow",
+      "Availability and premium invoice heuristics (deferred)",
+      "Inbound review ingestion when a real CRM domain exists",
+      "Campaign and automation orchestration (Phase 5–6)",
     ],
   },
   {
@@ -282,9 +295,9 @@ const fallbackSummaryCards: MarketingFoundationData["summaryCards"] = [
     helper: "Metadata-only placeholders for the next fourteen days.",
   },
   {
-    label: "Opportunities Detected",
+    label: "Open opportunities",
     value: "0",
-    helper: "CRM-guided suggestions remain gated until later Growth Center milestones.",
+    helper: "CRM-backed suggestions from jobs and inspections (Phase 4).",
   },
 ];
 
@@ -328,28 +341,34 @@ export function MarketingFoundationWorkspace({
     ?? foundationData?.organization.id
     ?? "Active organization";
 
-  const interactiveRoutes: MarketingRouteKey[] = ["settings", "create", "calendar", "channels"];
+  const interactiveRoutes: MarketingRouteKey[] = ["settings", "create", "calendar", "channels", "opportunities"];
   const suppressEducationalRails = interactiveRoutes.includes(activeRouteKey);
   const showPrimaryRail = activeRouteKey === "overview" || suppressEducationalRails;
 
   const phaseLabel =
-    foundationData?.phase === "phase_3_publishing_integrations"
-      ? "Phase 3 · Publishing integrations"
-      : foundationData?.phase === "phase_2_content_studio"
-        ? "Phase 2 Content Studio slice"
-        : "Growth Center rollout";
+    foundationData?.phase === "phase_4_crm_intelligence"
+      ? "Phase 4 · CRM Intelligence Layer"
+      : foundationData?.phase === "phase_3_publishing_integrations"
+        ? "Phase 3 · Publishing integrations"
+        : foundationData?.phase === "phase_2_content_studio"
+          ? "Phase 2 Content Studio slice"
+          : "Growth Center rollout";
   const heroEyebrow =
-    foundationData?.phase === "phase_3_publishing_integrations"
-      ? "Phase 3 · Channels + explicit jobs"
-      : foundationData?.phase === "phase_2_content_studio"
-        ? "Phase 2 · Manual studio online"
-        : "Growth Center rollout";
+    foundationData?.phase === "phase_4_crm_intelligence"
+      ? "Phase 4 · Opportunities + drafts"
+      : foundationData?.phase === "phase_3_publishing_integrations"
+        ? "Phase 3 · Channels + explicit jobs"
+        : foundationData?.phase === "phase_2_content_studio"
+          ? "Phase 2 · Manual studio online"
+          : "Growth Center rollout";
   const heroBody =
-    foundationData?.phase === "phase_3_publishing_integrations"
-      ? "OAuth-backed Google Business Profile and Facebook Page targets feed explicit publish jobs. Draft calendar metadata never posts by itself — only Publish Now or Schedule Publishing enqueue dispatcher-owned work in UTC."
-      : foundationData?.phase === "phase_2_content_studio"
-        ? "Capture office-side marketing posture, assemble multi-variant drafts manually, shepherd explicit review states, and book metadata-only placeholders. Earlier phases kept publishing offline."
-        : "Keep tenant-safe scaffolding online while phased capabilities roll forward.";
+    foundationData?.phase === "phase_4_crm_intelligence"
+      ? "CRM Intelligence turns recent completed jobs and inspection photo-type patterns into Growth Center opportunities. Convert to Draft hands off into the existing Content Studio and publishing flows — without campaigns, automation, or AI copy generation."
+      : foundationData?.phase === "phase_3_publishing_integrations"
+        ? "OAuth-backed Google Business Profile and Facebook Page targets feed explicit publish jobs. Draft calendar metadata never posts by itself — only Publish Now or Schedule Publishing enqueue dispatcher-owned work in UTC."
+        : foundationData?.phase === "phase_2_content_studio"
+          ? "Capture office-side marketing posture, assemble multi-variant drafts manually, shepherd explicit review states, and book metadata-only placeholders. Earlier phases kept publishing offline."
+          : "Keep tenant-safe scaffolding online while phased capabilities roll forward.";
 
   const renderPrimaryRail = () => {
     switch (activeRouteKey) {
@@ -401,8 +420,33 @@ export function MarketingFoundationWorkspace({
                     <Link href="/marketing/calendar" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">
                       View calendar placeholders
                     </Link>
+                    <Link href="/marketing/opportunities" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">
+                      View opportunities
+                    </Link>
                   </div>
                 </div>
+
+                {foundationData.recommended_next_action ? (
+                  <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-accent)]/35 bg-[color:var(--cmp-surface-card)] p-5">
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
+                      Recommended next action
+                    </p>
+                    <h3 className="mt-3 text-lg font-semibold text-[color:var(--sem-text-primary)]">
+                      {foundationData.recommended_next_action.headline}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+                      {foundationData.recommended_next_action.subheadline}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <Link
+                        href={foundationData.recommended_next_action.href ?? "/marketing/opportunities"}
+                        className="inline-flex rounded-full border border-transparent bg-[color:var(--sem-accent-primary)] px-4 py-2 text-xs font-semibold text-[color:var(--sem-text-inverse)]"
+                      >
+                        Open opportunities
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -476,6 +520,13 @@ export function MarketingFoundationWorkspace({
 
       case "channels":
         return <MarketingChannelsPanel capabilities={foundationData?.capabilities} />;
+
+      case "opportunities":
+        return (
+          <MarketingOpportunitiesPanel
+            canMutateOpportunities={Boolean(foundationData?.capabilities?.can_refresh_opportunities)}
+          />
+        );
 
       default:
         return null;
