@@ -12,6 +12,7 @@ type MarketingPageContext = {
   params: Promise<{
     slug?: string[];
   }>;
+  searchParams?: Promise<{ draft?: string | string[] }>;
 };
 
 const allowedRoutes = new Set<MarketingRouteKey>([
@@ -47,13 +48,21 @@ function buildNextPath(slug: string[] | undefined) {
   return `/marketing/${slug.join("/")}`;
 }
 
-export default async function MarketingPage({ params }: MarketingPageContext) {
+export default async function MarketingPage({ params, searchParams }: MarketingPageContext) {
   const resolvedParams = await params;
+  const resolvedSearchParams = searchParams === undefined ? undefined : await searchParams;
   const routeKey = resolveRouteKey(resolvedParams.slug);
 
   if (!routeKey) {
     notFound();
   }
+
+  const draftParamRaw = resolvedSearchParams?.draft;
+  const normalizedDraft =
+    typeof draftParamRaw === "string" ? draftParamRaw.trim()
+    : typeof draftParamRaw === "undefined" ? undefined
+    : Array.isArray(draftParamRaw) ? draftParamRaw[0]?.trim()
+    : undefined;
 
   await requireServerRoles(buildNextPath(resolvedParams.slug), ["owner", "admin", "office_admin", "dispatcher"]);
 
@@ -71,6 +80,7 @@ export default async function MarketingPage({ params }: MarketingPageContext) {
       activeRouteKey={routeKey}
       foundationData={foundationData}
       loadError={loadError}
+      studioDraftQuery={routeKey === "create" ? normalizedDraft : undefined}
     />
   );
 }

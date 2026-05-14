@@ -13,7 +13,7 @@ export class MarketingOpportunityEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "varchar", length: 64 })
+  @Column({ type: "varchar", length: 36 })
   organization_id!: string;
 
   @Column({ type: "varchar", length: 64 })

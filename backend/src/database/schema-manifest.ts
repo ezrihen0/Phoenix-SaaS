@@ -57,6 +57,11 @@ export const requiredTables = [
   "missed_call_sms_cooldowns",
   "recent_call_sms_logs",
   "recent_call_activity_events",
+  "marketing_profiles",
+  "marketing_connected_channels",
+  "marketing_opportunities",
+  "marketing_content_drafts",
+  "marketing_content_variants",
 ] as const;
 
 export const requiredColumns = [
@@ -145,6 +150,47 @@ export const requiredColumns = [
   { table: "missed_call_sms_cooldowns", columns: ["phone_number_normalized", "next_allowed_at"] },
   { table: "recent_call_sms_logs", columns: ["recent_call_id", "customer_id", "read_at"] },
   { table: "recent_call_activity_events", columns: ["recent_call_id", "event_key"] },
+  {
+    table: "marketing_profiles",
+    columns: [
+      "id",
+      "organization_id",
+      "identity_json",
+      "brand_voice_json",
+      "publishing_preferences_json",
+      "safety_preferences_json",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  {
+    table: "marketing_connected_channels",
+    columns: ["id", "organization_id", "channel_key", "connection_status", "created_at", "updated_at"],
+  },
+  {
+    table: "marketing_opportunities",
+    columns: ["id", "organization_id", "opportunity_type", "status", "title", "created_at", "updated_at"],
+  },
+  {
+    table: "marketing_content_drafts",
+    columns: [
+      "id",
+      "organization_id",
+      "created_by_user_id",
+      "updated_by_user_id",
+      "title",
+      "intent",
+      "notes",
+      "workflow_state",
+      "scheduled_at",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  {
+    table: "marketing_content_variants",
+    columns: ["id", "organization_id", "draft_id", "platform_key", "body_json", "created_at", "updated_at"],
+  },
 ] as const;
 
 export const requiredIndexes = [
@@ -188,6 +234,13 @@ export const requiredIndexes = [
   { table: "call_flow_ivr_options", columns: ["call_flow_config_id", "digit"], isUnique: true },
   { table: "callback_tasks", columns: ["recent_call_id"], isUnique: false },
   { table: "recent_call_sms_logs", columns: ["recent_call_id"], isUnique: false },
+  { table: "marketing_profiles", columns: ["organization_id"], isUnique: true },
+  { table: "marketing_connected_channels", columns: ["organization_id"], isUnique: false },
+  { table: "marketing_opportunities", columns: ["organization_id"], isUnique: false },
+  { table: "marketing_content_drafts", columns: ["organization_id", "workflow_state"], isUnique: false },
+  { table: "marketing_content_drafts", columns: ["organization_id", "scheduled_at"], isUnique: false },
+  { table: "marketing_content_variants", columns: ["draft_id", "platform_key"], isUnique: true },
+  { table: "marketing_content_variants", columns: ["organization_id"], isUnique: false },
 ] as const;
 
 export const requiredForeignKeys = [
@@ -257,4 +310,37 @@ export const requiredForeignKeys = [
   { table: "portal_sessions", column: "customer_id", referencedTable: "customers", referencedColumn: "id" },
   { table: "quote_line_items", column: "quote_id", referencedTable: "quotes", referencedColumn: "id" },
   { table: "invoice_line_items", column: "invoice_id", referencedTable: "invoices", referencedColumn: "id" },
+  { table: "marketing_profiles", column: "organization_id", referencedTable: "organizations", referencedColumn: "id" },
+  {
+    table: "marketing_connected_channels",
+    column: "organization_id",
+    referencedTable: "organizations",
+    referencedColumn: "id",
+  },
+  {
+    table: "marketing_opportunities",
+    column: "organization_id",
+    referencedTable: "organizations",
+    referencedColumn: "id",
+  },
+  {
+    table: "marketing_content_drafts",
+    column: "organization_id",
+    referencedTable: "organizations",
+    referencedColumn: "id",
+  },
+  { table: "marketing_content_drafts", column: "created_by_user_id", referencedTable: "users", referencedColumn: "id" },
+  { table: "marketing_content_drafts", column: "updated_by_user_id", referencedTable: "users", referencedColumn: "id" },
+  {
+    table: "marketing_content_variants",
+    column: "organization_id",
+    referencedTable: "organizations",
+    referencedColumn: "id",
+  },
+  {
+    table: "marketing_content_variants",
+    column: "draft_id",
+    referencedTable: "marketing_content_drafts",
+    referencedColumn: "id",
+  },
 ] as const;

@@ -12,6 +12,10 @@ import {
   Workflow,
 } from "lucide-react";
 
+import { MarketingCalendarPanel } from "./marketing-calendar-panel";
+import { MarketingContentStudio } from "./marketing-content-studio";
+import { MarketingProfileSettingsPanel } from "./marketing-profile-settings";
+
 export type MarketingRouteKey =
   | "overview"
   | "opportunities"
@@ -24,18 +28,32 @@ export type MarketingRouteKey =
   | "settings";
 
 export type MarketingFoundationData = {
-  phase: string;
+  phase: "phase_2_content_studio";
   organization: {
     id: string;
     name: string | null;
     slug: string | null;
   };
+  profile_saved: boolean;
+  profile_hint_complete: boolean;
+  drafts: {
+    draft: number;
+    needs_review: number;
+    approved: number;
+    scheduled_metadata_next_14d: number;
+  };
+  recent_drafts: Array<{
+    id: string;
+    title: string;
+    workflow_state: string;
+    updated_at: string;
+  }>;
   summaryCards: Array<{
     label: string;
     value: string;
     helper: string;
   }>;
-  laterPhases: string[];
+  publishing_disclaimer: string;
   protectedBoundaries: string[];
 };
 
@@ -43,6 +61,7 @@ type MarketingFoundationWorkspaceProps = {
   activeRouteKey: MarketingRouteKey;
   foundationData: MarketingFoundationData | null;
   loadError: string | null;
+  studioDraftQuery?: string | null;
 };
 
 type RouteDefinition = {
@@ -62,20 +81,21 @@ const routeDefinitions: RouteDefinition[] = [
     key: "overview",
     href: "/marketing",
     label: "Overview",
-    eyebrow: "Phase 1 Command Center",
-    title: "Growth Center foundation is live",
-    description: "The authenticated Growth Center now exists as a tenant-safe office module with empty states for the approved route family.",
+    eyebrow: "Phase 2 · Content Studio anchor",
+    title: "Office Growth Center pulse",
+    description:
+      "Phase 2 adds manual Marketing Profile persistence, seeded multi-platform drafts, review transitions, and metadata-only scheduling. Publishing and OAuth remain gated behind later approvals.",
     icon: Megaphone,
     includedNow: [
-      "Authenticated office-side `/marketing` route family",
-      "Active-organization context carried into the workspace",
-      "Foundation summary cards and route navigation",
-      "Strict Phase 1 boundary messaging across the module",
+      "Authenticated `/marketing` route family with Phase 2 live metrics",
+      "Counts for drafts awaiting review vs still in rework",
+      "Recent draft shortcuts into the studio surface",
+      "Explicit non-publishing disclaimers surfaced from the Growth Center APIs",
     ],
     laterPhaseWork: [
-      "CRM-driven opportunity detection",
-      "Draft generation and approval flows",
-      "Channel publishing and scheduling",
+      "Google Business Profile, Facebook, and Instagram OAuth scopes",
+      "Publish-now queues with telemetry and retry handling",
+      "CRM-guided opportunity ingestion",
     ],
   },
   {
@@ -101,38 +121,42 @@ const routeDefinitions: RouteDefinition[] = [
     key: "create",
     href: "/marketing/create",
     label: "Create",
-    eyebrow: "Future Content Studio",
-    title: "Content Studio is intentionally deferred",
-    description: "Phase 1 reserves the route and module shape, but does not create manual drafting or AI generation workflows.",
+    eyebrow: "Phase 2 · Manual Content Studio",
+    title: "Draft compositions with seeded variants",
+    description:
+      "Create organization-owned drafts, edit Google Business Profile, Facebook, and Instagram copy tracks, submit for reviewer approval, and capture calendar metadata without implying outbound posting.",
     icon: FilePenLine,
     includedNow: [
-      "Route shell for the future studio",
-      "Foundation-only owner guidance",
-      "No draft editor or generation form",
+      "Sidebar draft list scoped to your active organization",
+      "Mandatory three-variant seeding on creation",
+      "Tabs per platform variant with explicit save actions",
+      "Workflow badges for draft, review, and approved states",
     ],
     laterPhaseWork: [
-      "Manual post creation",
-      "Platform-specific variants",
-      "AI-assisted copy generation with owner review",
+      "Calendar drag-and-drop with conflict detection",
+      "Asset libraries and moderation tooling",
+      "Channel-specific validation once publishers arrive",
     ],
   },
   {
     key: "calendar",
     href: "/marketing/calendar",
     label: "Calendar",
-    eyebrow: "Future Scheduling",
-    title: "Calendar structure is reserved for a later phase",
-    description: "The calendar route exists so future marketing work has a stable place in the product, but no scheduling engine is active yet.",
+    eyebrow: "Phase 2 · Scheduling metadata",
+    title: "Calendar placeholders for planned posts",
+    description:
+      "Surface drafts carrying `scheduled_at` metadata grouped by UTC day inside the Growth Center. Nothing dispatches externally until Publishing ships as its own gated phase.",
     icon: CalendarDays,
     includedNow: [
-      "Route foundation and page shell",
-      "Tenant-safe empty state",
-      "No scheduling or drag-and-drop behavior",
+      "Month grid powered by authenticated calendar API responses",
+      "Links back into `/marketing/create?draft=id` composer",
+      "Copy reminding teams that scheduling stays offline",
+      "UTC-normalized placeholders to mirror server contracts",
     ],
     laterPhaseWork: [
-      "Draft scheduling",
-      "Content state tracking",
-      "Retry and publish-failure handling",
+      "Timezone-aware collaborator views",
+      "Conflict detection tied to staffing dispatch",
+      "Retry-aware publish telemetry overlays",
     ],
   },
   {
@@ -141,7 +165,8 @@ const routeDefinitions: RouteDefinition[] = [
     label: "Campaigns",
     eyebrow: "Future Campaign Builder",
     title: "Campaign Builder stays behind the Phase 1 gate",
-    description: "Phase 1 preserves the campaign route without introducing campaign generation, sequencing, or calendar insertion.",
+    description:
+      "Phase 1 preserves the campaign route without introducing campaign authoring tooling, sequencing, or calendar insertion.",
     icon: Rocket,
     includedNow: [
       "Protected route scaffold",
@@ -184,11 +209,11 @@ const routeDefinitions: RouteDefinition[] = [
     includedNow: [
       "Dedicated route shell inside Growth Center",
       "Clear boundary from existing `/automations` product area",
-      "No trigger processing or draft generation",
+      "No trigger processing or unattended posting",
     ],
     laterPhaseWork: [
       "Suggest-only triggers",
-      "Auto-draft rules with approval",
+      "Suggested-only triggers gated by reviewer approval",
       "Selective low-risk autopilot",
     ],
   },
@@ -215,19 +240,21 @@ const routeDefinitions: RouteDefinition[] = [
     key: "settings",
     href: "/marketing/settings",
     label: "Settings",
-    eyebrow: "Future Marketing Brain",
-    title: "Marketing settings contract exists, UI comes later",
-    description: "Phase 1 creates the foundation for organization-owned marketing settings without opening brand voice or compliance forms yet.",
+    eyebrow: "Phase 2 · Marketing Brain",
+    title: "Organization marketing profile persistence",
+    description:
+      "Capture identity, tone, publishing-adjacent CTA hints, and safety preferences as JSON-backed fragments validated on PATCH. Profiles load read-only projections without implicitly upserting rows.",
     icon: Settings2,
     includedNow: [
-      "Route shell for future profile settings",
-      "Organization-owned marketing profile contract reserved in the backend",
-      "No editable settings form yet",
+      "Panels for Identity, Voice, Publishing preferences, Safety",
+      "GET renders canonical empty payloads until the first PATCH",
+      "Upsert-on-save respects organization ownership",
+      "No outbound channel configuration flows",
     ],
     laterPhaseWork: [
-      "Brand voice and CTA preferences",
-      "Safety and restricted-term controls",
-      "Publishing defaults by organization",
+      "Versioned approvals for profile changes",
+      "Template libraries per franchise group",
+      "Localization packs once multi-region campaigns matter",
     ],
   },
 ];
@@ -236,24 +263,38 @@ const fallbackSummaryCards: MarketingFoundationData["summaryCards"] = [
   {
     label: "Connected Channels",
     value: "0",
-    helper: "Connections remain a later-phase publishing task.",
+    helper: "OAuth publishing continues to ship after Phase 2 hardening completes.",
   },
   {
-    label: "Drafts Awaiting Approval",
+    label: "Needs review",
     value: "0",
-    helper: "Draft creation is intentionally out of scope for Phase 1.",
+    helper: "Submit manual drafts whenever copy is ready for a second reviewer.",
   },
   {
-    label: "Scheduled This Week",
+    label: "Calendar metadata slots",
     value: "0",
-    helper: "Scheduling starts after Content Studio and publishing are approved.",
+    helper: "Metadata-only placeholders for the next fourteen days.",
   },
   {
     label: "Opportunities Detected",
     value: "0",
-    helper: "CRM intelligence is not active in the foundation slice.",
+    helper: "CRM-guided suggestions remain gated until later Growth Center milestones.",
   },
 ];
+
+const laterGrowthRoadmap = [
+  "Live channel publishing loops",
+  "CRM ingestion for opportunities",
+  "Campaign sequencing + approvals",
+];
+
+function formatWorkflowBadge(raw: string) {
+  if (raw === "needs_review") {
+    return "Needs review";
+  }
+
+  return `${raw.slice(0, 1).toUpperCase()}${raw.slice(1)}`;
+}
 
 function SummaryCard({ label, value, helper }: MarketingFoundationData["summaryCards"][number]) {
   return (
@@ -269,23 +310,151 @@ export function MarketingFoundationWorkspace({
   activeRouteKey,
   foundationData,
   loadError,
+  studioDraftQuery,
 }: MarketingFoundationWorkspaceProps) {
   const route = routeDefinitions.find((definition) => definition.key === activeRouteKey) ?? routeDefinitions[0];
   const Icon = route.icon;
-  const summaryCards = foundationData?.summaryCards.length ? foundationData.summaryCards : fallbackSummaryCards;
-  const organizationLabel = foundationData?.organization.name ?? foundationData?.organization.slug ?? foundationData?.organization.id ?? "Active organization";
-  const laterPhases = foundationData?.laterPhases.length
-    ? foundationData.laterPhases
-    : [
-      "Content Studio",
-      "AI generation",
-      "Publishing integrations",
-      "CRM intelligence",
-      "Campaign Builder",
-      "Autopilot",
-      "Analytics",
-      "Monetization",
-    ];
+  const summaryCards =
+    foundationData?.summaryCards && foundationData.summaryCards.length ? foundationData.summaryCards : fallbackSummaryCards;
+  const organizationLabel =
+    foundationData?.organization.name
+    ?? foundationData?.organization.slug
+    ?? foundationData?.organization.id
+    ?? "Active organization";
+
+  const interactiveRoutes: MarketingRouteKey[] = ["settings", "create", "calendar"];
+  const suppressEducationalRails = interactiveRoutes.includes(activeRouteKey);
+  const showPrimaryRail = activeRouteKey === "overview" || suppressEducationalRails;
+
+  const phaseLabel = foundationData?.phase === "phase_2_content_studio" ? "Phase 2 Content Studio slice" : "Growth Center rollout";
+  const heroEyebrow = foundationData?.phase === "phase_2_content_studio" ? "Phase 2 · Manual studio online" : "Growth Center rollout";
+  const heroBody =
+    foundationData?.phase === "phase_2_content_studio"
+      ? "Capture office-side marketing posture, assemble multi-variant drafts manually, shepherd explicit review states, and book metadata-only placeholders. Publishing credentials and outbound posts remain disabled until separately approved."
+      : "Keep tenant-safe scaffolding online while phased capabilities roll forward. Earlier builds only exposed placeholders; authenticate against the Growth Center endpoints to reconcile live metrics.";
+
+  const renderPrimaryRail = () => {
+    switch (activeRouteKey) {
+      case "overview": {
+        return (
+          <>
+            {foundationData ? (
+              <div className="space-y-5">
+                <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">
+                    Scheduling + publishing stance
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+                    {foundationData.publishing_disclaimer}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-3 text-xs text-[color:var(--sem-text-muted)]">
+                    <span className="theme-control-surface-soft rounded-full border px-3 py-1">
+                      Marketing profile:&nbsp;
+                      <span className="font-semibold text-[color:var(--sem-text-primary)]">
+                        {foundationData.profile_saved ? "Saved" : "Not saved"}
+                      </span>
+                    </span>
+                    <span className="theme-control-surface-soft rounded-full border px-3 py-1">
+                      Core fields hint:&nbsp;
+                      <span className="font-semibold text-[color:var(--sem-text-primary)]">
+                        {foundationData.profile_hint_complete ? "Looks complete" : "Needs inputs"}
+                      </span>
+                    </span>
+                    <span className="theme-control-surface-soft rounded-full border px-3 py-1">
+                      Workspace drafts:&nbsp;
+                      <span className="font-semibold text-[color:var(--sem-text-primary)]">
+                        {(foundationData.recent_drafts ?? []).length} recent
+                      </span>
+                    </span>
+                  </div>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <Link
+                      href="/marketing/settings"
+                      className="inline-flex rounded-full border border-transparent bg-[color:var(--sem-accent-primary)] px-4 py-2 text-xs font-semibold text-[color:var(--sem-text-inverse)]"
+                    >
+                      Open Marketing Profile
+                    </Link>
+                    <Link
+                      href="/marketing/create"
+                      className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold"
+                    >
+                      Start manual draft
+                    </Link>
+                    <Link href="/marketing/calendar" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">
+                      View calendar placeholders
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
+                        Recent draft activity
+                      </p>
+                      <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
+                        Every row opens the authenticated studio composer for manual edits only.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-5 overflow-auto">
+                    <table className="w-full min-w-[520px] text-left text-xs">
+                      <thead className="text-[color:var(--sem-text-muted)]">
+                        <tr className="border-b border-[color:var(--cmp-border-subtle)]">
+                          <th className="py-2 font-medium">Draft</th>
+                          <th className="py-2 font-medium">Workflow</th>
+                          <th className="py-2 font-medium">Updated</th>
+                          <th className="py-2 font-medium text-right">Open</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(foundationData.recent_drafts ?? []).length ? (
+                          foundationData.recent_drafts!.map((row) => (
+                            <tr key={row.id} className="border-b border-[color:var(--cmp-border-subtle)] last:border-none">
+                              <td className="py-3 pr-3 align-top font-semibold text-[color:var(--sem-text-primary)]">
+                                <Link href={`/marketing/create?draft=${encodeURIComponent(row.id)}`} className="hover:underline">
+                                  {row.title || "Untitled draft"}
+                                </Link>
+                              </td>
+                              <td className="py-3 pr-3 align-top text-[color:var(--sem-text-secondary)]">{formatWorkflowBadge(row.workflow_state)}</td>
+                              <td className="py-3 pr-3 align-top text-[color:var(--sem-text-muted)]">{row.updated_at}</td>
+                              <td className="py-3 text-right align-top">
+                                <Link href={`/marketing/create?draft=${encodeURIComponent(row.id)}`} className="font-semibold text-[color:var(--sem-accent-primary)]">
+                                  Edit
+                                </Link>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={4} className="py-6 text-center text-sm text-[color:var(--sem-text-muted)]">
+                              No drafts yet. Use Content Studio when you&apos;re ready to capture platform-specific wording.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </>
+        );
+      }
+
+      case "settings":
+        return <MarketingProfileSettingsPanel />;
+
+      case "create":
+        return <MarketingContentStudio studioDraftQuery={studioDraftQuery ?? undefined} />;
+
+      case "calendar":
+        return <MarketingCalendarPanel />;
+
+      default:
+        return null;
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
@@ -294,14 +463,14 @@ export function MarketingFoundationWorkspace({
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-4xl">
               <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">
-                Phase 1 Foundation
+                {heroEyebrow}
               </p>
+              <p className="mt-4 text-[10px] uppercase tracking-[0.4em] text-[color:var(--sem-text-muted)]">{phaseLabel}</p>
               <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
                 Growth Center
               </h1>
               <p className="mt-4 text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-                Build the tenant-safe Growth Center shell now. Keep content creation, publishing, CRM intelligence,
-                campaigns, automations, analytics, and monetization behind later approved phases.
+                {heroBody}
               </p>
             </div>
 
@@ -309,7 +478,7 @@ export function MarketingFoundationWorkspace({
               <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Active organization</p>
               <p className="mt-2 text-base font-semibold text-[color:var(--sem-text-primary)]">{organizationLabel}</p>
               <p className="mt-2 text-xs leading-5 text-[color:var(--sem-text-secondary)]">
-                Every route and future record in this module stays organization-owned.
+                Every route and persisted record honors server-enforced organization context.
               </p>
             </div>
           </div>
@@ -331,7 +500,7 @@ export function MarketingFoundationWorkspace({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Route family</p>
-              <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Approved Phase 1 surfaces</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Growth Center navigation</h2>
             </div>
             <span className="theme-badge rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.18em]">
               9 routes
@@ -371,36 +540,40 @@ export function MarketingFoundationWorkspace({
               </div>
             </div>
 
-            <div className="mt-6 grid gap-5 md:grid-cols-2">
-              <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Included now</p>
-                <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                  {route.includedNow.map((item) => (
-                    <li key={item} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {showPrimaryRail ? <div className="mt-8 space-y-6">{renderPrimaryRail()}</div> : null}
 
-              <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Later approved work</p>
-                <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                  {route.laterPhaseWork.map((item) => (
-                    <li key={item} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+            {!suppressEducationalRails ? (
+              <div className="mt-10 grid gap-5 md:grid-cols-2">
+                <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Included now</p>
+                  <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+                    {route.includedNow.map((item) => (
+                      <li key={item} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Later approved work</p>
+                  <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+                    {route.laterPhaseWork.map((item) => (
+                      <li key={item} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-            </div>
+            ) : null}
           </article>
 
           <aside className="space-y-6">
             <article className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Locked after Phase 1</p>
+              <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Behind Phase 2</p>
               <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                {laterPhases.map((phase) => (
+                {laterGrowthRoadmap.map((phase) => (
                   <li key={phase} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
                     {phase}
                   </li>
@@ -411,7 +584,11 @@ export function MarketingFoundationWorkspace({
             <article className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
               <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Protected boundaries</p>
               <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                {(foundationData?.protectedBoundaries ?? ["App and module wiring", "Organization-owned entity registration"]).map((item) => (
+                {(foundationData?.protectedBoundaries ?? [
+                  "Growth Center mutations stay tenant scoped",
+                  "Session actor supplies organization identifiers",
+                  "No delegated publish jobs in Phase 2",
+                ]).map((item) => (
                   <li key={item} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
                     {item}
                   </li>
