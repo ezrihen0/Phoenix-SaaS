@@ -67,7 +67,8 @@ type CustomerDetailPageContext = {
 
 export default async function CustomerDetailPage({ params }: CustomerDetailPageContext) {
   const { customerId } = await params;
-  await requireOfficeCrmRoute(`/customers/${customerId}`);
+  const session = await requireOfficeCrmRoute(`/customers/${customerId}`);
+  const canMintPortalMagicLink = session.permissions.includes("customers.manage");
 
   let customer: CustomerRecord | null = null;
   let relatedJobs: CustomerJobSummary[] = [];
@@ -136,6 +137,7 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageC
       estimates={estimates}
       inspections={inspections}
       loadError={loadError}
+      canMintPortalMagicLink={canMintPortalMagicLink}
     />
   );
 }

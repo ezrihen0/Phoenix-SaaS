@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BriefcaseBusiness,
   ChevronRight,
   ClipboardList,
+  Copy,
   FileText,
   Mail,
   MapPin,
@@ -19,6 +20,7 @@ import {
 import { openJobStatuses } from "@/lib/crm/data";
 import { formatAddress, formatDate, formatDateTime } from "@/lib/crm/display";
 import { getJobStatusLabel, getServiceTypeLabel } from "@/lib/crm/statuses";
+import { mintStaffPortalMagicLink } from "@/lib/portal/staff-magic-link-api";
 import type { Database } from "@/lib/types/database";
 import type { InspectionListRow } from "@/lib/inspections/browser-api";
 
@@ -84,6 +86,7 @@ type CustomerProfileWorkspaceProps = {
   estimates: EstimateListItem[];
   inspections: InspectionListRow[];
   loadError: string | null;
+  canMintPortalMagicLink?: boolean;
 };
 
 type CustomerTab = "info" | "jobs" | "estimates" | "invoices" | "inspections";
@@ -248,6 +251,75 @@ function PaginationFooter({
   );
 }
 
+function CustomerPortalMintSection({ customerId }: { customerId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [minted, setMinted] = useState<{ raw_token: string; expires_at: string } | null>(null);
+
+  async function mint() {
+    setBusy(true);
+    setError(null);
+
+    try {
+      const payload = await mintStaffPortalMagicLink(customerId);
+      setMinted(payload);
+    } catch (err) {
+      setMinted(null);
+      setError(err instanceof Error ? err.message : "Could not generate portal link.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyLink() {
+    if (!minted) {
+      return;
+    }
+
+    const url = `${window.location.origin}/access/${minted.raw_token}`;
+    await navigator.clipboard.writeText(url);
+  }
+
+  return (
+    <section className="theme-surface-card mt-5 rounded-[28px] border border-[color:var(--cmp-border-subtle)] p-5">
+      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Customer portal</p>
+      <p className="mt-3 text-sm leading-7 text-[color:var(--sem-text-secondary)]">
+        Generate a one-time secure link the customer opens in their browser. Links expire after seven days and can only be used once.
+      </p>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void mint()}
+          className="theme-btn-secondary rounded-full px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? "Generating…" : "Generate portal link"}
+        </button>
+        {minted ? (
+          <button
+            type="button"
+            onClick={() => void copyLink()}
+            className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
+          >
+            <Copy className="h-4 w-4" />
+            Copy link
+          </button>
+        ) : null}
+      </div>
+      {minted ? (
+        <p className="mt-4 text-sm text-[color:var(--sem-text-secondary)]">
+          Expires{" "}
+          <span className="font-semibold text-[color:var(--sem-text-primary)]">{formatDateTime(minted.expires_at)}</span>
+          .
+        </p>
+      ) : null}
+      {error ? (
+        <p className="theme-alert-error mt-4 rounded-[16px] border px-4 py-3 text-sm">{error}</p>
+      ) : null}
+    </section>
+  );
+}
+
 export default function CustomerProfileWorkspace({
   customer,
   relatedJobs,
@@ -255,6 +327,7 @@ export default function CustomerProfileWorkspace({
   estimates,
   inspections,
   loadError,
+  canMintPortalMagicLink = false,
 }: CustomerProfileWorkspaceProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -369,8 +442,9 @@ export default function CustomerProfileWorkspace({
         <section className="theme-surface-modal mt-4 overflow-hidden rounded-[32px] border border-[color:var(--cmp-border-subtle)]">
           <div className="p-5 sm:p-6">
             {safeActiveTab === "info" ? (
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-                <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] p-5">
+              <>
+                <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+                  <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] p-5">
                   <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Customer Info</p>
                   <div className="mt-5 grid gap-4 text-sm text-[color:var(--sem-text-secondary)]">
                     <div className="flex items-start gap-3">
@@ -421,6 +495,8 @@ export default function CustomerProfileWorkspace({
                   </div>
                 </section>
               </div>
+              {canMintPortalMagicLink ? <CustomerPortalMintSection customerId={customer.id} /> : null}
+            </>
             ) : null}
 
             {safeActiveTab === "jobs" ? (

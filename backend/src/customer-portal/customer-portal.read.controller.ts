@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards } from "@nestjs/common";
+import { Controller, Get, Req, UnauthorizedException, UseGuards } from "@nestjs/common";
 
 import { apiSuccess } from "../common/api-response";
 import type { RequestWithPortalSession } from "../common/request-types";
@@ -13,7 +13,17 @@ export class CustomerPortalReadController {
   @Get("home")
   async home(@Req() request: RequestWithPortalSession) {
     const customerId = request.portalSession!.customer_id;
-    const payload = await this.customerPortalService.getPortalHome(customerId);
+    const organizationId = request.portalSession!.session.organization_id?.trim() ?? "";
+    if (!organizationId) {
+      throw new UnauthorizedException({
+        error: {
+          code: "portal_organization_missing",
+          message: "This portal session is missing organization context.",
+        },
+      });
+    }
+
+    const payload = await this.customerPortalService.getPortalHome(organizationId, customerId);
     return apiSuccess(payload);
   }
 }
