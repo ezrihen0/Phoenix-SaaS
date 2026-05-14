@@ -5,6 +5,7 @@ import { apiError } from "../common/api-response";
 import type { BillingAccountEntity } from "../database/entities/billing-account.entity";
 import type { BillingPlanKey } from "./billing.constants";
 import { BillingProviderRegistryService } from "./billing-provider-registry.service";
+import { LanguageStoreEntitlementService } from "./language-store-entitlement.service";
 import type { ProviderSubscriptionSnapshot } from "./billing-provider.types";
 import { OrganizationBillingService } from "./organization-billing.service";
 
@@ -16,6 +17,7 @@ export class BillingOrchestrationService {
     private readonly configService: ConfigService,
     private readonly organizationBillingService: OrganizationBillingService,
     private readonly billingProviderRegistryService: BillingProviderRegistryService,
+    private readonly languageStoreEntitlementService: LanguageStoreEntitlementService,
   ) {}
 
   isActiveProviderConfigured(): boolean {
@@ -116,8 +118,9 @@ export class BillingOrchestrationService {
     };
 
     await this.organizationBillingService.updateBillingAccountFieldsById(account.id, patch);
-
-    return this.organizationBillingService.getBillingAccountById(account.id);
+    const nextAccount = await this.organizationBillingService.getBillingAccountById(account.id);
+    await this.languageStoreEntitlementService.reconcileBillingAccount(nextAccount, snapshot);
+    return nextAccount;
   }
 
   private async resolveBillingAccount(snapshot: ProviderSubscriptionSnapshot): Promise<BillingAccountEntity | null> {

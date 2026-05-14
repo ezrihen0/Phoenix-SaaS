@@ -2,9 +2,10 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import { apiError } from "../../common/api-response";
+import type { ProviderSubscriptionItemSnapshot } from "../billing-provider.types";
 import type { BillingPlanKey, OrganizationBillingStatus } from "../billing.constants";
 import { BillingOrchestrationService } from "../billing-orchestration.service";
-import { resolvePlanKeyForStripePriceId } from "./stripe-price-catalog";
+import { resolvePlanKeyForStripePriceId, resolveStripeSubscriptionCatalogEntry } from "./stripe-price-catalog";
 import { StripeClient } from "./stripe.client";
 
 type StripeMetadata = Partial<{
@@ -39,6 +40,8 @@ type StripeSubscriptionPayload = {
   ended_at?: number | null;
   items?: {
     data?: Array<{
+      id?: string | null;
+      quantity?: number | null;
       price?: {
         id?: string | null;
       } | null;
@@ -131,6 +134,7 @@ export class StripeWebhookService {
     await this.billingOrchestrationService.applyProviderSnapshot({
       provider: "stripe",
       billingAccountId: metadata.billing_account_id ?? null,
+      organizationId: metadata.organization_id ?? null,
       providerCustomerId: readStripeId(session.customer),
       providerSubscriptionId: readStripeId(session.subscription),
       planKey: parseMetadataPlanKey(metadata),
@@ -143,12 +147,15 @@ export class StripeWebhookService {
   private async handleSubscriptionUpsert(subscription: StripeSubscriptionPayload) {
     const priceId = readSubscriptionPriceId(subscription);
     const metadata = readStripeMetadata(subscription.metadata);
+    const subscriptionItems = readSubscriptionItems(this.configService, subscription);
     await this.billingOrchestrationService.applyProviderSnapshot({
       provider: "stripe",
       billingAccountId: metadata.billing_account_id ?? null,
+      organizationId: metadata.organization_id ?? null,
       providerCustomerId: readStripeId(subscription.customer),
       providerSubscriptionId: subscription.id,
       providerPriceId: priceId,
+      subscriptionItems,
       planKey: parseMetadataPlanKey(metadata) ?? resolvePlanKeyForStripePriceId(this.configService, priceId),
       billingStatus: mapStripeSubscriptionStatus(subscription.status),
       currentPeriodStart: unixToDate(subscription.current_period_start),
@@ -167,12 +174,15 @@ export class StripeWebhookService {
   private async handleSubscriptionDeleted(subscription: StripeSubscriptionPayload) {
     const priceId = readSubscriptionPriceId(subscription);
     const metadata = readStripeMetadata(subscription.metadata);
+    const subscriptionItems = readSubscriptionItems(this.configService, subscription);
     await this.billingOrchestrationService.applyProviderSnapshot({
       provider: "stripe",
       billingAccountId: metadata.billing_account_id ?? null,
+      organizationId: metadata.organization_id ?? null,
       providerCustomerId: readStripeId(subscription.customer),
       providerSubscriptionId: subscription.id,
       providerPriceId: priceId,
+      subscriptionItems,
       planKey: parseMetadataPlanKey(metadata) ?? resolvePlanKeyForStripePriceId(this.configService, priceId),
       billingStatus: "deactivated",
       cancelAtPeriodEnd: false,
@@ -190,6 +200,7 @@ export class StripeWebhookService {
     await this.billingOrchestrationService.applyProviderSnapshot({
       provider: "stripe",
       billingAccountId: metadata.billing_account_id ?? null,
+      organizationId: metadata.organization_id ?? null,
       providerCustomerId: readStripeId(invoice.customer),
       providerSubscriptionId: readStripeId(invoice.subscription),
       providerPriceId: priceId,
@@ -209,6 +220,7 @@ export class StripeWebhookService {
     await this.billingOrchestrationService.applyProviderSnapshot({
       provider: "stripe",
       billingAccountId: metadata.billing_account_id ?? null,
+      organizationId: metadata.organization_id ?? null,
       providerCustomerId: readStripeId(invoice.customer),
       providerSubscriptionId: readStripeId(invoice.subscription),
       providerPriceId: priceId,
@@ -276,8 +288,44 @@ function readSubscriptionPriceId(subscription: StripeSubscriptionPayload) {
   return subscription.items?.data?.[0]?.price?.id ?? null;
 }
 
+function readSubscriptionItems(
+  configService: ConfigService,
+  subscription: StripeSubscriptionPayload,
+): ProviderSubscriptionItemSnapshot[] {
+  const items = subscription.items?.data ?? [];
+
+  return items
+    .map((item) => {
+      const providerSubscriptionItemId = item.id?.trim();
+      if (!providerSubscriptionItemId) {
+        return null;
+      }
+
+      const providerPriceId = item.price?.id?.trim() ?? null;
+      const resolved = resolveStripeSubscriptionCatalogEntry(configService, providerPriceId);
+      if (!resolved) {
+        return null;
+      }
+
+      return {
+        providerSubscriptionItemId,
+        providerPriceId,
+        quantity: normalizeQuantity(item.quantity),
+      };
+    })
+    .filter((item): item is ProviderSubscriptionItemSnapshot => Boolean(item));
+}
+
 function readInvoicePriceId(invoice: StripeInvoicePayload) {
   return invoice.lines?.data?.[0]?.pricing?.price_details?.price ?? invoice.lines?.data?.[0]?.plan?.id ?? null;
+}
+
+function normalizeQuantity(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return 0;
+  }
+
+  return Math.trunc(value);
 }
 
 function readInvoicePeriodStart(invoice: StripeInvoicePayload) {

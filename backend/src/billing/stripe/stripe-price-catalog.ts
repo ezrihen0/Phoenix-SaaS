@@ -1,6 +1,7 @@
 import type { ConfigService } from "@nestjs/config";
 
 import type { BillingPlanKey } from "../billing.constants";
+import { resolveStripeSubscriptionItem, type ResolvedStripeSubscriptionItem } from "../language-store-entitlement.helpers";
 
 export function resolveStripePriceIdForPlan(
   configService: ConfigService,
@@ -20,25 +21,20 @@ export function resolvePlanKeyForStripePriceId(
   configService: ConfigService,
   priceId: string | null | undefined,
 ): BillingPlanKey | null {
-  const normalizedPriceId = priceId?.trim();
-  if (!normalizedPriceId) {
-    return null;
-  }
+  return resolveStripeSubscriptionCatalogEntry(configService, priceId)?.plan_key ?? null;
+}
 
-  const matchesStarter = resolveStripePriceIdForPlan(configService, "starter") === normalizedPriceId;
-  if (matchesStarter) {
-    return "starter";
-  }
+export function resolveStripePriceIdForLanguageSlotPack(configService: ConfigService): string | null {
+  return configService.get<string>("STRIPE_PRICE_LANGUAGE_SLOT_PACK")?.trim() || null;
+}
 
-  const matchesPro = resolveStripePriceIdForPlan(configService, "pro") === normalizedPriceId;
-  if (matchesPro) {
-    return "pro";
-  }
+export function resolveStripePriceIdForTranslationUsagePack(configService: ConfigService): string | null {
+  return configService.get<string>("STRIPE_PRICE_TRANSLATION_USAGE_PACK")?.trim() || null;
+}
 
-  const matchesBusiness = resolveStripePriceIdForPlan(configService, "business") === normalizedPriceId;
-  if (matchesBusiness) {
-    return "business";
-  }
-
-  return null;
+export function resolveStripeSubscriptionCatalogEntry(
+  configService: ConfigService,
+  priceId: string | null | undefined,
+): ResolvedStripeSubscriptionItem | null {
+  return resolveStripeSubscriptionItem(configService, priceId);
 }

@@ -17,6 +17,7 @@ import { AutomationScheduledRunEntity } from "./entities/automation-scheduled-ru
 import { AutomationSettingEntity } from "./entities/automation-setting.entity";
 import { AutomationTemplateEntity } from "./entities/automation-template.entity";
 import { BillingAccountEntity } from "./entities/billing-account.entity";
+import { BillingAccountSubscriptionItemEntity } from "./entities/billing-account-subscription-item.entity";
 import { AuthSessionEntity } from "./entities/auth-session.entity";
 import { CrmTaskEntity } from "./entities/crm-task.entity";
 import { CustomerEntity } from "./entities/customer.entity";
@@ -40,6 +41,8 @@ import { MarketingOpportunityEntity } from "./entities/marketing-opportunity.ent
 import { MarketingProfileEntity } from "./entities/marketing-profile.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
 import { OrganizationBillingEntity } from "./entities/organization-billing.entity";
+import { OrganizationEnabledLanguageEntity } from "./entities/organization-enabled-language.entity";
+import { OrganizationLanguageEntitlementEntity } from "./entities/organization-language-entitlement.entity";
 import { OrganizationSettingEntity } from "./entities/organization-setting.entity";
 import { PortalAccessEventEntity } from "./entities/portal-access-event.entity";
 import { PortalMagicLinkEntity } from "./entities/portal-magic-link.entity";
@@ -54,22 +57,26 @@ import { RecentCallEntity } from "./entities/recent-call.entity";
 import { ServiceEntity } from "./entities/service.entity";
 import { TechnicianEntity } from "./entities/technician.entity";
 import { UserEntity } from "./entities/user.entity";
+import { UserOrganizationLanguagePreferenceEntity } from "./entities/user-organization-language-preference.entity";
 
 type ConfigLookup = Pick<ConfigService, "get">;
 
 export const typeOrmEntities = [
   UserEntity,
   BillingAccountEntity,
+  BillingAccountSubscriptionItemEntity,
   ProfileEntity,
   TechnicianEntity,
   ServiceEntity,
   CustomerEntity,
   LeadEntity,
-  OrganizationEntity,
-  OrganizationBillingEntity,
   MarketingProfileEntity,
   MarketingConnectedChannelEntity,
   MarketingOpportunityEntity,
+  OrganizationEntity,
+  OrganizationBillingEntity,
+  OrganizationEnabledLanguageEntity,
+  OrganizationLanguageEntitlementEntity,
   MembershipEntity,
   JobEntity,
   QuoteEntity,
@@ -91,6 +98,7 @@ export const typeOrmEntities = [
   PortalSessionEntity,
   PortalAccessEventEntity,
   OrganizationSettingEntity,
+  UserOrganizationLanguagePreferenceEntity,
   AutomationTemplateEntity,
   AutomationRuleEntity,
   AutomationRunEntity,

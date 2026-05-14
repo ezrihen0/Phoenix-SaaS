@@ -17,12 +17,20 @@ export type BillingCheckoutSessionResult = {
   checkoutUrl: string;
 };
 
+export type ProviderSubscriptionItemSnapshot = {
+  providerSubscriptionItemId: string;
+  providerPriceId: string | null;
+  quantity: number;
+};
+
 export type ProviderSubscriptionSnapshot = {
   provider: BillingProvider;
   billingAccountId?: string | null;
+  organizationId?: string | null;
   providerCustomerId?: string | null;
   providerSubscriptionId?: string | null;
   providerPriceId?: string | null;
+  subscriptionItems?: ProviderSubscriptionItemSnapshot[] | null;
   planKey?: BillingPlanKey | null;
   billingStatus?: OrganizationBillingStatus | null;
   currentPeriodStart?: Date | null;
