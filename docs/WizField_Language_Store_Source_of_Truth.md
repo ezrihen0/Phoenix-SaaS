@@ -131,6 +131,7 @@ Language Store therefore uses:
 - Plan-included language capacity applies per covered organization.
 - Recurring add-on packs are purchased at the billing-account level and allocated to a specific covered organization unless a later product rule explicitly declares a particular add-on as account-wide.
 - V1 assumes Language Store add-ons are allocated to one covered organization, not globally pooled.
+- Code-facing rule: recurring add-on allocation must resolve at the subscription-item level. Subscription-level organization metadata may only be used as a backward-compatible fallback when an item-level allocation value is absent.
 
 ---
 
@@ -144,7 +145,7 @@ V1 launch entitlement matrix:
 
 - **Starter**
   - English only
-  - Language Store disabled
+  - Language Store disabled by default
   - `0` additional worker-language slots per covered organization
   - `0` monthly customer-output translation units
 
@@ -169,6 +170,11 @@ V1 recurring add-on packs are locked as:
 - **Translation Usage Pack**
   - adds `250` monthly customer-output translation units
   - allocated to one covered organization
+
+Starter clarification:
+
+- Starter does not include Language Store capacity on its own.
+- A recurring Language Store add-on allocated to one covered organization may activate only the purchased Language Store capacity for that organization without creating a second subscription or a second billing relationship.
 
 ## 6.3 Usage-metering rule
 
@@ -273,6 +279,33 @@ Later changes to:
 - translation quality
 
 must not rewrite the already-snapshotted customer document.
+
+## 8.4 Final chosen English contract
+
+- A generated provider draft and the final chosen English output are not the same product concept.
+- WizField must retain the generated English draft for auditability.
+- Finalization must persist the exact final chosen English text that the user approves for customer-facing use.
+- Final chosen English may be:
+  - the provider draft accepted verbatim
+  - or a user-reviewed English edit saved as the chosen output
+- Document attachment for translation records must be modeled with:
+  - `document_kind`
+  - `document_id`
+  - `document_line_key`
+  - `field_key`
+- Translation attachment must not depend only on transient quote/invoice line-item row ids because document editing may recreate line-item rows before the snapshot-safe point.
+
+## 8.5 First-cut document field mapping
+
+- P6 line-item translation is field-scoped, not document-global.
+- The first-cut customer-facing field mapping is:
+  - pricebook item `name`
+  - pricebook item `description`
+  - manual line `name`
+  - manual line `description`
+  - expanded bundle-derived line `name`
+  - expanded bundle-derived line `description`
+- Bundle-derived translation applies to the expanded customer-facing line items that land in quote/invoice snapshot history, not to a separate hidden bundle label.
 
 ---
 

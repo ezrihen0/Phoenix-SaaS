@@ -11,6 +11,7 @@ import { StripeClient } from "./stripe.client";
 type StripeMetadata = Partial<{
   billing_account_id: string;
   organization_id: string;
+  allocated_organization_id: string;
   user_id: string;
   plan_key: string;
 }>;
@@ -42,6 +43,7 @@ type StripeSubscriptionPayload = {
     data?: Array<{
       id?: string | null;
       quantity?: number | null;
+      metadata?: Record<string, string> | null;
       price?: {
         id?: string | null;
       } | null;
@@ -294,8 +296,7 @@ function readSubscriptionItems(
 ): ProviderSubscriptionItemSnapshot[] {
   const items = subscription.items?.data ?? [];
 
-  return items
-    .map((item) => {
+  const snapshots = items.map((item) => {
       const providerSubscriptionItemId = item.id?.trim();
       if (!providerSubscriptionItemId) {
         return null;
@@ -311,9 +312,11 @@ function readSubscriptionItems(
         providerSubscriptionItemId,
         providerPriceId,
         quantity: normalizeQuantity(item.quantity),
+        allocatedOrganizationId: readStripeItemAllocatedOrganizationId(item.metadata),
       };
-    })
-    .filter((item): item is ProviderSubscriptionItemSnapshot => Boolean(item));
+    }) as Array<ProviderSubscriptionItemSnapshot | null>;
+
+  return snapshots.filter((item): item is ProviderSubscriptionItemSnapshot => Boolean(item));
 }
 
 function readInvoicePriceId(invoice: StripeInvoicePayload) {
@@ -326,6 +329,13 @@ function normalizeQuantity(value: number | null | undefined) {
   }
 
   return Math.trunc(value);
+}
+
+function readStripeItemAllocatedOrganizationId(metadata: Record<string, string> | null | undefined) {
+  const normalizedMetadata = readStripeMetadata(metadata);
+  return normalizedMetadata.allocated_organization_id?.trim()
+    ?? normalizedMetadata.organization_id?.trim()
+    ?? null;
 }
 
 function readInvoicePeriodStart(invoice: StripeInvoicePayload) {

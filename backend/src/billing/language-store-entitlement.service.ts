@@ -41,6 +41,10 @@ export class LanguageStoreEntitlementService {
     await this.projectOrganizationEntitlements(account);
   }
 
+  async reprojectBillingAccount(account: BillingAccountEntity) {
+    await this.projectOrganizationEntitlements(account);
+  }
+
   private async syncSubscriptionItems(account: BillingAccountEntity, snapshot: ProviderSubscriptionSnapshot) {
     const subscriptionItems = snapshot.subscriptionItems ?? [];
     const providerSubscriptionId = snapshot.providerSubscriptionId?.trim() ?? null;
@@ -74,6 +78,7 @@ export class LanguageStoreEntitlementService {
       const nextAllocatedOrganizationId = resolveAllocatedOrganizationId({
         itemKind: resolved.item_kind,
         existingAllocatedOrganizationId: existing?.allocated_organization_id ?? null,
+        providerAllocatedOrganizationId: item.allocatedOrganizationId?.trim() ?? null,
         providerOrganizationId,
       });
 
@@ -221,11 +226,15 @@ export class LanguageStoreEntitlementService {
 function resolveAllocatedOrganizationId(input: {
   itemKind: BillingSubscriptionItemKind;
   existingAllocatedOrganizationId: string | null;
+  providerAllocatedOrganizationId: string | null;
   providerOrganizationId: string | null;
 }) {
   if (input.itemKind === "base_plan") {
     return null;
   }
 
-  return input.existingAllocatedOrganizationId ?? input.providerOrganizationId ?? null;
+  return input.providerAllocatedOrganizationId
+    ?? input.existingAllocatedOrganizationId
+    ?? input.providerOrganizationId
+    ?? null;
 }

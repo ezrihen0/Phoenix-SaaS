@@ -5,9 +5,11 @@ import assert from "node:assert/strict";
 import { HttpException } from "@nestjs/common";
 import { DataSource } from "typeorm";
 
+import { LanguageStoreEntitlementService } from "../billing/language-store-entitlement.service";
 import { OrganizationBillingService } from "../billing/organization-billing.service";
 import { buildDataSourceOptions } from "./typeorm.config";
 import { BillingAccountEntity } from "./entities/billing-account.entity";
+import { BillingAccountSubscriptionItemEntity } from "./entities/billing-account-subscription-item.entity";
 import { CustomerOutputTranslationRecordEntity } from "./entities/customer-output-translation-record.entity";
 import { OrganizationBillingEntity } from "./entities/organization-billing.entity";
 import { OrganizationEnabledLanguageEntity } from "./entities/organization-enabled-language.entity";
@@ -56,11 +58,19 @@ async function main() {
   const entitlementsRepository = dataSource.getRepository(OrganizationLanguageEntitlementEntity);
   const recordsRepository = dataSource.getRepository(CustomerOutputTranslationRecordEntity);
   const ledgerRepository = dataSource.getRepository(TranslationUsageLedgerEntity);
+  const configService = new EmptyConfigService() as any;
+  const languageStoreEntitlementService = new LanguageStoreEntitlementService(
+    configService,
+    dataSource.getRepository(OrganizationBillingEntity),
+    dataSource.getRepository(BillingAccountSubscriptionItemEntity),
+    entitlementsRepository,
+  );
 
   const organizationBillingService = new OrganizationBillingService(
     dataSource.getRepository(BillingAccountEntity),
     dataSource.getRepository(OrganizationBillingEntity),
     organizationsRepository,
+    languageStoreEntitlementService,
   );
   const languageStoreService = new LanguageStoreService(
     organizationBillingService,
@@ -172,9 +182,20 @@ async function main() {
       surfaceKey: "estimate_line_item_description",
       sourceLanguageCode: "es",
       sourceText: longSpanishSource,
+      attachment: {
+        documentKind: "quote",
+        documentId: "quote-smoke-a",
+        documentLineKey: "line-001",
+        fieldKey: "description",
+      },
     });
 
     assert.equal(generatedA.record.status, "draft");
+    assert.equal(generatedA.record.document_kind, "quote");
+    assert.equal(generatedA.record.document_id, "quote-smoke-a");
+    assert.equal(generatedA.record.document_line_key, "line-001");
+    assert.equal(generatedA.record.field_key, "description");
+    assert.equal(generatedA.record.final_text, null);
     assert.equal(generatedA.record.units_consumed, 2);
     assert.equal(generatedA.usage.consumed_translation_units, 2);
     assert.equal(generatedA.usage.remaining_translation_units, 248);
@@ -183,9 +204,11 @@ async function main() {
       organizationId: organizationA.id,
       actorUserId: owner.id,
       recordId: generatedA.record.id,
+      finalText: "Edited English output",
     });
 
     assert.equal(finalizedA.record.status, "final");
+    assert.equal(finalizedA.record.final_text, "Edited English output");
     assert.equal(finalizedA.usage.consumed_translation_units, 2);
 
     const generatedB = await translationService.generateDraft({
@@ -194,9 +217,16 @@ async function main() {
       surfaceKey: "invoice_line_item_name",
       sourceLanguageCode: "pl",
       sourceText: "piec kominowy",
+      attachment: {
+        documentKind: "invoice",
+        documentId: "invoice-smoke-b",
+        documentLineKey: "line-002",
+        fieldKey: "name",
+      },
     });
 
     assert.equal(generatedB.record.status, "draft");
+    assert.equal(generatedB.record.document_kind, "invoice");
     assert.equal(generatedB.usage.consumed_translation_units, 1);
     assert.equal(generatedB.usage.remaining_translation_units, 249);
 
@@ -235,6 +265,7 @@ async function main() {
         surfaceKey: "manual_line_text",
         sourceLanguageCode: "es",
         sourceText: "limpieza de chimenea",
+        attachment: null,
       });
     } catch (error) {
       assert.ok(error instanceof HttpException);

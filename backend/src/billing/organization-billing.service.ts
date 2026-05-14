@@ -6,6 +6,7 @@ import { apiError } from "../common/api-response";
 import { BillingAccountEntity } from "../database/entities/billing-account.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
 import { OrganizationBillingEntity } from "../database/entities/organization-billing.entity";
+import { LanguageStoreEntitlementService } from "./language-store-entitlement.service";
 import {
   type OrganizationBillingStatus,
   type BillingPlanKey,
@@ -45,6 +46,7 @@ export class OrganizationBillingService {
     private readonly billingRepository: Repository<OrganizationBillingEntity>,
     @InjectRepository(OrganizationEntity)
     private readonly organizationsRepository: Repository<OrganizationEntity>,
+    private readonly languageStoreEntitlementService: LanguageStoreEntitlementService,
   ) {}
 
   async getOrCreateContextForOrganization(
@@ -293,6 +295,7 @@ export class OrganizationBillingService {
     coverage.organization = organization;
 
     await this.billingRepository.save(coverage);
+    await this.languageStoreEntitlementService.reprojectBillingAccount(account);
     return this.getOrCreateContextForOrganization(normalizedOrganizationId);
   }
 

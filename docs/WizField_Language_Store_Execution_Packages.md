@@ -378,7 +378,19 @@ Attach the translation engine to the first locked V1 customer-facing surfaces an
 - estimate line-item customer-facing description translation
 - invoice line-item customer-facing name translation
 - invoice line-item customer-facing description translation
+- manual line customer-facing name translation
+- manual line customer-facing description translation
 - snapshot-safe persistence of the final chosen English output
+
+## Locked bridge assumptions before coding
+
+- P6 consumes the P5 translation-engine contract where:
+  - provider draft text remains stored for auditability
+  - finalization persists the exact final chosen English text
+  - translation records attach to document fields using `document_kind + document_id + document_line_key + field_key`
+- P6 must not invent a second translation persistence path outside the P5 engine.
+- P6 must not rely on transient quote/invoice line-item row ids as the only attachment key before the snapshot-safe point.
+- Bundle-derived line translation applies to the expanded line-item fields that become customer-facing snapshot text.
 
 ## Excluded
 

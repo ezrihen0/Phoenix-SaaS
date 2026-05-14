@@ -21,6 +21,7 @@ export type ProviderSubscriptionItemSnapshot = {
   providerSubscriptionItemId: string;
   providerPriceId: string | null;
   quantity: number;
+  allocatedOrganizationId?: string | null;
 };
 
 export type ProviderSubscriptionSnapshot = {

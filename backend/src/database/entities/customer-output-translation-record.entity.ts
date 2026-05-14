@@ -14,10 +14,15 @@ import { UserEntity } from "./user.entity";
 
 export const customerOutputTranslationStatuses = ["draft", "final"] as const;
 export type CustomerOutputTranslationStatus = (typeof customerOutputTranslationStatuses)[number];
+export const customerOutputTranslationDocumentKinds = ["quote", "invoice"] as const;
+export type CustomerOutputTranslationDocumentKind = (typeof customerOutputTranslationDocumentKinds)[number];
+export const customerOutputTranslationFieldKeys = ["name", "description"] as const;
+export type CustomerOutputTranslationFieldKey = (typeof customerOutputTranslationFieldKeys)[number];
 
 @Entity({ name: "customer_output_translation_records" })
 @Index("IDX_customer_output_translation_records_org_status", ["organization_id", "status"])
 @Index("IDX_customer_output_translation_records_org_created", ["organization_id", "created_at"])
+@Index("IDX_customer_output_translation_records_org_document", ["organization_id", "document_kind", "document_id"])
 export class CustomerOutputTranslationRecordEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
@@ -40,11 +45,26 @@ export class CustomerOutputTranslationRecordEntity {
   @Column({ type: "varchar", length: 16 })
   target_language_code!: string;
 
+  @Column({ type: "varchar", length: 16, nullable: true })
+  document_kind!: CustomerOutputTranslationDocumentKind | null;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  document_id!: string | null;
+
+  @Column({ type: "varchar", length: 128, nullable: true })
+  document_line_key!: string | null;
+
+  @Column({ type: "varchar", length: 32, nullable: true })
+  field_key!: CustomerOutputTranslationFieldKey | null;
+
   @Column({ type: "text" })
   source_text!: string;
 
   @Column({ type: "text" })
   translated_text!: string;
+
+  @Column({ type: "text", nullable: true })
+  final_text!: string | null;
 
   @Column({ type: "int", default: 0 })
   source_character_count!: number;
