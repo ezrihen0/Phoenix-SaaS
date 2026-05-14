@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -10,6 +11,7 @@ import {
 
 import { QuoteEntity } from "./quote.entity";
 
+@Index("IDX_quote_line_items_quote_document_line_key", ["quote_id", "document_line_key"], { unique: true })
 @Entity({ name: "quote_line_items" })
 export class QuoteLineItemEntity {
   @PrimaryGeneratedColumn("uuid")
@@ -20,6 +22,9 @@ export class QuoteLineItemEntity {
 
   @Column({ type: "varchar", length: 36, nullable: true })
   pricebook_item_id!: string | null;
+
+  @Column({ type: "varchar", length: 128, nullable: true })
+  document_line_key!: string | null;
 
   @Column({ type: "varchar", length: 128 })
   sku_snapshot!: string;

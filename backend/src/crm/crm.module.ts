@@ -18,6 +18,7 @@ import { QuoteEntity } from "../database/entities/quote.entity";
 import { QuoteLineItemEntity } from "../database/entities/quote-line-item.entity";
 import { ServiceEntity } from "../database/entities/service.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
+import { LanguageStoreModule } from "../language-store/language-store.module";
 import { CrmController } from "./crm.controller";
 import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
@@ -26,6 +27,7 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 @Module({
   imports: [
     AuthModule,
+    LanguageStoreModule,
     TypeOrmModule.forFeature([
       ProfileEntity,
       TechnicianEntity,

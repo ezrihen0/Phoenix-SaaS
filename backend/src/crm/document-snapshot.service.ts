@@ -4,15 +4,18 @@ import { Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import { InvoiceLineItemEntity } from "../database/entities/invoice-line-item.entity";
+import type { CustomerOutputTranslationFieldKey } from "../database/entities/customer-output-translation-record.entity";
 import { PricebookBundleItemEntity } from "../database/entities/pricebook-bundle-item.entity";
 import { PricebookBundleEntity } from "../database/entities/pricebook-bundle.entity";
 import { PricebookItemEntity } from "../database/entities/pricebook-item.entity";
 import { QuoteLineItemEntity } from "../database/entities/quote-line-item.entity";
+import { CustomerOutputTranslationService } from "../language-store/customer-output-translation.service";
 import { DocumentPricingService } from "./document-pricing.service";
 import type { DocumentLineItemInput } from "./validation";
 
 type SnapshotLineDraft = {
   pricebook_item_id: string | null;
+  document_line_key: string | null;
   sku_snapshot: string;
   name_snapshot: string;
   description_snapshot: string | null;
@@ -29,6 +32,13 @@ type SnapshotLineDraft = {
   sort_order: number;
 };
 
+type SnapshotDocumentKind = "quote" | "invoice";
+type SnapshotDocumentContext = {
+  organizationId: string;
+  documentKind: SnapshotDocumentKind;
+  documentId: string | null;
+};
+
 @Injectable()
 export class DocumentSnapshotService {
   constructor(
@@ -43,6 +53,7 @@ export class DocumentSnapshotService {
     @InjectRepository(PricebookBundleItemEntity)
     private readonly pricebookBundleItemsRepository: Repository<PricebookBundleItemEntity>,
     private readonly documentPricingService: DocumentPricingService,
+    private readonly customerOutputTranslationService: CustomerOutputTranslationService,
   ) {}
 
   async replaceInvoiceLineItems(invoiceId: string, lineDrafts: SnapshotLineDraft[]) {
@@ -79,19 +90,23 @@ export class DocumentSnapshotService {
     );
   }
 
-  async buildLineDrafts(lineItems: DocumentLineItemInput[], organizationId: string) {
+  async buildLineDrafts(lineItems: DocumentLineItemInput[], context: SnapshotDocumentContext) {
     const drafts: SnapshotLineDraft[] = [];
 
     for (const lineItem of lineItems) {
       if (lineItem.kind === "pricebook_item") {
         drafts.push(
           await this.buildPricebookItemSnapshot(
-            organizationId,
+            context,
+            lineItem.documentLineKey,
             lineItem.pricebookItemId,
             lineItem.quantity,
             lineItem.sortOrder,
             lineItem.unitPriceCentsOverride,
+            lineItem.nameOverride,
             lineItem.descriptionOverride,
+            lineItem.nameTranslationRecordId ?? null,
+            lineItem.descriptionTranslationRecordId ?? null,
           ),
         );
         continue;
@@ -100,7 +115,7 @@ export class DocumentSnapshotService {
       if (lineItem.kind === "pricebook_bundle") {
         drafts.push(
           ...(await this.buildBundleSnapshots(
-            organizationId,
+            context.organizationId,
             lineItem.pricebookBundleId,
             lineItem.sortOrder,
             lineItem.quantityMultiplier ?? "1",
@@ -110,12 +125,16 @@ export class DocumentSnapshotService {
       }
 
       drafts.push(
-        this.buildManualLineSnapshot(
+        await this.buildManualLineSnapshot(
+          context,
+          lineItem.documentLineKey,
           lineItem.name,
           lineItem.description ?? null,
           lineItem.quantity,
           lineItem.unitPriceCents,
           lineItem.sortOrder,
+          lineItem.nameTranslationRecordId ?? null,
+          lineItem.descriptionTranslationRecordId ?? null,
         ),
       );
     }
@@ -124,17 +143,21 @@ export class DocumentSnapshotService {
   }
 
   async buildPricebookItemSnapshot(
-    organizationId: string,
+    context: SnapshotDocumentContext,
+    documentLineKey: string,
     pricebookItemId: string,
     quantity: string,
     sortOrder: number,
     unitPriceCentsOverride?: number,
+    nameOverride?: string | null,
     descriptionOverride?: string | null,
+    nameTranslationRecordId?: string | null,
+    descriptionTranslationRecordId?: string | null,
   ): Promise<SnapshotLineDraft> {
     const item = await this.pricebookItemsRepository.findOne({
       where: {
         id: pricebookItemId,
-        organization_id: organizationId,
+        organization_id: context.organizationId,
       },
     });
 
@@ -143,12 +166,31 @@ export class DocumentSnapshotService {
     }
 
     const unitPriceCents = unitPriceCentsOverride ?? item.customer_price_cents;
+    const authoredName = nameOverride ?? item.name;
+    const authoredDescription = descriptionOverride === undefined ? item.customer_description : descriptionOverride;
+    const [nameSnapshot, descriptionSnapshot] = await Promise.all([
+      this.resolveCustomerFacingText({
+        context,
+        documentLineKey,
+        fieldKey: "name",
+        authoredText: authoredName,
+        translationRecordId: nameTranslationRecordId ?? null,
+      }),
+      this.resolveCustomerFacingText({
+        context,
+        documentLineKey,
+        fieldKey: "description",
+        authoredText: authoredDescription,
+        translationRecordId: descriptionTranslationRecordId ?? null,
+      }),
+    ]);
 
     return {
       pricebook_item_id: item.id,
+      document_line_key: documentLineKey,
       sku_snapshot: item.internal_sku,
-      name_snapshot: item.name,
-      description_snapshot: descriptionOverride ?? item.customer_description,
+      name_snapshot: nameSnapshot ?? authoredName,
+      description_snapshot: descriptionSnapshot,
       item_type_snapshot: item.item_type,
       unit_of_measure_snapshot: item.unit_of_measure,
       unit_price_cents_snapshot: unitPriceCents,
@@ -214,6 +256,7 @@ export class DocumentSnapshotService {
 
         return {
           pricebook_item_id: item.id,
+          document_line_key: null,
           sku_snapshot: item.internal_sku,
           name_snapshot: item.name,
           description_snapshot: item.customer_description,
@@ -235,18 +278,40 @@ export class DocumentSnapshotService {
       });
   }
 
-  buildManualLineSnapshot(
+  async buildManualLineSnapshot(
+    context: SnapshotDocumentContext,
+    documentLineKey: string,
     name: string,
     description: string | null,
     quantity: string,
     unitPriceCents: number,
     sortOrder: number,
-  ): SnapshotLineDraft {
+    nameTranslationRecordId?: string | null,
+    descriptionTranslationRecordId?: string | null,
+  ): Promise<SnapshotLineDraft> {
+    const [nameSnapshot, descriptionSnapshot] = await Promise.all([
+      this.resolveCustomerFacingText({
+        context,
+        documentLineKey,
+        fieldKey: "name",
+        authoredText: name,
+        translationRecordId: nameTranslationRecordId ?? null,
+      }),
+      this.resolveCustomerFacingText({
+        context,
+        documentLineKey,
+        fieldKey: "description",
+        authoredText: description,
+        translationRecordId: descriptionTranslationRecordId ?? null,
+      }),
+    ]);
+
     return {
       pricebook_item_id: null,
+      document_line_key: documentLineKey,
       sku_snapshot: "MANUAL",
-      name_snapshot: name,
-      description_snapshot: description,
+      name_snapshot: nameSnapshot ?? name,
+      description_snapshot: descriptionSnapshot,
       item_type_snapshot: "manual",
       unit_of_measure_snapshot: null,
       unit_price_cents_snapshot: unitPriceCents,
@@ -261,6 +326,53 @@ export class DocumentSnapshotService {
     };
   }
 
+  private async resolveCustomerFacingText(input: {
+    context: SnapshotDocumentContext;
+    documentLineKey: string;
+    fieldKey: CustomerOutputTranslationFieldKey;
+    authoredText: string | null;
+    translationRecordId: string | null;
+  }) {
+    if (!input.translationRecordId) {
+      return input.authoredText;
+    }
+
+    if (!input.context.documentId) {
+      apiError(
+        409,
+        "translation_document_save_required",
+        "Save the document before applying finalized customer English output to line items.",
+      );
+    }
+
+    const record = await this.customerOutputTranslationService.requireFinalizedDocumentTranslation({
+      organizationId: input.context.organizationId,
+      documentKind: input.context.documentKind,
+      documentId: input.context.documentId,
+      documentLineKey: input.documentLineKey,
+      fieldKey: input.fieldKey,
+      recordId: input.translationRecordId,
+    });
+    const finalText = record.final_text ?? record.translated_text;
+    const comparableAuthored = normalizeComparableText(input.authoredText);
+    const comparableSource = normalizeComparableText(record.source_text);
+    const comparableFinal = normalizeComparableText(finalText);
+
+    if (
+      comparableAuthored.length > 0
+      && comparableAuthored !== comparableSource
+      && comparableAuthored !== comparableFinal
+    ) {
+      apiError(
+        409,
+        "translation_record_source_mismatch",
+        "The selected customer English output is out of date for the current line text.",
+      );
+    }
+
+    return finalText;
+  }
+
   private multiplyQuantities(leftQuantity: string, rightQuantity: string) {
     const multipliedQuantity = Number(leftQuantity) * Number(rightQuantity);
 
@@ -270,4 +382,8 @@ export class DocumentSnapshotService {
 
     return multipliedQuantity.toFixed(3).replace(/\.000$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
   }
+}
+
+function normalizeComparableText(value: string | null) {
+  return (value ?? "").replace(/\r\n/g, "\n").trim();
 }

@@ -6,6 +6,10 @@ import { OrganizationBillingService } from "../billing/organization-billing.serv
 import { apiError } from "../common/api-response";
 import {
   CustomerOutputTranslationRecordEntity,
+  customerOutputTranslationDocumentKinds,
+  customerOutputTranslationFieldKeys,
+  type CustomerOutputTranslationDocumentKind,
+  type CustomerOutputTranslationFieldKey,
   type CustomerOutputTranslationStatus,
 } from "../database/entities/customer-output-translation-record.entity";
 import { TranslationUsageLedgerEntity } from "../database/entities/translation-usage-ledger.entity";
@@ -36,8 +40,13 @@ export type CustomerOutputTranslationRecordSnapshot = {
   surface_key: CustomerOutputTranslationSurfaceKey;
   source_language_code: string;
   target_language_code: string;
+  document_kind: CustomerOutputTranslationDocumentKind | null;
+  document_id: string | null;
+  document_line_key: string | null;
+  field_key: CustomerOutputTranslationFieldKey | null;
   source_text: string;
   translated_text: string;
+  final_text: string | null;
   source_character_count: number;
   units_consumed: number;
   provider_key: string;
@@ -63,23 +72,47 @@ export type CustomerOutputTranslationResult = {
   usage: CustomerOutputTranslationUsageSummary;
 };
 
+export type ListFinalizedDocumentTranslationsInput = {
+  organizationId: string;
+  documentKind: CustomerOutputTranslationDocumentKind;
+  documentId: string;
+};
+
+export type RequireFinalizedDocumentTranslationInput = {
+  organizationId: string;
+  documentKind: CustomerOutputTranslationDocumentKind;
+  documentId: string;
+  documentLineKey: string;
+  fieldKey: CustomerOutputTranslationFieldKey;
+  recordId: string;
+};
+
 type GenerateCustomerOutputTranslationInput = {
   organizationId: string;
   actorUserId: string;
   surfaceKey: CustomerOutputTranslationSurfaceKey;
   sourceLanguageCode: string;
   sourceText: string;
+  attachment: CustomerOutputTranslationAttachment | null;
 };
 
 type FinalizeCustomerOutputTranslationInput = {
   organizationId: string;
   actorUserId: string;
   recordId: string;
+  finalText: string | null;
 };
 
 type TranslationUsageWindow = {
   start: Date;
   end: Date;
+};
+
+export type CustomerOutputTranslationAttachment = {
+  documentKind: CustomerOutputTranslationDocumentKind;
+  documentId: string;
+  documentLineKey: string;
+  fieldKey: CustomerOutputTranslationFieldKey;
 };
 
 @Injectable()
@@ -199,8 +232,13 @@ export class CustomerOutputTranslationService {
           surface_key: input.surfaceKey,
           source_language_code: sourceLanguageCode,
           target_language_code: "en",
+          document_kind: input.attachment?.documentKind ?? null,
+          document_id: input.attachment?.documentId ?? null,
+          document_line_key: input.attachment?.documentLineKey ?? null,
+          field_key: input.attachment?.fieldKey ?? null,
           source_text: normalizedSourceText,
           translated_text: translatedText,
+          final_text: null,
           source_character_count: sourceCharacterCount,
           units_consumed: requestedUnits,
           provider_key: providerKey,
@@ -247,10 +285,26 @@ export class CustomerOutputTranslationService {
       apiError(404, "translation_record_not_found", "The requested translation record could not be found.");
     }
 
-    if (record.status === "draft") {
+    const normalizedFinalText = normalizeOptionalFinalText(input.finalText);
+    if (record.status === "final") {
+      const resolvedExistingFinalText = record.final_text ?? record.translated_text;
+      if (normalizedFinalText && normalizedFinalText !== resolvedExistingFinalText) {
+        apiError(
+          409,
+          "translation_record_already_finalized",
+          "The translation record is already finalized and cannot be changed.",
+        );
+      }
+
+      if (record.final_text == null) {
+        record.final_text = resolvedExistingFinalText;
+        await this.translationRecordsRepository.save(record);
+      }
+    } else {
       record.status = "final";
       record.finalized_by_user_id = input.actorUserId;
       record.finalized_at = new Date();
+      record.final_text = normalizedFinalText ?? record.translated_text;
       await this.translationRecordsRepository.save(record);
     }
 
@@ -273,6 +327,50 @@ export class CustomerOutputTranslationService {
       billing_period_start: usageWindow.start.toISOString(),
       billing_period_end: usageWindow.end.toISOString(),
     };
+  }
+
+  async listFinalizedDocumentTranslations(
+    input: ListFinalizedDocumentTranslationsInput,
+  ): Promise<CustomerOutputTranslationRecordSnapshot[]> {
+    const records = await this.translationRecordsRepository.find({
+      where: {
+        organization_id: input.organizationId,
+        document_kind: input.documentKind,
+        document_id: input.documentId,
+        status: "final",
+      },
+      order: {
+        created_at: "ASC",
+      },
+    });
+
+    return records.map((record) => serializeTranslationRecord(record));
+  }
+
+  async requireFinalizedDocumentTranslation(
+    input: RequireFinalizedDocumentTranslationInput,
+  ): Promise<CustomerOutputTranslationRecordSnapshot> {
+    const record = await this.translationRecordsRepository.findOne({
+      where: {
+        id: input.recordId,
+        organization_id: input.organizationId,
+        document_kind: input.documentKind,
+        document_id: input.documentId,
+        document_line_key: input.documentLineKey,
+        field_key: input.fieldKey,
+        status: "final",
+      },
+    });
+
+    if (!record) {
+      apiError(
+        404,
+        "translation_record_not_found",
+        "The requested finalized translation record could not be found for this document field.",
+      );
+    }
+
+    return serializeTranslationRecord(record);
   }
 
   private async resolveUsageWindow(organizationId: string): Promise<TranslationUsageWindow> {
@@ -321,6 +419,14 @@ export function isCustomerOutputTranslationSurfaceKey(value: string): value is C
   return customerOutputTranslationSurfaceKeys.includes(value as CustomerOutputTranslationSurfaceKey);
 }
 
+export function isCustomerOutputTranslationDocumentKind(value: string): value is CustomerOutputTranslationDocumentKind {
+  return customerOutputTranslationDocumentKinds.includes(value as CustomerOutputTranslationDocumentKind);
+}
+
+export function isCustomerOutputTranslationFieldKey(value: string): value is CustomerOutputTranslationFieldKey {
+  return customerOutputTranslationFieldKeys.includes(value as CustomerOutputTranslationFieldKey);
+}
+
 function assertTranslationGenerationAllowed(foundation: {
   language_store_enabled: boolean;
   billing_status: string;
@@ -362,8 +468,13 @@ function serializeTranslationRecord(
     surface_key: record.surface_key as CustomerOutputTranslationSurfaceKey,
     source_language_code: record.source_language_code,
     target_language_code: record.target_language_code,
+    document_kind: record.document_kind,
+    document_id: record.document_id,
+    document_line_key: record.document_line_key,
+    field_key: record.field_key,
     source_text: record.source_text,
     translated_text: record.translated_text,
+    final_text: record.final_text ?? (record.status === "final" ? record.translated_text : null),
     source_character_count: record.source_character_count,
     units_consumed: record.units_consumed,
     provider_key: record.provider_key,
@@ -378,6 +489,19 @@ function serializeTranslationRecord(
 
 function normalizeSourceText(value: string) {
   return value.replace(/\r\n/g, "\n");
+}
+
+function normalizeOptionalFinalText(value: string | null) {
+  if (value == null) {
+    return null;
+  }
+
+  const normalized = normalizeSourceText(value).trim();
+  if (!normalized) {
+    apiError(400, "translation_final_text_invalid", "final_text must not be empty when provided.");
+  }
+
+  return normalized;
 }
 
 function startOfCurrentUtcMonth(now: Date) {

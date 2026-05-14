@@ -2,6 +2,7 @@
 
 import { FileText, Plus, Trash2 } from "lucide-react";
 
+import CustomerOutputTranslationControl from "@/components/customer-output-translation-control";
 import {
   calculateInvoicePreviewTotals,
   formatCurrencyFromCents,
@@ -9,17 +10,31 @@ import {
   type InvoicePreviewTotals,
   type PersistedInvoiceLineItem,
 } from "@/lib/crm/invoice-line-model";
+import type { CustomerOutputTranslationStatus } from "@/lib/language-store/client-customer-output-translations";
 
 type InvoiceLineItemsEditorProps = {
   lines: InvoiceBuilderLine[];
   taxRateInput?: string;
   onTaxRateInputChange?: (value: string) => void;
   onLineChange?: (clientId: string, field: keyof InvoiceBuilderLine, value: string) => void;
+  onLineTranslationChange?: (
+    clientId: string,
+    field: "name" | "description",
+    value: {
+      recordId: string | null;
+      text: string | null;
+      status: CustomerOutputTranslationStatus | null;
+      sourceText: string | null;
+      sourceLanguageCode: string | null;
+    },
+  ) => void;
   onRemoveLine?: (clientId: string) => void;
   onAddManualLine?: () => void;
   onOpenPricebook?: () => void;
   readOnly?: boolean;
   persistedLines?: PersistedInvoiceLineItem[];
+  documentId?: string | null;
+  sourceLanguageCode?: string | null;
 };
 
 function lineSubtotalCents(line: InvoiceBuilderLine) {
@@ -41,11 +56,14 @@ export default function InvoiceLineItemsEditor({
   taxRateInput = "0",
   onTaxRateInputChange,
   onLineChange,
+  onLineTranslationChange,
   onRemoveLine,
   onAddManualLine,
   onOpenPricebook,
   readOnly = false,
   persistedLines,
+  documentId,
+  sourceLanguageCode,
 }: InvoiceLineItemsEditorProps) {
   const previewTotals: InvoicePreviewTotals = calculateInvoicePreviewTotals(
     lines,
@@ -106,51 +124,94 @@ export default function InvoiceLineItemsEditor({
             </div>
 
             {!readOnly && onLineChange ? (
-              <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_140px_140px_140px]">
-                <label className="space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
-                  <span>Name</span>
-                  <input
-                    type="text"
-                    value={line.name}
-                    onChange={(event) => onLineChange(line.clientId, "name", event.target.value)}
-                    className="w-full rounded-[16px] border border-white/10 bg-black/35 px-3 py-2.5 text-sm normal-case tracking-normal text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
-                  />
-                </label>
-                <label className="space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
-                  <span>Description</span>
-                  <input
-                    type="text"
-                    value={line.description}
-                    onChange={(event) => onLineChange(line.clientId, "description", event.target.value)}
-                    className="w-full rounded-[16px] border border-white/10 bg-black/35 px-3 py-2.5 text-sm normal-case tracking-normal text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
-                  />
-                </label>
-                <label className="space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
-                  <span>Qty</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={line.quantity}
-                    onChange={(event) => onLineChange(line.clientId, "quantity", event.target.value)}
-                    className="w-full rounded-[16px] border border-white/10 bg-black/35 px-3 py-2.5 text-sm normal-case tracking-normal text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
-                  />
-                </label>
-                <label className="space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
-                  <span>Unit Price</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={line.unitPriceInput}
-                    onChange={(event) => onLineChange(line.clientId, "unitPriceInput", event.target.value)}
-                    className="w-full rounded-[16px] border border-white/10 bg-black/35 px-3 py-2.5 text-sm normal-case tracking-normal text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
-                  />
-                </label>
-                <div className="space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
-                  <span>Line Total</span>
-                  <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5 text-sm normal-case tracking-normal text-white">
-                    {formatCurrencyFromCents(lineSubtotalCents(line))}
+              <div className="mt-4 space-y-3">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_140px_140px_140px]">
+                  <label className="space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
+                    <span>Name</span>
+                    <input
+                      type="text"
+                      value={line.name}
+                      onChange={(event) => onLineChange(line.clientId, "name", event.target.value)}
+                      className="w-full rounded-[16px] border border-white/10 bg-black/35 px-3 py-2.5 text-sm normal-case tracking-normal text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
+                    />
+                  </label>
+                  <label className="space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
+                    <span>Description</span>
+                    <input
+                      type="text"
+                      value={line.description}
+                      onChange={(event) => onLineChange(line.clientId, "description", event.target.value)}
+                      className="w-full rounded-[16px] border border-white/10 bg-black/35 px-3 py-2.5 text-sm normal-case tracking-normal text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
+                    />
+                  </label>
+                  <label className="space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
+                    <span>Qty</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={line.quantity}
+                      onChange={(event) => onLineChange(line.clientId, "quantity", event.target.value)}
+                      className="w-full rounded-[16px] border border-white/10 bg-black/35 px-3 py-2.5 text-sm normal-case tracking-normal text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
+                    />
+                  </label>
+                  <label className="space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
+                    <span>Unit Price</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={line.unitPriceInput}
+                      onChange={(event) => onLineChange(line.clientId, "unitPriceInput", event.target.value)}
+                      className="w-full rounded-[16px] border border-white/10 bg-black/35 px-3 py-2.5 text-sm normal-case tracking-normal text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
+                    />
+                  </label>
+                  <div className="space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
+                    <span>Line Total</span>
+                    <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5 text-sm normal-case tracking-normal text-white">
+                      {formatCurrencyFromCents(lineSubtotalCents(line))}
+                    </div>
                   </div>
                 </div>
+
+                {onLineTranslationChange ? (
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    <CustomerOutputTranslationControl
+                      label="Customer English for Name"
+                      currentText={line.name}
+                      documentKind="invoice"
+                      documentId={documentId ?? null}
+                      documentLineKey={line.documentLineKey}
+                      fieldKey="name"
+                      surfaceKey={line.kind === "manual" ? "manual_line_text" : "invoice_line_item_name"}
+                      sourceLanguageCode={sourceLanguageCode ?? null}
+                      state={{
+                        recordId: line.nameTranslationRecordId,
+                        text: line.nameTranslationText,
+                        status: line.nameTranslationStatus,
+                        sourceText: line.nameTranslationSourceText,
+                        sourceLanguageCode: line.nameTranslationSourceLanguageCode,
+                      }}
+                      onChange={(value) => onLineTranslationChange(line.clientId, "name", value)}
+                    />
+                    <CustomerOutputTranslationControl
+                      label="Customer English for Description"
+                      currentText={line.description}
+                      documentKind="invoice"
+                      documentId={documentId ?? null}
+                      documentLineKey={line.documentLineKey}
+                      fieldKey="description"
+                      surfaceKey={line.kind === "manual" ? "manual_line_text" : "invoice_line_item_description"}
+                      sourceLanguageCode={sourceLanguageCode ?? null}
+                      state={{
+                        recordId: line.descriptionTranslationRecordId,
+                        text: line.descriptionTranslationText,
+                        status: line.descriptionTranslationStatus,
+                        sourceText: line.descriptionTranslationSourceText,
+                        sourceLanguageCode: line.descriptionTranslationSourceLanguageCode,
+                      }}
+                      onChange={(value) => onLineTranslationChange(line.clientId, "description", value)}
+                    />
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="mt-4 grid gap-3 rounded-[18px] border border-white/10 bg-black/20 p-4 sm:grid-cols-2 xl:grid-cols-4">

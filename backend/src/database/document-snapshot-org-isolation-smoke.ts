@@ -11,6 +11,7 @@ import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectio
 import { DocumentPricingService } from "../crm/document-pricing.service";
 import { DocumentSnapshotService } from "../crm/document-snapshot.service";
 import type { DocumentLineItemInput } from "../crm/validation";
+import type { CustomerOutputTranslationService } from "../language-store/customer-output-translation.service";
 import { OrganizationEntity } from "./entities/organization.entity";
 import { PricebookBundleItemEntity } from "./entities/pricebook-bundle-item.entity";
 import { PricebookBundleEntity } from "./entities/pricebook-bundle.entity";
@@ -349,17 +350,23 @@ async function seedCatalog(dataSource: DataSource, token: string): Promise<Seede
 
 async function runSnapshotChecks(summary: SmokeSummary, service: DocumentSnapshotService, catalog: SeededCatalog) {
   summary.phases.seeding = "PASS";
+  const quoteContextForOrgA = {
+    organizationId: catalog.orgA.id,
+    documentKind: "quote" as const,
+    documentId: "smoke-quote-org-a",
+  };
 
   await expectPass(summary, "Same-org pricebook item snapshot succeeds", async () => {
     const lines: DocumentLineItemInput[] = [
       {
         kind: "pricebook_item",
+        documentLineKey: "same-org-item",
         pricebookItemId: catalog.itemA.id,
         quantity: "2",
         sortOrder: 0,
       },
     ];
-    const drafts = await service.buildLineDrafts(lines, catalog.orgA.id);
+    const drafts = await service.buildLineDrafts(lines, quoteContextForOrgA);
     if (drafts.length !== 1) {
       throw new Error(`Expected 1 draft line, got ${drafts.length}.`);
     }
@@ -385,12 +392,13 @@ async function runSnapshotChecks(summary: SmokeSummary, service: DocumentSnapsho
         [
           {
             kind: "pricebook_item",
+            documentLineKey: "cross-org-item",
             pricebookItemId: catalog.itemB.id,
             quantity: "1",
             sortOrder: 0,
           },
         ],
-        catalog.orgA.id,
+        quoteContextForOrgA,
       ),
   );
 
@@ -402,7 +410,7 @@ async function runSnapshotChecks(summary: SmokeSummary, service: DocumentSnapsho
         sortOrder: 0,
       },
     ];
-    const drafts = await service.buildLineDrafts(lines, catalog.orgA.id);
+    const drafts = await service.buildLineDrafts(lines, quoteContextForOrgA);
     if (drafts.length !== 1) {
       throw new Error(`Expected 1 expanded bundle draft, got ${drafts.length}.`);
     }
@@ -426,7 +434,7 @@ async function runSnapshotChecks(summary: SmokeSummary, service: DocumentSnapsho
             sortOrder: 0,
           },
         ],
-        catalog.orgA.id,
+        quoteContextForOrgA,
       ),
   );
 
@@ -443,7 +451,7 @@ async function runSnapshotChecks(summary: SmokeSummary, service: DocumentSnapsho
             sortOrder: 0,
           },
         ],
-        catalog.orgA.id,
+        quoteContextForOrgA,
       ),
   );
 
@@ -460,7 +468,7 @@ async function runSnapshotChecks(summary: SmokeSummary, service: DocumentSnapsho
             sortOrder: 0,
           },
         ],
-        catalog.orgA.id,
+        quoteContextForOrgA,
       ),
   );
 }
@@ -513,6 +521,11 @@ async function main() {
       dataSource.getRepository(PricebookBundleEntity),
       dataSource.getRepository(PricebookBundleItemEntity),
       new DocumentPricingService(),
+      {
+        requireFinalizedDocumentTranslation: async () => {
+          throw new Error("Unexpected translation lookup in document snapshot org isolation smoke test.");
+        },
+      } as unknown as CustomerOutputTranslationService,
     );
 
     const token = randomUUID().slice(0, 8);

@@ -86,11 +86,15 @@ export type CreateJobNotePayload = {
 
 export type PricebookItemDocumentLineInput = {
   kind: "pricebook_item";
+  documentLineKey: string;
   pricebookItemId: string;
   quantity: string;
   sortOrder: number;
   unitPriceCentsOverride?: number;
+  nameOverride?: string | null;
   descriptionOverride?: string | null;
+  nameTranslationRecordId?: string | null;
+  descriptionTranslationRecordId?: string | null;
 };
 
 export type PricebookBundleDocumentLineInput = {
@@ -102,11 +106,14 @@ export type PricebookBundleDocumentLineInput = {
 
 export type ManualDocumentLineInput = {
   kind: "manual";
+  documentLineKey: string;
   name: string;
   quantity: string;
   unitPriceCents: number;
   sortOrder: number;
   description?: string | null;
+  nameTranslationRecordId?: string | null;
+  descriptionTranslationRecordId?: string | null;
 };
 
 export type DocumentLineItemInput =
@@ -568,6 +575,7 @@ function parseDocumentLineItems(value: unknown): DocumentLineItemInput[] | undef
     if (kind === "pricebook_item") {
       return {
         kind,
+        documentLineKey: requireTrimmedString(lineItem.documentLineKey, `lineItems[${index}].documentLineKey`, 128),
         pricebookItemId: requireUuid(lineItem.pricebookItemId, `lineItems[${index}].pricebookItemId`),
         quantity: requirePositiveDecimalString(lineItem.quantity, `lineItems[${index}].quantity`),
         sortOrder: requireNonNegativeInteger(lineItem.sortOrder, `lineItems[${index}].sortOrder`),
@@ -575,6 +583,14 @@ function parseDocumentLineItems(value: unknown): DocumentLineItemInput[] | undef
           lineItem.unitPriceCentsOverride,
           `lineItems[${index}].unitPriceCentsOverride`,
         ),
+        nameOverride:
+          lineItem.nameOverride === undefined
+            ? undefined
+            : optionalTrimmedString(
+                lineItem.nameOverride,
+                `lineItems[${index}].nameOverride`,
+                255,
+              ),
         descriptionOverride:
           lineItem.descriptionOverride === undefined
             ? undefined
@@ -582,6 +598,17 @@ function parseDocumentLineItems(value: unknown): DocumentLineItemInput[] | undef
                 lineItem.descriptionOverride,
                 `lineItems[${index}].descriptionOverride`,
                 3000,
+              ),
+        nameTranslationRecordId:
+          lineItem.nameTranslationRecordId === undefined
+            ? undefined
+            : optionalUuid(lineItem.nameTranslationRecordId, `lineItems[${index}].nameTranslationRecordId`),
+        descriptionTranslationRecordId:
+          lineItem.descriptionTranslationRecordId === undefined
+            ? undefined
+            : optionalUuid(
+                lineItem.descriptionTranslationRecordId,
+                `lineItems[${index}].descriptionTranslationRecordId`,
               ),
       };
     }
@@ -600,6 +627,7 @@ function parseDocumentLineItems(value: unknown): DocumentLineItemInput[] | undef
 
     return {
       kind,
+      documentLineKey: requireTrimmedString(lineItem.documentLineKey, `lineItems[${index}].documentLineKey`, 128),
       name: requireTrimmedString(lineItem.name, `lineItems[${index}].name`, 255),
       quantity: requirePositiveDecimalString(lineItem.quantity, `lineItems[${index}].quantity`),
       unitPriceCents: requireNonNegativeInteger(lineItem.unitPriceCents, `lineItems[${index}].unitPriceCents`),
@@ -608,6 +636,17 @@ function parseDocumentLineItems(value: unknown): DocumentLineItemInput[] | undef
         lineItem.description === undefined
           ? undefined
           : optionalTrimmedString(lineItem.description, `lineItems[${index}].description`, 3000),
+      nameTranslationRecordId:
+        lineItem.nameTranslationRecordId === undefined
+          ? undefined
+          : optionalUuid(lineItem.nameTranslationRecordId, `lineItems[${index}].nameTranslationRecordId`),
+      descriptionTranslationRecordId:
+        lineItem.descriptionTranslationRecordId === undefined
+          ? undefined
+          : optionalUuid(
+              lineItem.descriptionTranslationRecordId,
+              `lineItems[${index}].descriptionTranslationRecordId`,
+            ),
     };
   });
 }

@@ -14,6 +14,7 @@ import {
   formatCentsInput,
   formatCurrencyFromCents,
   formatDateTime,
+  hydrateInvoiceLineTranslations,
   invoiceLineFromPricebookItem,
   invoiceLinesFromBundle,
   invoiceLinesFromPersistedSnapshot,
@@ -26,6 +27,8 @@ import {
 import { getJobStatusLabel, type JobStatus } from "@/lib/crm/statuses";
 import type { PersistedQuoteLineItem } from "@/lib/crm/quote-line-model";
 import type { PricebookBundleDetail, PricebookItem } from "@/lib/crm/pricebook-model";
+import { listDocumentCustomerOutputTranslations } from "@/lib/language-store/client-customer-output-translations";
+import { getClientLanguagePreference } from "@/lib/language-store/client-language-preferences";
 
 type ToastTone = "success" | "error" | "warning";
 type InvoiceLifecycleStatus = "sent" | "partial" | "paid" | "refunded" | "overpaid";
@@ -116,11 +119,13 @@ function invoiceLinesFromQuoteDetail(
       .sort((left, right) => left.sort_order - right.sort_order)
       .map((line) => ({
         clientId: `quote-${line.id}`,
+        documentLineKey: `invoice-from-quote-${line.id}-${Math.random().toString(36).slice(2, 8)}`,
         kind: line.pricebook_item_id ? "pricebook_item" : "manual",
         pricebookItemId: line.pricebook_item_id,
         sourceLabel: null,
         sku: line.sku_snapshot,
         name: line.name_snapshot,
+        originalName: line.pricebook_item_id ? line.name_snapshot : null,
         description: line.description_snapshot ?? "",
         quantity: normalizeQuantityInput(line.quantity, "Quantity"),
         unitPriceInput: formatCentsInput(line.unit_price_cents_snapshot),
@@ -129,6 +134,16 @@ function invoiceLinesFromQuoteDetail(
         originalDescription: line.pricebook_item_id ? line.description_snapshot : null,
         itemType: line.item_type_snapshot,
         unitOfMeasure: line.unit_of_measure_snapshot,
+        nameTranslationRecordId: null,
+        nameTranslationText: null,
+        nameTranslationStatus: null,
+        nameTranslationSourceText: null,
+        nameTranslationSourceLanguageCode: null,
+        descriptionTranslationRecordId: null,
+        descriptionTranslationText: null,
+        descriptionTranslationStatus: null,
+        descriptionTranslationSourceText: null,
+        descriptionTranslationSourceLanguageCode: null,
       }));
   }
 
@@ -164,6 +179,7 @@ export default function JobInvoiceSection({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingInvoice, setIsLoadingInvoice] = useState(false);
+  const [sourceLanguageCode, setSourceLanguageCode] = useState<string | null>(null);
 
   const canReflectPaidOnJob = currentJobStatus === "completed" || currentJobStatus === "paid";
   const previewTotals = useMemo(
@@ -177,18 +193,40 @@ export default function JobInvoiceSection({
     onInvoiceChange?.(nextInvoice);
   }
 
-  function applyInvoiceDetail(nextInvoice: JobInvoiceRecord | null) {
+  function applyInvoiceDetail(nextInvoice: JobInvoiceRecord | null, nextLines?: InvoiceBuilderLine[]) {
     publishInvoice(nextInvoice);
     setStatus(nextInvoice?.status ?? "unpaid");
     setTaxRateInput(bpsToTaxRateInput(nextInvoice?.tax_rate_bps_snapshot));
-    setLines(invoiceLinesFromPersistedSnapshot(nextInvoice?.line_items ?? [], nextInvoice?.amount_cents));
+    setLines(nextLines ?? invoiceLinesFromPersistedSnapshot(nextInvoice?.line_items ?? [], nextInvoice?.amount_cents));
   }
 
   async function loadInvoiceDetailById(invoiceId: string) {
     const response = await crmApiFetch<JobInvoiceRecord>(`/api/invoices/${invoiceId}`);
-    applyInvoiceDetail(response);
+    const baseLines = invoiceLinesFromPersistedSnapshot(response?.line_items ?? [], response?.amount_cents);
+    const translations = await listDocumentCustomerOutputTranslations("invoice", invoiceId).catch(() => []);
+    applyInvoiceDetail(response, hydrateInvoiceLineTranslations(baseLines, translations));
     return response;
   }
+
+  useEffect(() => {
+    let ignore = false;
+
+    void getClientLanguagePreference()
+      .then((preference) => {
+        if (!ignore) {
+          setSourceLanguageCode(preference.effective_language_code === "en" ? null : preference.effective_language_code);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setSourceLanguageCode(null);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!invoice?.id) {
@@ -334,6 +372,46 @@ export default function JobInvoiceSection({
     );
   }
 
+  function updateLineTranslation(
+    clientId: string,
+    field: "name" | "description",
+    value: {
+      recordId: string | null;
+      text: string | null;
+      status: "draft" | "final" | null;
+      sourceText: string | null;
+      sourceLanguageCode: string | null;
+    },
+  ) {
+    setLines((current) =>
+      current.map((line) => {
+        if (line.clientId !== clientId) {
+          return line;
+        }
+
+        if (field === "name") {
+          return {
+            ...line,
+            nameTranslationRecordId: value.recordId,
+            nameTranslationText: value.text,
+            nameTranslationStatus: value.status,
+            nameTranslationSourceText: value.sourceText,
+            nameTranslationSourceLanguageCode: value.sourceLanguageCode,
+          };
+        }
+
+        return {
+          ...line,
+          descriptionTranslationRecordId: value.recordId,
+          descriptionTranslationText: value.text,
+          descriptionTranslationStatus: value.status,
+          descriptionTranslationSourceText: value.sourceText,
+          descriptionTranslationSourceLanguageCode: value.sourceLanguageCode,
+        };
+      }),
+    );
+  }
+
   function removeLine(clientId: string) {
     setLines((current) => current.filter((line) => line.clientId !== clientId));
   }
@@ -385,10 +463,13 @@ export default function JobInvoiceSection({
             taxRateInput={taxRateInput}
             onTaxRateInputChange={setTaxRateInput}
             onLineChange={updateLine}
+            onLineTranslationChange={updateLineTranslation}
             onRemoveLine={removeLine}
             onAddManualLine={addManualLine}
             onOpenPricebook={() => setShowPricebookPicker((current) => !current)}
             persistedLines={invoiceDetail?.line_items}
+            documentId={invoiceDetail?.id ?? null}
+            sourceLanguageCode={sourceLanguageCode}
           />
 
           {showPricebookPicker ? (

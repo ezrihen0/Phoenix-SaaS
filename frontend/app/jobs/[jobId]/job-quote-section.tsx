@@ -13,6 +13,7 @@ import {
   createManualQuoteLine,
   formatCurrencyFromCents,
   formatDateTime,
+  hydrateQuoteLineTranslations,
   quoteLineFromPricebookItem,
   quoteLinesFromBundle,
   quoteLinesFromPersistedSnapshot,
@@ -22,6 +23,8 @@ import {
   type QuoteStatus,
 } from "@/lib/crm/quote-line-model";
 import type { PricebookBundleDetail, PricebookItem } from "@/lib/crm/pricebook-model";
+import { listDocumentCustomerOutputTranslations } from "@/lib/language-store/client-customer-output-translations";
+import { getClientLanguagePreference } from "@/lib/language-store/client-language-preferences";
 
 type ToastTone = "success" | "error" | "warning";
 
@@ -75,6 +78,7 @@ export default function JobQuoteSection({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+  const [sourceLanguageCode, setSourceLanguageCode] = useState<string | null>(null);
 
   const activeQuote = quoteDetail ?? quote;
   const isLocked = Boolean(activeQuote?.approved_at || activeQuote?.signed_at);
@@ -88,19 +92,41 @@ export default function JobQuoteSection({
     onQuoteChange?.(nextQuote);
   }
 
-  function applyQuoteDetail(nextQuote: JobQuoteRecord | null) {
+  function applyQuoteDetail(nextQuote: JobQuoteRecord | null, nextLines?: QuoteBuilderLine[]) {
     publishQuote(nextQuote);
     setDescription(nextQuote?.description ?? "");
     setStatus(nextQuote?.status ?? "draft");
     setTaxRateInput(bpsToTaxRateInput(nextQuote?.tax_rate_bps_snapshot));
-    setLines(quoteLinesFromPersistedSnapshot(nextQuote?.line_items ?? [], nextQuote?.price_cents));
+    setLines(nextLines ?? quoteLinesFromPersistedSnapshot(nextQuote?.line_items ?? [], nextQuote?.price_cents));
   }
 
   async function loadQuoteDetail(quoteId: string) {
     const response = await crmApiFetch<JobQuoteRecord>(`/api/estimates/${quoteId}`);
-    applyQuoteDetail(response);
+    const baseLines = quoteLinesFromPersistedSnapshot(response?.line_items ?? [], response?.price_cents);
+    const translations = await listDocumentCustomerOutputTranslations("quote", quoteId).catch(() => []);
+    applyQuoteDetail(response, hydrateQuoteLineTranslations(baseLines, translations));
     return response;
   }
+
+  useEffect(() => {
+    let ignore = false;
+
+    void getClientLanguagePreference()
+      .then((preference) => {
+        if (!ignore) {
+          setSourceLanguageCode(preference.effective_language_code === "en" ? null : preference.effective_language_code);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setSourceLanguageCode(null);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!quote?.id) {
@@ -174,6 +200,46 @@ export default function JobQuoteSection({
     );
   }
 
+  function updateLineTranslation(
+    clientId: string,
+    field: "name" | "description",
+    value: {
+      recordId: string | null;
+      text: string | null;
+      status: "draft" | "final" | null;
+      sourceText: string | null;
+      sourceLanguageCode: string | null;
+    },
+  ) {
+    setLines((current) =>
+      current.map((line) => {
+        if (line.clientId !== clientId) {
+          return line;
+        }
+
+        if (field === "name") {
+          return {
+            ...line,
+            nameTranslationRecordId: value.recordId,
+            nameTranslationText: value.text,
+            nameTranslationStatus: value.status,
+            nameTranslationSourceText: value.sourceText,
+            nameTranslationSourceLanguageCode: value.sourceLanguageCode,
+          };
+        }
+
+        return {
+          ...line,
+          descriptionTranslationRecordId: value.recordId,
+          descriptionTranslationText: value.text,
+          descriptionTranslationStatus: value.status,
+          descriptionTranslationSourceText: value.sourceText,
+          descriptionTranslationSourceLanguageCode: value.sourceLanguageCode,
+        };
+      }),
+    );
+  }
+
   function removeLine(clientId: string) {
     setLines((current) => current.filter((line) => line.clientId !== clientId));
   }
@@ -228,11 +294,14 @@ export default function JobQuoteSection({
             taxRateInput={taxRateInput}
             onTaxRateInputChange={isLocked ? undefined : setTaxRateInput}
             onLineChange={isLocked ? undefined : updateLine}
+            onLineTranslationChange={isLocked ? undefined : updateLineTranslation}
             onRemoveLine={isLocked ? undefined : removeLine}
             onAddManualLine={isLocked ? undefined : addManualLine}
             onOpenPricebook={isLocked ? undefined : () => setShowPricebookPicker((current) => !current)}
             readOnly={isLocked}
             persistedLines={activeQuote?.line_items}
+            documentId={activeQuote?.id ?? null}
+            sourceLanguageCode={sourceLanguageCode}
           />
 
           {showPricebookPicker && !isLocked ? (

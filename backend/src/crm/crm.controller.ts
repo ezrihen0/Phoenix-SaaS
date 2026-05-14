@@ -1135,7 +1135,12 @@ export class CrmController {
 
       const hasSnapshotLineItems = payload.lineItems !== undefined;
       const quoteLineDrafts = hasSnapshotLineItems
-        ? await this.buildDocumentLineDrafts(payload.lineItems ?? [], organizationId)
+        ? await this.buildDocumentLineDrafts(
+            payload.lineItems ?? [],
+            organizationId,
+            "quote",
+            existingQuote?.id ?? null,
+          )
         : [];
       const quoteTotals = hasSnapshotLineItems
         ? this.documentPricingService.computeSnapshotTotals(
@@ -1364,6 +1369,7 @@ export class CrmController {
       invoice_id: lineItem.invoice_id,
       pricebook_item_id: lineItem.pricebook_item_id,
       sku_snapshot: lineItem.sku_snapshot,
+      document_line_key: lineItem.document_line_key,
       name_snapshot: lineItem.name_snapshot,
       description_snapshot: lineItem.description_snapshot,
       item_type_snapshot: lineItem.item_type_snapshot,
@@ -1388,6 +1394,7 @@ export class CrmController {
       quote_id: lineItem.quote_id,
       pricebook_item_id: lineItem.pricebook_item_id,
       sku_snapshot: lineItem.sku_snapshot,
+      document_line_key: lineItem.document_line_key,
       name_snapshot: lineItem.name_snapshot,
       description_snapshot: lineItem.description_snapshot,
       item_type_snapshot: lineItem.item_type_snapshot,
@@ -1406,8 +1413,17 @@ export class CrmController {
     }));
   }
 
-  private async buildDocumentLineDrafts(lineItems: DocumentLineItemInput[], organizationId: string) {
-    return this.documentSnapshotService.buildLineDrafts(lineItems, organizationId);
+  private async buildDocumentLineDrafts(
+    lineItems: DocumentLineItemInput[],
+    organizationId: string,
+    documentKind: "quote" | "invoice",
+    documentId: string | null,
+  ) {
+    return this.documentSnapshotService.buildLineDrafts(lineItems, {
+      organizationId,
+      documentKind,
+      documentId,
+    });
   }
 
   @Get("invoices")
@@ -2180,7 +2196,12 @@ export class CrmController {
 
       const hasSnapshotLineItems = payload.lineItems !== undefined;
       const invoiceLineDrafts = hasSnapshotLineItems
-        ? await this.buildDocumentLineDrafts(payload.lineItems ?? [], organizationId)
+        ? await this.buildDocumentLineDrafts(
+            payload.lineItems ?? [],
+            organizationId,
+            "invoice",
+            existingInvoice?.id ?? null,
+          )
         : [];
       const invoiceTotals = hasSnapshotLineItems
         ? this.documentPricingService.computeSnapshotTotals(
