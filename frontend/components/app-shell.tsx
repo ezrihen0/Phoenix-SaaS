@@ -23,6 +23,7 @@ import {
   Workflow,
 } from "lucide-react";
 
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
 import { ThemeRuntime } from "@/components/theme-runtime";
 import { GlobalSearchShell } from "@/features/global-search/global-search-shell";
@@ -308,6 +309,7 @@ export function AppShell({ children }: AppShellProps) {
               <div ref={searchPopoverRef} className="relative flex min-h-[76px] flex-1 items-center justify-end">
                 <div className="theme-surface-modal flex flex-wrap items-center justify-end gap-3 rounded-[30px] border bg-[color:var(--cmp-surface-panel)]/95 px-3 py-3 shadow-[0_20px_65px_color-mix(in_srgb,var(--bg-canvas)_56%,transparent)] backdrop-blur-xl">
                   <OrganizationSwitcher variant="shell" />
+                  <LanguageSwitcher variant="shell" />
                   <div className="theme-control-surface-soft flex items-center gap-3 rounded-full border px-3 py-2">
                     <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--sem-accent-primary),var(--sem-action-secondary))] text-sm font-semibold text-[color:var(--sem-text-inverse)]">
                       {buildInitials(userLabel)}

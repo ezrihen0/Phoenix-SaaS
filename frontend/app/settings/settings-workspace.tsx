@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Building2, CreditCard, Palette, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { useState } from "react";
 
@@ -252,9 +253,29 @@ export function SettingsWorkspace({
           ) : null}
         </section>
       ) : (
-        <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-          Choose one closed cube above to open that settings topic.
-        </section>
+        <div className="space-y-4">
+          <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+            Choose one closed cube above to open that settings topic.
+          </section>
+
+          <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Language Store</p>
+                <h2 className="mt-3 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Open workspace languages</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+                  Review enabled languages, available slots, and locked states for the active workspace.
+                </p>
+              </div>
+              <Link
+                href="/language-store"
+                className="theme-control-surface inline-flex items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold transition hover:border-[color:var(--cmp-border-accent)]"
+              >
+                Open Language Store
+              </Link>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );
