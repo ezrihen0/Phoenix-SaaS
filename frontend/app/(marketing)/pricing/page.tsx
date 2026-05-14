@@ -42,9 +42,8 @@ export default async function PricingPage({ searchParams }: PricingPageContext) 
         </h2>
         <ul className="list-disc space-y-2 pl-5 text-sm leading-7 text-white/60">
           <li>
-            <strong className="text-white/80">Shared payer authority:</strong> the local{" "}
-            <code className="rounded bg-black/40 px-1.5 py-0.5 text-xs">billing_accounts</code> table remains the
-            source of truth for subscription and payer state.
+            <strong className="text-white/80">Shared payer authority:</strong>{" "}
+            your subscription and payer identity live on one WizField billing profile—the same profile Stripe Checkout updates when payment succeeds.
           </li>
           <li>
             <strong className="text-white/80">Checkout:</strong> owner-authenticated Stripe Checkout Sessions create the

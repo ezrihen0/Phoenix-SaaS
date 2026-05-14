@@ -117,7 +117,15 @@ async function requireAuthenticatedJobDetailRoute(nextPath: string) {
   return requireServerSession(nextPath);
 }
 
-function ErrorPanel({ message }: { message: string }) {
+function ErrorPanel({
+  message,
+  recoveryHref,
+  recoveryLabel,
+}: {
+  message: string;
+  recoveryHref: string;
+  recoveryLabel: string;
+}) {
   return (
     <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
       <section className="theme-surface-modal mx-auto max-w-5xl rounded-[32px] border border-[color:var(--cmp-border-subtle)] p-8">
@@ -128,11 +136,11 @@ function ErrorPanel({ message }: { message: string }) {
         <p className="mt-4 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)]">{message}</p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link
-            href="/jobs"
+            href={recoveryHref}
             className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to jobs
+            {recoveryLabel}
           </Link>
         </div>
       </section>
@@ -142,7 +150,10 @@ function ErrorPanel({ message }: { message: string }) {
 
 export default async function JobDetailPage({ params }: JobDetailPageContext) {
   const { jobId } = await params;
-  await requireAuthenticatedJobDetailRoute(`/jobs/${jobId}`);
+  const session = await requireAuthenticatedJobDetailRoute(`/jobs/${jobId}`);
+  const profileRole = session.profile?.role ?? null;
+  const recoveryHref = profileRole === "technician" ? "/home" : "/jobs";
+  const recoveryLabel = profileRole === "technician" ? "Back to home" : "Back to jobs";
 
   let job: JobDetailRecord | null = null;
 
@@ -155,7 +166,13 @@ export default async function JobDetailPage({ params }: JobDetailPageContext) {
       notFound();
     }
 
-    return <ErrorPanel message={message} />;
+    return (
+      <ErrorPanel
+        message={message}
+        recoveryHref={recoveryHref}
+        recoveryLabel={recoveryLabel}
+      />
+    );
   }
 
   if (!job) {
@@ -168,7 +185,13 @@ export default async function JobDetailPage({ params }: JobDetailPageContext) {
   try {
     technicians = await serverApiFetch<TechnicianRecord[]>("/api/technicians");
   } catch {
-    return <ErrorPanel message="The technician roster could not be loaded." />;
+    return (
+      <ErrorPanel
+        message="The technician roster could not be loaded."
+        recoveryHref={recoveryHref}
+        recoveryLabel={recoveryLabel}
+      />
+    );
   }
 
   const assignmentTechniciansMap = new Map<string, TechnicianRecord>();

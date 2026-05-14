@@ -5,6 +5,8 @@ import {
   isOfficeDashboardResponse,
   type OfficeDashboardResponse,
 } from "@/lib/crm/home-dashboard-types";
+import { canAccessShellHref } from "@/lib/navigation/shell-nav-policy";
+import Link from "next/link";
 
 function isOfficeRole(role: SessionRole | null) {
   return role === "owner"
@@ -12,6 +14,49 @@ function isOfficeRole(role: SessionRole | null) {
     || role === "office_admin"
     || role === "dispatcher"
     || role === "viewer";
+}
+
+function OfficeSnapshotQuickLinks({ role }: { role: SessionRole | null }) {
+  type QuickItem = { href: string; label: string };
+
+  const candidates: QuickItem[] = [
+    { href: "/leads", label: "Leads queue" },
+    { href: "/jobs", label: "Jobs board" },
+    { href: "/schedule", label: "Schedule" },
+    { href: "/dispatch", label: "Dispatch" },
+    { href: "/invoices", label: "Invoices" },
+    { href: "/estimates", label: "Estimates" },
+    { href: "/marketing", label: "Growth Center" },
+    { href: "/automations", label: "CRM automations" },
+    { href: "/calls", label: "Calls" },
+    { href: "/messaging", label: "Messaging" },
+  ];
+
+  const links = candidates.filter((item) => canAccessShellHref(item.href, role));
+
+  if (links.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
+      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Jump to operations</p>
+      <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
+        Open the module behind each snapshot metric—without hunting the sidebar.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {links.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="theme-control-surface inline-flex items-center rounded-full border px-4 py-2 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+          >
+            {item.label}
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function SummaryCard({
@@ -64,9 +109,8 @@ export default async function HomePage() {
               Operations home
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-              Your field queue and job progress live below. Use{" "}
-              <strong className="font-medium text-[color:var(--sem-text-primary)]">Jobs</strong>
-              {" "}when you need full job detail, or stay here to update status and field notes in one place.
+              Your field queue and job progress live below. Open any job card for full detail, field notes, and status —
+              your shortcuts stay on this board between visits.
             </p>
             <p className="mt-4 inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-secondary)]">
               Technician board
@@ -87,9 +131,9 @@ export default async function HomePage() {
             Operations home
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-            Your WizField snapshot for today: leads, jobs, scheduling, and billing in one place. Next: open{" "}
-            <strong className="font-medium text-[color:var(--sem-text-primary)]">Jobs</strong> to dispatch work or{" "}
-            <strong className="font-medium text-[color:var(--sem-text-primary)]">Leads</strong> to qualify new intake.
+            Tiles summarize today&apos;s intake, workload, and billing health whenever the dashboard responds.{" "}
+            <strong className="font-medium text-[color:var(--sem-text-primary)]">Jump to operations</strong>
+            {" "}is always available for one-click entry into the modules that matter now.
           </p>
           <p className="mt-4 inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-secondary)]">
             Live dashboard snapshot
@@ -141,6 +185,8 @@ export default async function HomePage() {
             </div>
           </section>
         ) : null}
+
+        {officeRole ? <OfficeSnapshotQuickLinks role={role} /> : null}
 
         {!technicianRole && !officeRole ? (
           <section className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5 text-sm text-[color:var(--sem-text-secondary)]">

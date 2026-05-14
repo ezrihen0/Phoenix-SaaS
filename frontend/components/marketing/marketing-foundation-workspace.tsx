@@ -239,7 +239,7 @@ const routeDefinitions: RouteDefinition[] = [
     eyebrow: "Autopilot (V1)",
     title: "Opportunity-triggered rules with safe actions",
     description:
-      "Create rules that react to CRM opportunity signals. Actions remain suggest-only or auto-create draft in Content Studio — no auto-publish, no scheduled scanner triggers in V1.",
+      "Growth Center marketing automation—distinct from CRM operational rules under Automations in the main navigation. React to CRM opportunity signals; actions stay suggest-only or auto-create drafts in Content Studio—no auto-publish and no scheduled scanner triggers in V1.",
     icon: Workflow,
     includedNow: [
       "Rules keyed to opportunity types surfaced in CRM Intelligence",
@@ -248,7 +248,7 @@ const routeDefinitions: RouteDefinition[] = [
     ],
     laterPhaseWork: [
       "Scheduled scanners and additional trigger families",
-      "Automation Store or cross-product catalog",
+      "Tighter orchestration between Growth Center campaigns and CRM operational triggers where product allows",
       "Selective auto-publish only after explicit commercial and safety sign-off",
     ],
   },

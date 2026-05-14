@@ -43,9 +43,9 @@ export default async function BillingSuccessPage({ searchParams }: BillingSucces
           </p>
         )}
 
-        {sessionId ? (
+        {sessionId && process.env.NODE_ENV === "development" ? (
           <div className="mt-6 rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">Debug session id</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">Stripe Checkout session id (development only)</p>
             <p className="mt-2 break-all font-mono text-xs text-[color:var(--sem-text-primary)]">{sessionId}</p>
           </div>
         ) : null}

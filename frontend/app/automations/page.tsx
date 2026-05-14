@@ -24,24 +24,19 @@ type ActivityItem = {
 
 const summaryCards: SummaryCard[] = [
   {
-    label: "Active Rules",
-    value: "0",
-    helper: "Owner-created automations will appear here after validation and save.",
+    label: "Saved rules",
+    value: "—",
+    helper: "Rules you validate and save appear in the list below.",
   },
   {
-    label: "Pending Actions",
-    value: "0",
-    helper: "Approval-required sends and tasks will queue here before execution.",
+    label: "Recipe categories",
+    value: "12",
+    helper: "Labels group future operational recipes; most recipes are not built yet.",
   },
   {
-    label: "Runs Today",
-    value: "0",
-    helper: "Every run, skip, block, and failure will be auditable.",
-  },
-  {
-    label: "Kill Switch",
-    value: "Planned",
-    helper: "Global safety controls are part of the foundation work.",
+    label: "Builder",
+    value: "Live",
+    helper: "Create CRM-triggered logic with server-side validation before activation.",
   },
 ];
 
@@ -62,19 +57,19 @@ const categories = [
 
 const activityPreview: ActivityItem[] = [
   {
-    title: "No runs yet",
-    detail: "Execution history will show which rule ran, why it ran, and what happened.",
-    status: "Audit",
+    title: "Run history",
+    detail: "When execution logging ships for this module, runs will list here.",
+    status: "Roadmap",
   },
   {
-    title: "No pending approvals",
-    detail: "Customer-facing or risky actions can create approval cards before sending.",
-    status: "Queue",
+    title: "Approval queue",
+    detail: "Risky or customer-visible actions may require review before send.",
+    status: "Future",
   },
   {
-    title: "No active custom rules",
-    detail: "Validated owner-created rules will become active immediately after Save.",
-    status: "Builder",
+    title: "Custom rules",
+    detail: "Use the builder below; incomplete rules stay blocked until validation passes.",
+    status: "Today",
   },
 ];
 
@@ -98,37 +93,50 @@ export default async function AutomationsPage() {
           <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">
-                Independent Product Body
+                CRM · Operational rules
               </p>
               <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
-                Automation Store
+                CRM automations
               </h1>
               <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-                Build safe business automations from trusted CRM events. Browse success recipes, create custom logic,
-                validate every rule, and keep every action auditable.
+                This workspace is for <strong className="font-medium text-[color:var(--sem-text-primary)]">operational CRM rules</strong>
+                {" "}built from tenant events—distinct from Growth Center, where marketing drafts, publishing, and{" "}
+                <strong className="font-medium text-[color:var(--sem-text-primary)]">Growth Center Automations</strong>
+                {" "}drive opportunity-linked content workflows (draft creation only in V1—never silent outbound posting).
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href="#recipes"
-                className="inline-flex items-center gap-2 rounded-full bg-[color:var(--cmp-action-primary)] px-5 py-3 text-sm font-semibold text-[color:var(--sem-text-inverse)] transition hover:opacity-90"
+                href="/marketing/automations"
+                className="theme-control-surface inline-flex items-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
               >
                 <Sparkles className="h-4 w-4" />
-                Browse Success Recipes
+                Growth Center Automations
               </Link>
               <Link
                 href="#custom-builder"
-                className="theme-control-surface inline-flex items-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+                className="inline-flex items-center gap-2 rounded-full bg-[color:var(--cmp-action-primary)] px-5 py-3 text-sm font-semibold text-[color:var(--sem-text-inverse)] transition hover:opacity-90"
               >
                 <Plus className="h-4 w-4" />
-                Create Custom Automation
+                Rule builder
               </Link>
             </div>
           </div>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="theme-surface-card rounded-[26px] border border-[color:var(--cmp-border-accent)]/35 bg-[color:var(--cmp-surface-panel)] p-5 sm:p-6">
+          <p className="text-sm leading-7 text-[color:var(--sem-text-secondary)]">
+            <span className="font-semibold text-[color:var(--sem-text-primary)]">Not the marketing automation suite.</span>
+            {" "}For opportunity-triggered drafts, campaigns, and publishing workflows, open{" "}
+            <Link href="/marketing/automations" className="font-medium text-[color:var(--sem-accent-primary)] underline-offset-2 hover:underline">
+              Growth Center → Automations
+            </Link>
+            . This page stays focused on CRM-style operational automation tooling as it lands.
+          </p>
+        </section>
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {summaryCards.map((card) => (
             <SummaryCard key={card.label} {...card} />
           ))}
@@ -138,15 +146,15 @@ export default async function AutomationsPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
-                Marketplace Structure
+                Recipe framework
               </p>
-              <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Recipe categories</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Future recipe buckets</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                V1 creates the category frame for a future 50-60 recipe marketplace without building every recipe now.
+                Category chips reserve taxonomy for guided recipes. Most recipes are not shipped yet—the builder below is the supported path today.
               </p>
             </div>
             <span className="theme-badge rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.18em]">
-              12 categories
+              Early layout
             </span>
           </div>
 
@@ -170,14 +178,13 @@ export default async function AutomationsPage() {
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
-                  Custom Builder
+                  Rule builder
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-text-primary)]">
-                  Save becomes active after validation
+                  Validation before activation
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                  The owner chooses the event, conditions, action, timing, and template. The backend will block unsafe or
-                  incomplete rules before they become active.
+                  Pick event, conditions, and actions. The backend rejects unsafe or incomplete rules—they only apply after successful validation.
                 </p>
               </div>
             </div>

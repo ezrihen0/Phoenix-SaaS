@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Boxes,
   BriefcaseBusiness,
+  CalendarDays,
   ClipboardList,
   FileText,
   House,
@@ -19,6 +20,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Truck,
   Users,
   Workflow,
 } from "lucide-react";
@@ -29,6 +31,7 @@ import { ThemeRuntime } from "@/components/theme-runtime";
 import { GlobalSearchShell } from "@/features/global-search/global-search-shell";
 import { getClientSession } from "@/lib/auth/client-auth";
 import { handleLogout } from "@/lib/auth/logout";
+import { isShellNavHrefVisible, type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
 
 type AppShellProps = {
   children: ReactNode;
@@ -61,6 +64,8 @@ const HIDDEN_PREFIXES = [
 const PRIMARY_NAV_ITEMS: NavItem[] = [
   { href: "/home", label: "Home", icon: House },
   { href: "/jobs", label: "Jobs", icon: BriefcaseBusiness },
+  { href: "/schedule", label: "Schedule", icon: CalendarDays },
+  { href: "/dispatch", label: "Dispatch", icon: Truck },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/leads", label: "Leads", icon: ClipboardList },
   { href: "/inventory", label: "Inventory", icon: Boxes },
@@ -69,9 +74,9 @@ const PRIMARY_NAV_ITEMS: NavItem[] = [
   { href: "/estimates", label: "Estimates", icon: FileText },
   { href: "/calls", label: "Calls", icon: Phone },
   { href: "/messaging", label: "Messaging", icon: MessageSquare },
-  { href: "/marketing", label: "Marketing", icon: Megaphone },
+  { href: "/marketing", label: "Growth Center", icon: Megaphone },
   { href: "/inspections", label: "Inspections", icon: ShieldCheck },
-  { href: "/automations", label: "Automations", icon: Workflow },
+  { href: "/automations", label: "CRM automations", icon: Workflow },
 ];
 
 const HEADER_QUICK_LINKS: Array<Pick<NavItem, "href" | "label" | "icon">> = [
@@ -149,6 +154,8 @@ export function AppShell({ children }: AppShellProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
   const [userLabel, setUserLabel] = useState("WizField User");
+  const [shellNavRole, setShellNavRole] = useState<ShellNavRole | null>(null);
+  const [shellNavRoleResolved, setShellNavRoleResolved] = useState(false);
   const enabled = shouldShowShell(pathname);
 
   useEffect(() => {
@@ -192,6 +199,8 @@ export function AppShell({ children }: AppShellProps) {
 
       setUserLabel(nextLabel);
       setSearchEnabled(Boolean(canSearch));
+      setShellNavRole(session?.profile?.role ?? null);
+      setShellNavRoleResolved(true);
     }
 
     void loadUser();
@@ -228,6 +237,14 @@ export function AppShell({ children }: AppShellProps) {
     );
   }
 
+  const visiblePrimaryNav = PRIMARY_NAV_ITEMS.filter((item) =>
+    isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
+  );
+
+  const visibleHeaderQuickLinks = HEADER_QUICK_LINKS.filter((item) =>
+    isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
+  );
+
   return (
     <>
       <ThemeRuntime />
@@ -256,7 +273,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
 
           <nav className="flex flex-1 flex-col gap-2 overflow-y-auto pr-1">
-            {PRIMARY_NAV_ITEMS.map((item) => (
+            {visiblePrimaryNav.map((item) => (
               <SideNavLink
                 key={item.href}
                 {...item}
@@ -317,7 +334,7 @@ export function AppShell({ children }: AppShellProps) {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {HEADER_QUICK_LINKS.map((item) => (
+                    {visibleHeaderQuickLinks.map((item) => (
                       <HeaderQuickLink
                         key={item.href}
                         href={item.href}
