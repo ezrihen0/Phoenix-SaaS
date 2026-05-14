@@ -19,6 +19,7 @@ import { AutomationTemplateEntity } from "./entities/automation-template.entity"
 import { BillingAccountEntity } from "./entities/billing-account.entity";
 import { BillingAccountSubscriptionItemEntity } from "./entities/billing-account-subscription-item.entity";
 import { AuthSessionEntity } from "./entities/auth-session.entity";
+import { CustomerOutputTranslationRecordEntity } from "./entities/customer-output-translation-record.entity";
 import { CrmTaskEntity } from "./entities/crm-task.entity";
 import { CustomerEntity } from "./entities/customer.entity";
 import { InspectionEntity } from "./entities/inspection.entity";
@@ -58,6 +59,7 @@ import { QuoteLineItemEntity } from "./entities/quote-line-item.entity";
 import { RecentCallEntity } from "./entities/recent-call.entity";
 import { ServiceEntity } from "./entities/service.entity";
 import { TechnicianEntity } from "./entities/technician.entity";
+import { TranslationUsageLedgerEntity } from "./entities/translation-usage-ledger.entity";
 import { UserEntity } from "./entities/user.entity";
 import { UserOrganizationLanguagePreferenceEntity } from "./entities/user-organization-language-preference.entity";
 
@@ -67,8 +69,10 @@ export const typeOrmEntities = [
   UserEntity,
   BillingAccountEntity,
   BillingAccountSubscriptionItemEntity,
+  CustomerOutputTranslationRecordEntity,
   ProfileEntity,
   TechnicianEntity,
+  TranslationUsageLedgerEntity,
   ServiceEntity,
   CustomerEntity,
   LeadEntity,

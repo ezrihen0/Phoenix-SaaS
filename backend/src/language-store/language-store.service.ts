@@ -145,6 +145,10 @@ export class LanguageStoreService {
     };
   }
 
+  async listEnabledLanguagesForOrganization(organizationId: string) {
+    return this.listEnabledLanguages(organizationId);
+  }
+
   async getUserOrganizationLanguagePreference(
     organizationId: string,
     userId: string,
