@@ -35,6 +35,9 @@ import { JobNoteEntity } from "./entities/job-note.entity";
 import { JobStatusEventEntity } from "./entities/job-status-event.entity";
 import { LeadEntity } from "./entities/lead.entity";
 import { MembershipEntity } from "./entities/membership.entity";
+import { MarketingConnectedChannelEntity } from "./entities/marketing-connected-channel.entity";
+import { MarketingOpportunityEntity } from "./entities/marketing-opportunity.entity";
+import { MarketingProfileEntity } from "./entities/marketing-profile.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
 import { OrganizationBillingEntity } from "./entities/organization-billing.entity";
 import { OrganizationSettingEntity } from "./entities/organization-setting.entity";
@@ -64,6 +67,9 @@ export const typeOrmEntities = [
   LeadEntity,
   OrganizationEntity,
   OrganizationBillingEntity,
+  MarketingProfileEntity,
+  MarketingConnectedChannelEntity,
+  MarketingOpportunityEntity,
   MembershipEntity,
   JobEntity,
   QuoteEntity,

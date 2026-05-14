@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  Megaphone,
   Package,
   Phone,
   Receipt,
@@ -68,6 +69,7 @@ const PRIMARY_NAV_ITEMS: NavItem[] = [
   { href: "/calls", label: "Calls", icon: Phone },
   { href: "/messaging", label: "Messaging", icon: MessageSquare },
   { href: "/inspections", label: "Inspections", icon: ShieldCheck },
+  { href: "/marketing", label: "Marketing", icon: Megaphone },
   { href: "/automations", label: "Automations", icon: Workflow },
 ];
 

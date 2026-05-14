@@ -11,6 +11,7 @@ import { CustomerPortalModule } from "./customer-portal/customer-portal.module";
 import { buildTypeOrmModuleOptions } from "./database/typeorm.config";
 import { InspectionsModule } from "./inspections/inspections.module";
 import { InventoryModule } from "./inventory/inventory.module";
+import { MarketingModule } from "./marketing/marketing.module";
 import { MessagingModule } from "./messaging/messaging.module";
 import { PricebookModule } from "./pricebook/pricebook.module";
 import { PublicBookingsModule } from "./public/public-bookings.module";
@@ -36,6 +37,7 @@ import { TelephonyModule } from "./telephony/telephony.module";
     CustomerPortalModule,
     MessagingModule,
     InventoryModule,
+    MarketingModule,
     PricebookModule,
     TelephonyModule,
     AutomationsModule,
