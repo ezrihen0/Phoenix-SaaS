@@ -39,6 +39,9 @@ import { LeadEntity } from "./entities/lead.entity";
 import { MembershipEntity } from "./entities/membership.entity";
 import { MarketingConnectedChannelEntity } from "./entities/marketing-connected-channel.entity";
 import { MarketingContentDraftEntity } from "./entities/marketing-content-draft.entity";
+import { MarketingOAuthStateEntity } from "./entities/marketing-oauth-state.entity";
+import { MarketingPublishAttemptEntity } from "./entities/marketing-publish-attempt.entity";
+import { MarketingPublishJobEntity } from "./entities/marketing-publish-job.entity";
 import { MarketingContentVariantEntity } from "./entities/marketing-content-variant.entity";
 import { MarketingOpportunityEntity } from "./entities/marketing-opportunity.entity";
 import { MarketingProfileEntity } from "./entities/marketing-profile.entity";
@@ -78,6 +81,9 @@ export const typeOrmEntities = [
   LeadEntity,
   MarketingProfileEntity,
   MarketingConnectedChannelEntity,
+  MarketingOAuthStateEntity,
+  MarketingPublishJobEntity,
+  MarketingPublishAttemptEntity,
   MarketingContentDraftEntity,
   MarketingContentVariantEntity,
   MarketingOpportunityEntity,

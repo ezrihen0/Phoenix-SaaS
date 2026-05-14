@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { MarketingCalendarPanel } from "./marketing-calendar-panel";
+import { MarketingChannelsPanel } from "./marketing-channels-panel";
 import { MarketingContentStudio } from "./marketing-content-studio";
 import { MarketingProfileSettingsPanel } from "./marketing-profile-settings";
 
@@ -28,7 +29,11 @@ export type MarketingRouteKey =
   | "settings";
 
 export type MarketingFoundationData = {
-  phase: "phase_2_content_studio";
+  phase: "phase_2_content_studio" | "phase_3_publishing_integrations";
+  capabilities?: {
+    can_manage_channels: boolean;
+    can_enqueue_publishing: boolean;
+  };
   organization: {
     id: string;
     name: string | null;
@@ -183,19 +188,20 @@ const routeDefinitions: RouteDefinition[] = [
     key: "channels",
     href: "/marketing/channels",
     label: "Channels",
-    eyebrow: "Future Publishing Integrations",
-    title: "Channel hub is foundation-only",
-    description: "The channels route is ready for later integration work, but there are no live OAuth, reconnect, or publishing flows in Phase 1.",
+    eyebrow: "Phase 3 · OAuth targets",
+    title: "Google, Facebook, and deferred Instagram",
+    description:
+      "Connect Google Business Profile and a Facebook Page per organization. Tokens encrypt at rest; Instagram stays visibly deferred until Growth Center V1.5.",
     icon: Link2,
     includedNow: [
-      "Route shell for the integration hub",
-      "Organization-owned channel contract reserved in the backend",
-      "No connection or permission actions yet",
+      "Google + Meta OAuth handoffs with location/Page selection when multiple targets exist",
+      "Disconnect/reconnect flows scoped to owners and admins",
+      "Instagram card labeled Coming Soon without outbound IG calls",
     ],
     laterPhaseWork: [
-      "Google Business Profile, Facebook, and Instagram connections",
-      "Authorization health and reconnect handling",
-      "Publish-now and schedule-publish orchestration",
+      "Instagram containers, media libraries, and IG publishing",
+      "Multi-location or multi-page management beyond MVP singles",
+      "Rich media payloads mapped per provider",
     ],
   },
   {
@@ -322,16 +328,28 @@ export function MarketingFoundationWorkspace({
     ?? foundationData?.organization.id
     ?? "Active organization";
 
-  const interactiveRoutes: MarketingRouteKey[] = ["settings", "create", "calendar"];
+  const interactiveRoutes: MarketingRouteKey[] = ["settings", "create", "calendar", "channels"];
   const suppressEducationalRails = interactiveRoutes.includes(activeRouteKey);
   const showPrimaryRail = activeRouteKey === "overview" || suppressEducationalRails;
 
-  const phaseLabel = foundationData?.phase === "phase_2_content_studio" ? "Phase 2 Content Studio slice" : "Growth Center rollout";
-  const heroEyebrow = foundationData?.phase === "phase_2_content_studio" ? "Phase 2 · Manual studio online" : "Growth Center rollout";
+  const phaseLabel =
+    foundationData?.phase === "phase_3_publishing_integrations"
+      ? "Phase 3 · Publishing integrations"
+      : foundationData?.phase === "phase_2_content_studio"
+        ? "Phase 2 Content Studio slice"
+        : "Growth Center rollout";
+  const heroEyebrow =
+    foundationData?.phase === "phase_3_publishing_integrations"
+      ? "Phase 3 · Channels + explicit jobs"
+      : foundationData?.phase === "phase_2_content_studio"
+        ? "Phase 2 · Manual studio online"
+        : "Growth Center rollout";
   const heroBody =
-    foundationData?.phase === "phase_2_content_studio"
-      ? "Capture office-side marketing posture, assemble multi-variant drafts manually, shepherd explicit review states, and book metadata-only placeholders. Publishing credentials and outbound posts remain disabled until separately approved."
-      : "Keep tenant-safe scaffolding online while phased capabilities roll forward. Earlier builds only exposed placeholders; authenticate against the Growth Center endpoints to reconcile live metrics.";
+    foundationData?.phase === "phase_3_publishing_integrations"
+      ? "OAuth-backed Google Business Profile and Facebook Page targets feed explicit publish jobs. Draft calendar metadata never posts by itself — only Publish Now or Schedule Publishing enqueue dispatcher-owned work in UTC."
+      : foundationData?.phase === "phase_2_content_studio"
+        ? "Capture office-side marketing posture, assemble multi-variant drafts manually, shepherd explicit review states, and book metadata-only placeholders. Earlier phases kept publishing offline."
+        : "Keep tenant-safe scaffolding online while phased capabilities roll forward.";
 
   const renderPrimaryRail = () => {
     switch (activeRouteKey) {
@@ -446,10 +464,18 @@ export function MarketingFoundationWorkspace({
         return <MarketingProfileSettingsPanel />;
 
       case "create":
-        return <MarketingContentStudio studioDraftQuery={studioDraftQuery ?? undefined} />;
+        return (
+          <MarketingContentStudio
+            studioDraftQuery={studioDraftQuery ?? undefined}
+            publishCapabilities={foundationData?.capabilities}
+          />
+        );
 
       case "calendar":
         return <MarketingCalendarPanel />;
+
+      case "channels":
+        return <MarketingChannelsPanel capabilities={foundationData?.capabilities} />;
 
       default:
         return null;

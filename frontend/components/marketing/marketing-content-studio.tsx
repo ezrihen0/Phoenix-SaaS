@@ -11,6 +11,8 @@ import {
   fetchMarketingDrafts,
   patchMarketingDraft,
   patchMarketingVariant,
+  publishMarketingDraftNow,
+  publishMarketingDraftSchedule,
   transitionMarketingDraft,
 } from "@/lib/marketing/client-marketing";
 
@@ -32,9 +34,13 @@ function formatWorkflowState(raw: string) {
 
 type MarketingContentStudioProps = {
   studioDraftQuery?: string;
+  publishCapabilities?: {
+    can_manage_channels: boolean;
+    can_enqueue_publishing: boolean;
+  };
 };
 
-export function MarketingContentStudio({ studioDraftQuery }: MarketingContentStudioProps) {
+export function MarketingContentStudio({ studioDraftQuery, publishCapabilities }: MarketingContentStudioProps) {
   const router = useRouter();
   const [listError, setListError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -59,6 +65,10 @@ export function MarketingContentStudio({ studioDraftQuery }: MarketingContentStu
   const [variantBodies, setVariantBodies] = useState<
     Partial<Record<string, MarketingVariantPayload["body"]>>
   >({});
+
+  const [publishingBusy, setPublishingBusy] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [publishScheduleLocal, setPublishScheduleLocal] = useState("");
 
   const syncDetailToFormFields = useCallback((payload: DraftDetailPayload) => {
     const { draft, variants } = payload;
@@ -332,6 +342,45 @@ export function MarketingContentStudio({ studioDraftQuery }: MarketingContentStu
     return "border-[color:var(--cmp-border-subtle)] text-[color:var(--sem-text-muted)]";
   }, [detail?.draft.workflow_state]);
 
+  const canPublish = Boolean(publishCapabilities?.can_enqueue_publishing);
+
+  const handlePublishNow = useCallback(async () => {
+    if (!detail?.draft?.id) {
+      return;
+    }
+
+    setPublishingBusy(true);
+    setActionError(null);
+
+    try {
+      await publishMarketingDraftNow(detail.draft.id);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Publish request failed.");
+    } finally {
+      setPublishingBusy(false);
+    }
+  }, [detail?.draft?.id]);
+
+  const handlePublishSchedule = useCallback(async () => {
+    if (!detail?.draft?.id || !publishScheduleLocal.trim()) {
+      return;
+    }
+
+    setPublishingBusy(true);
+    setActionError(null);
+
+    try {
+      const iso = new Date(publishScheduleLocal).toISOString();
+
+      await publishMarketingDraftSchedule(detail.draft.id, iso);
+      setScheduleOpen(false);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Schedule request failed.");
+    } finally {
+      setPublishingBusy(false);
+    }
+  }, [detail?.draft?.id, publishScheduleLocal]);
+
   return (
     <div className="grid gap-6 xl:grid-cols-[260px,minmax(0,1fr)]">
       <aside className="theme-surface-card space-y-4 rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-4">
@@ -453,8 +502,66 @@ export function MarketingContentStudio({ studioDraftQuery }: MarketingContentStu
                 >
                   Request changes
                 </button>
+                {canPublish && detail.draft.workflow_state === "approved" ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={detailBusy || publishingBusy}
+                      onClick={() => void handlePublishNow()}
+                      className="rounded-[16px] border border-transparent bg-[color:var(--sem-accent-primary)] px-3 py-2 text-xs font-semibold text-[color:var(--sem-text-inverse)] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {publishingBusy ? "Publishing…" : "Publish now"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={detailBusy || publishingBusy}
+                      onClick={() => setScheduleOpen(true)}
+                      className="theme-control-surface-soft rounded-[16px] border px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Schedule publishing
+                    </button>
+                  </>
+                ) : null}
               </div>
             </header>
+
+            {scheduleOpen ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10">
+                <div className="w-full max-w-md rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-6 shadow-2xl">
+                  <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">Schedule publishing (UTC execution)</p>
+                  <p className="mt-2 text-xs leading-5 text-[color:var(--sem-text-muted)]">
+                    This becomes the publish job execution time (stored in UTC). Draft calendar metadata stays editorial-only.
+                  </p>
+                  <label className="mt-4 block text-xs text-[color:var(--sem-text-secondary)]">
+                    Run at (local picker → ISO UTC on save)
+                    <input
+                      type="datetime-local"
+                      className="mt-2 w-full rounded-[16px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-2 text-sm"
+                      value={publishScheduleLocal}
+                      onChange={(evt) => setPublishScheduleLocal(evt.target.value)}
+                    />
+                  </label>
+                  <div className="mt-5 flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      className="theme-control-surface-soft rounded-[16px] border px-4 py-2 text-xs font-semibold"
+                      onClick={() => setScheduleOpen(false)}
+                      disabled={publishingBusy}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={publishingBusy || !publishScheduleLocal.trim()}
+                      className="rounded-[16px] border border-transparent bg-[color:var(--sem-accent-primary)] px-4 py-2 text-xs font-semibold text-[color:var(--sem-text-inverse)] disabled:opacity-40"
+                      onClick={() => void handlePublishSchedule()}
+                    >
+                      {publishingBusy ? "Saving…" : "Enqueue schedule"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="theme-surface-card grid gap-4 rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5 md:grid-cols-2">
               <label className="block text-sm text-[color:var(--sem-text-secondary)]">

@@ -64,6 +64,9 @@ export const requiredTables = [
   "marketing_opportunities",
   "marketing_content_drafts",
   "marketing_content_variants",
+  "marketing_oauth_states",
+  "marketing_publish_jobs",
+  "marketing_publish_attempts",
 ] as const;
 
 export const requiredColumns = [
@@ -191,7 +194,27 @@ export const requiredColumns = [
   },
   {
     table: "marketing_connected_channels",
-    columns: ["id", "organization_id", "channel_key", "connection_status", "created_at", "updated_at"],
+    columns: [
+      "id",
+      "organization_id",
+      "channel_key",
+      "channel_label",
+      "connection_status",
+      "account_label",
+      "authorization_health",
+      "permissions_status",
+      "last_published_at",
+      "last_failure_at",
+      "metadata_json",
+      "google_account_resource",
+      "google_location_resource",
+      "facebook_page_id",
+      "encrypted_credentials",
+      "pending_targets_encrypted",
+      "token_expires_at",
+      "created_at",
+      "updated_at",
+    ],
   },
   {
     table: "marketing_opportunities",
@@ -216,6 +239,43 @@ export const requiredColumns = [
   {
     table: "marketing_content_variants",
     columns: ["id", "organization_id", "draft_id", "platform_key", "body_json", "created_at", "updated_at"],
+  },
+  {
+    table: "marketing_oauth_states",
+    columns: ["id", "organization_id", "provider", "state_token", "expires_at", "consumed_at", "created_at"],
+  },
+  {
+    table: "marketing_publish_jobs",
+    columns: [
+      "id",
+      "organization_id",
+      "draft_id",
+      "status",
+      "scheduled_at",
+      "lease_owner",
+      "leased_until",
+      "publish_intent",
+      "created_by_user_id",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  {
+    table: "marketing_publish_attempts",
+    columns: [
+      "id",
+      "organization_id",
+      "publish_job_id",
+      "platform_key",
+      "attempt_no",
+      "status",
+      "outcome_code",
+      "provider_http_status",
+      "provider_error_json",
+      "external_post_id",
+      "started_at",
+      "finished_at",
+    ],
   },
 ] as const;
 
@@ -282,11 +342,18 @@ export const requiredIndexes = [
   { table: "recent_call_sms_logs", columns: ["recent_call_id"], isUnique: false },
   { table: "marketing_profiles", columns: ["organization_id"], isUnique: true },
   { table: "marketing_connected_channels", columns: ["organization_id"], isUnique: false },
+  { table: "marketing_connected_channels", columns: ["organization_id", "channel_key"], isUnique: true },
   { table: "marketing_opportunities", columns: ["organization_id"], isUnique: false },
   { table: "marketing_content_drafts", columns: ["organization_id", "workflow_state"], isUnique: false },
   { table: "marketing_content_drafts", columns: ["organization_id", "scheduled_at"], isUnique: false },
   { table: "marketing_content_variants", columns: ["draft_id", "platform_key"], isUnique: true },
   { table: "marketing_content_variants", columns: ["organization_id"], isUnique: false },
+  { table: "marketing_oauth_states", columns: ["organization_id"], isUnique: false },
+  { table: "marketing_oauth_states", columns: ["state_token"], isUnique: true },
+  { table: "marketing_publish_jobs", columns: ["organization_id", "draft_id"], isUnique: false },
+  { table: "marketing_publish_jobs", columns: ["status", "scheduled_at"], isUnique: false },
+  { table: "marketing_publish_attempts", columns: ["publish_job_id"], isUnique: false },
+  { table: "marketing_publish_attempts", columns: ["organization_id"], isUnique: false },
 ] as const;
 
 export const requiredForeignKeys = [
@@ -423,6 +490,37 @@ export const requiredForeignKeys = [
     table: "marketing_content_variants",
     column: "draft_id",
     referencedTable: "marketing_content_drafts",
+    referencedColumn: "id",
+  },
+  {
+    table: "marketing_oauth_states",
+    column: "organization_id",
+    referencedTable: "organizations",
+    referencedColumn: "id",
+  },
+  {
+    table: "marketing_publish_jobs",
+    column: "organization_id",
+    referencedTable: "organizations",
+    referencedColumn: "id",
+  },
+  {
+    table: "marketing_publish_jobs",
+    column: "draft_id",
+    referencedTable: "marketing_content_drafts",
+    referencedColumn: "id",
+  },
+  { table: "marketing_publish_jobs", column: "created_by_user_id", referencedTable: "users", referencedColumn: "id" },
+  {
+    table: "marketing_publish_attempts",
+    column: "organization_id",
+    referencedTable: "organizations",
+    referencedColumn: "id",
+  },
+  {
+    table: "marketing_publish_attempts",
+    column: "publish_job_id",
+    referencedTable: "marketing_publish_jobs",
     referencedColumn: "id",
   },
 ] as const;

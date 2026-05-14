@@ -1,5 +1,6 @@
 import { Module, OnModuleInit } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AutomationsModule } from "./automations/automations.module";
@@ -25,6 +26,7 @@ import { TelephonyModule } from "./telephony/telephony.module";
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => buildTypeOrmModuleOptions(configService),

@@ -43,6 +43,24 @@ export class MarketingConnectedChannelEntity {
   @Column({ type: "text", nullable: true })
   metadata_json!: string | null;
 
+  @Column({ type: "varchar", length: 512, nullable: true })
+  google_account_resource!: string | null;
+
+  @Column({ type: "varchar", length: 512, nullable: true })
+  google_location_resource!: string | null;
+
+  @Column({ type: "varchar", length: 64, nullable: true })
+  facebook_page_id!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  encrypted_credentials!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  pending_targets_encrypted!: string | null;
+
+  @Column({ type: runtimeTimestampColumnType, precision: 6, nullable: true })
+  token_expires_at!: Date | null;
+
   @CreateDateColumn({ type: runtimeTimestampColumnType, precision: 6 })
   created_at!: Date;
 

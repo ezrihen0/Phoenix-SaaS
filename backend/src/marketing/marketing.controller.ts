@@ -3,13 +3,10 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
+import { requireMarketingOfficeActor } from "./marketing-access";
 import { MarketingContentService } from "./marketing-content.service";
 import { MarketingProfileService } from "./marketing-profile.service";
 import { MarketingService } from "./marketing.service";
-
-function isMarketingOfficeRole(role: string | null | undefined) {
-  return role === "owner" || role === "admin" || role === "office_admin" || role === "dispatcher";
-}
 
 function readPositiveInt(value: string | undefined, fallback: number): number {
   if (!value) {
@@ -61,27 +58,28 @@ export class MarketingController {
 
   @Get("foundation")
   async getFoundation(@Req() request: RequestWithActor) {
-    const actor = this.requireMarketingOfficeActor(request);
+    const actor = requireMarketingOfficeActor(request);
 
     return apiSuccess(
       await this.marketingService.buildFoundationResponse({
-        organizationId: actor.organization_id!,
+        organizationId: actor.organization_id,
         organizationName: actor.organization?.name ?? null,
         organizationSlug: actor.organization?.slug ?? null,
+        role: actor.role,
       }),
     );
   }
 
   @Get("profile")
   async getProfile(@Req() request: RequestWithActor) {
-    const actor = this.requireMarketingOfficeActor(request);
+    const actor = requireMarketingOfficeActor(request);
 
     return apiSuccess(await this.profileService.getProfileReadOnly(actor.organization_id!));
   }
 
   @Patch("profile")
   async patchProfile(@Req() request: RequestWithActor, @Body() body: unknown) {
-    const actor = this.requireMarketingOfficeActor(request);
+    const actor = requireMarketingOfficeActor(request);
     const payload = this.readObjectBody(body);
 
     return apiSuccess(
@@ -96,7 +94,7 @@ export class MarketingController {
     @Query("offset") offset?: string,
     @Query("workflow_state") workflowState?: string,
   ) {
-    const actor = this.requireMarketingOfficeActor(request);
+    const actor = requireMarketingOfficeActor(request);
 
     return apiSuccess(
       await this.contentService.listDrafts(actor.organization_id!, {
@@ -109,7 +107,7 @@ export class MarketingController {
 
   @Post("drafts")
   async createDraft(@Req() request: RequestWithActor, @Body() body: unknown) {
-    const actor = this.requireMarketingOfficeActor(request);
+    const actor = requireMarketingOfficeActor(request);
     const payload = this.readObjectBody(body);
 
     return apiSuccess(
@@ -119,7 +117,7 @@ export class MarketingController {
 
   @Get("drafts/:draftId")
   async getDraft(@Req() request: RequestWithActor, @Param("draftId") draftId: string) {
-    const actor = this.requireMarketingOfficeActor(request);
+    const actor = requireMarketingOfficeActor(request);
 
     return apiSuccess(await this.contentService.getDraftDetail(actor.organization_id!, draftId.trim()));
   }
@@ -130,7 +128,7 @@ export class MarketingController {
     @Param("draftId") draftId: string,
     @Body() body: unknown,
   ) {
-    const actor = this.requireMarketingOfficeActor(request);
+    const actor = requireMarketingOfficeActor(request);
     const payload = this.readObjectBody(body);
 
     return apiSuccess(
@@ -145,7 +143,7 @@ export class MarketingController {
     @Param("variantId") variantId: string,
     @Body() body: unknown,
   ) {
-    const actor = this.requireMarketingOfficeActor(request);
+    const actor = requireMarketingOfficeActor(request);
     const payload = this.readObjectBody(body);
 
     return apiSuccess(
@@ -165,7 +163,7 @@ export class MarketingController {
     @Param("draftId") draftId: string,
     @Body() body: unknown,
   ) {
-    const actor = this.requireMarketingOfficeActor(request);
+    const actor = requireMarketingOfficeActor(request);
     const payload = this.readObjectBody(body);
 
     const action = readTransitionBody(payload);
@@ -176,28 +174,10 @@ export class MarketingController {
 
   @Get("calendar")
   async calendar(@Req() request: RequestWithActor, @Query("from") from?: string, @Query("to") to?: string) {
-    const actor = this.requireMarketingOfficeActor(request);
+    const actor = requireMarketingOfficeActor(request);
     const range = parseMarketingCalendarRange(from, to);
 
     return apiSuccess(await this.contentService.getCalendar(actor.organization_id!, range));
-  }
-
-  private requireMarketingOfficeActor(request: RequestWithActor) {
-    const actor = request.actor;
-
-    if (!actor?.user) {
-      apiError(401, "marketing_session_required", "A valid session is required to access the Growth Center.");
-    }
-
-    if (!isMarketingOfficeRole(actor.role)) {
-      apiError(403, "marketing_access_forbidden", "This account cannot access the Growth Center.");
-    }
-
-    if (!actor.organization_id) {
-      apiError(403, "marketing_organization_required", "An active organization is required to access the Growth Center.");
-    }
-
-    return actor;
   }
 
   private readObjectBody(body: unknown): Record<string, unknown> {

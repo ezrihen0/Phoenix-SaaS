@@ -193,3 +193,94 @@ export async function fetchMarketingCalendar(range?: { from?: string; to?: strin
 
   return marketingFetch<MarketingCalendarPayload>(`/api/marketing/calendar${suffix}`);
 }
+
+export type MarketingChannelsApiPayload = {
+  channels: Array<{
+    channel_key: string;
+    channel_row_id?: string | null;
+    connection_status?: string;
+    account_label?: string | null;
+    authorization_health?: string | null;
+    selected_google_location_resource?: string | null;
+    selected_facebook_page_id?: string | null;
+    pending_selection?: boolean;
+    oauth_authorizing?: boolean;
+    pending_google_locations?: Array<{ resourceName: string; title: string }> | null;
+    pending_meta_pages?: Array<{ id: string; name: string }> | null;
+    deferred?: boolean;
+    headline?: string;
+  }>;
+};
+
+export async function fetchMarketingChannels() {
+  return marketingFetch<MarketingChannelsApiPayload>("/api/marketing/channels");
+}
+
+export async function startMarketingGoogleOAuth() {
+  return marketingFetch<{ url: string }>("/api/marketing/channels/google/start-oauth", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function startMarketingMetaOAuth() {
+  return marketingFetch<{ url: string }>("/api/marketing/channels/meta/start-oauth", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function selectMarketingGoogleLocation(locationResource: string) {
+  return marketingFetch<{ ok: boolean }>("/api/marketing/channels/google/select-location", {
+    method: "POST",
+    body: JSON.stringify({ location_resource: locationResource }),
+  });
+}
+
+export async function selectMarketingMetaPage(pageId: string) {
+  return marketingFetch<{ ok: boolean }>("/api/marketing/channels/meta/select-page", {
+    method: "POST",
+    body: JSON.stringify({ page_id: pageId }),
+  });
+}
+
+export async function disconnectMarketingChannel(channelRowId: string) {
+  return marketingFetch<{ ok: boolean }>(`/api/marketing/channels/${encodeURIComponent(channelRowId)}/disconnect`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function reconnectMarketingChannel(channelRowId: string) {
+  return marketingFetch<{ url: string }>(`/api/marketing/channels/${encodeURIComponent(channelRowId)}/reconnect`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export type MarketingPublishJobPayload = {
+  job: {
+    id: string;
+    draft_id: string;
+    status: string;
+    scheduled_at: string;
+    publish_intent: string;
+  };
+};
+
+export async function publishMarketingDraftNow(draftId: string) {
+  return marketingFetch<MarketingPublishJobPayload>(`/api/marketing/drafts/${encodeURIComponent(draftId)}/publish-now`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function publishMarketingDraftSchedule(draftId: string, scheduledAtIso: string) {
+  return marketingFetch<MarketingPublishJobPayload>(
+    `/api/marketing/drafts/${encodeURIComponent(draftId)}/publish-schedule`,
+    {
+      method: "POST",
+      body: JSON.stringify({ scheduled_at: scheduledAtIso }),
+    },
+  );
+}

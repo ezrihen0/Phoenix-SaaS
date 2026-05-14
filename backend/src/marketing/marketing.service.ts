@@ -1,14 +1,19 @@
 import { Injectable } from "@nestjs/common";
 
+import { MarketingChannelsService } from "./marketing-channels.service";
 import { MarketingContentService } from "./marketing-content.service";
 import { MarketingProfileService } from "./marketing-profile.service";
 
 export type MarketingFoundationResponse = {
-  phase: "phase_2_content_studio";
+  phase: "phase_3_publishing_integrations";
   organization: {
     id: string;
     name: string | null;
     slug: string | null;
+  };
+  capabilities: {
+    can_manage_channels: boolean;
+    can_enqueue_publishing: boolean;
   };
   profile_saved: boolean;
   profile_hint_complete: boolean;
@@ -38,12 +43,14 @@ export class MarketingService {
   constructor(
     private readonly profileService: MarketingProfileService,
     private readonly contentService: MarketingContentService,
+    private readonly channelsService: MarketingChannelsService,
   ) {}
 
   async buildFoundationResponse(input: {
     organizationId: string;
     organizationName: string | null;
     organizationSlug: string | null;
+    role: string | null;
   }): Promise<MarketingFoundationResponse> {
     const organizationId = input.organizationId;
 
@@ -52,22 +59,30 @@ export class MarketingService {
     const profileSavedPromise = this.profileService.exists(organizationId);
     const profileRecordPromise = this.profileService.loadProfileRecord(organizationId);
     const recentPromise = this.contentService.recentDraftSnapshots(organizationId, 5);
+    const connectedChannelsPromise = this.channelsService.countConnectedPublishingTargets(organizationId);
 
     const counts = await countsPromise;
     const scheduledSoon = await scheduledPromise;
     const profileSaved = await profileSavedPromise;
     const profileRecord = await profileRecordPromise;
     const recentSnapshots = await recentPromise;
+    const connectedChannels = await connectedChannelsPromise;
 
     const profileHintComplete =
       Boolean(profileSaved) && this.profileService.profileCompletenessApprox(profileRecord);
 
+    const role = input.role;
+
     return {
-      phase: "phase_2_content_studio",
+      phase: "phase_3_publishing_integrations",
       organization: {
         id: organizationId,
         name: input.organizationName,
         slug: input.organizationSlug,
+      },
+      capabilities: {
+        can_manage_channels: role === "owner" || role === "admin",
+        can_enqueue_publishing: role === "owner" || role === "admin" || role === "office_admin",
       },
       profile_saved: profileSaved,
       profile_hint_complete: profileHintComplete,
@@ -86,8 +101,9 @@ export class MarketingService {
       summaryCards: [
         {
           label: "Connected Channels",
-          value: "0",
-          helper: "Channel OAuth stays outside Phase 2. Content Studio drafts remain offline until publishing phases ship.",
+          value: `${connectedChannels}`,
+          helper:
+            "Google Business Profile and Facebook Page OAuth targets count toward live publishing readiness. Instagram stays deferred until V1.5.",
         },
         {
           label: "Needs review",
@@ -97,7 +113,8 @@ export class MarketingService {
         {
           label: "Calendar metadata slots",
           value: `${scheduledSoon}`,
-          helper: "Upcoming placeholders inside the Growth Center calendar. Scheduling does not post to any external channel.",
+          helper:
+            "Editorial placeholders on drafts. Execution time always comes from explicit publish jobs (`publish_job.scheduled_at` in UTC).",
         },
         {
           label: "Opportunities Detected",
@@ -106,11 +123,12 @@ export class MarketingService {
         },
       ],
       publishing_disclaimer:
-        "Phase 2 never publishes to Google, Facebook, or Instagram. Scheduling is metadata-only until publishing is separately authorized.",
+        "Publishing creates explicit Growth Center jobs (`publish_job.scheduled_at`). Draft calendar metadata (`draft.scheduled_at`) never silently posts.",
       protectedBoundaries: [
         "Marketing records stay organization scoped",
         "Session-derived organization context drives every marketing query",
-        "No delegated publish jobs or automated authoring endpoints ship in Phase 2",
+        "Instagram variants remain seeded while outbound IG publishing waits for V1.5",
+        "Dispatcher roles cannot enqueue publishes or mutate OAuth integrations",
       ],
     };
   }
