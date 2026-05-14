@@ -14,6 +14,7 @@ import {
   MarketingOpportunityDetectionService,
   type MarketingOpportunityCandidate,
 } from "./marketing-opportunity-detection.service";
+import { MarketingAutomationEvaluationService } from "./marketing-automation-evaluation.service";
 
 function safePayloadForClient(payload: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -76,6 +77,7 @@ export class MarketingOpportunityService {
     private readonly opportunityRepo: Repository<MarketingOpportunityEntity>,
     private readonly detectionService: MarketingOpportunityDetectionService,
     private readonly contentService: MarketingContentService,
+    private readonly automationEvaluationService: MarketingAutomationEvaluationService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -92,14 +94,17 @@ export class MarketingOpportunityService {
     this.lastRefreshAtMsByOrg.set(organizationId, now);
   }
 
-  async refreshOpportunities(organizationId: string): Promise<{ upserted: number }> {
+  async refreshOpportunities(
+    organizationId: string,
+    actorUserId: string,
+  ): Promise<{ upserted: number }> {
     this.assertRefreshCooldown(organizationId);
     const candidates = await this.detectionService.detectForOrganization(organizationId);
     let upserted = 0;
     const now = new Date();
 
     for (const c of candidates) {
-      const saved = await this.upsertCandidate(organizationId, c, now);
+      const saved = await this.upsertCandidate(organizationId, c, now, actorUserId);
       if (saved) {
         upserted += 1;
       }
@@ -111,7 +116,11 @@ export class MarketingOpportunityService {
   /**
    * Bounded warm refresh for publishers entering `/marketing/opportunities`.
    */
-  async maybeWarmRefreshFromReadPath(organizationId: string, role: string | null | undefined): Promise<void> {
+  async maybeWarmRefreshFromReadPath(
+    organizationId: string,
+    role: string | null | undefined,
+    actorUserId?: string | undefined,
+  ): Promise<void> {
     if (!isPublisherRole(role)) {
       return;
     }
@@ -126,7 +135,7 @@ export class MarketingOpportunityService {
     const candidates = await this.detectionService.detectForOrganization(organizationId);
     const stamp = new Date();
     for (const c of candidates) {
-      await this.upsertCandidate(organizationId, c, stamp);
+      await this.upsertCandidate(organizationId, c, stamp, actorUserId);
     }
   }
 
@@ -134,6 +143,7 @@ export class MarketingOpportunityService {
     organizationId: string,
     candidate: MarketingOpportunityCandidate,
     now: Date,
+    actorUserId?: string | undefined,
   ): Promise<boolean> {
     const existing = await this.opportunityRepo.findOne({
       where: { organization_id: organizationId, dedupe_key: candidate.dedupe_key },
@@ -168,6 +178,8 @@ export class MarketingOpportunityService {
           last_refreshed_at: now,
         }),
       );
+
+      await this.maybeEvaluateAutomationsAfterUpsert(organizationId, candidate.dedupe_key, actorUserId);
       return true;
     }
 
@@ -185,12 +197,35 @@ export class MarketingOpportunityService {
     }
 
     await this.opportunityRepo.save(existing);
+
+    await this.maybeEvaluateAutomationsAfterUpsert(organizationId, candidate.dedupe_key, actorUserId);
     return true;
+  }
+
+  private async maybeEvaluateAutomationsAfterUpsert(
+    organizationId: string,
+    dedupeKey: string,
+    actorUserId?: string | undefined,
+  ): Promise<void> {
+    if (!actorUserId) {
+      return;
+    }
+
+    const reloaded = await this.opportunityRepo.findOne({
+      where: { organization_id: organizationId, dedupe_key: dedupeKey },
+    });
+
+    if (!reloaded) {
+      return;
+    }
+
+    await this.automationEvaluationService.evaluateAfterUpsert(organizationId, reloaded, actorUserId);
   }
 
   async listOpportunities(input: {
     organizationId: string;
     role: string | null | undefined;
+    actorUserId?: string | undefined;
     warmUp?: boolean;
     limit: number;
     offset: number;
@@ -198,7 +233,7 @@ export class MarketingOpportunityService {
     opportunity_type?: string;
   }): Promise<{ opportunities: Record<string, unknown>[]; total: number }> {
     if (input.warmUp) {
-      await this.maybeWarmRefreshFromReadPath(input.organizationId, input.role);
+      await this.maybeWarmRefreshFromReadPath(input.organizationId, input.role, input.actorUserId);
     }
 
     const qb = this.opportunityRepo

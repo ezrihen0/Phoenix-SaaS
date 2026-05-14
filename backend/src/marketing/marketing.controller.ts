@@ -77,7 +77,9 @@ export class MarketingController {
     const actor = requireMarketingOfficeActor(request);
     assertMarketingPublisher(actor);
 
-    return apiSuccess(await this.opportunityService.refreshOpportunities(actor.organization_id!));
+    return apiSuccess(
+      await this.opportunityService.refreshOpportunities(actor.organization_id!, actor.user.id),
+    );
   }
 
   @Get("opportunities")
@@ -95,6 +97,7 @@ export class MarketingController {
       await this.opportunityService.listOpportunities({
         organizationId: actor.organization_id!,
         role: actor.role,
+        actorUserId: actor.user.id,
         warmUp: warmUp === "true" || warmUp === "1",
         limit: Math.min(readPositiveInt(limit, 50), 100),
         offset: readPositiveInt(offset, 0),

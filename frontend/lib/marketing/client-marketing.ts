@@ -530,3 +530,111 @@ export async function deleteMarketingCampaignItem(campaignId: string, itemId: st
     { method: "DELETE" },
   );
 }
+
+export const MARKETING_AUTOMATION_OPPORTUNITY_TYPES = [
+  "work_showcase_recent",
+  "service_momentum",
+  "local_authority_geo",
+  "before_after_signal",
+] as const;
+
+export type MarketingAutomationOpportunityType = (typeof MARKETING_AUTOMATION_OPPORTUNITY_TYPES)[number];
+
+export type MarketingAutomationRulePayload = {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  trigger_opportunity_types: string[];
+  action_type: string;
+  action_config: Record<string, unknown>;
+  cooldown_seconds: number;
+  created_by_user_id: string | null;
+  updated_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MarketingAutomationRunPayload = {
+  id: string;
+  organization_id: string;
+  rule_id: string;
+  idempotency_key: string;
+  marketing_opportunity_id: string | null;
+  marketing_content_draft_id: string | null;
+  outcome: string;
+  skip_reason: string | null;
+  error_detail: string | null;
+  trigger_snapshot: Record<string, unknown>;
+  created_at: string;
+};
+
+export type MarketingAutomationPreviewResult = {
+  would_evaluate: boolean;
+  outcome?: string;
+  skip_reason?: string | null;
+  idempotency_key?: string;
+  rule_name?: string;
+};
+
+export async function fetchMarketingAutomationRules() {
+  return marketingFetch<{ rules: MarketingAutomationRulePayload[] }>("/api/marketing/automation-rules");
+}
+
+export async function fetchMarketingAutomationRule(ruleId: string) {
+  return marketingFetch<{ rule: MarketingAutomationRulePayload }>(
+    `/api/marketing/automation-rules/${encodeURIComponent(ruleId)}`,
+  );
+}
+
+export async function createMarketingAutomationRule(body: Record<string, unknown>) {
+  return marketingFetch<{ rule: MarketingAutomationRulePayload }>("/api/marketing/automation-rules", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function patchMarketingAutomationRule(ruleId: string, body: Record<string, unknown>) {
+  return marketingFetch<{ rule: MarketingAutomationRulePayload }>(
+    `/api/marketing/automation-rules/${encodeURIComponent(ruleId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export async function deleteMarketingAutomationRule(ruleId: string) {
+  return marketingFetch<{ deleted: boolean }>(`/api/marketing/automation-rules/${encodeURIComponent(ruleId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchMarketingAutomationRuns(query?: { limit?: number; offset?: number; rule_id?: string }) {
+  const params = new URLSearchParams();
+  if (query?.limit !== undefined) {
+    params.set("limit", `${query.limit}`);
+  }
+  if (query?.offset !== undefined) {
+    params.set("offset", `${query.offset}`);
+  }
+  if (query?.rule_id) {
+    params.set("rule_id", query.rule_id);
+  }
+  const qs = params.toString();
+  const suffix = qs ? `?${qs}` : "";
+  return marketingFetch<{ runs: MarketingAutomationRunPayload[]; total: number }>(
+    `/api/marketing/automation-runs${suffix}`,
+  );
+}
+
+export async function previewMarketingAutomationRule(ruleId: string, opportunityId: string) {
+  return marketingFetch<MarketingAutomationPreviewResult>(
+    `/api/marketing/automation-rules/${encodeURIComponent(ruleId)}/preview`,
+    {
+      method: "POST",
+      body: JSON.stringify({ opportunity_id: opportunityId }),
+    },
+  );
+}

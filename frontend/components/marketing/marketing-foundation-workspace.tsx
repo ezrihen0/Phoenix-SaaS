@@ -12,6 +12,7 @@ import {
   Workflow,
 } from "lucide-react";
 
+import { MarketingAutomationsPanel } from "./marketing-automations-panel";
 import { MarketingCalendarPanel } from "./marketing-calendar-panel";
 import { MarketingCampaignsPanel } from "./marketing-campaigns-panel";
 import { MarketingChannelsPanel } from "./marketing-channels-panel";
@@ -231,19 +232,20 @@ const routeDefinitions: RouteDefinition[] = [
     key: "automations",
     href: "/marketing/automations",
     label: "Automations",
-    eyebrow: "Future Autopilot",
-    title: "Marketing automations are not opened in Phase 1",
-    description: "This route keeps the future automation surface separate from the existing Automation Store while remaining non-functional for now.",
+    eyebrow: "Phase 6 · Autopilot (V1)",
+    title: "Opportunity-triggered rules with safe actions",
+    description:
+      "Create rules that react to Phase 4 CRM opportunity signals. Actions are suggest-only or auto-create draft in Content Studio — no auto-publish and no scanner/cron triggers in V1.",
     icon: Workflow,
     includedNow: [
-      "Dedicated route shell inside Growth Center",
-      "Clear boundary from existing `/automations` product area",
-      "No trigger processing or unattended posting",
+      "Rules keyed to opportunity types from Phase 4 detection",
+      "Suggest-only and auto-create draft actions with idempotent runs",
+      "Dry-run preview and run history for auditors",
     ],
     laterPhaseWork: [
-      "Suggest-only triggers",
-      "Suggested-only triggers gated by reviewer approval",
-      "Selective low-risk autopilot",
+      "Scheduled scanners and additional trigger families",
+      "Automation Store or cross-product catalog",
+      "Broader autopilot after review maturity",
     ],
   },
   {
@@ -356,7 +358,15 @@ export function MarketingFoundationWorkspace({
     ?? foundationData?.organization.id
     ?? "Active organization";
 
-  const interactiveRoutes: MarketingRouteKey[] = ["settings", "create", "calendar", "channels", "opportunities", "campaigns"];
+  const interactiveRoutes: MarketingRouteKey[] = [
+    "settings",
+    "create",
+    "calendar",
+    "channels",
+    "opportunities",
+    "campaigns",
+    "automations",
+  ];
   const suppressEducationalRails = interactiveRoutes.includes(activeRouteKey);
   const showPrimaryRail = activeRouteKey === "overview" || suppressEducationalRails;
 
@@ -555,6 +565,13 @@ export function MarketingFoundationWorkspace({
       case "campaigns":
         return (
           <MarketingCampaignsPanel canMutateCampaigns={Boolean(foundationData?.capabilities?.can_mutate_campaigns)} />
+        );
+
+      case "automations":
+        return (
+          <MarketingAutomationsPanel
+            canMutateAutomations={Boolean(foundationData?.capabilities?.can_mutate_campaigns)}
+          />
         );
 
       default:

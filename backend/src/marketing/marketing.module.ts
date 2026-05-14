@@ -3,6 +3,8 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthModule } from "../auth/auth.module";
 import { JobEntity } from "../database/entities/job.entity";
+import { MarketingAutomationRuleEntity } from "../database/entities/marketing-automation-rule.entity";
+import { MarketingAutomationRunEntity } from "../database/entities/marketing-automation-run.entity";
 import { MarketingCampaignEntity } from "../database/entities/marketing-campaign.entity";
 import { MarketingCampaignItemEntity } from "../database/entities/marketing-campaign-item.entity";
 import { MarketingConnectedChannelEntity } from "../database/entities/marketing-connected-channel.entity";
@@ -15,6 +17,9 @@ import { MarketingPublishAttemptEntity } from "../database/entities/marketing-pu
 import { MarketingPublishJobEntity } from "../database/entities/marketing-publish-job.entity";
 import { InspectionEntity } from "../database/entities/inspection.entity";
 
+import { MarketingAutomationController } from "./marketing-automation.controller";
+import { MarketingAutomationEvaluationService } from "./marketing-automation-evaluation.service";
+import { MarketingAutomationService } from "./marketing-automation.service";
 import { MarketingCampaignController } from "./marketing-campaign.controller";
 import { MarketingCampaignService } from "./marketing-campaign.service";
 import { MarketingChannelsController } from "./marketing-channels.controller";
@@ -47,6 +52,8 @@ import { MarketingService } from "./marketing.service";
       MarketingContentDraftEntity,
       MarketingContentVariantEntity,
       MarketingOpportunityEntity,
+      MarketingAutomationRuleEntity,
+      MarketingAutomationRunEntity,
       JobEntity,
       InspectionEntity,
     ]),
@@ -56,6 +63,7 @@ import { MarketingService } from "./marketing.service";
     MarketingOAuthPublicController,
     MarketingChannelsController,
     MarketingCampaignController,
+    MarketingAutomationController,
     MarketingPublishController,
   ],
   providers: [
@@ -68,6 +76,8 @@ import { MarketingService } from "./marketing.service";
     MarketingProfileService,
     MarketingContentService,
     MarketingOpportunityDetectionService,
+    MarketingAutomationEvaluationService,
+    MarketingAutomationService,
     MarketingOpportunityService,
     MarketingCampaignService,
     MarketingService,
