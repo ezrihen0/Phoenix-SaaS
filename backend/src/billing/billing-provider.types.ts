@@ -1,11 +1,11 @@
-import type { BillingProvider, OrganizationBillingStatus, PhoenixPlanKey } from "./billing.constants";
+import type { BillingPlanKey, BillingProvider, OrganizationBillingStatus } from "./billing.constants";
 
 export type BillingCheckoutSessionInput = {
   billingAccountId: string;
   organizationId: string;
   userId: string;
   userEmail: string | null;
-  planKey: PhoenixPlanKey;
+  planKey: BillingPlanKey;
   existingProviderCustomerId: string | null;
   successUrl: string;
   cancelUrl: string;
@@ -23,7 +23,7 @@ export type ProviderSubscriptionSnapshot = {
   providerCustomerId?: string | null;
   providerSubscriptionId?: string | null;
   providerPriceId?: string | null;
-  planKey?: PhoenixPlanKey | null;
+  planKey?: BillingPlanKey | null;
   billingStatus?: OrganizationBillingStatus | null;
   currentPeriodStart?: Date | null;
   currentPeriodEnd?: Date | null;

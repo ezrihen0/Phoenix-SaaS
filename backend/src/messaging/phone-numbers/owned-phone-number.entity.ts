@@ -60,7 +60,7 @@ export class OwnedPhoneNumberEntity {
   @Column({ type: "boolean", default: true })
   is_active!: boolean;
 
-  /** Legacy column name; stores the Phoenix organization id for telephony ownership. */
+  /** Legacy column name; stores the organization id for telephony ownership. */
   @Column({ type: "char", length: 36, nullable: true })
   tenant_id!: string | null;
 

@@ -129,7 +129,7 @@ function buildBaseTypeOrmOptions(readEnv: (key: string) => string | undefined): 
     port: Number(readEnv("DB_PORT") ?? defaults.port),
     username: readEnv("DB_USERNAME") ?? defaults.username,
     password: readEnv("DB_PASSWORD") ?? defaults.password,
-    database: readEnv("DB_NAME") ?? "phoenix_crm",
+    database: readEnv("DB_NAME") ?? "wizfield",
     entities: typeOrmEntities,
     migrations: [
       join(__dirname, "migrations", "active", "*.ts"),

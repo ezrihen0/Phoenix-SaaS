@@ -950,7 +950,7 @@ export class AuthService {
   }
 
   private getSessionCookieName() {
-    return this.configService.get<string>("SESSION_COOKIE_NAME") ?? "phoenix_session";
+    return this.configService.get<string>("SESSION_COOKIE_NAME") ?? "wizfield_session";
   }
 
   private getSessionTtlHours() {

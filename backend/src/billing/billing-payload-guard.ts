@@ -2,7 +2,7 @@ import { apiError } from "../common/api-response";
 
 /**
  * Rejects payloads that look like raw card numbers. Clover card tokens (clv_…)
- * must be created in the browser or Clover tooling — never send PAN to PhoenixOS.
+ * must be created in the browser or Clover tooling — never send PAN to WizField.
  */
 export function rejectLikelyRawCardNumber(source: string): void {
   const compact = source.replace(/\s+/g, "");

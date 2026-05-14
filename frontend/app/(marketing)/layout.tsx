@@ -18,7 +18,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             href="/landing"
             className="font-[family:var(--font-flat-display)] text-lg tracking-tight text-[#f5ecd2] transition hover:text-[color:var(--flat-gold)]"
           >
-            PhoenixOS
+            WizField
           </Link>
           <nav className="flex flex-wrap items-center gap-4 text-sm text-white/70">
             {NAV_LINKS.map(({ href, label }) => (
@@ -42,7 +42,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
       <div className="flex-1">{children}</div>
       <footer className="border-t border-white/10 px-6 py-8 text-sm text-white/50 lg:px-10">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p>PhoenixOS — field-service operations, not generic CRM.</p>
+          <p>WizField — field-service operations, not generic CRM.</p>
           <div className="flex flex-wrap gap-4">
             <Link href="/terms" className="hover:text-white/80">
               Terms

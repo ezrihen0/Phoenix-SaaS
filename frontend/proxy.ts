@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const sessionCookieName = process.env.SESSION_COOKIE_NAME ?? "phoenix_session";
+const sessionCookieName = process.env.SESSION_COOKIE_NAME ?? "wizfield_session";
 
 function isProtectedRoute(pathname: string) {
   return pathname === "/"

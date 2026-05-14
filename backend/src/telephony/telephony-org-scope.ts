@@ -16,7 +16,7 @@ export function requireTelephonyOrganizationId(actor: ActorContext | undefined):
   return id;
 }
 
-/** WHERE predicate: a recent_calls row (alias) belongs to the given Phoenix organization (positional `?`). */
+/** WHERE predicate: a recent_calls row (alias) belongs to the given organization (positional `?`). */
 export function recentCallBelongsToOrgSql(alias: string): string {
   return `(
     (${alias}.inbound_owned_phone_number_id IS NOT NULL AND EXISTS (

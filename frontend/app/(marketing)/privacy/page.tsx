@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — PhoenixOS",
-  description: "Privacy Policy for PhoenixOS (draft — legal review required).",
+  title: "Privacy Policy — WizField",
+  description: "Privacy Policy for WizField (draft — legal review required).",
 };
 
 export default function PrivacyPage() {

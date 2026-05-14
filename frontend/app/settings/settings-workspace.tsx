@@ -78,7 +78,7 @@ const allTopics: Array<{
   {
     id: "billing",
     label: "Billing",
-    title: "PhoenixOS subscription",
+    title: "WizField subscription",
     helper: "View plan, business-count entitlement, and launch Stripe checkout for the shared billing account.",
     Icon: CreditCard,
     ownerOnly: true,

@@ -22,7 +22,7 @@ function getStatusMessage(nextPath: string | null) {
     return "Sign in to open the technician board and update field progress in real time.";
   }
 
-  return "Sign in to run leads, jobs, dispatch, estimates, invoices, and customer history in one PhoenixOS workspace.";
+  return "Sign in to run leads, jobs, dispatch, estimates, invoices, and customer history in one WizField workspace.";
 }
 
 export default function LoginForm() {
@@ -42,7 +42,7 @@ export default function LoginForm() {
 
     if (!destination) {
       throw new Error(
-        "This account authenticated successfully, but no supported PhoenixOS dashboard destination is assigned yet.",
+        "This account authenticated successfully, but no supported WizField dashboard destination is assigned yet.",
       );
     }
 
@@ -112,7 +112,7 @@ export default function LoginForm() {
       <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-12 px-6 py-10 lg:grid-cols-[minmax(0,1.1fr)_480px] lg:px-10">
         <section className="max-w-2xl">
           <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
-            PhoenixOS
+            WizField
           </p>
           <h1 className="mt-5 max-w-xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] md:text-7xl">
             Dispatch the workday before the first truck rolls.
@@ -187,7 +187,7 @@ export default function LoginForm() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   className="w-full bg-transparent text-white outline-none placeholder:text-white/28"
-                  placeholder="office@phoenixfireplace.com"
+                  placeholder="office@example.com"
                 />
               </div>
             </label>

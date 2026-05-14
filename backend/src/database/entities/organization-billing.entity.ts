@@ -9,7 +9,7 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
-import type { OrganizationBillingStatus, PhoenixPlanKey } from "../../billing/billing.constants";
+import type { BillingPlanKey, OrganizationBillingStatus } from "../../billing/billing.constants";
 import { BillingAccountEntity } from "./billing-account.entity";
 import { OrganizationEntity } from "./organization.entity";
 
@@ -42,7 +42,7 @@ export class OrganizationBillingEntity {
   clover_subscription_id!: string | null;
 
   @Column({ type: "varchar", length: 32 })
-  plan_key!: PhoenixPlanKey;
+  plan_key!: BillingPlanKey;
 
   @Column({ type: "varchar", length: 32 })
   billing_status!: OrganizationBillingStatus;

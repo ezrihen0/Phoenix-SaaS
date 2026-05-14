@@ -6,8 +6,8 @@ import { getServerSession } from "@/lib/auth/server-session";
 import { PricingPlans } from "./pricing-plans";
 
 export const metadata: Metadata = {
-  title: "Pricing — PhoenixOS",
-  description: "Shared billing-account plans for Stripe Checkout and multi-business PhoenixOS entitlements.",
+  title: "Pricing — WizField",
+  description: "Shared billing-account plans for Stripe Checkout and multi-business WizField entitlements.",
 };
 
 type PricingPageContext = {
@@ -29,9 +29,9 @@ export default async function PricingPage({ searchParams }: PricingPageContext) 
         Shared billing-account plans
       </h1>
       <p className="mt-5 text-base leading-7 text-white/65">
-        PhoenixOS uses one shared billing account per payer, and one subscription can cover multiple businesses under the
+        WizField uses one shared billing account per payer, and one subscription can cover multiple businesses under the
         same entitlement. Stripe Checkout is the active subscription checkout path; tenant invoice payments remain
-        separate from PhoenixOS SaaS billing.
+        separate from WizField platform billing.
       </p>
 
       <section className="mt-10 space-y-4 rounded-[28px] border border-white/10 bg-white/[0.04] p-6 sm:p-8">
@@ -44,10 +44,10 @@ export default async function PricingPage({ searchParams }: PricingPageContext) 
           </li>
           <li>
             <strong className="text-white/80">Checkout:</strong> owner-authenticated Stripe Checkout Sessions create the
-            hosted subscription flow without collecting raw card details inside PhoenixOS.
+            hosted subscription flow without collecting raw card details inside WizField.
           </li>
           <li>
-            <strong className="text-white/80">Webhook activation:</strong> PhoenixOS waits for verified Stripe webhook
+            <strong className="text-white/80">Webhook activation:</strong> WizField waits for verified Stripe webhook
             events before local billing state is treated as active.
           </li>
           <li>

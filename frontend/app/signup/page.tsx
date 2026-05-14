@@ -27,7 +27,7 @@ export default function SignupPage() {
 
     if (!destination) {
       throw new Error(
-        "Your account was created, but no supported PhoenixOS dashboard destination is assigned yet.",
+        "Your account was created, but no supported WizField dashboard destination is assigned yet.",
       );
     }
 
@@ -63,14 +63,14 @@ export default function SignupPage() {
       <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-12 px-6 py-10 lg:grid-cols-[minmax(0,1.05fr)_520px] lg:px-10">
         <section className="max-w-2xl">
           <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
-            PhoenixOS
+            WizField
           </p>
           <h1 className="mt-5 max-w-xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] md:text-7xl">
-            Start your first PhoenixOS workspace.
+            Start your first WizField workspace.
           </h1>
           <p className="mt-6 max-w-xl text-base leading-7 text-white/62 md:text-lg">
             Create your owner account, create your first business, and land inside the workspace immediately. Billing is
-            managed through a shared PhoenixOS billing account, with Stripe as the active checkout provider.
+            managed through a shared WizField billing account, with Stripe as the active checkout provider.
           </p>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-3">

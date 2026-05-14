@@ -1,13 +1,13 @@
 ﻿const { chromium } = require('playwright-core');
 
 const BASE_URL = 'http://localhost:3000';
-const EMAIL = 'admin@phoenixcrm.local';
+const EMAIL = 'admin@wizfield.local';
 const PASSWORD = 'Admin12345!';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 async function login(page) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
-  await page.getByPlaceholder('office@phoenixfireplace.com').fill(EMAIL);
+  await page.getByPlaceholder('office@example.com').fill(EMAIL);
   await page.getByPlaceholder('Enter your password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 20000 });

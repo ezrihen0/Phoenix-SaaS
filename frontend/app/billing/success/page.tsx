@@ -14,7 +14,7 @@ export default async function BillingSuccessPage({ searchParams }: BillingSucces
         <p className="text-[11px] uppercase tracking-[0.32em] text-[color:var(--sem-accent-primary)]">Billing</p>
         <h1 className="mt-4 text-4xl font-semibold tracking-tight">Subscription confirmation is processing</h1>
         <p className="mt-4 text-sm leading-7 text-[color:var(--sem-text-secondary)]">
-          Stripe Checkout returned successfully, but PhoenixOS will not mark the plan active until verified webhook
+          Stripe Checkout returned successfully, but WizField will not mark the plan active until verified webhook
           events update the shared billing account. You can return to settings and refresh after webhook delivery is
           configured.
         </p>

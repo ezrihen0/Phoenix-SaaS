@@ -720,7 +720,7 @@ async function removeUploadedPhotoFiles(storageKeys: Iterable<string>) {
 
 async function main() {
   const options = requireMySqlOptions();
-  const databaseName = process.env.DB_SMOKE_DATABASE?.trim() || `phoenix_crm_inspections_verify_${Date.now()}`;
+  const databaseName = process.env.DB_SMOKE_DATABASE?.trim() || `wizfield_inspections_verify_${Date.now()}`;
   const shouldDrop = normalizeBooleanFlag(process.env.DB_SMOKE_DROP, false);
   const summary = createSummary(databaseName);
 

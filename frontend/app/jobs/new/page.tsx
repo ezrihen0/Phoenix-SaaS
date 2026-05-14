@@ -251,7 +251,7 @@ export default async function NewJobPage({ searchParams }: NewJobPageContext) {
                 Schedule a new service job from the current CRM record.
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-white/62 sm:text-base">
-                Use the minimum Phoenix CRM job fields only: customer, service type, address, schedule, assigned technician, and internal notes.
+                Use the minimum required job fields only: customer, service type, address, schedule, assigned technician, and internal notes.
               </p>
             </div>
 

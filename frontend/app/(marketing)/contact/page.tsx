@@ -5,12 +5,12 @@ const SUPPORT_EMAIL =
   process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() || "support@example.com";
 
 export const metadata: Metadata = {
-  title: "Contact — PhoenixOS",
-  description: "Contact PhoenixOS for access, support, and founding customer conversations.",
+  title: "Contact — WizField",
+  description: "Contact WizField for access, support, and founding customer conversations.",
 };
 
 export default function ContactPage() {
-  const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("PhoenixOS — access or support")}`;
+  const mailto = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("WizField — access or support")}`;
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 lg:px-10 lg:py-20">

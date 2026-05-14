@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — PhoenixOS",
-  description: "Terms of Service for PhoenixOS (draft — legal review required).",
+  title: "Terms of Service — WizField",
+  description: "Terms of Service for WizField (draft — legal review required).",
 };
 
 export default function TermsPage() {

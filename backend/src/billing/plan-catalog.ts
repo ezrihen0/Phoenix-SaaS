@@ -1,11 +1,11 @@
 import type { ConfigService } from "@nestjs/config";
 
-import type { PhoenixPlanKey } from "./billing.constants";
+import type { BillingPlanKey } from "./billing.constants";
 
-/** Env-mapped Clover recurring plan IDs for the single PhoenixOS merchant. */
-export function resolveCloverPlanIdForPhoenixPlan(
+/** Env-mapped Clover recurring plan IDs for the single WizField merchant. */
+export function resolveCloverPlanIdForBillingPlan(
   configService: ConfigService,
-  planKey: PhoenixPlanKey,
+  planKey: BillingPlanKey,
 ): string | null {
   const key =
     planKey === "starter"

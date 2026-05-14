@@ -2,12 +2,12 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import { apiError } from "../common/api-response";
-import type { OrganizationBillingStatus, PhoenixPlanKey } from "./billing.constants";
+import type { BillingPlanKey, OrganizationBillingStatus } from "./billing.constants";
 import { rejectLikelyRawCardNumber } from "./billing-payload-guard";
 import { CloverEcommerceClient } from "./clover-ecommerce.client";
 import { CloverRecurringClient } from "./clover-recurring.client";
 import { OrganizationBillingService } from "./organization-billing.service";
-import { resolveCloverPlanIdForPhoenixPlan } from "./plan-catalog";
+import { resolveCloverPlanIdForBillingPlan } from "./plan-catalog";
 
 const blockingSubscribeStatuses: OrganizationBillingStatus[] = ["active", "trialing", "past_due"];
 
@@ -58,7 +58,7 @@ export class BillingLifecycleService {
   async subscribeWithCardToken(
     organizationId: string,
     input: {
-      planKey: PhoenixPlanKey;
+      planKey: BillingPlanKey;
       source: string;
       email?: string;
       firstName?: string;
@@ -69,7 +69,7 @@ export class BillingLifecycleService {
 
     this.assertCloverStackReady();
 
-    const planId = resolveCloverPlanIdForPhoenixPlan(this.configService, input.planKey);
+    const planId = resolveCloverPlanIdForBillingPlan(this.configService, input.planKey);
     if (!planId) {
       apiError(
         503,
@@ -149,7 +149,7 @@ export class BillingLifecycleService {
     return this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
   }
 
-  async changePlan(organizationId: string, nextPlanKey: PhoenixPlanKey) {
+  async changePlan(organizationId: string, nextPlanKey: BillingPlanKey) {
     const row = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
     if (row.account.plan_key === nextPlanKey) {
       return row;
@@ -166,7 +166,7 @@ export class BillingLifecycleService {
       apiError(400, "billing_customer_missing", "No Clover customer id is stored for this billing account.");
     }
 
-    const newPlanId = resolveCloverPlanIdForPhoenixPlan(this.configService, nextPlanKey);
+    const newPlanId = resolveCloverPlanIdForBillingPlan(this.configService, nextPlanKey);
     if (!newPlanId) {
       apiError(
         503,

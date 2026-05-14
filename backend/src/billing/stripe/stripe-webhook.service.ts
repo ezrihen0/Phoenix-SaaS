@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import { apiError } from "../../common/api-response";
-import type { OrganizationBillingStatus, PhoenixPlanKey } from "../billing.constants";
+import type { BillingPlanKey, OrganizationBillingStatus } from "../billing.constants";
 import { BillingOrchestrationService } from "../billing-orchestration.service";
 import { resolvePlanKeyForStripePriceId } from "./stripe-price-catalog";
 import { StripeClient } from "./stripe.client";
@@ -247,7 +247,7 @@ function readStripeMetadata(metadata: Record<string, string> | null | undefined)
   return metadata as StripeMetadata;
 }
 
-function parseMetadataPlanKey(metadata: StripeMetadata): PhoenixPlanKey | null {
+function parseMetadataPlanKey(metadata: StripeMetadata): BillingPlanKey | null {
   const planKey = metadata.plan_key?.trim().toLowerCase();
   if (planKey === "starter" || planKey === "pro" || planKey === "business") {
     return planKey;

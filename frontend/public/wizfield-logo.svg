@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" role="img" aria-labelledby="title desc">
+  <title id="title">WizField logo</title>
+  <desc id="desc">Wordmark for WizField.</desc>
+  <rect width="320" height="96" rx="24" fill="#14212a" />
+  <path d="M34 24h18l12 31 12-31h18L80 72H64L34 24Z" fill="#f7df97" />
+  <path d="M111 24h18v48h-18z" fill="#f7df97" />
+  <path d="M145 24h18v15h21v14h-21v19h-18z" fill="#f7df97" />
+  <path d="M197 24h18v48h-18z" fill="#f7df97" />
+  <path d="M231 24h18v34h37v14h-55z" fill="#f7df97" />
+</svg>

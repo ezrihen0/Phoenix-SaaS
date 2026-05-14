@@ -6,7 +6,7 @@ import { Check, LoaderCircle, MessageSquare, Phone, Plus, Send, Trash2 } from "l
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
 
-const COMPANY_PLACEHOLDER_VALUE = "Phoenix Chimney & Fireplace";
+const COMPANY_PLACEHOLDER_VALUE = "Service Company";
 
 type Lane = "customers" | "unknown";
 
@@ -584,7 +584,7 @@ export default function MessagingDashboard({
           setSelectedPhoneKey(normalizePhoneKey(recipientPhone));
         }
 
-        window.dispatchEvent(new CustomEvent("phoenix:texts-updated"));
+        window.dispatchEvent(new CustomEvent("wizfield:texts-updated"));
         closeComposer();
         void loadDashboard(false);
       } catch (error) {
@@ -859,7 +859,7 @@ export default function MessagingDashboard({
 
         setTextThread(next);
         setTextDraft("");
-        window.dispatchEvent(new CustomEvent("phoenix:texts-updated"));
+        window.dispatchEvent(new CustomEvent("wizfield:texts-updated"));
         void loadDashboard(false);
       } catch (error) {
         setThreadError(error instanceof Error ? error.message : "The text message could not be sent.");
@@ -896,7 +896,7 @@ export default function MessagingDashboard({
 
         setTextThread(next);
         setTextDraft("");
-        window.dispatchEvent(new CustomEvent("phoenix:texts-updated"));
+        window.dispatchEvent(new CustomEvent("wizfield:texts-updated"));
         void loadDashboard(false);
       } catch (error) {
         setThreadError(error instanceof Error ? error.message : "The text message could not be sent.");
@@ -927,7 +927,7 @@ export default function MessagingDashboard({
       );
 
       setTextThread(next);
-      window.dispatchEvent(new CustomEvent("phoenix:texts-updated"));
+      window.dispatchEvent(new CustomEvent("wizfield:texts-updated"));
       void loadDashboard(false);
     } catch (error) {
       setThreadError(error instanceof Error ? error.message : `The conversation could not be marked as ${nextAction}.`);

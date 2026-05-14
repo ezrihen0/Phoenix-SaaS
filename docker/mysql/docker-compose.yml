@@ -1,17 +1,17 @@
 services:
   mysql:
     image: mysql:8.4
-    container_name: phoenix_mysql
+    container_name: wizfield_mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: phoenix_crm
-      MYSQL_USER: phoenix
-      MYSQL_PASSWORD: phoenix
+      MYSQL_DATABASE: wizfield
+      MYSQL_USER: wizfield
+      MYSQL_PASSWORD: wizfield
     ports:
       - "3306:3306"
     volumes:
-      - phoenix_mysql_data:/var/lib/mysql
+      - wizfield_mysql_data:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
       interval: 10s
@@ -20,7 +20,7 @@ services:
 
   phpmyadmin:
     image: phpmyadmin:5.2
-    container_name: phoenix_phpmyadmin
+    container_name: wizfield_phpmyadmin
     restart: unless-stopped
     depends_on:
       mysql:
@@ -35,4 +35,4 @@ services:
       - "8081:80"
 
 volumes:
-  phoenix_mysql_data:
+  wizfield_mysql_data:

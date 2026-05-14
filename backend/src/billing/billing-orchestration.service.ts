@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 
 import { apiError } from "../common/api-response";
 import type { BillingAccountEntity } from "../database/entities/billing-account.entity";
-import type { PhoenixPlanKey } from "./billing.constants";
+import type { BillingPlanKey } from "./billing.constants";
 import { BillingProviderRegistryService } from "./billing-provider-registry.service";
 import type { ProviderSubscriptionSnapshot } from "./billing-provider.types";
 import { OrganizationBillingService } from "./organization-billing.service";
@@ -34,7 +34,7 @@ export class BillingOrchestrationService {
     organizationId: string;
     userId: string;
     userEmail: string | null;
-    planKey: PhoenixPlanKey;
+    planKey: BillingPlanKey;
   }) {
     const context = await this.organizationBillingService.getOrCreateContextForOrganization(input.organizationId);
     const provider = this.billingProviderRegistryService.getActiveProvider();

@@ -27,7 +27,7 @@ async function bootstrap() {
   const port = Number(process.env.PORT ?? configService.get<string>("BACKEND_PORT") ?? "4000");
   const corsOrigins = parseCorsOrigins(configService.get<string>("CORS_ORIGIN"));
 
-  console.log(`Phoenix CRM backend listening on port ${port}`);
+  console.log(`WizField backend listening on port ${port}`);
 
   app.use(cookieParser());
   app.useGlobalPipes(

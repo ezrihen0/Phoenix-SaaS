@@ -1,8 +1,8 @@
-# PhoenixOS SaaS Engineering Closeout and Verification
+# WizField Engineering Closeout and Verification
 
 ## Purpose
 
-This is the single consolidated engineering closeout record for the completed Phoenix_SaaS foundation and Gate 11-14 phase.
+This is the single consolidated engineering closeout record for the completed WizField foundation and Gate 11-14 phase.
 
 It preserves the final successful engineering evidence, removes duplicated superseded bodies, and keeps historical reversals only as short notes.
 
@@ -13,7 +13,7 @@ It preserves the final successful engineering evidence, removes duplicated super
 - Gate 13: `ENGINEERING PASS`
 - Gate 14: `ENGINEERING COMPLETE`
 
-These statuses are locked for this documentation consolidation pass and are not reopened here.
+These statuses are locked for this rename pass and are not reopened here.
 
 ## 2. Gate 11 verification summary
 
@@ -109,7 +109,7 @@ Historical note only:
 
 ## 8. Mandatory production-like Gate 12 rerun note
 
-The successful Gate 12 dev/test closeout does not remove the requirement for a focused production-like rerun once Phoenix_SaaS is attached to the real public domain and deployed backend.
+The successful Gate 12 dev/test closeout does not remove the requirement for a focused production-like rerun once WizField is attached to the real public domain and deployed backend.
 
 That future rerun is not a restart of SaaS architecture work. It is a mandatory runtime confidence replay that must re-check at minimum:
 
@@ -138,7 +138,7 @@ Use the canonical reverification runbook for that replay.
 
 ## Closeout statement
 
-Phoenix_SaaS completed the internal engineering foundation through Gate 14 with:
+WizField completed the internal engineering foundation through Gate 14 with:
 
 - tenant-safe multi-org UX confirmed
 - Gate 12 dev/test rerun closed successfully

@@ -1,4 +1,4 @@
-# PhoenixOS SaaS Owner Launch Activation Checklist
+# WizField Owner Launch Activation Checklist
 
 ## Purpose
 
@@ -21,7 +21,7 @@ Complete all items below with an owner session and an active organization select
 
 1. Fill `STRIPE_SECRET_KEY`.
 2. Fill `STRIPE_WEBHOOK_SECRET`.
-3. Configure the Stripe dashboard webhook endpoint for PhoenixOS.
+3. Configure the Stripe dashboard webhook endpoint for WizField.
 4. Confirm these six event families are subscribed:
    - `checkout.session.completed`
    - `customer.subscription.created`
@@ -29,7 +29,7 @@ Complete all items below with an owner session and an active organization select
    - `customer.subscription.deleted`
    - `invoice.paid`
    - `invoice.payment_failed`
-5. Run one real owner checkout through the PhoenixOS Stripe-hosted checkout flow.
+5. Run one real owner checkout through the WizField Stripe-hosted checkout flow.
 6. Verify `/billing/success` only shows processing confirmation and does not claim activation from redirect alone.
 7. Verify subscription synchronization lands in `billing_accounts`.
 8. Re-open billing surfaces and confirm shared billing-account state reflects the Stripe customer, subscription, provider, and plan correctly.

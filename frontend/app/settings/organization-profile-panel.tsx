@@ -152,7 +152,7 @@ export function OrganizationProfilePanel({
             value={businessName}
             onChange={(event) => setBusinessName(event.target.value)}
             className="theme-control-surface w-full rounded-[16px] border px-4 py-3 text-[color:var(--sem-text-primary)] outline-none"
-            placeholder="Phoenix Fireplace"
+            placeholder="Service Company"
           />
         </label>
 
@@ -223,7 +223,7 @@ export function OrganizationProfilePanel({
               <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Add Business</p>
               <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Create another workspace</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                New businesses attach to the same shared PhoenixOS billing account and count against the current plan
+                New businesses attach to the same shared WizField billing account and count against the current plan
                 entitlement, regardless of which covered workspace started the Stripe-backed subscription.
               </p>
             </div>

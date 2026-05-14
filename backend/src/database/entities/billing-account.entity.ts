@@ -9,7 +9,7 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
-import type { BillingProvider, OrganizationBillingStatus, PhoenixPlanKey } from "../../billing/billing.constants";
+import type { BillingPlanKey, BillingProvider, OrganizationBillingStatus } from "../../billing/billing.constants";
 import { OrganizationEntity } from "./organization.entity";
 import { OrganizationBillingEntity } from "./organization-billing.entity";
 import { UserEntity } from "./user.entity";
@@ -26,7 +26,7 @@ export class BillingAccountEntity {
   anchor_organization_id!: string | null;
 
   @Column({ type: "varchar", length: 32 })
-  plan_key!: PhoenixPlanKey;
+  plan_key!: BillingPlanKey;
 
   @Column({ type: "varchar", length: 32 })
   billing_status!: OrganizationBillingStatus;

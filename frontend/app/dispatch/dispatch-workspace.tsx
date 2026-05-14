@@ -144,7 +144,7 @@ export default function DispatchWorkspace({
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
-                Phoenix Fireplace CRM
+                WizField
               </p>
               <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] sm:text-6xl">
                 Dispatch layer for address visibility, technician coverage, and map handoff.

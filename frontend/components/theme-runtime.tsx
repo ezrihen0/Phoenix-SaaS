@@ -2,7 +2,7 @@
 
 import { useLayoutEffect } from "react";
 
-export const THEME_STORAGE_KEY = "phoenix.appearance.theme";
+export const THEME_STORAGE_KEY = "wizfield.appearance.theme";
 export const DEFAULT_THEME = "brown-cream";
 
 export const THEME_OPTIONS = [

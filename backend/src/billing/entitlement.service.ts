@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 
 import { apiError } from "../common/api-response";
-import type { PhoenixPlanKey } from "./billing.constants";
+import type { BillingPlanKey } from "./billing.constants";
 import { OrganizationBillingService } from "./organization-billing.service";
 
 export type MonetizedFeature = "automations" | "inventory_manage" | "pricebook_manage";
@@ -46,7 +46,7 @@ export class EntitlementService {
     }
   }
 
-  planAllowsPricebookManage(planKey: PhoenixPlanKey) {
+  planAllowsPricebookManage(planKey: BillingPlanKey) {
     return planKey === "pro" || planKey === "business";
   }
 

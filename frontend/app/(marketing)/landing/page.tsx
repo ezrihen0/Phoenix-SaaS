@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "PhoenixOS — Field-service operating system",
+  title: "WizField — Field-service operating system",
   description:
     "A field-service operating system for owners who are tired of losing calls, jobs, estimates, invoices, and customer history.",
 };
@@ -13,13 +13,13 @@ export default function LandingPage() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.14),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(191,87,0,0.1),transparent_28%)]" />
       <div className="relative mx-auto max-w-4xl px-6 py-16 lg:px-10 lg:py-24">
         <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
-          PhoenixOS
+          WizField
         </p>
         <h1 className="mt-5 font-[family:var(--font-flat-display)] text-4xl leading-tight tracking-tight text-[#f5ecd2] sm:text-5xl md:text-6xl">
           Stop losing calls, jobs, estimates, invoices, and customer history.
         </h1>
         <p className="mt-6 max-w-2xl text-lg leading-8 text-white/65">
-          PhoenixOS is a <strong className="font-medium text-white/85">field-service operating system</strong> for
+          WizField is a <strong className="font-medium text-white/85">field-service operating system</strong> for
           owners and teams who run real trucks, real schedules, and real revenue — not a generic CRM bolt-on.
         </p>
         <div className="mt-10 flex flex-wrap gap-4">

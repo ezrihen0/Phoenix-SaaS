@@ -76,7 +76,7 @@ export default async function HomePage() {
             Operations home
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-            Your PhoenixOS snapshot for today: leads, jobs, scheduling, and billing in one place. Next: open{" "}
+            Your WizField snapshot for today: leads, jobs, scheduling, and billing in one place. Next: open{" "}
             <strong className="font-medium text-[color:var(--sem-text-primary)]">Jobs</strong> to dispatch work or{" "}
             <strong className="font-medium text-[color:var(--sem-text-primary)]">Leads</strong> to qualify new intake.
           </p>

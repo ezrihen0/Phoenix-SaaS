@@ -2543,7 +2543,7 @@ export class InspectionsAdminService {
 
   private async resolveOrCreateDraftCustomer(organizationId: string) {
     const existing = await this.customersRepository.findOne({
-      where: { email: "internal-draft@phoenix.local", organization_id: organizationId },
+      where: { email: "internal-draft@wizfield.local", organization_id: organizationId },
     });
     if (existing) {
       return existing;
@@ -2553,7 +2553,7 @@ export class InspectionsAdminService {
         organization_id: organizationId,
         full_name: "Internal Draft",
         phone: "0000000000",
-        email: "internal-draft@phoenix.local",
+        email: "internal-draft@wizfield.local",
         external_client_number: null,
         company_name: null,
         service_address_line_1: "",

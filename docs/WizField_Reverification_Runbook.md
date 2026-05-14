@@ -1,8 +1,8 @@
-# PhoenixOS SaaS Reverification Runbook
+# WizField Reverification Runbook
 
 ## Purpose
 
-This is the reusable operator runbook for future Phoenix_SaaS reverification on production-like or deployed environments.
+This is the reusable operator runbook for future WizField reverification on production-like or deployed environments.
 
 It is a replay tool, not an active engineering gate blocker.
 
@@ -19,7 +19,7 @@ Do not use this document to reopen internal Gate 11-14 closeout statuses. Use it
 
 ## 2. Required environment
 
-- Phoenix_SaaS backend and frontend reachable in the target environment
+- WizField backend and frontend reachable in the target environment
 - Migrated application database
 - Ability to run backend and frontend builds
 - Ability to run `migration:run`, `schema:verify`, and the four isolation smoke commands

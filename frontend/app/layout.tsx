@@ -21,7 +21,7 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "PhoenixOS",
+  title: "WizField",
   description:
     "Field-service operating system for owners who are tired of losing calls, jobs, estimates, invoices, and customer history.",
 };

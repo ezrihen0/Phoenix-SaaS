@@ -1277,7 +1277,7 @@ export default function JobsWorkspace() {
               <div className="mt-6 rounded-[28px] theme-control-surface-soft border-dashed bg-[color:var(--cmp-surface-panel)] px-5 py-10 text-center text-sm text-[color:var(--sem-text-secondary)]">
                 {queueFilterActive
                   ? "No jobs match the current technician and date filters."
-                  : "No jobs are active yet. Convert a lead to start the first Phoenix service ticket."}
+                  : "No jobs are active yet. Convert a lead to start the first service ticket."}
               </div>
             )}
           </SectionFrame>

@@ -40,7 +40,7 @@ type NavItem = {
 
 type SearchCapableRole = "owner" | "admin" | "office_admin";
 
-const COLLAPSED_KEY = "phoenix.quick-nav.collapsed";
+const COLLAPSED_KEY = "wizfield.quick-nav.collapsed";
 const HIDDEN_PREFIXES = [
   "/access",
   "/book",
@@ -92,7 +92,7 @@ function buildInitials(value: string) {
   const parts = value.trim().split(/\s+/).filter(Boolean).slice(0, 2);
 
   if (parts.length === 0) {
-    return "PH";
+    return "WF";
   }
 
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
@@ -145,7 +145,7 @@ export function AppShell({ children }: AppShellProps) {
   const [collapsedPreferenceReady, setCollapsedPreferenceReady] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
-  const [userLabel, setUserLabel] = useState("Phoenix User");
+  const [userLabel, setUserLabel] = useState("WizField User");
   const enabled = shouldShowShell(pathname);
 
   useEffect(() => {
@@ -187,7 +187,7 @@ export function AppShell({ children }: AppShellProps) {
       const nextLabel = session?.profile?.full_name?.trim()
         || session?.technician?.display_name?.trim()
         || session?.user?.email?.trim()
-        || "Phoenix User";
+        || "WizField User";
       const canSearch = canUseGlobalSearch(session?.profile?.role) && destination?.destination === "/jobs";
 
       setUserLabel(nextLabel);
@@ -242,7 +242,7 @@ export function AppShell({ children }: AppShellProps) {
             {!collapsed ? (
               <div>
                 <p className="text-[11px] uppercase tracking-[0.35em] text-[color:var(--sem-text-muted)]">Quick Navigation</p>
-                <p className="mt-1 font-[family:var(--font-flat-display)] text-2xl text-[color:var(--sem-text-primary)]">Phoenix CRM</p>
+                <p className="mt-1 font-[family:var(--font-flat-display)] text-2xl text-[color:var(--sem-text-primary)]">WizField</p>
               </div>
             ) : <div className="h-12" />}
             <button
@@ -296,8 +296,8 @@ export function AppShell({ children }: AppShellProps) {
             <div className="mx-auto flex max-w-[1600px] items-start justify-between gap-4">
               <div className="inline-flex h-[4.25rem] w-[min(58vw,16rem)] shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[#14212a] p-1 shadow-[0_18px_45px_rgba(15,23,42,0.18)] ring-1 ring-white/5 backdrop-blur-xl sm:h-[4.75rem] sm:w-[17.8125rem] lg:w-[17.8125rem]">
                 <img
-                  src="/phoenix-logo.png"
-                  alt="Phoenix Chimney and Fireplaces Services"
+                  src="/wizfield-logo.svg"
+                  alt="WizField logo"
                   className="block h-full w-full object-fill drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
                 />
               </div>

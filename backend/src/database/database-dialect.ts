@@ -8,8 +8,8 @@ type DatabaseDefaults = {
 
 const MYSQL_DEFAULTS: DatabaseDefaults = {
   port: "3306",
-  username: "phoenix",
-  password: "phoenix",
+  username: "wizfield",
+  password: "wizfield",
 };
 
 const POSTGRES_DEFAULTS: DatabaseDefaults = {

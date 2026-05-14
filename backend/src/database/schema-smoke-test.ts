@@ -30,7 +30,7 @@ function requireMySqlOptions(): MysqlConnectionOptions {
 async function main() {
   const options = requireMySqlOptions();
   const databaseName = process.env.DB_SMOKE_DATABASE?.trim()
-    || `phoenix_crm_smoke_${Date.now()}`;
+    || `wizfield_smoke_${Date.now()}`;
   const shouldDrop = (process.env.DB_SMOKE_DROP ?? "false").trim().toLowerCase() === "true";
 
   const adminConnection = await mysql.createConnection({

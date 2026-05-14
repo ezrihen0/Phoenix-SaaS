@@ -65,7 +65,7 @@ export default function JobStatusPanel({
         <span>Status Flow</span>
       </div>
       <p className="mt-3 text-sm leading-6 text-white/58">
-        Move the job through the Phoenix CRM pipeline and store an optional note on the status timeline. Cancelling a job requires a reason.
+        Move the job through the active workflow and store an optional note on the status timeline. Cancelling a job requires a reason.
       </p>
 
       <label className="mt-4 block space-y-2 text-sm text-white/66">

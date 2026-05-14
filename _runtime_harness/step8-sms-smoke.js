@@ -72,13 +72,13 @@ function isNon555PhoneNumber(value) {
 }
 
 const BACKEND_URL = readConfigValue('SMS_SMOKE_BACKEND_URL', 'http://localhost:4000').replace(/\/$/, '');
-const OFFICE_EMAIL = readConfigValue('SMS_SMOKE_OFFICE_EMAIL', 'admin@phoenixcrm.local');
+const OFFICE_EMAIL = readConfigValue('SMS_SMOKE_OFFICE_EMAIL', 'admin@wizfield.local');
 const OFFICE_PASSWORD = readConfigValue('SMS_SMOKE_OFFICE_PASSWORD', 'Admin12345!');
 const TECH_EMAIL = readConfigValue('SMS_SMOKE_TECH_EMAIL');
 const TECH_PASSWORD = readConfigValue('SMS_SMOKE_TECH_PASSWORD');
 const CONVERSATION_ID = readConfigValue('SMS_SMOKE_CONVERSATION_ID');
 const SMOKE_TO_NUMBER = readConfigValue('SMS_SMOKE_TO_NUMBER');
-const SEND_BODY = readConfigValue('SMS_SMOKE_SEND_BODY', 'Phoenix CRM SMS smoke test');
+const SEND_BODY = readConfigValue('SMS_SMOKE_SEND_BODY', 'WizField SMS smoke test');
 const WEBHOOK_FILE = readConfigValue('SMS_SMOKE_WEBHOOK_FILE');
 const WEBHOOK_SIGNATURE = readConfigValue('SMS_SMOKE_WEBHOOK_SIGNATURE');
 const WEBHOOK_TIMESTAMP = readConfigValue('SMS_SMOKE_WEBHOOK_TIMESTAMP');

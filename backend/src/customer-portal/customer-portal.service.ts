@@ -286,7 +286,7 @@ export class CustomerPortalService {
   }
 
   private getPortalSessionCookieName() {
-    return this.configService.get<string>("PORTAL_SESSION_COOKIE_NAME") ?? "phoenix_portal_session";
+    return this.configService.get<string>("PORTAL_SESSION_COOKIE_NAME") ?? "wizfield_portal_session";
   }
 
   private getPortalSessionExpiryDate() {

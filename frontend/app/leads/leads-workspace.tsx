@@ -890,7 +890,7 @@ export default function LeadsWorkspace({
                 <FieldInput
                   value={intakeForm.serviceCity}
                   onChange={(event) => setIntakeForm((current) => ({ ...current, serviceCity: event.target.value }))}
-                  placeholder="Phoenix"
+                  placeholder="Calgary"
                 />
               </label>
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">

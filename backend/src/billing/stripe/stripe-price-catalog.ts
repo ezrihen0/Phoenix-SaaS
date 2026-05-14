@@ -1,10 +1,10 @@
 import type { ConfigService } from "@nestjs/config";
 
-import type { PhoenixPlanKey } from "../billing.constants";
+import type { BillingPlanKey } from "../billing.constants";
 
 export function resolveStripePriceIdForPlan(
   configService: ConfigService,
-  planKey: PhoenixPlanKey,
+  planKey: BillingPlanKey,
 ): string | null {
   const envKey =
     planKey === "starter"
@@ -19,7 +19,7 @@ export function resolveStripePriceIdForPlan(
 export function resolvePlanKeyForStripePriceId(
   configService: ConfigService,
   priceId: string | null | undefined,
-): PhoenixPlanKey | null {
+): BillingPlanKey | null {
   const normalizedPriceId = priceId?.trim();
   if (!normalizedPriceId) {
     return null;

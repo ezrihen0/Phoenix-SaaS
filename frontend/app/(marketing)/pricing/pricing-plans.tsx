@@ -16,7 +16,7 @@ const plans = [
     key: "starter",
     title: "Starter",
     coverage: "Covers 1 business",
-    body: "Best for a single service brand under one shared PhoenixOS billing account.",
+    body: "Best for a single service brand under one shared WizField billing account.",
   },
   {
     key: "pro",

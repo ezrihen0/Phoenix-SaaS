@@ -352,7 +352,7 @@ function toastClass(tone: ToastTone) {
 }
 
 function noteDraftKey(jobId: string) {
-  return `phoenix-job-note-draft:${jobId}`;
+  return `wizfield-job-note-draft:${jobId}`;
 }
 
 function isActiveTab(value: string | null): value is JobTab {
@@ -1226,7 +1226,7 @@ export default function JobDetailWorkspace({
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div>
                                 <p className="text-sm font-medium text-[color:var(--sem-text-primary)]">
-                                  {note.author_name?.trim() || "Phoenix Team"}
+                                  {note.author_name?.trim() || "WizField Team"}
                                 </p>
                                 <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                                   {formatNoteDateTime(note.created_at)}

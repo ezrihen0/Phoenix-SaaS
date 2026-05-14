@@ -12,7 +12,7 @@ export type CloverSubscriptionPayload = {
   object?: string;
 };
 
-const recurringUserAgent = "PhoenixOS-Billing/1.0";
+const recurringUserAgent = "WizField-Billing/1.0";
 
 @Injectable()
 export class CloverRecurringClient {

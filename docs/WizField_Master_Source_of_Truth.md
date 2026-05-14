@@ -1,22 +1,22 @@
-# PhoenixOS SaaS Master Source of Truth
+# WizField Master Source of Truth
 
 ## Purpose
 
-This is the single canonical product and architecture truth for the Phoenix SaaS project.
+This is the single canonical product and architecture truth for the WizField project.
 
-It replaces the older scattered Gate 0-14 roadmap, SaaS foundation, numbered Gate 1-10 source-of-truth docs, the Gate 11 UX contract, and the standalone Gate 13 billing sync document as the first document to read before any future Phoenix_SaaS discussion.
+It replaces the older scattered Gate 0-14 roadmap, SaaS foundation, numbered Gate 1-10 source-of-truth docs, the Gate 11 UX contract, and the standalone Gate 13 billing sync document as the first document to read before any future WizField discussion.
 
 ## 1. Product identity and project separation
 
-- The repository is the Phoenix SaaS workstream: a multi-tenant SaaS conversion of the proven Phoenix CRM operating engine.
-- `Phoenix_CRM` and `Phoenix_SaaS` are separate workstreams and must remain mentally and operationally separate.
-- Historical rule preserved: `Phoenix_CRM is protected. Phoenix_SaaS is the surgery room.`
-- The SaaS product direction is `PhoenixOS`: a field-service operating system for owners running one or more service businesses from one account.
+- The repository is the WizField workstream: a multi-tenant SaaS conversion of the proven Phoenix CRM operating engine.
+- `Phoenix_CRM` and `WizField` are separate workstreams and must remain mentally and operationally separate.
+- Historical boundary preserved: `Phoenix_CRM is protected. WizField is the surgery room.`
+- The product direction is `WizField`: a field-service operating system for owners running one or more service businesses from one account.
 
-## 2. Phoenix_CRM vs Phoenix_SaaS safety boundary
+## 2. Phoenix_CRM vs WizField safety boundary
 
-- Do not treat Phoenix_SaaS as a place for casual production fixes, broad cleanup, or mixed-scope refactors.
-- Do not treat Phoenix_CRM as a safe place to experiment with SaaS tenant architecture.
+- Do not treat `WizField` as a place for casual production fixes, broad cleanup, or mixed-scope refactors.
+- Do not treat `Phoenix_CRM` as a safe place to experiment with SaaS tenant architecture.
 - The active SaaS truth lives in this document plus the three companion canonical docs, not in historical planning fragments.
 - Git history preserves historical detail; the active docs tree should stay small and current.
 
@@ -26,15 +26,15 @@ It replaces the older scattered Gate 0-14 roadmap, SaaS foundation, numbered Gat
 - Prisma is frozen / reference-only during the SaaS conversion.
 - Do not use Prisma for active reads, writes, migrations, or dual-runtime planning.
 - Tenant ownership, migrations, services, controllers, and query filters are defined through the active TypeORM/NestJS stack.
-- The SaaS objective was never "change ORM and architecture at the same time." The objective is to make the existing engine tenant-safe first.
+- The objective is to make the existing engine tenant-safe first, not to change ORM and architecture at the same time.
 
 ## 4. Product north star
 
-PhoenixOS is not a generic CRM reskin. It is a multi-tenant field-service operating system built from the Phoenix CRM operational engine.
+WizField is not a generic CRM reskin. It is a multi-tenant field-service operating system built from the Phoenix CRM operational engine.
 
-The core promise is:
+Core promise:
 
-> PhoenixOS helps field-service owners manage calls, leads, jobs, estimates, invoices, communication, reports, and customer access across multiple businesses from one operating system.
+> WizField helps field-service owners manage calls, leads, jobs, estimates, invoices, communication, reports, and customer access across multiple businesses from one operating system.
 
 The product remains anchored in real field-service operations: customer history, lead intake, job management, estimates, invoices, payments, calls, SMS, inspections, reports, warranty documents, dispatch, and scheduling.
 
@@ -81,7 +81,7 @@ Platform
   - Pro = up to 3 businesses
   - Business = expanded local model with no fixed hard cap currently enforced in local repo truth
 - Plan enforcement resolves from organization context through the linked shared billing account.
-- Billing is SaaS/platform billing and must remain separate from tenant CRM invoice/payment records.
+- Billing is SaaS/platform billing and remains separate from tenant CRM invoice/payment records.
 
 ## 8. Stripe-first provider model
 
@@ -106,11 +106,7 @@ Platform
 
 - Public booking must resolve the target organization first.
 - Public portal and access-token flows must bind back to organization-owned resources.
-- Token resolution must prove:
-  - token validity
-  - token expiry status
-  - target resource ownership
-  - correct organization scope
+- Token resolution must prove validity, expiry status, target resource ownership, and correct organization scope.
 - Public routes must not expose internal records by bare UUID alone.
 - Invalid, expired, or reused tokens must fail safely.
 - Public booking must never silently default to the wrong tenant.
@@ -127,13 +123,7 @@ Platform
 ## 12. Document, branding, and snapshot rules
 
 - Platform brand and tenant brand are separate.
-- Do not globally rename `Phoenix` blindly.
-- Classify Phoenix references before changing them:
-  - platform branding
-  - tenant branding
-  - legal/report wording
-  - internal identifiers
-  - historical business data
+- Do not globally rename `Phoenix_CRM` or historical CRM/business data.
 - Tenant-facing business identity comes from organization-owned settings.
 - Generated invoices, estimates, reports, warranties, and similar artifacts must use immutable snapshots where historical truth matters.
 - A later settings change must not silently rewrite a previously generated tenant document.
@@ -160,7 +150,7 @@ Platform
 
 ## 14. Current owner launch activation boundary
 
-Internal engineering for the Gate 0-14 foundation phase is complete enough that no Gate 11-14 status should be reopened by this documentation pass.
+Internal engineering for the Gate 0-14 foundation phase is complete enough that no Gate 11-14 status should be reopened by this rename pass.
 
 What remains is owner-managed launch activation, not unfinished foundation engineering:
 
@@ -180,9 +170,9 @@ The next phase is not "redo SaaS architecture." The next phase is controlled lau
 
 Use the companion docs this way:
 
-- `PhoenixOS_SaaS_Engineering_Closeout_and_Verification.md` for final engineering evidence and locked closeout truth
-- `PhoenixOS_SaaS_Owner_Launch_Activation_Checklist.md` for owner-managed launch activation items
-- `PhoenixOS_SaaS_Reverification_Runbook.md` for future production-like reruns and operator replay
+- `WizField_Engineering_Closeout_and_Verification.md` for final engineering evidence and locked closeout truth
+- `WizField_Owner_Launch_Activation_Checklist.md` for owner-managed launch activation items
+- `WizField_Reverification_Runbook.md` for future production-like reruns and operator replay
 
 Short handoff summary:
 

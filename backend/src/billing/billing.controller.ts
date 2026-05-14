@@ -5,7 +5,7 @@ import { requirePermission } from "../auth/permissions";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
-import { parsePhoenixPlanKey } from "./billing.constants";
+import { parseBillingPlanKey } from "./billing.constants";
 import { BillingOrchestrationService } from "./billing-orchestration.service";
 import { OrganizationBillingService } from "./organization-billing.service";
 import { resolveStripePriceIdForPlan } from "./stripe/stripe-price-catalog";
@@ -25,7 +25,7 @@ export class BillingController {
       request.actor,
       "billing.manage",
       "billing_manage_forbidden",
-      "Only an organization owner can view PhoenixOS billing for this workspace.",
+      "Only an organization owner can view WizField billing for this workspace.",
     );
     const organizationId = this.requireOrganizationId(actor);
     const row = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
@@ -49,7 +49,7 @@ export class BillingController {
       request.actor,
       "billing.manage",
       "billing_manage_forbidden",
-      "Only an organization owner can start PhoenixOS billing checkout for this workspace.",
+      "Only an organization owner can start WizField billing checkout for this workspace.",
     );
     const organizationId = this.requireOrganizationId(actor);
     const planKey = readPlanKeyFromBody(body);
@@ -70,12 +70,12 @@ export class BillingController {
   }
 }
 
-function readPlanKeyFromBody(body: unknown): NonNullable<ReturnType<typeof parsePhoenixPlanKey>> {
+function readPlanKeyFromBody(body: unknown): NonNullable<ReturnType<typeof parseBillingPlanKey>> {
   if (!body || typeof body !== "object") {
     apiError(400, "billing_payload_invalid", "Expected a JSON object.");
   }
   const o = body as Record<string, unknown>;
-  const planKey = parsePhoenixPlanKey(o.plan_key);
+  const planKey = parseBillingPlanKey(o.plan_key);
   if (!planKey) {
     apiError(400, "billing_plan_key_invalid", "Field plan_key must be starter, pro, or business.");
   }

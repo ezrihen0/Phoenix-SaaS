@@ -99,10 +99,10 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
 
   return (
     <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">PhoenixOS SaaS billing</p>
+      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">WizField billing</p>
       <h2 className="mt-3 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Shared billing account</h2>
       <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-        The active workspace belongs to a shared PhoenixOS billing account. One subscription can cover multiple
+        The active workspace belongs to a shared WizField billing account. One subscription can cover multiple
         businesses according to the current plan entitlement, while tenant invoice payments stay separate.
       </p>
 
@@ -181,7 +181,7 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
         <h3 className="text-lg font-semibold text-[color:var(--sem-text-primary)]">Stripe checkout</h3>
         <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
           Launch Stripe Checkout for the shared billing account. Covered businesses inherit the same plan after verified
-          Stripe webhook events update the local billing account. PhoenixOS does not collect raw card details here.
+          Stripe webhook events update the local billing account. WizField does not collect raw card details here.
         </p>
 
         {!checkoutReady ? (

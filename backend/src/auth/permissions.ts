@@ -181,7 +181,7 @@ export function listPermissionsForRole(role: unknown): RoleModePermission[] {
 export function requireActorProfile(
   actor: ActorContext | null | undefined,
   code = "actor_profile_missing",
-  message = "The authenticated user does not have a Phoenix Fireplace CRM profile yet.",
+  message = "The authenticated user does not have a workspace profile yet.",
 ): ActorWithProfile {
   if (!actor?.profile) {
     apiError(403, code, message);

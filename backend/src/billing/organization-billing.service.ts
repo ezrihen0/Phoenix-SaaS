@@ -8,7 +8,7 @@ import { OrganizationEntity } from "../database/entities/organization.entity";
 import { OrganizationBillingEntity } from "../database/entities/organization-billing.entity";
 import {
   type OrganizationBillingStatus,
-  type PhoenixPlanKey,
+  type BillingPlanKey,
   resolveOrganizationLimitForPlan,
 } from "./billing.constants";
 
@@ -30,7 +30,7 @@ export type BillingContext = {
 
 type BillingAccountSeedInput = {
   ownerUserId?: string | null;
-  planKey?: PhoenixPlanKey;
+  planKey?: BillingPlanKey;
   billingStatus?: OrganizationBillingStatus;
   trialStartsAt?: Date | null;
   trialEndsAt?: Date | null;
@@ -131,7 +131,7 @@ export class OrganizationBillingService {
 
   async updatePlanAndStatus(
     organizationId: string,
-    planKey: PhoenixPlanKey,
+    planKey: BillingPlanKey,
     billingStatus: OrganizationBillingStatus,
   ) {
     const context = await this.getOrCreateContextForOrganization(organizationId);

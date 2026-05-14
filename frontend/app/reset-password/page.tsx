@@ -68,7 +68,7 @@ export default function ResetPasswordPage() {
     try {
       await updateCurrentPassword(password);
 
-      setStatusMessage("Password updated. Routing you into Phoenix Fireplace CRM.");
+      setStatusMessage("Password updated. Routing you into WizField.");
       window.location.assign("/jobs");
     } catch (error) {
       setErrorMessage(
