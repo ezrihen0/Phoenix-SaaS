@@ -8,7 +8,7 @@ import { MarketingOpportunityService } from "./marketing-opportunity.service";
 import { MarketingProfileService } from "./marketing-profile.service";
 
 export type MarketingFoundationResponse = {
-  phase: "phase_5_campaign_builder";
+  phase: "growth_center_v1_program_complete";
   organization: {
     id: string;
     name: string | null;
@@ -112,7 +112,7 @@ export class MarketingService {
     const recommendedNext = this.opportunityService.recommendNextAction(opportunityRows);
 
     return {
-      phase: "phase_5_campaign_builder",
+      phase: "growth_center_v1_program_complete",
       organization: {
         id: organizationId,
         name: input.organizationName,

@@ -34,10 +34,11 @@ export type MarketingRouteKey =
 
 export type MarketingFoundationData = {
   phase:
-    | "phase_2_content_studio"
-    | "phase_3_publishing_integrations"
+    | "growth_center_v1_program_complete"
+    | "phase_5_campaign_builder"
     | "phase_4_crm_intelligence"
-    | "phase_5_campaign_builder";
+    | "phase_3_publishing_integrations"
+    | "phase_2_content_studio";
   capabilities?: {
     can_manage_channels: boolean;
     can_enqueue_publishing: boolean;
@@ -114,48 +115,46 @@ const routeDefinitions: RouteDefinition[] = [
     key: "overview",
     href: "/marketing",
     label: "Overview",
-    eyebrow: "Phase 2 · Content Studio anchor",
+    eyebrow: "Growth Center · Operating home",
     title: "Office Growth Center pulse",
     description:
-      "Phase 2 adds manual Marketing Profile persistence, seeded multi-platform drafts, review transitions, and metadata-only scheduling. Publishing and OAuth remain gated behind later approvals.",
+      "Session-scoped workspace for marketing profile, drafts, calendar metadata, OAuth channels, CRM opportunities, campaigns, automations, analytics, and explicit publish jobs — all organization-owned. Three clocks stay distinct: draft `scheduled_at` metadata, Growth Center `publish_job.scheduled_at` (UTC), and each provider’s UI.",
     icon: Megaphone,
     includedNow: [
-      "Authenticated `/marketing` route family with Phase 2 live metrics",
-      "Counts for drafts awaiting review vs still in rework",
-      "Recent draft shortcuts into the studio surface",
-      "Explicit non-publishing disclaimers surfaced from the Growth Center APIs",
+      "Foundation metrics, recent drafts, recommended next action, and Phase 7 analytics pulse strip",
+      "Publishing disclaimer and protected boundaries from authenticated foundation APIs",
+      "Single navigation rail into every Growth Center surface",
     ],
     laterPhaseWork: [
-      "Google Business Profile, Facebook, and Instagram OAuth scopes",
-      "Publish-now queues with telemetry and retry handling",
-      "CRM-guided opportunity ingestion",
+      "Growth Center plan entitlements and commercial packaging (architecture only today)",
+      "Instagram outbound publishing (V1.5) and richer media workflows",
     ],
   },
   {
     key: "opportunities",
     href: "/marketing/opportunities",
     label: "Opportunities",
-    eyebrow: "Phase 4 · CRM Intelligence",
+    eyebrow: "CRM Intelligence",
     title: "Operational signals → marketing drafts",
     description:
       "WizField scans recent jobs and inspection photo types (no media URLs surfaced) to suggest opportunities. Owners, admins, and office admins refresh, dismiss, archive, or convert to Content Studio drafts — dispatchers read only.",
     icon: Lightbulb,
     includedNow: [
-      "Four Core V1 detectors: work showcase, service momentum, local geographic density, before/after signal",
+      "Core V1 detectors: work showcase, service momentum, local geographic density, before/after signal",
       "Convert to Draft opens Content Studio with empty platform variants",
       "Tenant-safe dedupe keyed per organization",
     ],
     laterPhaseWork: [
-      "Availability and premium invoice heuristics (deferred)",
-      "Inbound review ingestion when a real CRM domain exists",
-      "Campaign and automation orchestration (Phase 5–6)",
+      "Availability and premium invoice heuristics",
+      "Inbound review ingestion when CRM domain deepens",
+      "Tighter Opportunity → Campaign orchestration beyond informational entry points",
     ],
   },
   {
     key: "create",
     href: "/marketing/create",
     label: "Create",
-    eyebrow: "Phase 2 · Manual Content Studio",
+    eyebrow: "Content Studio",
     title: "Draft compositions with seeded variants",
     description:
       "Create organization-owned drafts, edit Google Business Profile, Facebook, and Instagram copy tracks, submit for reviewer approval, and capture calendar metadata without implying outbound posting.",
@@ -168,49 +167,48 @@ const routeDefinitions: RouteDefinition[] = [
     ],
     laterPhaseWork: [
       "Calendar drag-and-drop with conflict detection",
-      "Asset libraries and moderation tooling",
-      "Channel-specific validation once publishers arrive",
+      "Shared asset libraries and moderation tooling",
+      "Richer per-provider outbound validation as channels evolve",
     ],
   },
   {
     key: "calendar",
     href: "/marketing/calendar",
     label: "Calendar",
-    eyebrow: "Phase 2 · Scheduling metadata",
+    eyebrow: "Scheduling metadata",
     title: "Calendar placeholders for planned posts",
     description:
-      "Surface drafts carrying `scheduled_at` metadata grouped by UTC day inside the Growth Center. Nothing dispatches externally until Publishing ships as its own gated phase.",
+      "Surface drafts carrying `scheduled_at` metadata grouped by UTC day. This grid is editorial context only — outbound execution always flows through explicit Growth Center publish jobs tied to channel targets.",
     icon: CalendarDays,
     includedNow: [
       "Month grid powered by authenticated calendar API responses",
       "Links back into `/marketing/create?draft=id` composer",
-      "Copy reminding teams that scheduling stays offline",
-      "UTC-normalized placeholders to mirror server contracts",
+      "UTC-normalized placeholders aligned with server contracts",
     ],
     laterPhaseWork: [
       "Timezone-aware collaborator views",
       "Conflict detection tied to staffing dispatch",
-      "Retry-aware publish telemetry overlays",
+      "Optional publish-attempt overlays on calendar reads",
     ],
   },
   {
     key: "campaigns",
     href: "/marketing/campaigns",
     label: "Campaigns",
-    eyebrow: "Phase 5 · Campaign Builder",
+    eyebrow: "Campaign Builder",
     title: "Objective-first plans with templated slots",
     description:
-      "Create Phase 5 campaign shells with deterministic slots, optionally attach Content Studio drafts per slot, and close campaigns without implying outbound publishing. Draft metadata, explicit publish_job UTC times, and provider calendars remain distinct clocks.",
+      "Create campaign shells with deterministic slots, optionally attach Content Studio drafts per slot, and close or archive plans without implying automatic outbound publishing. Slots never replace explicit publish jobs.",
     icon: Rocket,
     includedNow: [
-      "Four canonical campaign kinds with seeded slot templates",
+      "Canonical campaign kinds with seeded slot templates",
       "Per-slot draft creation, attach existing drafts, or detach without deleting drafts",
       "Optional bulk draft creation for empty slots",
-      "Terminal statuses (completed / archived / cancelled) lock edits except detach rules enforced server-side",
+      "Terminal statuses lock structural edits; detach rules enforced server-side",
     ],
     laterPhaseWork: [
-      "Opportunity → campaign handoffs beyond informational CTAs",
-      "Automation sequencing tied to approvals",
+      "Deeper Opportunity → Campaign workflows",
+      "Post-approval automation sequencing",
       "Cross-channel readiness scoring inside campaigns",
     ],
   },
@@ -218,7 +216,7 @@ const routeDefinitions: RouteDefinition[] = [
     key: "channels",
     href: "/marketing/channels",
     label: "Channels",
-    eyebrow: "Phase 3 · OAuth targets",
+    eyebrow: "Publishing integrations",
     title: "Google, Facebook, and deferred Instagram",
     description:
       "Connect Google Business Profile and a Facebook Page per organization. Tokens encrypt at rest; Instagram stays visibly deferred until Growth Center V1.5.",
@@ -238,27 +236,27 @@ const routeDefinitions: RouteDefinition[] = [
     key: "automations",
     href: "/marketing/automations",
     label: "Automations",
-    eyebrow: "Phase 6 · Autopilot (V1)",
+    eyebrow: "Autopilot (V1)",
     title: "Opportunity-triggered rules with safe actions",
     description:
-      "Create rules that react to Phase 4 CRM opportunity signals. Actions are suggest-only or auto-create draft in Content Studio — no auto-publish and no scanner/cron triggers in V1.",
+      "Create rules that react to CRM opportunity signals. Actions remain suggest-only or auto-create draft in Content Studio — no auto-publish, no scheduled scanner triggers in V1.",
     icon: Workflow,
     includedNow: [
-      "Rules keyed to opportunity types from Phase 4 detection",
+      "Rules keyed to opportunity types surfaced in CRM Intelligence",
       "Suggest-only and auto-create draft actions with idempotent runs",
       "Dry-run preview and run history for auditors",
     ],
     laterPhaseWork: [
       "Scheduled scanners and additional trigger families",
       "Automation Store or cross-product catalog",
-      "Broader autopilot after review maturity",
+      "Selective auto-publish only after explicit commercial and safety sign-off",
     ],
   },
   {
     key: "analytics",
     href: "/marketing/analytics",
     label: "Analytics",
-    eyebrow: "Phase 7 · Operating visibility",
+    eyebrow: "Operating visibility",
     title: "Org-scoped Growth Center aggregates",
     description:
       "Bounded UTC windows summarize opportunities, drafts, campaigns, publish jobs and attempts, automations, channels, and workflow funnels. Metrics describe internal tooling — not ad ROI or organic reach.",
@@ -279,7 +277,7 @@ const routeDefinitions: RouteDefinition[] = [
     key: "settings",
     href: "/marketing/settings",
     label: "Settings",
-    eyebrow: "Phase 2 · Marketing Brain",
+    eyebrow: "Marketing profile",
     title: "Organization marketing profile persistence",
     description:
       "Capture identity, tone, publishing-adjacent CTA hints, and safety preferences as JSON-backed fragments validated on PATCH. Profiles load read-only projections without implicitly upserting rows.",
@@ -302,7 +300,8 @@ const fallbackSummaryCards: MarketingFoundationData["summaryCards"] = [
   {
     label: "Connected Channels",
     value: "0",
-    helper: "OAuth publishing continues to ship after Phase 2 hardening completes.",
+    helper:
+      "Google Business Profile and Facebook OAuth targets when connected. Instagram remains deferred until Growth Center V1.5.",
   },
   {
     label: "Needs review",
@@ -327,10 +326,15 @@ const fallbackSummaryCards: MarketingFoundationData["summaryCards"] = [
 ];
 
 const laterGrowthRoadmap = [
-  "Live channel publishing loops",
-  "CRM ingestion for opportunities",
-  "Marketing autopilot beyond manual campaigns",
+  "Instagram outbound publishing (Growth Center V1.5)",
+  "Scheduled or scanner-based automation triggers beyond opportunity V1",
+  "Growth Center commercial entitlements (Stripe plan ↔ capability matrix)",
+  "Analytics exports or rollups if operational scale demands them",
 ];
+
+function isGrowthCenterProgramV1Complete(phase: MarketingFoundationData["phase"] | undefined): boolean {
+  return phase === "growth_center_v1_program_complete" || phase === "phase_5_campaign_builder";
+}
 
 function formatWorkflowBadge(raw: string) {
   if (raw === "needs_review") {
@@ -379,36 +383,35 @@ export function MarketingFoundationWorkspace({
   const suppressEducationalRails = interactiveRoutes.includes(activeRouteKey);
   const showPrimaryRail = activeRouteKey === "overview" || suppressEducationalRails;
 
-  const phaseLabel =
-    foundationData?.phase === "phase_5_campaign_builder"
-      ? "Phase 5 · Campaign Builder layer"
-      : foundationData?.phase === "phase_4_crm_intelligence"
-        ? "Phase 4 · CRM Intelligence Layer"
-        : foundationData?.phase === "phase_3_publishing_integrations"
-          ? "Phase 3 · Publishing integrations"
-          : foundationData?.phase === "phase_2_content_studio"
-            ? "Phase 2 Content Studio slice"
-            : "Growth Center rollout";
-  const heroEyebrow =
-    foundationData?.phase === "phase_5_campaign_builder"
-      ? "Phase 5 · Campaigns + coordinated pushes"
-      : foundationData?.phase === "phase_4_crm_intelligence"
-        ? "Phase 4 · Opportunities + drafts"
-        : foundationData?.phase === "phase_3_publishing_integrations"
-          ? "Phase 3 · Channels + explicit jobs"
-          : foundationData?.phase === "phase_2_content_studio"
-            ? "Phase 2 · Manual studio online"
-            : "Growth Center rollout";
-  const heroBody =
-    foundationData?.phase === "phase_5_campaign_builder"
-      ? "Campaign Builder coordinates templated slots around one objective while CRM Intelligence still surfaces operational opportunities. Creating or converting drafts never attaches media automatically or publishes — outbound work stays tied to explicit publish jobs with UTC schedules. Draft scheduling metadata, Growth Center publish_job times, and whatever each provider displays remain three distinct clocks."
-      : foundationData?.phase === "phase_4_crm_intelligence"
-        ? "CRM Intelligence turns recent completed jobs and inspection photo-type patterns into Growth Center opportunities. Convert to Draft hands off into the existing Content Studio and publishing flows — without campaigns, automation, or AI copy generation."
-        : foundationData?.phase === "phase_3_publishing_integrations"
-          ? "OAuth-backed Google Business Profile and Facebook Page targets feed explicit publish jobs. Draft calendar metadata never posts by itself — only Publish Now or Schedule Publishing enqueue dispatcher-owned work in UTC."
-          : foundationData?.phase === "phase_2_content_studio"
-            ? "Capture office-side marketing posture, assemble multi-variant drafts manually, shepherd explicit review states, and book metadata-only placeholders. Earlier phases kept publishing offline."
-            : "Keep tenant-safe scaffolding online while phased capabilities roll forward.";
+  const programV1Complete = isGrowthCenterProgramV1Complete(foundationData?.phase);
+
+  const phaseLabel = programV1Complete
+    ? "Growth Center · Program V1 (Phases 1–7)"
+    : foundationData?.phase === "phase_4_crm_intelligence"
+      ? "Phase roll-out · CRM Intelligence Layer"
+      : foundationData?.phase === "phase_3_publishing_integrations"
+        ? "Phase roll-out · Publishing integrations"
+        : foundationData?.phase === "phase_2_content_studio"
+          ? "Phase roll-out · Content Studio"
+          : "Growth Center";
+  const heroEyebrow = programV1Complete
+    ? "Growth Center · Program complete"
+    : foundationData?.phase === "phase_4_crm_intelligence"
+      ? "CRM Intelligence online"
+      : foundationData?.phase === "phase_3_publishing_integrations"
+        ? "Publishing integrations online"
+        : foundationData?.phase === "phase_2_content_studio"
+          ? "Content Studio online"
+          : "Growth Center";
+  const heroBody = programV1Complete
+    ? "The full Growth Center stack is live: Marketing Profile and Content Studio, metadata calendar, Google and Facebook OAuth publishing with explicit UTC jobs, CRM opportunities, Campaign Builder, V1 automations (draft creation or suggestions only — never auto-publish without a future product decision), and honest internal analytics. Dispatchers read broadly; publishing, opportunity refresh, dismiss/archive/convert, campaigns, and automations mutations stay with owners, admins, and office admins. Draft scheduling metadata still never posts by itself."
+    : foundationData?.phase === "phase_4_crm_intelligence"
+      ? "CRM Intelligence turns recent completed jobs and inspection photo-type patterns into Growth Center opportunities. Convert to Draft hands off into Content Studio, campaigns, automations, and publishing when your role allows."
+      : foundationData?.phase === "phase_3_publishing_integrations"
+        ? "OAuth-backed Google Business Profile and Facebook Page targets feed explicit publish jobs. Draft calendar metadata never posts by itself."
+        : foundationData?.phase === "phase_2_content_studio"
+          ? "Capture office-side marketing posture, assemble multi-variant drafts manually, shepherd explicit review states, and book metadata-only placeholders."
+          : "Keep tenant-safe scaffolding online while phased capabilities roll forward.";
 
   const renderPrimaryRail = () => {
     switch (activeRouteKey) {
@@ -749,7 +752,7 @@ export function MarketingFoundationWorkspace({
 
           <aside className="space-y-6">
             <article className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Behind Phase 2</p>
+              <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Approved future Growth Center work</p>
               <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
                 {laterGrowthRoadmap.map((phase) => (
                   <li key={phase} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
