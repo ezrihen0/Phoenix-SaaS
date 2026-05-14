@@ -16,7 +16,6 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
   const [organizationName, setOrganizationName] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,7 +44,6 @@ export default function SignupPage() {
         email: email.trim().toLowerCase(),
         password,
         fullName: fullName.trim(),
-        phone: phone.trim() || null,
         organizationName: organizationName.trim(),
       });
       await completeSignup();
@@ -66,11 +64,11 @@ export default function SignupPage() {
             WizField
           </p>
           <h1 className="mt-5 max-w-xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] md:text-7xl">
-            Start your first WizField workspace.
+            Create your WizField workspace.
           </h1>
           <p className="mt-6 max-w-xl text-base leading-7 text-white/62 md:text-lg">
-            Create your owner account, create your first business, and land inside the workspace immediately. Billing is
-            managed through a shared WizField billing account, with Stripe as the active checkout provider.
+            Create your owner account and your first business. Your workspace will be prepared for activation through
+            WizField&apos;s shared billing flow with Stripe as the checkout provider.
           </p>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-3">
@@ -83,7 +81,7 @@ export default function SignupPage() {
               {
                 icon: Building2,
                 title: "First business",
-                body: "Your first organization becomes the active workspace on sign-up.",
+                body: "Your first organization is prepared as the workspace you will activate next.",
               },
               {
                 icon: ShieldCheck,
@@ -114,7 +112,7 @@ export default function SignupPage() {
                 Create Account
               </p>
               <h2 className="mt-3 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[#f5ecd2]">
-                Open your first workspace
+                Create My Workspace
               </h2>
             </div>
             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[color:rgba(212,175,55,0.22)] bg-[color:rgba(212,175,55,0.1)] text-[color:var(--flat-gold)]">
@@ -138,7 +136,7 @@ export default function SignupPage() {
             </label>
 
             <label className="block space-y-2 text-sm text-white/68">
-              <span>Business name</span>
+              <span>Business Name</span>
               <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
                 <Building2 className="h-4 w-4 text-[color:var(--flat-gold)]" />
                 <input
@@ -149,6 +147,7 @@ export default function SignupPage() {
                   placeholder="Jordan Chimney & Fireplace"
                 />
               </div>
+              <p className="text-xs text-white/42">You can update this later in your settings.</p>
             </label>
 
             <label className="block space-y-2 text-sm text-white/68">
@@ -184,20 +183,6 @@ export default function SignupPage() {
               </div>
             </label>
 
-            <label className="block space-y-2 text-sm text-white/68">
-              <span>Phone (optional)</span>
-              <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
-                <UserRound className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                <input
-                  autoComplete="tel"
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  className="w-full bg-transparent text-white outline-none placeholder:text-white/28"
-                  placeholder="(555) 555-5555"
-                />
-              </div>
-            </label>
-
             {errorMessage ? (
               <div className="rounded-[22px] border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
                 {errorMessage}
@@ -209,7 +194,7 @@ export default function SignupPage() {
               disabled={isSubmitting}
               className="inline-flex w-full items-center justify-center gap-2 rounded-[22px] border border-[color:rgba(212,175,55,0.28)] bg-[linear-gradient(135deg,rgba(212,175,55,0.24),rgba(212,175,55,0.08))] px-5 py-3.5 text-sm font-medium text-[#f7df97] transition hover:bg-[linear-gradient(135deg,rgba(212,175,55,0.3),rgba(212,175,55,0.12))] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span>{isSubmitting ? "Creating account..." : "Create account"}</span>
+              <span>{isSubmitting ? "Creating workspace..." : "Create My Workspace"}</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </form>

@@ -22,6 +22,10 @@ function getStatusMessage(nextPath: string | null) {
     return "Sign in to open the technician board and update field progress in real time.";
   }
 
+  if (nextPath === "/pricing") {
+    return "Sign in to continue with subscription activation for your WizField workspace.";
+  }
+
   return "Sign in to run leads, jobs, dispatch, estimates, invoices, and customer history in one WizField workspace.";
 }
 
@@ -50,7 +54,7 @@ export default function LoginForm() {
       ? nextPath
       : destination;
 
-    router.replace(nextDestination);
+    router.replace(nextDestination ?? "/pricing");
     router.refresh();
   }
 

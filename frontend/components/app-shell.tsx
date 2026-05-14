@@ -52,6 +52,7 @@ const HIDDEN_PREFIXES = [
   "/pricing",
   "/privacy",
   "/reset-password",
+  "/signup",
   "/technician",
   "/terms",
   "/warranty-certificate",
@@ -68,8 +69,8 @@ const PRIMARY_NAV_ITEMS: NavItem[] = [
   { href: "/estimates", label: "Estimates", icon: FileText },
   { href: "/calls", label: "Calls", icon: Phone },
   { href: "/messaging", label: "Messaging", icon: MessageSquare },
-  { href: "/inspections", label: "Inspections", icon: ShieldCheck },
   { href: "/marketing", label: "Marketing", icon: Megaphone },
+  { href: "/inspections", label: "Inspections", icon: ShieldCheck },
   { href: "/automations", label: "Automations", icon: Workflow },
 ];
 

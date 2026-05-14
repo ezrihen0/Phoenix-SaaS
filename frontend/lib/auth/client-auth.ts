@@ -7,6 +7,8 @@ type ApiEnvelope<T> = {
   };
 };
 
+export type ClientDestination = "/pricing" | "/jobs" | "/technician";
+
 async function authFetch<T>(
   input: string,
   init?: RequestInit,
@@ -134,7 +136,7 @@ export async function setClientActiveOrganization(organizationId: string) {
 }
 
 export async function getClientDestination() {
-  return authFetch<{ destination: "/jobs" | "/technician" }>("/api/auth/destination");
+  return authFetch<{ destination: ClientDestination | null }>("/api/auth/destination");
 }
 
 export async function updateCurrentPassword(password: string) {

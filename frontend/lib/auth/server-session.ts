@@ -10,6 +10,8 @@ type ApiEnvelope<T> = {
   };
 };
 
+type ClientDestination = "/pricing" | "/jobs" | "/technician";
+
 export type SessionRole = "owner" | "admin" | "office_admin" | "dispatcher" | "csr" | "technician" | "viewer";
 
 type SessionData = {
@@ -93,7 +95,7 @@ export async function getServerSession() {
 
 export async function getServerDestination() {
   try {
-    const response = await serverAuthFetch<{ destination: "/jobs" | "/technician" }>("/api/auth/destination");
+    const response = await serverAuthFetch<{ destination: ClientDestination | null }>("/api/auth/destination");
     return response.destination;
   } catch {
     return null;
@@ -125,6 +127,16 @@ export async function requireServerSession(nextPath: string) {
 
   if (!session) {
     redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+  }
+
+  const destination = await getServerDestination();
+
+  if (!destination) {
+    redirect("/login?reason=role-resolution-failed");
+  }
+
+  if (destination === "/pricing" && nextPath !== "/pricing") {
+    redirect("/pricing");
   }
 
   return session;

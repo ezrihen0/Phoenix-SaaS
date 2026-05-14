@@ -9,6 +9,7 @@ type PricingPlansProps = {
   ownerMode: boolean;
   authenticated: boolean;
   checkoutCancelled: boolean;
+  activationMode: boolean;
 };
 
 const plans = [
@@ -32,10 +33,14 @@ const plans = [
   },
 ] as const;
 
-export function PricingPlans({ ownerMode, authenticated, checkoutCancelled }: PricingPlansProps) {
+export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, activationMode }: PricingPlansProps) {
   const [busyPlan, setBusyPlan] = useState<(typeof plans)[number]["key"] | null>(null);
   const [message, setMessage] = useState<string | null>(
-    checkoutCancelled ? "Stripe checkout was cancelled before confirmation. No plan change was activated." : null,
+    checkoutCancelled
+      ? activationMode
+        ? "Complete your subscription to activate your workspace."
+        : "Stripe checkout was cancelled before confirmation. No plan change was activated."
+      : null,
   );
 
   async function startCheckout(planKey: (typeof plans)[number]["key"]) {
@@ -70,7 +75,7 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled }: Pr
                 onClick={() => void startCheckout(plan.key)}
                 className="inline-flex w-full items-center justify-center rounded-full border border-[color:rgba(212,175,55,0.4)] bg-[color:rgba(212,175,55,0.15)] px-5 py-3 text-sm font-semibold text-[#f7df97] transition hover:border-[color:rgba(212,175,55,0.55)] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {busyPlan === plan.key ? "Redirecting to Stripe…" : "Start Stripe checkout"}
+                {busyPlan === plan.key ? "Redirecting to Stripe…" : activationMode ? "Start Plan" : "Start Stripe checkout"}
               </button>
             ) : authenticated ? (
               <Link

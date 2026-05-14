@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getServerSession } from "@/lib/auth/server-session";
+import { getServerDestination, getServerSession } from "@/lib/auth/server-session";
 
 export default async function HomePage() {
   const session = await getServerSession();
@@ -9,18 +9,10 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const role = session.profile?.role ?? null;
+  const destination = await getServerDestination();
 
-  if (role === "technician") {
-    redirect("/technician");
-  }
-
-  if (role === "csr") {
-    redirect("/jobs");
-  }
-
-  if (role) {
-    redirect("/home");
+  if (destination) {
+    redirect(destination);
   }
 
   redirect("/login?reason=unsupported-account");

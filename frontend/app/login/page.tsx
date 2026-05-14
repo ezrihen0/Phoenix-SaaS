@@ -29,9 +29,9 @@ export default function LoginPage() {
         return;
       }
 
-      const payload = await getClientDestination().catch(() => ({ destination: "/jobs" as const }));
+      const payload = await getClientDestination().catch(() => ({ destination: "/pricing" as const }));
 
-      router.replace(payload.destination ?? "/jobs");
+      router.replace(payload.destination ?? "/pricing");
       router.refresh();
     }
 

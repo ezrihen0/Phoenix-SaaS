@@ -24,6 +24,7 @@ import { UserEntity } from "../database/entities/user.entity";
 const DEFAULT_ORGANIZATION_NAME = "Phoenix Chimney & Fireplace";
 const DEFAULT_ORGANIZATION_SLUG = "phoenix";
 const LEGACY_ORGANIZATION_SLUG = "phoenix-default";
+const accessEligibleBillingStatuses = new Set(["active", "trialing"]);
 
 @Injectable()
 export class AuthService {
@@ -582,6 +583,26 @@ export class AuthService {
     return actor;
   }
 
+  async resolveClientDestination(actor: ActorContext) {
+    const role = actor.role ?? actor.profile?.role ?? null;
+    const organizationId = actor.organization_id?.trim() ?? null;
+
+    if (!role) {
+      return null;
+    }
+
+    if (!organizationId) {
+      return role === "technician" ? "/technician" : "/jobs";
+    }
+
+    const accessEligible = await this.isCrmAccessEligibleForOrganization(organizationId);
+    if (!accessEligible) {
+      return "/pricing" as const;
+    }
+
+    return role === "technician" ? "/technician" as const : "/jobs" as const;
+  }
+
   buildSessionResponse(actor: ActorContext) {
     return {
       user: {
@@ -965,5 +986,17 @@ export class AuthService {
 
   private isSessionCookieSecure() {
     return (this.configService.get<string>("SESSION_COOKIE_SECURE") ?? "false").toLowerCase() === "true";
+  }
+
+  private async isCrmAccessEligibleForOrganization(organizationId: string) {
+    const context = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
+    const billingStatus = context.account.billing_status;
+    const hasVerifiedStripeSync = Boolean(
+      context.account.provider_subscription_id?.trim()
+      && context.account.provider_price_id?.trim()
+      && context.account.last_webhook_at,
+    );
+
+    return accessEligibleBillingStatuses.has(billingStatus) && hasVerifiedStripeSync;
   }
 }

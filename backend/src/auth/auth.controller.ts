@@ -252,10 +252,10 @@ export class AuthController {
   @Get("destination")
   @UseGuards(SessionGuard)
   async destination(@Req() request: RequestWithActor) {
-    const role = request.actor?.role ?? request.actor?.profile?.role;
+    const actor = request.actor;
 
     return apiSuccess({
-      destination: role === "technician" ? "/technician" : "/jobs",
+      destination: actor ? await this.authService.resolveClientDestination(actor) : null,
     });
   }
 
