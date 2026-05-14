@@ -139,9 +139,9 @@ async function main() {
         included_additional_language_slots: 2,
         addon_additional_language_slots: 0,
         total_additional_language_slots: 2,
-        included_translation_units: 250,
+        included_translation_units: 4,
         addon_translation_units: 0,
-        total_translation_units: 250,
+        total_translation_units: 4,
         last_reconciled_at: new Date(),
       }),
       entitlementsRepository.create({
@@ -198,7 +198,7 @@ async function main() {
     assert.equal(generatedA.record.final_text, null);
     assert.equal(generatedA.record.units_consumed, 2);
     assert.equal(generatedA.usage.consumed_translation_units, 2);
-    assert.equal(generatedA.usage.remaining_translation_units, 248);
+    assert.equal(generatedA.usage.remaining_translation_units, 2);
 
     const finalizedA = await translationService.finalizeDraft({
       organizationId: organizationA.id,
@@ -210,6 +210,62 @@ async function main() {
     assert.equal(finalizedA.record.status, "final");
     assert.equal(finalizedA.record.final_text, "Edited English output");
     assert.equal(finalizedA.usage.consumed_translation_units, 2);
+    const usageAfterFinalizeA = await translationService.getUsageSummary(organizationA.id);
+    assert.equal(usageAfterFinalizeA.consumed_translation_units, 2);
+    assert.equal(usageAfterFinalizeA.remaining_translation_units, 2);
+
+    const regeneratedA = await translationService.generateDraft({
+      organizationId: organizationA.id,
+      actorUserId: owner.id,
+      surfaceKey: "estimate_line_item_description",
+      sourceLanguageCode: "es",
+      sourceText: longSpanishSource,
+      attachment: {
+        documentKind: "quote",
+        documentId: "quote-smoke-a",
+        documentLineKey: "line-001-regenerated",
+        fieldKey: "description",
+      },
+    });
+
+    assert.equal(regeneratedA.record.status, "draft");
+    assert.equal(regeneratedA.record.units_consumed, 2);
+    assert.equal(regeneratedA.usage.consumed_translation_units, 4);
+    assert.equal(regeneratedA.usage.remaining_translation_units, 0);
+
+    const finalizedRegeneratedA = await translationService.finalizeDraft({
+      organizationId: organizationA.id,
+      actorUserId: owner.id,
+      recordId: regeneratedA.record.id,
+      finalText: null,
+    });
+
+    assert.equal(finalizedRegeneratedA.record.status, "final");
+    assert.equal(finalizedRegeneratedA.record.final_text, finalizedRegeneratedA.record.translated_text);
+    assert.equal(finalizedRegeneratedA.usage.consumed_translation_units, 4);
+
+    let exhaustedUsageRejected = false;
+    try {
+      await translationService.generateDraft({
+        organizationId: organizationA.id,
+        actorUserId: owner.id,
+        surfaceKey: "manual_line_text",
+        sourceLanguageCode: "es",
+        sourceText: "consumo extra",
+        attachment: null,
+      });
+    } catch (error) {
+      assert.ok(error instanceof HttpException);
+      const response = error.getResponse() as {
+        error?: {
+          code?: string;
+        };
+      };
+      assert.equal(response?.error?.code, "translation_usage_exhausted");
+      exhaustedUsageRejected = true;
+    }
+
+    assert.equal(exhaustedUsageRejected, true);
 
     const generatedB = await translationService.generateDraft({
       organizationId: organizationB.id,
@@ -229,6 +285,9 @@ async function main() {
     assert.equal(generatedB.record.document_kind, "invoice");
     assert.equal(generatedB.usage.consumed_translation_units, 1);
     assert.equal(generatedB.usage.remaining_translation_units, 249);
+    const usageSummaryB = await translationService.getUsageSummary(organizationB.id);
+    assert.equal(usageSummaryB.consumed_translation_units, 1);
+    assert.equal(usageSummaryB.remaining_translation_units, 249);
 
     const persistedARecordCount = await recordsRepository.count({
       where: { organization_id: organizationA.id },
@@ -243,9 +302,9 @@ async function main() {
       where: { organization_id: organizationB.id },
     });
 
-    assert.equal(persistedARecordCount, 1);
+    assert.equal(persistedARecordCount, 2);
     assert.equal(persistedBRecordCount, 1);
-    assert.equal(persistedALedgerCount, 1);
+    assert.equal(persistedALedgerCount, 2);
     assert.equal(persistedBLedgerCount, 1);
 
     const missingProviderService = new CustomerOutputTranslationService(
@@ -260,11 +319,11 @@ async function main() {
     let missingProviderFailedSafely = false;
     try {
       await missingProviderService.generateDraft({
-        organizationId: organizationA.id,
+        organizationId: organizationB.id,
         actorUserId: owner.id,
         surfaceKey: "manual_line_text",
-        sourceLanguageCode: "es",
-        sourceText: "limpieza de chimenea",
+        sourceLanguageCode: "pl",
+        sourceText: "czyszczenie komina",
         attachment: null,
       });
     } catch (error) {

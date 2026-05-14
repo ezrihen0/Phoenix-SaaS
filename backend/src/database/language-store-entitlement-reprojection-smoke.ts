@@ -157,6 +157,55 @@ async function main() {
     assert.equal(finalEntitlementB.total_additional_language_slots, 2);
     assert.equal(finalEntitlementB.total_translation_units, 500);
 
+    await languageStoreEntitlementService.reconcileBillingAccount(contextA.account, {
+      provider: "stripe",
+      providerSubscriptionId: "sub_entitlement_smoke",
+      providerPriceId: "price_pro",
+      billingStatus: "active",
+      currentPeriodStart: new Date("2026-05-01T00:00:00.000Z"),
+      currentPeriodEnd: new Date("2026-05-31T23:59:59.000Z"),
+      lastProviderSyncAt: new Date("2026-05-15T00:00:00.000Z"),
+      subscriptionItems: [
+        {
+          providerSubscriptionItemId: "si_plan",
+          providerPriceId: "price_pro",
+          quantity: 1,
+        },
+        {
+          providerSubscriptionItemId: "si_slot_a",
+          providerPriceId: "price_lang_slot",
+          quantity: 1,
+          allocatedOrganizationId: organizationB.id,
+        },
+      ],
+    });
+
+    const reprojectedItems = await billingItemsRepository.find({
+      where: { billing_account_id: contextA.account.id },
+      order: { provider_subscription_item_id: "ASC" },
+    });
+    const reassignedSlot = reprojectedItems.find((item) => item.provider_subscription_item_id === "si_slot_a");
+    const staleTranslationPack = reprojectedItems.find((item) => item.provider_subscription_item_id === "si_translation_b");
+
+    assert.equal(reassignedSlot?.allocated_organization_id, organizationB.id);
+    assert.equal(reassignedSlot?.is_active, true);
+    assert.equal(staleTranslationPack?.is_active, false);
+    assert.equal(staleTranslationPack?.quantity, 0);
+
+    const reprojectedEntitlementA = await entitlementsRepository.findOne({
+      where: { organization_id: organizationA.id },
+    });
+    const reprojectedEntitlementB = await entitlementsRepository.findOne({
+      where: { organization_id: organizationB.id },
+    });
+
+    assert.ok(reprojectedEntitlementA);
+    assert.ok(reprojectedEntitlementB);
+    assert.equal(reprojectedEntitlementA.total_additional_language_slots, 2);
+    assert.equal(reprojectedEntitlementA.total_translation_units, 250);
+    assert.equal(reprojectedEntitlementB.total_additional_language_slots, 3);
+    assert.equal(reprojectedEntitlementB.total_translation_units, 250);
+
     console.log("Language Store entitlement reprojection smoke passed.");
   } finally {
     if (billingAccountId) {

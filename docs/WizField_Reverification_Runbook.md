@@ -94,6 +94,81 @@ Expected result:
 - each smoke returns `ok: true`
 - backend and frontend builds pass
 
+## 6A. Language Store V1 reverification addendum
+
+Use this addendum when the completed Language Store V1 package must be replayed as a bounded verification pass without reopening the underlying Gate 11-14 foundation decisions.
+
+### Language Store V1 prerequisites
+
+- backend migrations already applied in the target environment
+- backend app credential available for normal `migration:run`, `schema:verify`, and build commands
+- same-user multi-org fixture available for a Language Store operator who belongs to Org LS-A and Org LS-B
+- Org LS-A and Org LS-B linked under the intended shared `billing_account`
+- Language Store enabled under the verified entitlement projection for the fixture organizations
+- the standard local smoke principal available when any ephemeral-DB smoke needs `CREATE DATABASE` / `DROP DATABASE`
+
+### Language Store V1 fixture identifiers to record
+
+Record these before the run:
+
+- operator user id / email
+- Org LS-A id / slug
+- Org LS-B id / slug
+- shared `billing_account_id`
+- one verified quote id for Org LS-A
+- one verified invoice id for Org LS-A
+
+### Language Store V1 exact command set
+
+Run these from repo root:
+
+```text
+npm.cmd run migration:run --workspace backend
+npm.cmd run schema:verify --workspace backend
+npm.cmd run language-store-entitlement:smoke --workspace backend
+npm.cmd run language-store-translation:smoke --workspace backend
+npm.cmd run language-store-preference:smoke --workspace backend
+npm.cmd run language-store-snapshot-safety:smoke --workspace backend
+npm.cmd run build --workspace backend
+npm.cmd run build --workspace frontend
+git status --short
+```
+
+### Language Store V1 replay expectations
+
+- entitlement reprojection remains organization-scoped across shared billing coverage and item reassignment
+- the same user can retain different preferred worker languages in Org LS-A and Org LS-B
+- disabling a previously selected language falls back to English only in the affected organization
+- translation usage units still follow the `1 unit per 1,000 source characters, rounded up` rule
+- regeneration consumes units again
+- finalize consumes no extra unit
+- quote and invoice customer-facing snapshots accept only finalized `final_text`
+- cross-org, cross-document, and field-mismatched translation references fail safely
+- already-snapshotted customer-facing text remains unchanged after later preference, enablement, or translation-record changes
+
+### Language Store V1 result logging fields
+
+Add these fields to the normal run log when Language Store V1 is in scope:
+
+| Field | Value |
+|---|---|
+| Language Store entitlement smoke | PASS / FAIL |
+| Language Store translation smoke | PASS / FAIL |
+| Language Store preference smoke | PASS / FAIL |
+| Language Store snapshot safety smoke | PASS / FAIL |
+| Language Store build/schema closeout | PASS / FAIL |
+| Language Store notes / anomalies |  |
+
+### Language Store V1 stop conditions
+
+Stop the Language Store portion of the run if any of the following occurs:
+
+- entitlement projection drifts across organizations under the same `billing_account`
+- preference state leaks across organizations for the same user
+- translation usage accounting no longer matches the locked unit rule
+- draft, foreign-org, foreign-document, or field-mismatched translation records can enter customer-facing snapshots
+- a new Language Store verification failure would require schema expansion, billing-model redesign, or product-scope widening to explain
+
 ## 7. Multi-org UX verification replay
 
 Replay the Gate 11 contract:

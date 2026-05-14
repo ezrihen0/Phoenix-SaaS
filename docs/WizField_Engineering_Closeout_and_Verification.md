@@ -122,14 +122,53 @@ That future rerun is not a restart of SaaS architecture work. It is a mandatory 
 
 Use the canonical reverification runbook for that replay.
 
-## 9. Historical note only
+## 9. Language Store V1 addendum
+
+This addendum records the bounded P1-P6 Language Store verification pass only. It does not reopen the underlying Gate 11-14 foundation statuses above.
+
+### Language Store V1 verification summary
+
+- P7 remains verification and closeout only.
+- No new Language Store product behavior, schema expansion, billing redesign, or UI expansion is part of this addendum.
+- Final evidence for Language Store V1 is captured from migration/schema checks, the four Language Store smoke commands, and backend/frontend builds.
+
+### Language Store V1 evidence list
+
+Required evidence for closeout:
+
+- `npm.cmd run migration:run --workspace backend`
+- `npm.cmd run schema:verify --workspace backend`
+- `npm.cmd run language-store-entitlement:smoke --workspace backend`
+- `npm.cmd run language-store-translation:smoke --workspace backend`
+- `npm.cmd run language-store-preference:smoke --workspace backend`
+- `npm.cmd run language-store-snapshot-safety:smoke --workspace backend`
+- `npm.cmd run build --workspace backend`
+- `npm.cmd run build --workspace frontend`
+- `git status --short` reviewed before any commit recommendation
+
+### Language Store V1 deferred-scope note
+
+This closeout does not add:
+
+- new customer-visible Language Store behavior
+- additional billing-provider capability
+- new output languages beyond the locked V1 scope
+- post-P6 expansion work outside verification evidence
+
+### Language Store V1 closeout statement
+
+- final Language Store V1 verdict: `CLOSED / GO`
+- defects found during P7: `none in Language Store product behavior; one narrow verification-harness expectation update and one narrow missing-provider harness routing fix were completed during P7`
+- commit recommendation: `ready for a clean P7-only commit that excludes unrelated Marketing docs`
+
+## 10. Historical note only
 
 - A 2026-05-13 Gate 12 `NO-GO` existed.
 - It was superseded by the successful 2026-05-14 rerun.
 - The prior blocker was the broken multi-org password login path.
 - The older full `NO-GO`, `WAIVED`, and `HOLD` bodies are intentionally not repeated here.
 
-## 10. Migration hygiene note for `1778630000000-organization-billing.ts`
+## 11. Migration hygiene note for `1778630000000-organization-billing.ts`
 
 - `1778630000000-organization-billing.ts` remained untouched during the final Gate 13 closeout.
 - The current migration chain treats it as historical schema lineage.
