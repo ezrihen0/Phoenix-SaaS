@@ -7,6 +7,12 @@ import DocumentPricebookPicker from "@/components/document-pricebook-picker";
 import InvoiceLineItemsEditor from "@/components/invoice-line-items-editor";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import {
+  applyDocumentLineTranslationState,
+  createEmptyDocumentLineTranslationFields,
+  hydrateDocumentTranslationsForSave,
+  loadDocumentSourceLanguageCode,
+} from "@/lib/crm/document-line-translations";
+import {
   bpsToTaxRateInput,
   buildInvoiceLineItemPayload,
   calculateInvoicePreviewTotals,
@@ -14,7 +20,6 @@ import {
   formatCentsInput,
   formatCurrencyFromCents,
   formatDateTime,
-  hydrateInvoiceLineTranslations,
   invoiceLineFromPricebookItem,
   invoiceLinesFromBundle,
   invoiceLinesFromPersistedSnapshot,
@@ -27,8 +32,6 @@ import {
 import { getJobStatusLabel, type JobStatus } from "@/lib/crm/statuses";
 import type { PersistedQuoteLineItem } from "@/lib/crm/quote-line-model";
 import type { PricebookBundleDetail, PricebookItem } from "@/lib/crm/pricebook-model";
-import { listDocumentCustomerOutputTranslations } from "@/lib/language-store/client-customer-output-translations";
-import { getClientLanguagePreference } from "@/lib/language-store/client-language-preferences";
 
 type ToastTone = "success" | "error" | "warning";
 type InvoiceLifecycleStatus = "sent" | "partial" | "paid" | "refunded" | "overpaid";
@@ -134,16 +137,7 @@ function invoiceLinesFromQuoteDetail(
         originalDescription: line.pricebook_item_id ? line.description_snapshot : null,
         itemType: line.item_type_snapshot,
         unitOfMeasure: line.unit_of_measure_snapshot,
-        nameTranslationRecordId: null,
-        nameTranslationText: null,
-        nameTranslationStatus: null,
-        nameTranslationSourceText: null,
-        nameTranslationSourceLanguageCode: null,
-        descriptionTranslationRecordId: null,
-        descriptionTranslationText: null,
-        descriptionTranslationStatus: null,
-        descriptionTranslationSourceText: null,
-        descriptionTranslationSourceLanguageCode: null,
+        ...createEmptyDocumentLineTranslationFields(),
       }));
   }
 
@@ -203,25 +197,19 @@ export default function JobInvoiceSection({
   async function loadInvoiceDetailById(invoiceId: string) {
     const response = await crmApiFetch<JobInvoiceRecord>(`/api/invoices/${invoiceId}`);
     const baseLines = invoiceLinesFromPersistedSnapshot(response?.line_items ?? [], response?.amount_cents);
-    const translations = await listDocumentCustomerOutputTranslations("invoice", invoiceId).catch(() => []);
-    applyInvoiceDetail(response, hydrateInvoiceLineTranslations(baseLines, translations));
+    const hydratedLines = await hydrateDocumentTranslationsForSave("invoice", invoiceId, baseLines);
+    applyInvoiceDetail(response, hydratedLines);
     return response;
   }
 
   useEffect(() => {
     let ignore = false;
 
-    void getClientLanguagePreference()
-      .then((preference) => {
-        if (!ignore) {
-          setSourceLanguageCode(preference.effective_language_code === "en" ? null : preference.effective_language_code);
-        }
-      })
-      .catch(() => {
-        if (!ignore) {
-          setSourceLanguageCode(null);
-        }
-      });
+    void loadDocumentSourceLanguageCode().then((nextSourceLanguageCode) => {
+      if (!ignore) {
+        setSourceLanguageCode(nextSourceLanguageCode);
+      }
+    });
 
     return () => {
       ignore = true;
@@ -389,25 +377,7 @@ export default function JobInvoiceSection({
           return line;
         }
 
-        if (field === "name") {
-          return {
-            ...line,
-            nameTranslationRecordId: value.recordId,
-            nameTranslationText: value.text,
-            nameTranslationStatus: value.status,
-            nameTranslationSourceText: value.sourceText,
-            nameTranslationSourceLanguageCode: value.sourceLanguageCode,
-          };
-        }
-
-        return {
-          ...line,
-          descriptionTranslationRecordId: value.recordId,
-          descriptionTranslationText: value.text,
-          descriptionTranslationStatus: value.status,
-          descriptionTranslationSourceText: value.sourceText,
-          descriptionTranslationSourceLanguageCode: value.sourceLanguageCode,
-        };
+        return applyDocumentLineTranslationState(line, field, value);
       }),
     );
   }

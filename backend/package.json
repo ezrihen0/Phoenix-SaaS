@@ -13,7 +13,7 @@
     "migration:revert": "node -r ts-node/register ./node_modules/typeorm/cli.js -d src/database/data-source.ts migration:revert",
     "schema:verify": "node -r ts-node/register src/database/verify-schema.ts",
     "schema:smoke": "node -r ts-node/register src/database/schema-smoke-test.ts",
-    "language-store-billing:smoke": "node -r ts-node/register src/database/language-store-billing-projection-smoke.ts",
+    "language-store-billing-dev:smoke": "node -r ts-node/register src/database/language-store-billing-projection-smoke.ts",
     "language-store-entitlement:smoke": "node -r ts-node/register src/database/language-store-entitlement-reprojection-smoke.ts",
     "language-store-preference:smoke": "node -r ts-node/register src/database/language-store-preference-isolation-smoke.ts",
     "language-store-translation:smoke": "node -r ts-node/register src/database/language-store-translation-engine-smoke.ts",

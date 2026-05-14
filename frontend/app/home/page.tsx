@@ -72,7 +72,7 @@ export default async function HomePage() {
               Technician board
             </p>
           </section>
-          <TechnicianHomeBoard embeddedInAppShell />
+          <TechnicianHomeBoard />
         </div>
       </main>
     );

@@ -23,7 +23,6 @@ These statuses are locked for this rename pass and are not reopened here.
 - Forbidden switch to a non-member org failed safely with `organization_access_forbidden`.
 - The post-switch navigation target remained `/home`.
 - Deep-link stale-data safety was confirmed through foreign-org customer, lead, job, estimate, and invoice negative reads.
-- The technician surface remained aligned to the same switcher contract even though the local rerun did not provision a dedicated technician fixture user.
 
 ## 3. Gate 12 final verification summary
 
@@ -131,20 +130,18 @@ This addendum records the bounded P1-P6 Language Store verification pass only. I
 - P7 remains verification and closeout only.
 - No new Language Store product behavior, schema expansion, billing redesign, or UI expansion is part of this addendum.
 - Final evidence for Language Store V1 is captured from migration/schema checks, the four Language Store smoke commands, and backend/frontend builds.
+- Exact replay commands and future rerun procedure live in `docs/WizField_Reverification_Runbook.md`.
 
-### Language Store V1 evidence list
+### Language Store V1 evidence summary
 
-Required evidence for closeout:
-
-- `npm.cmd run migration:run --workspace backend`
-- `npm.cmd run schema:verify --workspace backend`
-- `npm.cmd run language-store-entitlement:smoke --workspace backend`
-- `npm.cmd run language-store-translation:smoke --workspace backend`
-- `npm.cmd run language-store-preference:smoke --workspace backend`
-- `npm.cmd run language-store-snapshot-safety:smoke --workspace backend`
-- `npm.cmd run build --workspace backend`
-- `npm.cmd run build --workspace frontend`
-- `git status --short` reviewed before any commit recommendation
+- migration run: pass
+- schema verify: pass
+- entitlement reprojection smoke: pass
+- translation engine smoke: pass
+- preference isolation smoke: pass
+- snapshot safety smoke: pass
+- backend build: pass
+- frontend build: pass
 
 ### Language Store V1 deferred-scope note
 
@@ -158,8 +155,8 @@ This closeout does not add:
 ### Language Store V1 closeout statement
 
 - final Language Store V1 verdict: `CLOSED / GO`
-- defects found during P7: `none in Language Store product behavior; one narrow verification-harness expectation update and one narrow missing-provider harness routing fix were completed during P7`
-- commit recommendation: `ready for a clean P7-only commit that excludes unrelated Marketing docs`
+- defects found during P7: `none in Language Store product behavior; two narrow verification-harness fixes were completed during closeout`
+- current product truth assumes the unified authenticated app shell and `/home`, not a separate Language Store technician surface
 
 ## 10. Historical note only
 

@@ -19,11 +19,7 @@ function listSwitchableMemberships(session: ClientSession) {
   );
 }
 
-type OrganizationSwitcherProps = {
-  variant: "shell" | "technician";
-};
-
-export function OrganizationSwitcher({ variant }: OrganizationSwitcherProps) {
+export function OrganizationSwitcher() {
   const pathname = usePathname();
   const [session, setSession] = useState<ClientSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -70,25 +66,11 @@ export function OrganizationSwitcher({ variant }: OrganizationSwitcherProps) {
       ?.organization?.name?.trim()
     || null;
 
-  const shellTextMuted = "text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]";
-  const shellLabel = "text-sm font-medium text-[color:var(--sem-text-primary)]";
-  const techTextMuted = "text-[11px] uppercase tracking-[0.28em] text-white/46";
-  const techLabel = "text-sm font-medium text-[#f5ecd2]";
-
-  const mutedClass = variant === "shell" ? shellTextMuted : techTextMuted;
-  const labelClass = variant === "shell" ? shellLabel : techLabel;
-
-  const panelClass = variant === "shell"
-    ? "absolute right-0 z-50 mt-2 min-w-[220px] rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] py-2 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
-    : "absolute right-0 z-50 mt-2 min-w-[220px] rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(14,14,14,0.98),rgba(22,22,22,0.95))] py-2 shadow-[0_24px_80px_rgba(0,0,0,0.5)]";
-
-  const buttonClass = variant === "shell"
-    ? "inline-flex max-w-[min(100%,14rem)] items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] px-3 py-2 text-left text-sm transition hover:border-[color:var(--cmp-border-accent)]"
-    : "inline-flex max-w-[min(100%,16rem)] items-center gap-2 rounded-full border border-white/12 bg-black/40 px-3 py-2 text-left text-sm transition hover:border-white/22";
-
-  const optionClass = variant === "shell"
-    ? "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-[color:var(--sem-text-primary)] hover:bg-[color:var(--cmp-hover-surface)]"
-    : "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-white/88 hover:bg-white/[0.06]";
+  const mutedClass = "text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]";
+  const labelClass = "text-sm font-medium text-[color:var(--sem-text-primary)]";
+  const panelClass = "absolute right-0 z-50 mt-2 min-w-[220px] rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] py-2 shadow-[0_24px_80px_rgba(0,0,0,0.35)]";
+  const buttonClass = "inline-flex max-w-[min(100%,14rem)] items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] px-3 py-2 text-left text-sm transition hover:border-[color:var(--cmp-border-accent)]";
+  const optionClass = "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-[color:var(--sem-text-primary)] hover:bg-[color:var(--cmp-hover-surface)]";
 
   async function handleSelectOrganization(organizationId: string) {
     if (!session || organizationId === session.active_organization?.id) {
@@ -119,15 +101,6 @@ export function OrganizationSwitcher({ variant }: OrganizationSwitcherProps) {
   }
 
   if (!session) {
-    if (variant === "technician") {
-      return (
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-black/35 px-3 py-2 text-sm text-white/56">
-          <Loader2 className="h-4 w-4 animate-spin text-[color:var(--flat-gold)]" />
-          <span>Loading workspace…</span>
-        </div>
-      );
-    }
-
     return (
       <div className="inline-flex items-center gap-2 rounded-full border border-dashed border-[color:var(--cmp-border-subtle)] px-3 py-2 text-sm text-[color:var(--sem-text-muted)]">
         <Loader2 className="h-4 w-4 animate-spin" />
@@ -140,12 +113,12 @@ export function OrganizationSwitcher({ variant }: OrganizationSwitcherProps) {
     return (
       <div className="max-w-xs">
         <p className={mutedClass}>Active workspace</p>
-        <p className={`${labelClass} ${variant === "technician" ? "text-amber-100/90" : "text-amber-700 dark:text-amber-200"}`}>
+        <p className={`${labelClass} text-amber-700 dark:text-amber-200`}>
           No active business membership is available.
         </p>
         <Link
           href="/settings"
-          className={`mt-1 inline-block text-xs underline-offset-4 hover:underline ${variant === "shell" ? "text-[color:var(--sem-accent-primary)]" : "text-[color:var(--flat-gold)]"}`}
+          className="mt-1 inline-block text-xs text-[color:var(--sem-accent-primary)] underline-offset-4 hover:underline"
         >
           Open settings
         </Link>
@@ -158,7 +131,7 @@ export function OrganizationSwitcher({ variant }: OrganizationSwitcherProps) {
 
     return (
       <div className="inline-flex items-center gap-2">
-        <Building2 className={`h-4 w-4 shrink-0 ${variant === "shell" ? "text-[color:var(--sem-text-muted)]" : "text-white/50"}`} />
+        <Building2 className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
         <div>
           <p className={mutedClass}>Active workspace</p>
           <p className={`${labelClass} max-w-[14rem] truncate`}>{displayName}</p>
@@ -179,15 +152,15 @@ export function OrganizationSwitcher({ variant }: OrganizationSwitcherProps) {
           setMenuOpen((open) => !open);
         }}
       >
-        <Building2 className={`h-4 w-4 shrink-0 ${variant === "shell" ? "text-[color:var(--sem-text-muted)]" : "text-white/50"}`} />
+        <Building2 className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
         <span className={`truncate ${labelClass}`}>
           {activeLabel ?? switchable.find((m) => m.organization_id === session.active_membership?.organization_id)?.organization?.name ?? "Select organization"}
         </span>
-        <ChevronDown className={`h-4 w-4 shrink-0 ${variant === "shell" ? "text-[color:var(--sem-text-muted)]" : "text-white/46"}`} />
+        <ChevronDown className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
       </button>
 
       {loadError ? (
-        <p className={`mt-1 max-w-[14rem] text-xs ${variant === "shell" ? "text-rose-600 dark:text-rose-300" : "text-rose-200"}`}>{loadError}</p>
+        <p className="mt-1 max-w-[14rem] text-xs text-rose-600 dark:text-rose-300">{loadError}</p>
       ) : null}
 
       {menuOpen ? (
@@ -205,7 +178,7 @@ export function OrganizationSwitcher({ variant }: OrganizationSwitcherProps) {
                 role="option"
                 aria-selected={isActive}
                 disabled={Boolean(switchingToId)}
-                className={`${optionClass} ${isActive ? (variant === "shell" ? "bg-[color:var(--cmp-hover-surface)]" : "bg-white/[0.08]") : ""}`}
+                className={`${optionClass} ${isActive ? "bg-[color:var(--cmp-hover-surface)]" : ""}`}
                 onClick={() => {
                   void handleSelectOrganization(membership.organization_id);
                 }}

@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 
 import { projectLanguageEntitlement, resolveStripeSubscriptionItem } from "../billing/language-store-entitlement.helpers";
 
+// Dev-only helper smoke: this covers low-level billing projection math and item resolution,
+// while the closeout Language Store verification surface stays limited to the four package smokes.
+
 function createConfigStub(values: Record<string, string>) {
   return {
     get(key: string) {
@@ -70,7 +73,7 @@ async function main() {
   assert.equal(projectedStarterWithAddOn.total_additional_language_slots, 0);
   assert.equal(projectedStarterWithAddOn.total_translation_units, 250);
 
-  console.log("Language Store billing projection smoke passed.");
+  console.log("Language Store dev-only billing projection smoke passed.");
 }
 
 void main().catch((error: unknown) => {

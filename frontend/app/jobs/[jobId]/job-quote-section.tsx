@@ -7,13 +7,17 @@ import DocumentPricebookPicker from "@/components/document-pricebook-picker";
 import QuoteLineItemsEditor from "@/components/quote-line-items-editor";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import {
+  applyDocumentLineTranslationState,
+  hydrateDocumentTranslationsForSave,
+  loadDocumentSourceLanguageCode,
+} from "@/lib/crm/document-line-translations";
+import {
   bpsToTaxRateInput,
   buildQuoteLineItemPayload,
   calculateQuotePreviewTotals,
   createManualQuoteLine,
   formatCurrencyFromCents,
   formatDateTime,
-  hydrateQuoteLineTranslations,
   quoteLineFromPricebookItem,
   quoteLinesFromBundle,
   quoteLinesFromPersistedSnapshot,
@@ -23,8 +27,6 @@ import {
   type QuoteStatus,
 } from "@/lib/crm/quote-line-model";
 import type { PricebookBundleDetail, PricebookItem } from "@/lib/crm/pricebook-model";
-import { listDocumentCustomerOutputTranslations } from "@/lib/language-store/client-customer-output-translations";
-import { getClientLanguagePreference } from "@/lib/language-store/client-language-preferences";
 
 type ToastTone = "success" | "error" | "warning";
 
@@ -103,25 +105,19 @@ export default function JobQuoteSection({
   async function loadQuoteDetail(quoteId: string) {
     const response = await crmApiFetch<JobQuoteRecord>(`/api/estimates/${quoteId}`);
     const baseLines = quoteLinesFromPersistedSnapshot(response?.line_items ?? [], response?.price_cents);
-    const translations = await listDocumentCustomerOutputTranslations("quote", quoteId).catch(() => []);
-    applyQuoteDetail(response, hydrateQuoteLineTranslations(baseLines, translations));
+    const hydratedLines = await hydrateDocumentTranslationsForSave("quote", quoteId, baseLines);
+    applyQuoteDetail(response, hydratedLines);
     return response;
   }
 
   useEffect(() => {
     let ignore = false;
 
-    void getClientLanguagePreference()
-      .then((preference) => {
-        if (!ignore) {
-          setSourceLanguageCode(preference.effective_language_code === "en" ? null : preference.effective_language_code);
-        }
-      })
-      .catch(() => {
-        if (!ignore) {
-          setSourceLanguageCode(null);
-        }
-      });
+    void loadDocumentSourceLanguageCode().then((nextSourceLanguageCode) => {
+      if (!ignore) {
+        setSourceLanguageCode(nextSourceLanguageCode);
+      }
+    });
 
     return () => {
       ignore = true;
@@ -217,25 +213,7 @@ export default function JobQuoteSection({
           return line;
         }
 
-        if (field === "name") {
-          return {
-            ...line,
-            nameTranslationRecordId: value.recordId,
-            nameTranslationText: value.text,
-            nameTranslationStatus: value.status,
-            nameTranslationSourceText: value.sourceText,
-            nameTranslationSourceLanguageCode: value.sourceLanguageCode,
-          };
-        }
-
-        return {
-          ...line,
-          descriptionTranslationRecordId: value.recordId,
-          descriptionTranslationText: value.text,
-          descriptionTranslationStatus: value.status,
-          descriptionTranslationSourceText: value.sourceText,
-          descriptionTranslationSourceLanguageCode: value.sourceLanguageCode,
-        };
+        return applyDocumentLineTranslationState(line, field, value);
       }),
     );
   }

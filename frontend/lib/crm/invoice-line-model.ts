@@ -5,9 +5,13 @@ import type {
   PricebookItem,
 } from "@/lib/crm/pricebook-model";
 import type {
-  CustomerOutputTranslationRecord,
   CustomerOutputTranslationStatus,
 } from "@/lib/language-store/client-customer-output-translations";
+import {
+  createEmptyDocumentLineTranslationFields,
+  getFinalizedDocumentLineTranslationRecordId,
+  hydrateDocumentLineTranslations,
+} from "@/lib/crm/document-line-translations";
 
 export type InvoiceStatus = Database["public"]["Enums"]["invoice_status"];
 
@@ -107,16 +111,6 @@ function nextDocumentLineKey(prefix: string) {
   documentLineKeyCounter += 1;
   const randomSuffix = Math.random().toString(36).slice(2, 10);
   return `${prefix}-${Date.now().toString(36)}-${documentLineKeyCounter}-${randomSuffix}`;
-}
-
-function createEmptyTranslationState() {
-  return {
-    recordId: null,
-    text: null,
-    status: null as CustomerOutputTranslationStatus | null,
-    sourceText: null,
-    sourceLanguageCode: null,
-  };
 }
 
 export function formatCurrencyFromCents(cents: number | null | undefined) {
@@ -227,8 +221,6 @@ export function bpsToTaxRateInput(bps: number | null | undefined) {
 }
 
 export function createManualInvoiceLine(): InvoiceBuilderLine {
-  const nameTranslation = createEmptyTranslationState();
-  const descriptionTranslation = createEmptyTranslationState();
   return {
     clientId: nextClientId("manual"),
     documentLineKey: nextDocumentLineKey("invoice-manual"),
@@ -246,22 +238,11 @@ export function createManualInvoiceLine(): InvoiceBuilderLine {
     originalDescription: null,
     itemType: "manual",
     unitOfMeasure: null,
-    nameTranslationRecordId: nameTranslation.recordId,
-    nameTranslationText: nameTranslation.text,
-    nameTranslationStatus: nameTranslation.status,
-    nameTranslationSourceText: nameTranslation.sourceText,
-    nameTranslationSourceLanguageCode: nameTranslation.sourceLanguageCode,
-    descriptionTranslationRecordId: descriptionTranslation.recordId,
-    descriptionTranslationText: descriptionTranslation.text,
-    descriptionTranslationStatus: descriptionTranslation.status,
-    descriptionTranslationSourceText: descriptionTranslation.sourceText,
-    descriptionTranslationSourceLanguageCode: descriptionTranslation.sourceLanguageCode,
+    ...createEmptyDocumentLineTranslationFields(),
   };
 }
 
 export function invoiceLineFromPricebookItem(item: PricebookItem): InvoiceBuilderLine {
-  const nameTranslation = createEmptyTranslationState();
-  const descriptionTranslation = createEmptyTranslationState();
   return {
     clientId: nextClientId("item"),
     documentLineKey: nextDocumentLineKey("invoice-item"),
@@ -279,16 +260,7 @@ export function invoiceLineFromPricebookItem(item: PricebookItem): InvoiceBuilde
     originalDescription: item.customer_description,
     itemType: item.item_type,
     unitOfMeasure: item.unit_of_measure,
-    nameTranslationRecordId: nameTranslation.recordId,
-    nameTranslationText: nameTranslation.text,
-    nameTranslationStatus: nameTranslation.status,
-    nameTranslationSourceText: nameTranslation.sourceText,
-    nameTranslationSourceLanguageCode: nameTranslation.sourceLanguageCode,
-    descriptionTranslationRecordId: descriptionTranslation.recordId,
-    descriptionTranslationText: descriptionTranslation.text,
-    descriptionTranslationStatus: descriptionTranslation.status,
-    descriptionTranslationSourceText: descriptionTranslation.sourceText,
-    descriptionTranslationSourceLanguageCode: descriptionTranslation.sourceLanguageCode,
+    ...createEmptyDocumentLineTranslationFields(),
   };
 }
 
@@ -299,8 +271,6 @@ function invoiceLineFromBundleItem(bundleName: string, bundleItem: PricebookBund
     throw new Error("Bundle item is missing its pricebook item.");
   }
 
-  const nameTranslation = createEmptyTranslationState();
-  const descriptionTranslation = createEmptyTranslationState();
   return {
     clientId: nextClientId("bundle-item"),
     documentLineKey: nextDocumentLineKey("invoice-bundle"),
@@ -318,16 +288,7 @@ function invoiceLineFromBundleItem(bundleName: string, bundleItem: PricebookBund
     originalDescription: item.customer_description,
     itemType: item.item_type,
     unitOfMeasure: item.unit_of_measure,
-    nameTranslationRecordId: nameTranslation.recordId,
-    nameTranslationText: nameTranslation.text,
-    nameTranslationStatus: nameTranslation.status,
-    nameTranslationSourceText: nameTranslation.sourceText,
-    nameTranslationSourceLanguageCode: nameTranslation.sourceLanguageCode,
-    descriptionTranslationRecordId: descriptionTranslation.recordId,
-    descriptionTranslationText: descriptionTranslation.text,
-    descriptionTranslationStatus: descriptionTranslation.status,
-    descriptionTranslationSourceText: descriptionTranslation.sourceText,
-    descriptionTranslationSourceLanguageCode: descriptionTranslation.sourceLanguageCode,
+    ...createEmptyDocumentLineTranslationFields(),
   };
 }
 
@@ -345,39 +306,25 @@ export function invoiceLinesFromPersistedSnapshot(
   if (lines.length > 0) {
     return [...lines]
       .sort((left, right) => left.sort_order - right.sort_order)
-      .map((line) => {
-        const nameTranslation = createEmptyTranslationState();
-        const descriptionTranslation = createEmptyTranslationState();
-
-        return {
-          clientId: nextClientId("persisted"),
-          documentLineKey: line.document_line_key ?? nextDocumentLineKey("invoice-persisted"),
-          kind: line.pricebook_item_id ? "pricebook_item" : "manual",
-          pricebookItemId: line.pricebook_item_id,
-          sourceLabel: null,
-          sku: line.sku_snapshot,
-          name: line.name_snapshot,
-          originalName: line.pricebook_item_id ? line.name_snapshot : null,
-          description: line.description_snapshot ?? "",
-          quantity: normalizeQuantityInput(line.quantity, "Quantity"),
-          unitPriceInput: formatCentsInput(line.unit_price_cents_snapshot),
-          unitPriceCents: line.unit_price_cents_snapshot,
-          originalUnitPriceCents: line.pricebook_item_id ? line.unit_price_cents_snapshot : null,
-          originalDescription: line.pricebook_item_id ? line.description_snapshot : null,
-          itemType: line.item_type_snapshot,
-          unitOfMeasure: line.unit_of_measure_snapshot,
-          nameTranslationRecordId: nameTranslation.recordId,
-          nameTranslationText: nameTranslation.text,
-          nameTranslationStatus: nameTranslation.status,
-          nameTranslationSourceText: nameTranslation.sourceText,
-          nameTranslationSourceLanguageCode: nameTranslation.sourceLanguageCode,
-          descriptionTranslationRecordId: descriptionTranslation.recordId,
-          descriptionTranslationText: descriptionTranslation.text,
-          descriptionTranslationStatus: descriptionTranslation.status,
-          descriptionTranslationSourceText: descriptionTranslation.sourceText,
-          descriptionTranslationSourceLanguageCode: descriptionTranslation.sourceLanguageCode,
-        };
-      });
+      .map((line) => ({
+        clientId: nextClientId("persisted"),
+        documentLineKey: line.document_line_key ?? nextDocumentLineKey("invoice-persisted"),
+        kind: line.pricebook_item_id ? "pricebook_item" : "manual",
+        pricebookItemId: line.pricebook_item_id,
+        sourceLabel: null,
+        sku: line.sku_snapshot,
+        name: line.name_snapshot,
+        originalName: line.pricebook_item_id ? line.name_snapshot : null,
+        description: line.description_snapshot ?? "",
+        quantity: normalizeQuantityInput(line.quantity, "Quantity"),
+        unitPriceInput: formatCentsInput(line.unit_price_cents_snapshot),
+        unitPriceCents: line.unit_price_cents_snapshot,
+        originalUnitPriceCents: line.pricebook_item_id ? line.unit_price_cents_snapshot : null,
+        originalDescription: line.pricebook_item_id ? line.description_snapshot : null,
+        itemType: line.item_type_snapshot,
+        unitOfMeasure: line.unit_of_measure_snapshot,
+        ...createEmptyDocumentLineTranslationFields(),
+      }));
   }
 
   if (typeof fallbackAmountCents === "number" && fallbackAmountCents > 0) {
@@ -419,14 +366,12 @@ export function buildInvoiceLineItemPayload(lines: InvoiceBuilderLine[]): Invoic
     const unitPriceCents = parseCurrencyInputToCents(line.unitPriceInput, `Line ${index + 1} unit price`);
     const normalizedName = line.name.trim();
     const normalizedDescription = line.description.trim() ? line.description.trim() : null;
-    const includeNameTranslation =
-      line.nameTranslationStatus === "final"
-      && line.nameTranslationRecordId
-      && line.nameTranslationSourceText === normalizedName;
-    const includeDescriptionTranslation =
-      line.descriptionTranslationStatus === "final"
-      && line.descriptionTranslationRecordId
-      && line.descriptionTranslationSourceText === normalizedDescription;
+    const nameTranslationRecordId = getFinalizedDocumentLineTranslationRecordId(line, "name", normalizedName);
+    const descriptionTranslationRecordId = getFinalizedDocumentLineTranslationRecordId(
+      line,
+      "description",
+      normalizedDescription,
+    );
 
     if (line.kind === "pricebook_item" && line.pricebookItemId) {
       return {
@@ -447,9 +392,8 @@ export function buildInvoiceLineItemPayload(lines: InvoiceBuilderLine[]): Invoic
           line.originalDescription !== null && line.originalDescription !== normalizedDescription
             ? normalizedDescription
             : undefined,
-        nameTranslationRecordId: includeNameTranslation ? line.nameTranslationRecordId : undefined,
-        descriptionTranslationRecordId:
-          includeDescriptionTranslation ? line.descriptionTranslationRecordId : undefined,
+        nameTranslationRecordId,
+        descriptionTranslationRecordId,
       };
     }
 
@@ -465,43 +409,15 @@ export function buildInvoiceLineItemPayload(lines: InvoiceBuilderLine[]): Invoic
       unitPriceCents,
       sortOrder: index,
       description: normalizedDescription,
-      nameTranslationRecordId: includeNameTranslation ? line.nameTranslationRecordId : undefined,
-      descriptionTranslationRecordId:
-        includeDescriptionTranslation ? line.descriptionTranslationRecordId : undefined,
+      nameTranslationRecordId,
+      descriptionTranslationRecordId,
     };
   });
 }
 
 export function hydrateInvoiceLineTranslations(
   lines: InvoiceBuilderLine[],
-  records: CustomerOutputTranslationRecord[],
+  records: import("@/lib/language-store/client-customer-output-translations").CustomerOutputTranslationRecord[],
 ): InvoiceBuilderLine[] {
-  const translationByLineField = new Map<string, CustomerOutputTranslationRecord>();
-
-  for (const record of records) {
-    if (!record.document_line_key || !record.field_key) {
-      continue;
-    }
-
-    translationByLineField.set(`${record.document_line_key}:${record.field_key}`, record);
-  }
-
-  return lines.map((line) => {
-    const nameRecord = translationByLineField.get(`${line.documentLineKey}:name`);
-    const descriptionRecord = translationByLineField.get(`${line.documentLineKey}:description`);
-
-    return {
-      ...line,
-      nameTranslationRecordId: nameRecord?.id ?? null,
-      nameTranslationText: nameRecord?.final_text ?? nameRecord?.translated_text ?? null,
-      nameTranslationStatus: nameRecord?.status ?? null,
-      nameTranslationSourceText: nameRecord?.source_text ?? null,
-      nameTranslationSourceLanguageCode: nameRecord?.source_language_code ?? null,
-      descriptionTranslationRecordId: descriptionRecord?.id ?? null,
-      descriptionTranslationText: descriptionRecord?.final_text ?? descriptionRecord?.translated_text ?? null,
-      descriptionTranslationStatus: descriptionRecord?.status ?? null,
-      descriptionTranslationSourceText: descriptionRecord?.source_text ?? null,
-      descriptionTranslationSourceLanguageCode: descriptionRecord?.source_language_code ?? null,
-    };
-  });
+  return hydrateDocumentLineTranslations(lines, records);
 }

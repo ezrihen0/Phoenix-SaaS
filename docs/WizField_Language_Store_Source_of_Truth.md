@@ -1,10 +1,12 @@
 # WizField Language Store
 # Source of Truth
 
-**Document status:** Canonical P0 decision lock - active Language Store truth  
+**Document status:** Canonical active Language Store product and architecture truth  
 **Project:** WizField  
 **Scope:** Billing architecture, entitlement scope, V1 product contract, and execution guardrails for Language Store  
 **Not a reopen of foundation work:** This document builds on the already-closed Gate 0-14 foundation and does not reopen tenancy, multi-org UX, billing-account authority, or document snapshot rules.
+**Companion docs:** `docs/WizField_Reverification_Runbook.md` for replay procedure and `docs/WizField_Engineering_Closeout_and_Verification.md` for final closeout evidence  
+**Historical only:** `docs/WizField_Language_Store_Execution_Packages.md` and `docs/WizField_Language_Store_Master_Plan_Prompt.md`
 
 ---
 
@@ -21,7 +23,9 @@ WizField already closed the foundation that Language Store must sit on top of:
 
 Language Store is therefore a controlled product-extension initiative, not a new SaaS-foundation project.
 
-This document freezes the product and billing rules that later execution packages must inherit exactly.
+This document freezes the product and billing rules that later implementation and reverification work must inherit exactly.
+
+After V1 closure, this document remains the only active Language Store product and architecture truth. The former execution-package and master-planning artifacts remain historical only.
 
 ---
 

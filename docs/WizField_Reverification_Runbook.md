@@ -98,6 +98,8 @@ Expected result:
 
 Use this addendum when the completed Language Store V1 package must be replayed as a bounded verification pass without reopening the underlying Gate 11-14 foundation decisions.
 
+This addendum is procedural only. Active Language Store product, billing, entitlement, and snapshot rules remain owned by `docs/WizField_Language_Store_Source_of_Truth.md`.
+
 ### Language Store V1 prerequisites
 
 - backend migrations already applied in the target environment
