@@ -638,3 +638,78 @@ export async function previewMarketingAutomationRule(ruleId: string, opportunity
     },
   );
 }
+
+export type MarketingAnalyticsSummaryPayload = {
+  window: {
+    preset: string;
+    from: string;
+    to: string;
+    utc_note: string;
+  };
+  disclaimers: string[];
+  opportunities: {
+    rows_created_in_window_by_current_status: Record<string, number>;
+    lifecycle_events_in_window: Record<string, number>;
+    top_opportunity_types_in_window: Array<{ opportunity_type: string; count: number }>;
+  };
+  drafts: {
+    workflow_state_counts_for_creates_in_window: Record<string, number>;
+    draft_source_buckets_creates_in_window: Record<string, number>;
+  };
+  campaigns: {
+    campaigns_created_in_window_by_status: Record<string, number>;
+    item_slot_coverage_campaigns_created_in_window: {
+      campaign_rows_created_in_window: number;
+      item_rows_for_those_campaigns: number;
+      items_with_draft_attached: number;
+      slots_empty: number;
+      coverage_ratio_items_with_draft?: number | null;
+    };
+  };
+  publishing: {
+    jobs_created_in_window_by_status: Record<string, number>;
+    attempts_started_in_window_by_platform: Array<{
+      platform_key: string;
+      total: number;
+      succeeded: number;
+      failed: number;
+      other: number;
+    }>;
+  };
+  automations: {
+    rules_enabled_current_total: number;
+    runs_in_window_by_outcome: Record<string, number>;
+    top_skip_reasons_in_window: Array<{ skip_reason: string; count: number }>;
+  };
+  channels: {
+    connection_status_counts: Array<{ connection_status: string; count: number }>;
+    channels_with_last_failure_in_window: number;
+  };
+  funnels: Record<string, string | number | null | undefined>;
+};
+
+export async function fetchMarketingAnalyticsSummary(query?: {
+  preset?: string;
+  from?: string;
+  to?: string;
+}) {
+  const params = new URLSearchParams();
+
+  if (query?.preset) {
+    params.set("preset", query.preset);
+  }
+
+  if (query?.from) {
+    params.set("from", query.from);
+  }
+
+  if (query?.to) {
+    params.set("to", query.to);
+  }
+
+  const qs = params.toString();
+
+  const suffix = qs ? `?${qs}` : "";
+
+  return marketingFetch<MarketingAnalyticsSummaryPayload>(`/api/marketing/analytics/summary${suffix}`);
+}

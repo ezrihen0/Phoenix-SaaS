@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 
+import { MarketingAnalyticsService } from "./marketing-analytics.service";
 import { MarketingChannelsService } from "./marketing-channels.service";
 import { MarketingCampaignService } from "./marketing-campaign.service";
 import { MarketingContentService } from "./marketing-content.service";
@@ -53,6 +54,11 @@ export type MarketingFoundationResponse = {
   }>;
   publishing_disclaimer: string;
   protectedBoundaries: string[];
+  analytics_overview_pulse?: {
+    window_note: string;
+    terminal_publish_jobs_last_30d: number;
+    opportunities_updated_converted_last_30d: number;
+  };
 };
 
 @Injectable()
@@ -63,6 +69,7 @@ export class MarketingService {
     private readonly channelsService: MarketingChannelsService,
     private readonly opportunityService: MarketingOpportunityService,
     private readonly campaignService: MarketingCampaignService,
+    private readonly analyticsService: MarketingAnalyticsService,
   ) {}
 
   async buildFoundationResponse(input: {
@@ -82,6 +89,7 @@ export class MarketingService {
     const opportunityOpenPromise = this.opportunityService.countOpenForOrganization(organizationId);
     const opportunityRowsPromise = this.opportunityService.loadOpenSuggestedForRecommendation(organizationId);
     const activeCampaignsPromise = this.campaignService.countActiveCampaigns(organizationId);
+    const pulsePromise = this.analyticsService.buildOverviewPulse(organizationId);
 
     const counts = await countsPromise;
     const scheduledSoon = await scheduledPromise;
@@ -92,6 +100,7 @@ export class MarketingService {
     const opportunityOpenCount = await opportunityOpenPromise;
     const opportunityRows = await opportunityRowsPromise;
     const activeCampaignCount = await activeCampaignsPromise;
+    const analyticsPulse = await pulsePromise;
 
     const profileHintComplete =
       Boolean(profileSaved) && this.profileService.profileCompletenessApprox(profileRecord);
@@ -175,6 +184,12 @@ export class MarketingService {
         "Instagram variants remain seeded while outbound IG publishing waits for V1.5",
         "Dispatcher roles cannot enqueue publishes, mutate OAuth integrations, refresh opportunities, dismiss, archive, convert opportunities to drafts, or mutate campaigns",
       ],
+      analytics_overview_pulse: {
+        window_note: `Rolling ${analyticsPulse.window_preset} (UTC)`,
+        terminal_publish_jobs_last_30d: analyticsPulse.publish_jobs_terminal_count,
+        opportunities_updated_converted_last_30d:
+          analyticsPulse.opportunities_converted_approx_count,
+      },
     };
   }
 }

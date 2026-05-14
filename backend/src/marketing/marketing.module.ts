@@ -17,6 +17,8 @@ import { MarketingPublishAttemptEntity } from "../database/entities/marketing-pu
 import { MarketingPublishJobEntity } from "../database/entities/marketing-publish-job.entity";
 import { InspectionEntity } from "../database/entities/inspection.entity";
 
+import { MarketingAnalyticsController } from "./marketing-analytics.controller";
+import { MarketingAnalyticsService } from "./marketing-analytics.service";
 import { MarketingAutomationController } from "./marketing-automation.controller";
 import { MarketingAutomationEvaluationService } from "./marketing-automation-evaluation.service";
 import { MarketingAutomationService } from "./marketing-automation.service";
@@ -64,6 +66,7 @@ import { MarketingService } from "./marketing.service";
     MarketingChannelsController,
     MarketingCampaignController,
     MarketingAutomationController,
+    MarketingAnalyticsController,
     MarketingPublishController,
   ],
   providers: [
@@ -78,6 +81,7 @@ import { MarketingService } from "./marketing.service";
     MarketingOpportunityDetectionService,
     MarketingAutomationEvaluationService,
     MarketingAutomationService,
+    MarketingAnalyticsService,
     MarketingOpportunityService,
     MarketingCampaignService,
     MarketingService,

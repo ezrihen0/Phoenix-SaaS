@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { MarketingAutomationsPanel } from "./marketing-automations-panel";
+import { MarketingAnalyticsPanel } from "./marketing-analytics-panel";
 import { MarketingCalendarPanel } from "./marketing-calendar-panel";
 import { MarketingCampaignsPanel } from "./marketing-campaigns-panel";
 import { MarketingChannelsPanel } from "./marketing-channels-panel";
@@ -82,6 +83,11 @@ export type MarketingFoundationData = {
   }>;
   publishing_disclaimer: string;
   protectedBoundaries: string[];
+  analytics_overview_pulse?: {
+    window_note: string;
+    terminal_publish_jobs_last_30d: number;
+    opportunities_updated_converted_last_30d: number;
+  };
 };
 
 type MarketingFoundationWorkspaceProps = {
@@ -252,19 +258,21 @@ const routeDefinitions: RouteDefinition[] = [
     key: "analytics",
     href: "/marketing/analytics",
     label: "Analytics",
-    eyebrow: "Future Operating Analytics",
-    title: "Analytics remain intentionally empty",
-    description: "Phase 1 does not add vanity charts or channel metrics before the publish engine exists and proves reliable.",
+    eyebrow: "Phase 7 · Operating visibility",
+    title: "Org-scoped Growth Center aggregates",
+    description:
+      "Bounded UTC windows summarize opportunities, drafts, campaigns, publish jobs and attempts, automations, channels, and workflow funnels. Metrics describe internal tooling — not ad ROI or organic reach.",
     icon: BarChart3,
     includedNow: [
-      "Reserved analytics route",
-      "Foundation-only messaging",
-      "No reporting logic or charts",
+      "Preset ranges (last 7d / 30d / 90d) or explicit UTC calendar bounds with a maximum span clamp",
+      "Truthful disclaimers surfaced next to funnel approximations and attribution buckets",
+      "Dispatcher-safe read access aligned with Growth Center routing",
+      "Rolling last-30d pulse counters on Overview when foundation loads",
     ],
     laterPhaseWork: [
-      "Consistency metrics",
-      "Accepted-vs-ignored opportunity reporting",
-      "Channel outcome metrics where supported",
+      "Export and scheduled snapshots if product demands them",
+      "Deeper attribution once audited transition logs exist",
+      "Channel outcome metrics tied to provider insights where contracts allow",
     ],
   },
   {
@@ -366,6 +374,7 @@ export function MarketingFoundationWorkspace({
     "opportunities",
     "campaigns",
     "automations",
+    "analytics",
   ];
   const suppressEducationalRails = interactiveRoutes.includes(activeRouteKey);
   const showPrimaryRail = activeRouteKey === "overview" || suppressEducationalRails;
@@ -459,6 +468,49 @@ export function MarketingFoundationWorkspace({
                     </Link>
                   </div>
                 </div>
+
+                {foundationData.analytics_overview_pulse ? (
+                  <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
+                      Analytics pulse (Growth Center internals)
+                    </p>
+                    <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">
+                      {foundationData.analytics_overview_pulse.window_note}
+                    </p>
+                    <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
+                          Terminal publish jobs
+                        </dt>
+                        <dd className="mt-2 text-2xl font-semibold tabular-nums text-[color:var(--sem-text-primary)]">
+                          {foundationData.analytics_overview_pulse.terminal_publish_jobs_last_30d}
+                        </dd>
+                        <dd className="mt-2 text-xs text-[color:var(--sem-text-secondary)]">
+                          Jobs created in-window that reached succeeded, partial, failed, or canceled.
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
+                          Opportunities → draft conversion (approx)
+                        </dt>
+                        <dd className="mt-2 text-2xl font-semibold tabular-nums text-[color:var(--sem-text-primary)]">
+                          {foundationData.analytics_overview_pulse.opportunities_updated_converted_last_30d}
+                        </dd>
+                        <dd className="mt-2 text-xs text-[color:var(--sem-text-secondary)]">
+                          Rows marked converted within the window (`updated_at` semantics). Use Analytics for detail.
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="mt-5">
+                      <Link
+                        href="/marketing/analytics"
+                        className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold"
+                      >
+                        Open Analytics
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
 
                 {foundationData.recommended_next_action ? (
                   <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-accent)]/35 bg-[color:var(--cmp-surface-card)] p-5">
@@ -573,6 +625,9 @@ export function MarketingFoundationWorkspace({
             canMutateAutomations={Boolean(foundationData?.capabilities?.can_mutate_campaigns)}
           />
         );
+
+      case "analytics":
+        return <MarketingAnalyticsPanel />;
 
       default:
         return null;
