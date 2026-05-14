@@ -370,3 +370,163 @@ export async function convertMarketingOpportunityToDraft(opportunityId: string, 
     },
   );
 }
+
+export type MarketingCampaignSummary = {
+  id: string;
+  organization_id: string;
+  campaign_kind: string;
+  title: string;
+  objective_summary: string | null;
+  primary_service_topic: string | null;
+  geo_label: string | null;
+  geo_normalized: string | null;
+  channel_intent: unknown;
+  window_starts_at: string;
+  window_ends_at: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MarketingCampaignItemDetail = {
+  id: string;
+  organization_id: string;
+  campaign_id: string;
+  sort_order: number;
+  slot_key: string;
+  label: string;
+  plan_notes: string | null;
+  suggested_scheduled_at: string | null;
+  intended_platform_keys: unknown;
+  draft_id: string | null;
+  created_at: string;
+  updated_at: string;
+  draft: {
+    id: string;
+    title: string;
+    workflow_state: string;
+    scheduled_at: string | null;
+    updated_at: string;
+    publish_jobs: Array<{
+      id: string;
+      status: string;
+      scheduled_at: string;
+      publish_intent: string;
+    }>;
+  } | null;
+};
+
+export type MarketingCampaignDetailPayload = {
+  campaign: MarketingCampaignSummary;
+  items: MarketingCampaignItemDetail[];
+};
+
+export async function fetchMarketingCampaigns(query?: {
+  limit?: number;
+  offset?: number;
+  status?: string;
+  include_archived?: boolean;
+}) {
+  const params = new URLSearchParams();
+
+  if (query?.limit !== undefined) {
+    params.set("limit", `${query.limit}`);
+  }
+
+  if (query?.offset !== undefined) {
+    params.set("offset", `${query.offset}`);
+  }
+
+  if (query?.status) {
+    params.set("status", query.status);
+  }
+
+  if (query?.include_archived) {
+    params.set("include_archived", "true");
+  }
+
+  const qs = params.toString();
+  const suffix = qs ? `?${qs}` : "";
+
+  return marketingFetch<{ campaigns: MarketingCampaignSummary[]; total: number }>(`/api/marketing/campaigns${suffix}`);
+}
+
+export async function fetchMarketingCampaignDetail(campaignId: string) {
+  return marketingFetch<MarketingCampaignDetailPayload>(
+    `/api/marketing/campaigns/${encodeURIComponent(campaignId)}`,
+  );
+}
+
+export async function fetchMarketingCampaignProgress(campaignId: string) {
+  return marketingFetch<Record<string, unknown>>(
+    `/api/marketing/campaigns/${encodeURIComponent(campaignId)}/progress`,
+  );
+}
+
+export async function createMarketingCampaign(body: Record<string, unknown>) {
+  return marketingFetch<MarketingCampaignDetailPayload>("/api/marketing/campaigns", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function patchMarketingCampaign(campaignId: string, body: Record<string, unknown>) {
+  return marketingFetch<MarketingCampaignDetailPayload>(
+    `/api/marketing/campaigns/${encodeURIComponent(campaignId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export async function bulkCreateCampaignDraftsForEmptySlots(campaignId: string, body?: Record<string, unknown>) {
+  return marketingFetch<{ created: number; drafts: DraftDetailPayload[] }>(
+    `/api/marketing/campaigns/${encodeURIComponent(campaignId)}/items/create-drafts-for-empty-slots`,
+    {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    },
+  );
+}
+
+export async function createMarketingCampaignItemDraft(
+  campaignId: string,
+  itemId: string,
+  body?: Record<string, unknown>,
+) {
+  return marketingFetch<DraftDetailPayload>(
+    `/api/marketing/campaigns/${encodeURIComponent(campaignId)}/items/${encodeURIComponent(itemId)}/create-draft`,
+    {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    },
+  );
+}
+
+export async function attachMarketingCampaignItemDraft(campaignId: string, itemId: string, draftId: string) {
+  return marketingFetch<MarketingCampaignItemDetail>(
+    `/api/marketing/campaigns/${encodeURIComponent(campaignId)}/items/${encodeURIComponent(itemId)}/attach-draft`,
+    {
+      method: "POST",
+      body: JSON.stringify({ draft_id: draftId }),
+    },
+  );
+}
+
+export async function detachMarketingCampaignItemDraft(campaignId: string, itemId: string) {
+  return marketingFetch<MarketingCampaignItemDetail>(
+    `/api/marketing/campaigns/${encodeURIComponent(campaignId)}/items/${encodeURIComponent(itemId)}/detach-draft`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
+}
+
+export async function deleteMarketingCampaignItem(campaignId: string, itemId: string) {
+  return marketingFetch<{ deleted: boolean }>(
+    `/api/marketing/campaigns/${encodeURIComponent(campaignId)}/items/${encodeURIComponent(itemId)}`,
+    { method: "DELETE" },
+  );
+}

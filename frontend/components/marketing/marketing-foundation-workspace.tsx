@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { MarketingCalendarPanel } from "./marketing-calendar-panel";
+import { MarketingCampaignsPanel } from "./marketing-campaigns-panel";
 import { MarketingChannelsPanel } from "./marketing-channels-panel";
 import { MarketingContentStudio } from "./marketing-content-studio";
 import { MarketingOpportunitiesPanel } from "./marketing-opportunities-panel";
@@ -30,11 +31,16 @@ export type MarketingRouteKey =
   | "settings";
 
 export type MarketingFoundationData = {
-  phase: "phase_2_content_studio" | "phase_3_publishing_integrations" | "phase_4_crm_intelligence";
+  phase:
+    | "phase_2_content_studio"
+    | "phase_3_publishing_integrations"
+    | "phase_4_crm_intelligence"
+    | "phase_5_campaign_builder";
   capabilities?: {
     can_manage_channels: boolean;
     can_enqueue_publishing: boolean;
     can_refresh_opportunities?: boolean;
+    can_mutate_campaigns?: boolean;
   };
   organization: {
     id: string;
@@ -51,6 +57,9 @@ export type MarketingFoundationData = {
   };
   opportunities?: {
     open_count: number;
+  };
+  campaigns?: {
+    active_count: number;
   };
   recommended_next_action?: {
     opportunity_type: string | null;
@@ -181,20 +190,21 @@ const routeDefinitions: RouteDefinition[] = [
     key: "campaigns",
     href: "/marketing/campaigns",
     label: "Campaigns",
-    eyebrow: "Future Campaign Builder",
-    title: "Campaign Builder stays behind the Phase 1 gate",
+    eyebrow: "Phase 5 · Campaign Builder",
+    title: "Objective-first plans with templated slots",
     description:
-      "Phase 1 preserves the campaign route without introducing campaign authoring tooling, sequencing, or calendar insertion.",
+      "Create Phase 5 campaign shells with deterministic slots, optionally attach Content Studio drafts per slot, and close campaigns without implying outbound publishing. Draft metadata, explicit publish_job UTC times, and provider calendars remain distinct clocks.",
     icon: Rocket,
     includedNow: [
-      "Protected route scaffold",
-      "Consistent Growth Center navigation",
-      "No campaign creation logic",
+      "Four canonical campaign kinds with seeded slot templates",
+      "Per-slot draft creation, attach existing drafts, or detach without deleting drafts",
+      "Optional bulk draft creation for empty slots",
+      "Terminal statuses (completed / archived / cancelled) lock edits except detach rules enforced server-side",
     ],
     laterPhaseWork: [
-      "Seasonal campaign maps",
-      "Revenue and trust campaign sequences",
-      "Calendar-ready campaign bundles",
+      "Opportunity → campaign handoffs beyond informational CTAs",
+      "Automation sequencing tied to approvals",
+      "Cross-channel readiness scoring inside campaigns",
     ],
   },
   {
@@ -299,12 +309,17 @@ const fallbackSummaryCards: MarketingFoundationData["summaryCards"] = [
     value: "0",
     helper: "CRM-backed suggestions from jobs and inspections (Phase 4).",
   },
+  {
+    label: "Active campaigns",
+    value: "0",
+    helper: "Plans that reached active status after the first linked draft (Growth Center Phase 5).",
+  },
 ];
 
 const laterGrowthRoadmap = [
   "Live channel publishing loops",
   "CRM ingestion for opportunities",
-  "Campaign sequencing + approvals",
+  "Marketing autopilot beyond manual campaigns",
 ];
 
 function formatWorkflowBadge(raw: string) {
@@ -341,34 +356,40 @@ export function MarketingFoundationWorkspace({
     ?? foundationData?.organization.id
     ?? "Active organization";
 
-  const interactiveRoutes: MarketingRouteKey[] = ["settings", "create", "calendar", "channels", "opportunities"];
+  const interactiveRoutes: MarketingRouteKey[] = ["settings", "create", "calendar", "channels", "opportunities", "campaigns"];
   const suppressEducationalRails = interactiveRoutes.includes(activeRouteKey);
   const showPrimaryRail = activeRouteKey === "overview" || suppressEducationalRails;
 
   const phaseLabel =
-    foundationData?.phase === "phase_4_crm_intelligence"
-      ? "Phase 4 · CRM Intelligence Layer"
-      : foundationData?.phase === "phase_3_publishing_integrations"
-        ? "Phase 3 · Publishing integrations"
-        : foundationData?.phase === "phase_2_content_studio"
-          ? "Phase 2 Content Studio slice"
-          : "Growth Center rollout";
+    foundationData?.phase === "phase_5_campaign_builder"
+      ? "Phase 5 · Campaign Builder layer"
+      : foundationData?.phase === "phase_4_crm_intelligence"
+        ? "Phase 4 · CRM Intelligence Layer"
+        : foundationData?.phase === "phase_3_publishing_integrations"
+          ? "Phase 3 · Publishing integrations"
+          : foundationData?.phase === "phase_2_content_studio"
+            ? "Phase 2 Content Studio slice"
+            : "Growth Center rollout";
   const heroEyebrow =
-    foundationData?.phase === "phase_4_crm_intelligence"
-      ? "Phase 4 · Opportunities + drafts"
-      : foundationData?.phase === "phase_3_publishing_integrations"
-        ? "Phase 3 · Channels + explicit jobs"
-        : foundationData?.phase === "phase_2_content_studio"
-          ? "Phase 2 · Manual studio online"
-          : "Growth Center rollout";
+    foundationData?.phase === "phase_5_campaign_builder"
+      ? "Phase 5 · Campaigns + coordinated pushes"
+      : foundationData?.phase === "phase_4_crm_intelligence"
+        ? "Phase 4 · Opportunities + drafts"
+        : foundationData?.phase === "phase_3_publishing_integrations"
+          ? "Phase 3 · Channels + explicit jobs"
+          : foundationData?.phase === "phase_2_content_studio"
+            ? "Phase 2 · Manual studio online"
+            : "Growth Center rollout";
   const heroBody =
-    foundationData?.phase === "phase_4_crm_intelligence"
-      ? "CRM Intelligence turns recent completed jobs and inspection photo-type patterns into Growth Center opportunities. Convert to Draft hands off into the existing Content Studio and publishing flows — without campaigns, automation, or AI copy generation."
-      : foundationData?.phase === "phase_3_publishing_integrations"
-        ? "OAuth-backed Google Business Profile and Facebook Page targets feed explicit publish jobs. Draft calendar metadata never posts by itself — only Publish Now or Schedule Publishing enqueue dispatcher-owned work in UTC."
-        : foundationData?.phase === "phase_2_content_studio"
-          ? "Capture office-side marketing posture, assemble multi-variant drafts manually, shepherd explicit review states, and book metadata-only placeholders. Earlier phases kept publishing offline."
-          : "Keep tenant-safe scaffolding online while phased capabilities roll forward.";
+    foundationData?.phase === "phase_5_campaign_builder"
+      ? "Campaign Builder coordinates templated slots around one objective while CRM Intelligence still surfaces operational opportunities. Creating or converting drafts never attaches media automatically or publishes — outbound work stays tied to explicit publish jobs with UTC schedules. Draft scheduling metadata, Growth Center publish_job times, and whatever each provider displays remain three distinct clocks."
+      : foundationData?.phase === "phase_4_crm_intelligence"
+        ? "CRM Intelligence turns recent completed jobs and inspection photo-type patterns into Growth Center opportunities. Convert to Draft hands off into the existing Content Studio and publishing flows — without campaigns, automation, or AI copy generation."
+        : foundationData?.phase === "phase_3_publishing_integrations"
+          ? "OAuth-backed Google Business Profile and Facebook Page targets feed explicit publish jobs. Draft calendar metadata never posts by itself — only Publish Now or Schedule Publishing enqueue dispatcher-owned work in UTC."
+          : foundationData?.phase === "phase_2_content_studio"
+            ? "Capture office-side marketing posture, assemble multi-variant drafts manually, shepherd explicit review states, and book metadata-only placeholders. Earlier phases kept publishing offline."
+            : "Keep tenant-safe scaffolding online while phased capabilities roll forward.";
 
   const renderPrimaryRail = () => {
     switch (activeRouteKey) {
@@ -422,6 +443,9 @@ export function MarketingFoundationWorkspace({
                     </Link>
                     <Link href="/marketing/opportunities" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">
                       View opportunities
+                    </Link>
+                    <Link href="/marketing/campaigns" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">
+                      View campaigns
                     </Link>
                   </div>
                 </div>
@@ -528,6 +552,11 @@ export function MarketingFoundationWorkspace({
           />
         );
 
+      case "campaigns":
+        return (
+          <MarketingCampaignsPanel canMutateCampaigns={Boolean(foundationData?.capabilities?.can_mutate_campaigns)} />
+        );
+
       default:
         return null;
     }
@@ -567,7 +596,7 @@ export function MarketingFoundationWorkspace({
           ) : null}
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {summaryCards.map((card) => (
             <SummaryCard key={card.label} {...card} />
           ))}

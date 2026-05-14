@@ -3,6 +3,8 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthModule } from "../auth/auth.module";
 import { JobEntity } from "../database/entities/job.entity";
+import { MarketingCampaignEntity } from "../database/entities/marketing-campaign.entity";
+import { MarketingCampaignItemEntity } from "../database/entities/marketing-campaign-item.entity";
 import { MarketingConnectedChannelEntity } from "../database/entities/marketing-connected-channel.entity";
 import { MarketingContentDraftEntity } from "../database/entities/marketing-content-draft.entity";
 import { MarketingContentVariantEntity } from "../database/entities/marketing-content-variant.entity";
@@ -13,6 +15,8 @@ import { MarketingPublishAttemptEntity } from "../database/entities/marketing-pu
 import { MarketingPublishJobEntity } from "../database/entities/marketing-publish-job.entity";
 import { InspectionEntity } from "../database/entities/inspection.entity";
 
+import { MarketingCampaignController } from "./marketing-campaign.controller";
+import { MarketingCampaignService } from "./marketing-campaign.service";
 import { MarketingChannelsController } from "./marketing-channels.controller";
 import { MarketingChannelsService } from "./marketing-channels.service";
 import { MarketingContentService } from "./marketing-content.service";
@@ -35,6 +39,8 @@ import { MarketingService } from "./marketing.service";
     TypeOrmModule.forFeature([
       MarketingProfileEntity,
       MarketingConnectedChannelEntity,
+      MarketingCampaignEntity,
+      MarketingCampaignItemEntity,
       MarketingOAuthStateEntity,
       MarketingPublishJobEntity,
       MarketingPublishAttemptEntity,
@@ -49,6 +55,7 @@ import { MarketingService } from "./marketing.service";
     MarketingController,
     MarketingOAuthPublicController,
     MarketingChannelsController,
+    MarketingCampaignController,
     MarketingPublishController,
   ],
   providers: [
@@ -62,6 +69,7 @@ import { MarketingService } from "./marketing.service";
     MarketingContentService,
     MarketingOpportunityDetectionService,
     MarketingOpportunityService,
+    MarketingCampaignService,
     MarketingService,
   ],
 })

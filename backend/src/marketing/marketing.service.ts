@@ -1,12 +1,13 @@
 import { Injectable } from "@nestjs/common";
 
 import { MarketingChannelsService } from "./marketing-channels.service";
+import { MarketingCampaignService } from "./marketing-campaign.service";
 import { MarketingContentService } from "./marketing-content.service";
 import { MarketingOpportunityService } from "./marketing-opportunity.service";
 import { MarketingProfileService } from "./marketing-profile.service";
 
 export type MarketingFoundationResponse = {
-  phase: "phase_4_crm_intelligence";
+  phase: "phase_5_campaign_builder";
   organization: {
     id: string;
     name: string | null;
@@ -16,6 +17,7 @@ export type MarketingFoundationResponse = {
     can_manage_channels: boolean;
     can_enqueue_publishing: boolean;
     can_refresh_opportunities: boolean;
+    can_mutate_campaigns: boolean;
   };
   profile_saved: boolean;
   profile_hint_complete: boolean;
@@ -27,6 +29,9 @@ export type MarketingFoundationResponse = {
   };
   opportunities: {
     open_count: number;
+  };
+  campaigns: {
+    active_count: number;
   };
   recommended_next_action: {
     opportunity_type: string | null;
@@ -57,6 +62,7 @@ export class MarketingService {
     private readonly contentService: MarketingContentService,
     private readonly channelsService: MarketingChannelsService,
     private readonly opportunityService: MarketingOpportunityService,
+    private readonly campaignService: MarketingCampaignService,
   ) {}
 
   async buildFoundationResponse(input: {
@@ -75,6 +81,7 @@ export class MarketingService {
     const connectedChannelsPromise = this.channelsService.countConnectedPublishingTargets(organizationId);
     const opportunityOpenPromise = this.opportunityService.countOpenForOrganization(organizationId);
     const opportunityRowsPromise = this.opportunityService.loadOpenSuggestedForRecommendation(organizationId);
+    const activeCampaignsPromise = this.campaignService.countActiveCampaigns(organizationId);
 
     const counts = await countsPromise;
     const scheduledSoon = await scheduledPromise;
@@ -84,6 +91,7 @@ export class MarketingService {
     const connectedChannels = await connectedChannelsPromise;
     const opportunityOpenCount = await opportunityOpenPromise;
     const opportunityRows = await opportunityRowsPromise;
+    const activeCampaignCount = await activeCampaignsPromise;
 
     const profileHintComplete =
       Boolean(profileSaved) && this.profileService.profileCompletenessApprox(profileRecord);
@@ -95,7 +103,7 @@ export class MarketingService {
     const recommendedNext = this.opportunityService.recommendNextAction(opportunityRows);
 
     return {
-      phase: "phase_4_crm_intelligence",
+      phase: "phase_5_campaign_builder",
       organization: {
         id: organizationId,
         name: input.organizationName,
@@ -105,6 +113,7 @@ export class MarketingService {
         can_manage_channels: role === "owner" || role === "admin",
         can_enqueue_publishing: canPublish,
         can_refresh_opportunities: canPublish,
+        can_mutate_campaigns: canPublish,
       },
       profile_saved: profileSaved,
       profile_hint_complete: profileHintComplete,
@@ -116,6 +125,9 @@ export class MarketingService {
       },
       opportunities: {
         open_count: opportunityOpenCount,
+      },
+      campaigns: {
+        active_count: activeCampaignCount,
       },
       recommended_next_action: recommendedNext,
       recent_drafts: recentSnapshots.map((draft) => ({
@@ -148,6 +160,12 @@ export class MarketingService {
           helper:
             "CRM-backed suggestions from recent jobs and inspections. Refresh lists explicitly or open Opportunities — dispatchers can review but cannot refresh or convert.",
         },
+        {
+          label: "Active campaigns",
+          value: `${activeCampaignCount}`,
+          helper:
+            "Campaign Builder pushes grouped around one objective. Dispatchers see counts only — owners/admins/office admins create plans and linked drafts.",
+        },
       ],
       publishing_disclaimer:
         "Publishing creates explicit Growth Center jobs (`publish_job.scheduled_at`). Draft calendar metadata (`draft.scheduled_at`) never silently posts.",
@@ -155,7 +173,7 @@ export class MarketingService {
         "Marketing records stay organization scoped",
         "Session-derived organization context drives every marketing query",
         "Instagram variants remain seeded while outbound IG publishing waits for V1.5",
-        "Dispatcher roles cannot enqueue publishes, mutate OAuth integrations, refresh opportunities, dismiss, archive, or convert to drafts",
+        "Dispatcher roles cannot enqueue publishes, mutate OAuth integrations, refresh opportunities, dismiss, archive, convert opportunities to drafts, or mutate campaigns",
       ],
     };
   }
