@@ -1,10 +1,10 @@
-import { requireServerDestination } from "@/lib/auth/server-session";
+import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 
 import ScheduleWorkspace from "./schedule-workspace";
 
 export default async function SchedulePage() {
-  await requireServerDestination("/schedule", "/jobs");
+  await requireOfficeCrmRoute("/schedule");
 
   let initialJobs: unknown[] = [];
   let technicians: unknown[] = [];

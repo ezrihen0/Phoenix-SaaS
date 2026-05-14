@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ClipboardList, MapPin, UserRound } from "lucide-react";
 
-import { requireServerDestination } from "@/lib/auth/server-session";
+import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { formatAddress } from "@/lib/crm/display";
 import type { Database } from "@/lib/types/database";
@@ -96,7 +96,7 @@ export default async function NewJobPage({ searchParams }: NewJobPageContext) {
       ? `/jobs/new?leadId=${encodeURIComponent(leadId)}`
       : "/jobs/new";
 
-  await requireServerDestination(nextPath, "/jobs");
+  await requireOfficeCrmRoute(nextPath);
 
   if ((customerId && leadId) || (!customerId && !leadId)) {
     return (

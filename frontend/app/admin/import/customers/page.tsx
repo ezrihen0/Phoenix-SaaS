@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 
-import { requireServerDestination } from "@/lib/auth/server-session";
+import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
 
 import CustomerImportWorkspace from "./customer-import-workspace";
 
 export default async function CustomerImportPage() {
-  await requireServerDestination("/admin/import/customers", "/jobs");
+  await requireOfficeCrmRoute("/admin/import/customers");
 
   return <CustomerImportWorkspace />;
 }

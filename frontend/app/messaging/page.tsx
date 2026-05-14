@@ -21,7 +21,7 @@ export default async function MessagingPage({ searchParams }: MessagingPageConte
   const session = await requireServerSession("/messaging");
 
   if (session.profile?.role === "technician") {
-    redirect("/technician");
+    redirect("/home");
   }
 
   const resolvedSearchParams = await searchParams;

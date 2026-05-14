@@ -255,7 +255,11 @@ function MetricCard({ icon: Icon, label, value }: { icon: typeof Flame; label: s
   );
 }
 
-export default function TechnicianWorkspace() {
+type TechnicianHomeBoardProps = {
+  embeddedInAppShell?: boolean;
+};
+
+export default function TechnicianHomeBoard({ embeddedInAppShell = false }: TechnicianHomeBoardProps) {
   const router = useRouter();
   const [dashboard, setDashboard] = useState<TechnicianDashboardResponse | null>(null);
   const [jobDetail, setJobDetail] = useState<JobDetail | null>(null);
@@ -407,28 +411,38 @@ export default function TechnicianWorkspace() {
 
   if (isBooting && !dashboard) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[color:var(--flat-canvas)] text-white">
+      <div
+        className={
+          embeddedInAppShell
+            ? "flex min-h-[220px] items-center justify-center rounded-[34px] bg-[color:var(--flat-canvas)] text-white"
+            : "flex min-h-screen items-center justify-center bg-[color:var(--flat-canvas)] text-white"
+        }
+      >
         <div className="inline-flex items-center gap-3 text-sm text-white/62">
           <LoaderCircle className="h-4 w-4 animate-spin text-[color:var(--flat-gold)]" />
           Loading the technician board...
         </div>
-      </main>
+      </div>
     );
   }
 
-  return (
-    <main className="relative min-h-screen overflow-hidden bg-[color:var(--flat-canvas)] text-white">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.15),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(80,200,120,0.16),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_32%)]" />
-      <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:32px_32px]" />
-
-      <div className="relative mx-auto max-w-[1500px] px-5 py-6 lg:px-8">
+  const boardBody = (
+      <div className={`relative mx-auto max-w-[1500px] px-5 py-6 lg:px-8${embeddedInAppShell ? " max-w-none" : ""}`}>
         <header className="rounded-[34px] border border-[color:rgba(212,175,55,0.18)] bg-[linear-gradient(180deg,rgba(9,9,9,0.94),rgba(18,18,18,0.88))] p-6 shadow-[0_34px_120px_rgba(0,0,0,0.42)] backdrop-blur-2xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
-                WizField
-              </p>
-              <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] sm:text-6xl">
+              {!embeddedInAppShell ? (
+                <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
+                  WizField
+                </p>
+              ) : null}
+              <h1
+                className={
+                  embeddedInAppShell
+                    ? "max-w-3xl font-[family:var(--font-flat-display)] text-4xl leading-none tracking-tight text-[#f5ecd2] sm:text-5xl"
+                    : "mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] sm:text-6xl"
+                }
+              >
                 Technician board for live job progress and clean field handoff.
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-white/56 sm:text-base">
@@ -436,27 +450,29 @@ export default function TechnicianWorkspace() {
               </p>
             </div>
 
-            <div className="flex w-full flex-col gap-4 sm:w-auto sm:items-end">
-              <OrganizationSwitcher variant="technician" />
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void runAction(
-                      "logout",
-                      async () => {
-                        await handleLogout(router);
-                      },
-                      "Signing out...",
-                    );
-                  }}
-                  className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sign out
-                </button>
+            {!embeddedInAppShell ? (
+              <div className="flex w-full flex-col gap-4 sm:w-auto sm:items-end">
+                <OrganizationSwitcher variant="technician" />
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void runAction(
+                        "logout",
+                        async () => {
+                          await handleLogout(router);
+                        },
+                        "Signing out...",
+                      );
+                    }}
+                    className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign out
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : null}
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -710,6 +726,24 @@ export default function TechnicianWorkspace() {
           </div>
         </div>
       </div>
+  );
+
+  if (embeddedInAppShell) {
+    return (
+      <div className="relative overflow-hidden rounded-[34px] text-white">
+        <div className="absolute inset-0 bg-[color:var(--flat-canvas)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.15),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(80,200,120,0.16),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_32%)]" />
+        <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:32px_32px]" />
+        <div className="relative">{boardBody}</div>
+      </div>
+    );
+  }
+
+  return (
+    <main className="relative min-h-screen overflow-hidden bg-[color:var(--flat-canvas)] text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.15),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(80,200,120,0.16),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_32%)]" />
+      <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:32px_32px]" />
+      {boardBody}
     </main>
   );
 }

@@ -1,11 +1,11 @@
 import type { DispatchJobRecord, DispatchTechnicianRecord } from "@/lib/crm/dispatch";
-import { requireServerDestination } from "@/lib/auth/server-session";
+import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 
 import DispatchWorkspace from "./dispatch-workspace";
 
 export default async function DispatchPage() {
-  await requireServerDestination("/dispatch", "/jobs");
+  await requireOfficeCrmRoute("/dispatch");
 
   let initialJobs: DispatchJobRecord[] = [];
   let technicians: DispatchTechnicianRecord[] = [];

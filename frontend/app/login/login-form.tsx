@@ -18,10 +18,6 @@ import {
 } from "@/lib/auth/client-auth";
 
 function getStatusMessage(nextPath: string | null) {
-  if (nextPath === "/technician") {
-    return "Sign in to open the technician board and update field progress in real time.";
-  }
-
   if (nextPath === "/pricing") {
     return "Sign in to continue with subscription activation for your WizField workspace.";
   }

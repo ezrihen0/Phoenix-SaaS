@@ -5,11 +5,11 @@ const sessionCookieName = process.env.SESSION_COOKIE_NAME ?? "wizfield_session";
 function isProtectedRoute(pathname: string) {
   return pathname === "/"
     || pathname.startsWith("/jobs")
-    || pathname.startsWith("/technician")
     || pathname.startsWith("/customers")
     || pathname.startsWith("/admin")
     || pathname.startsWith("/schedule")
-    || pathname.startsWith("/dispatch");
+    || pathname.startsWith("/dispatch")
+    || pathname.startsWith("/home");
 }
 
 export async function proxy(request: NextRequest) {
@@ -34,5 +34,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/jobs/:path*", "/technician/:path*", "/customers/:path*", "/admin/:path*", "/schedule/:path*", "/dispatch/:path*"],
+  matcher: ["/", "/home/:path*", "/jobs/:path*", "/customers/:path*", "/admin/:path*", "/schedule/:path*", "/dispatch/:path*"],
 };

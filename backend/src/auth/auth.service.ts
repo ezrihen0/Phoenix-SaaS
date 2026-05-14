@@ -592,7 +592,7 @@ export class AuthService {
     }
 
     if (!organizationId) {
-      return role === "technician" ? "/technician" : "/jobs";
+      return "/home" as const;
     }
 
     const accessEligible = await this.isCrmAccessEligibleForOrganization(organizationId);
@@ -600,7 +600,7 @@ export class AuthService {
       return "/pricing" as const;
     }
 
-    return role === "technician" ? "/technician" as const : "/jobs" as const;
+    return "/home" as const;
   }
 
   buildSessionResponse(actor: ActorContext) {

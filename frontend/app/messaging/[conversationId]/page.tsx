@@ -22,7 +22,7 @@ export default async function MessagingConversationPage({ params }: MessagingCon
   const session = await requireServerSession("/messaging");
 
   if (session.profile?.role === "technician") {
-    redirect("/technician");
+    redirect("/home");
   }
 
   const resolvedParams = await params;

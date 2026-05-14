@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 
-import { getClientDestination, getClientSession } from "@/lib/auth/client-auth";
+import { getClientSession } from "@/lib/auth/client-auth";
 import { ThemeRuntime } from "@/components/theme-runtime";
 
 import { GlobalSearchCombobox } from "./global-search-combobox";
 import { GlobalSearchResults } from "./global-search-results";
 import { useGlobalSearch } from "./use-global-search";
 
-const DISALLOWED_PREFIXES = ["/login", "/reset-password", "/technician"];
+const DISALLOWED_PREFIXES = ["/login", "/reset-password"];
 
 type SearchCapableRole = "owner" | "admin" | "office_admin";
 
@@ -46,8 +46,7 @@ export function GlobalSearchShell({ mode = "bar", open = true }: GlobalSearchShe
       }
 
       const session = await getClientSession().catch(() => null);
-      const destination = await getClientDestination().catch(() => null);
-      const isOffice = canUseGlobalSearch(session?.profile?.role) && destination?.destination === "/jobs";
+      const isOffice = canUseGlobalSearch(session?.profile?.role);
 
       if (!cancelled) {
         setIsOfficeRoute(Boolean(isOffice));

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
-import { requireServerDestination } from "@/lib/auth/server-session";
+import { requireServerSession } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { buildAddressQuery, buildGoogleMapsSearchUrl } from "@/lib/crm/display";
 import type { Database } from "@/lib/types/database";
@@ -113,8 +113,8 @@ function relationValue<T>(value: RelatedValue<T> | undefined) {
   return value ?? null;
 }
 
-async function requireOfficeAdminJobDetailRoute(nextPath: string) {
-  return requireServerDestination(nextPath, "/jobs");
+async function requireAuthenticatedJobDetailRoute(nextPath: string) {
+  return requireServerSession(nextPath);
 }
 
 function ErrorPanel({ message }: { message: string }) {
@@ -142,7 +142,7 @@ function ErrorPanel({ message }: { message: string }) {
 
 export default async function JobDetailPage({ params }: JobDetailPageContext) {
   const { jobId } = await params;
-  await requireOfficeAdminJobDetailRoute(`/jobs/${jobId}`);
+  await requireAuthenticatedJobDetailRoute(`/jobs/${jobId}`);
 
   let job: JobDetailRecord | null = null;
 

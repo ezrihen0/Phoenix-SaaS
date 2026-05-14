@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { serverApiFetch } from "@/lib/api/server-fetch";
-import { requireServerDestination } from "@/lib/auth/server-session";
+import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
 import type { InspectionListRow } from "@/lib/inspections/browser-api";
 import type { Database } from "@/lib/types/database";
 
@@ -67,7 +67,7 @@ type CustomerDetailPageContext = {
 
 export default async function CustomerDetailPage({ params }: CustomerDetailPageContext) {
   const { customerId } = await params;
-  await requireServerDestination(`/customers/${customerId}`, "/jobs");
+  await requireOfficeCrmRoute(`/customers/${customerId}`);
 
   let customer: CustomerRecord | null = null;
   let relatedJobs: CustomerJobSummary[] = [];

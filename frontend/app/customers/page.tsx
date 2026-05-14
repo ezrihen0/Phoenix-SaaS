@@ -17,7 +17,7 @@ import {
   type MasterTableState,
 } from "@/components/master-table";
 import { serverApiFetch } from "@/lib/api/server-fetch";
-import { requireServerDestination } from "@/lib/auth/server-session";
+import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
 import { openJobStatuses } from "@/lib/crm/data";
 import { formatAddress, formatDate } from "@/lib/crm/display";
 import type { Database } from "@/lib/types/database";
@@ -84,7 +84,7 @@ function customerStatusBadgeClass(openJobs: number) {
 }
 
 export default async function CustomersPage({ searchParams }: CustomersPageContext) {
-  await requireServerDestination("/customers", "/jobs");
+  await requireOfficeCrmRoute("/customers");
   const resolvedSearchParams = await searchParams;
   const pageValue = Number.parseInt((firstValue(resolvedSearchParams.page) ?? "1").trim(), 10);
   const pageSizeValue = Number.parseInt((firstValue(resolvedSearchParams.pageSize) ?? "10").trim(), 10);

@@ -10,7 +10,7 @@ type ApiEnvelope<T> = {
   };
 };
 
-type ClientDestination = "/pricing" | "/jobs" | "/technician";
+type ClientDestination = "/pricing" | "/home";
 
 export type SessionRole = "owner" | "admin" | "office_admin" | "dispatcher" | "csr" | "technician" | "viewer";
 
@@ -102,21 +102,12 @@ export async function getServerDestination() {
   }
 }
 
-export async function requireServerDestination(nextPath: string, requiredDestination?: "/jobs" | "/technician") {
-  const session = await getServerSession();
+export async function requireOfficeCrmRoute(nextPath: string) {
+  const session = await requireServerSession(nextPath);
 
-  if (!session) {
-    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
-  }
-
-  const destination = await getServerDestination();
-
-  if (!destination) {
-    redirect("/login?reason=role-resolution-failed");
-  }
-
-  if (requiredDestination && destination !== requiredDestination) {
-    redirect(destination ?? "/login?reason=unsupported-account");
+  if (session.profile?.role === "technician") {
+    const destination = await getServerDestination();
+    redirect(destination ?? "/home");
   }
 
   return session;

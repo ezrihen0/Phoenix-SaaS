@@ -7,7 +7,7 @@ type ApiEnvelope<T> = {
   };
 };
 
-export type ClientDestination = "/pricing" | "/jobs" | "/technician";
+export type ClientDestination = "/pricing" | "/home";
 
 async function authFetch<T>(
   input: string,

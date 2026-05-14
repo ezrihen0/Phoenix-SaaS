@@ -27,7 +27,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
 import { ThemeRuntime } from "@/components/theme-runtime";
 import { GlobalSearchShell } from "@/features/global-search/global-search-shell";
-import { getClientDestination, getClientSession } from "@/lib/auth/client-auth";
+import { getClientSession } from "@/lib/auth/client-auth";
 import { handleLogout } from "@/lib/auth/logout";
 
 type AppShellProps = {
@@ -54,7 +54,6 @@ const HIDDEN_PREFIXES = [
   "/privacy",
   "/reset-password",
   "/signup",
-  "/technician",
   "/terms",
   "/warranty-certificate",
 ];
@@ -179,10 +178,7 @@ export function AppShell({ children }: AppShellProps) {
     let cancelled = false;
 
     async function loadUser() {
-      const [session, destination] = await Promise.all([
-        getClientSession().catch(() => null),
-        getClientDestination().catch(() => null),
-      ]);
+      const session = await getClientSession().catch(() => null);
 
       if (cancelled) {
         return;
@@ -192,7 +188,7 @@ export function AppShell({ children }: AppShellProps) {
         || session?.technician?.display_name?.trim()
         || session?.user?.email?.trim()
         || "WizField User";
-      const canSearch = canUseGlobalSearch(session?.profile?.role) && destination?.destination === "/jobs";
+      const canSearch = canUseGlobalSearch(session?.profile?.role);
 
       setUserLabel(nextLabel);
       setSearchEnabled(Boolean(canSearch));

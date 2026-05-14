@@ -1,10 +1,9 @@
-import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerSession, type SessionRole } from "@/lib/auth/server-session";
+import TechnicianHomeBoard from "@/components/home/technician-home-board";
+import { serverApiFetch } from "@/lib/api/server-fetch";
 import {
   isOfficeDashboardResponse,
-  isTechnicianDashboardResponse,
   type OfficeDashboardResponse,
-  type TechnicianDashboardResponse,
 } from "@/lib/crm/home-dashboard-types";
 
 function isOfficeRole(role: SessionRole | null) {
@@ -40,21 +39,9 @@ export default async function HomePage() {
   const officeRole = isOfficeRole(role);
 
   let officeDashboard: OfficeDashboardResponse | null = null;
-  let technicianDashboard: TechnicianDashboardResponse | null = null;
   let loadError: string | null = null;
 
-  if (technicianRole) {
-    try {
-      const payload = await serverApiFetch<unknown>("/api/technician/dashboard");
-      if (isTechnicianDashboardResponse(payload)) {
-        technicianDashboard = payload;
-      } else {
-        loadError = "Technician dashboard data is unavailable right now.";
-      }
-    } catch {
-      loadError = "Technician dashboard data is unavailable right now.";
-    }
-  } else if (officeRole) {
+  if (officeRole) {
     try {
       const payload = await serverApiFetch<unknown>("/api/dashboard");
       if (isOfficeDashboardResponse(payload)) {
@@ -65,6 +52,30 @@ export default async function HomePage() {
     } catch {
       loadError = "Office dashboard data is unavailable right now.";
     }
+  }
+
+  if (technicianRole) {
+    return (
+      <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
+        <div className="mx-auto max-w-7xl space-y-6">
+          <section className="theme-surface-modal rounded-[34px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-7 sm:p-8">
+            <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Home</p>
+            <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
+              Operations home
+            </h1>
+            <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
+              Your field queue and job progress live below. Use{" "}
+              <strong className="font-medium text-[color:var(--sem-text-primary)]">Jobs</strong>
+              {" "}when you need full job detail, or stay here to update status and field notes in one place.
+            </p>
+            <p className="mt-4 inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-secondary)]">
+              Technician board
+            </p>
+          </section>
+          <TechnicianHomeBoard embeddedInAppShell />
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -88,41 +99,6 @@ export default async function HomePage() {
         {loadError ? (
           <section className="theme-alert-error rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-5 py-4 text-sm text-[color:var(--sem-text-secondary)]">
             {loadError}
-          </section>
-        ) : null}
-
-        {technicianRole && technicianDashboard ? (
-          <section className="space-y-4">
-            <div className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Today Focus</p>
-              <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
-                <SummaryCard
-                  label="In Progress"
-                  helper="Jobs actively being worked now."
-                  value={technicianDashboard.summary.inProgressJobs}
-                />
-                <SummaryCard
-                  label="Completed Today"
-                  helper="Jobs closed and completed today."
-                  value={technicianDashboard.summary.completedToday}
-                />
-              </div>
-            </div>
-            <div className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Backlog Health</p>
-              <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
-                <SummaryCard
-                  label="Open Jobs"
-                  helper="Total open assignments in your queue."
-                  value={technicianDashboard.summary.openJobs}
-                />
-                <SummaryCard
-                  label="Waiting Approval"
-                  helper="Work waiting on customer approval."
-                  value={technicianDashboard.summary.waitingForApprovalJobs}
-                />
-              </div>
-            </div>
           </section>
         ) : null}
 
