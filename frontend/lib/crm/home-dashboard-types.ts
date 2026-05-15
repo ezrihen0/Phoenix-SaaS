@@ -9,7 +9,7 @@ export type DashboardControlItem = {
   technicianName: string | null;
   amountCents: number | null;
   scheduledFor: string | null;
-  occurredAt: string;
+  occurredAt: string | null;
   statusLabel: string;
 };
 
@@ -32,6 +32,7 @@ export type OfficeDashboardResponse = {
     unpaidInvoices: number;
   };
   controls: {
+    quotesWaitingApproval: DashboardControlItem[];
     unpaidInvoices: DashboardControlItem[];
     followUpsNeeded: DashboardControlItem[];
     todaysScheduledJobs: DashboardControlItem[];
@@ -67,11 +68,12 @@ function isFiniteNumber(value: unknown) {
 }
 
 export function isOfficeDashboardResponse(value: unknown): value is OfficeDashboardResponse {
-  if (!isRecord(value) || !isRecord(value.summary)) {
+  if (!isRecord(value) || !isRecord(value.summary) || !isRecord(value.controls)) {
     return false;
   }
 
   const summary = value.summary;
+  const controls = value.controls;
 
   return (
     isFiniteNumber(summary.newLeads)
@@ -79,6 +81,11 @@ export function isOfficeDashboardResponse(value: unknown): value is OfficeDashbo
     && isFiniteNumber(summary.activeJobs)
     && isFiniteNumber(summary.jobsScheduledToday)
     && isFiniteNumber(summary.unpaidInvoices)
+    && Array.isArray(controls.quotesWaitingApproval)
+    && Array.isArray(controls.unpaidInvoices)
+    && Array.isArray(controls.followUpsNeeded)
+    && Array.isArray(controls.todaysScheduledJobs)
+    && Array.isArray(controls.recentCompletedJobs)
   );
 }
 

@@ -142,6 +142,15 @@ export class RecentCallEntity {
   @Column({ type: "varchar", length: 128, nullable: true })
   ai_model!: string | null;
 
+  @Column({ type: "varchar", length: 255, nullable: true })
+  telnyx_conversation_id!: string | null;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  telnyx_ai_assistant_id!: string | null;
+
+  @Column({ type: "longtext", nullable: true })
+  ai_conversation_messages_json!: string | null;
+
   @Column({ type: "datetime", precision: 6, nullable: true })
   ai_enriched_at!: Date | null;
 

@@ -24,6 +24,7 @@ export const requiredTables = [
   "job_notes",
   "job_status_events",
   "inspections",
+  "ai_recommendation_runs",
   "inspection_items",
   "inspection_photos",
   "inspection_required_fields",
@@ -50,6 +51,7 @@ export const requiredTables = [
   "owned_phone_numbers",
   "txt_conversations",
   "txt_messages",
+  "voice_flows",
   "sms_templates",
   "call_flow_configs",
   "call_flow_business_hours",
@@ -59,6 +61,7 @@ export const requiredTables = [
   "missed_call_sms_cooldowns",
   "recent_call_sms_logs",
   "recent_call_activity_events",
+  "telnyx_webhook_event_receipts",
   "marketing_profiles",
   "marketing_connected_channels",
   "marketing_campaigns",
@@ -74,6 +77,10 @@ export const requiredTables = [
 ] as const;
 
 export const requiredColumns = [
+  {
+    table: "voice_flows",
+    columns: ["id", "flow_id", "telnyx_assistant_id", "title", "is_active", "created_at", "updated_at"],
+  },
   {
     table: "billing_accounts",
     columns: [
@@ -140,6 +147,22 @@ export const requiredColumns = [
     ],
   },
   { table: "auth_sessions", columns: ["user_id", "active_organization_id", "session_token_hash"] },
+  {
+    table: "ai_recommendation_runs",
+    columns: [
+      "id",
+      "organization_id",
+      "actor_profile_id",
+      "source_channel",
+      "feature_key",
+      "tool_trace_json",
+      "model_id",
+      "prompt_version",
+      "status",
+      "error_code",
+      "created_at",
+    ],
+  },
   { table: "customers", columns: ["organization_id", "full_name", "phone"] },
   { table: "jobs", columns: ["organization_id", "customer_id", "status"] },
   { table: "quotes", columns: ["organization_id", "job_id", "status"] },
@@ -190,6 +213,7 @@ export const requiredColumns = [
   { table: "missed_call_sms_cooldowns", columns: ["phone_number_normalized", "next_allowed_at"] },
   { table: "recent_call_sms_logs", columns: ["recent_call_id", "customer_id", "read_at"] },
   { table: "recent_call_activity_events", columns: ["recent_call_id", "event_key"] },
+  { table: "telnyx_webhook_event_receipts", columns: ["provider", "provider_event_id"], isUnique: true },
   {
     table: "marketing_profiles",
     columns: [
@@ -437,14 +461,17 @@ export const requiredIndexes = [
   },
   { table: "memberships", columns: ["user_id", "organization_id"], isUnique: true },
   { table: "auth_sessions", columns: ["session_token_hash"], isUnique: true },
+  { table: "ai_recommendation_runs", columns: ["organization_id", "created_at"], isUnique: false },
   { table: "quote_line_items", columns: ["quote_id", "document_line_key"], isUnique: true },
   { table: "invoice_line_items", columns: ["invoice_id", "document_line_key"], isUnique: true },
   { table: "pricebook_items", columns: ["organization_id", "internal_sku"], isUnique: true },
   { table: "inventory_items", columns: ["organization_id", "internal_sku"], isUnique: true },
   { table: "inventory_locations", columns: ["organization_id", "name"], isUnique: true },
   { table: "recent_calls", columns: ["provider", "provider_event_id"], isUnique: true },
+  { table: "voice_flows", columns: ["flow_id"], isUnique: true },
   { table: "recent_calls", columns: ["created_at"], isUnique: false },
   { table: "owned_phone_numbers", columns: ["provider", "provider_number_id"], isUnique: false },
+  { table: "owned_phone_numbers", columns: ["voice_flow_id"], isUnique: false },
   { table: "txt_conversations", columns: ["owned_phone_number_normalized", "customer_phone_number_normalized", "is_archived"], isUnique: true },
   { table: "txt_messages", columns: ["conversation_id", "created_at"], isUnique: false },
   { table: "sms_templates", columns: ["is_active", "sort_order", "created_at"], isUnique: false },
@@ -577,6 +604,18 @@ export const requiredForeignKeys = [
   },
   { table: "auth_sessions", column: "user_id", referencedTable: "users", referencedColumn: "id" },
   { table: "auth_sessions", column: "active_organization_id", referencedTable: "organizations", referencedColumn: "id" },
+  {
+    table: "ai_recommendation_runs",
+    column: "organization_id",
+    referencedTable: "organizations",
+    referencedColumn: "id",
+  },
+  {
+    table: "ai_recommendation_runs",
+    column: "actor_profile_id",
+    referencedTable: "profiles",
+    referencedColumn: "id",
+  },
   { table: "customers", column: "organization_id", referencedTable: "organizations", referencedColumn: "id" },
   { table: "jobs", column: "customer_id", referencedTable: "customers", referencedColumn: "id" },
   { table: "jobs", column: "organization_id", referencedTable: "organizations", referencedColumn: "id" },
@@ -719,6 +758,12 @@ export const requiredForeignKeys = [
     table: "marketing_publish_attempts",
     column: "publish_job_id",
     referencedTable: "marketing_publish_jobs",
+    referencedColumn: "id",
+  },
+  {
+    table: "owned_phone_numbers",
+    column: "voice_flow_id",
+    referencedTable: "voice_flows",
     referencedColumn: "id",
   },
 ] as const;

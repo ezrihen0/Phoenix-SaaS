@@ -144,6 +144,18 @@ function formatRegistryLabel(value: string | null) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+/** Phase 1.5B P4 — one-line hybrid CRM signal for Telnyx AI Assistant (audit detail in `ai_recommendation_runs`). */
+function telnyxVoiceIntakeHybridHint(call: RecentCallListItem): string | null {
+  const provider = (call.aiProvider ?? "").trim();
+  if (provider !== "telnyx_ai_assistant") {
+    return null;
+  }
+  if (call.matchedLeadId) {
+    return "Hybrid CRM: lead linked from voice intake";
+  }
+  return "Hybrid CRM: no lead linked — review if intake ran";
+}
+
 function getInboundNumberLabel(call: RecentCallListItem) {
   return call.inboundOwnedPhoneNumberLabel ?? call.toNumber ?? "Unknown destination";
 }
@@ -584,6 +596,8 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                         const inboundNumberLabel = getInboundNumberLabel(call);
                         const inboundMarketLabel = getInboundMarketLabel(call);
 
+                        const voiceHybridHint = telnyxVoiceIntakeHybridHint(call);
+
                         return (
                           <tr key={call.id} className={`border-b border-[color:var(--border-subtle)] transition last:border-b-0 ${operationalState.surfaceClass}`}>
                             <td className={`${callsLedgerBodyCellClass} align-middle`}>
@@ -664,6 +678,9 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                             <td className={`${callsLedgerBodyCellClass} text-[color:var(--text-secondary)]`}>
                               <div className="font-medium text-[color:var(--text-primary)]">{operationalState.nextAction}</div>
                               <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">{call.aiSummary ?? call.recordingStatus ?? "Pending review"}</div>
+                              {voiceHybridHint ? (
+                                <div className="mt-1 text-[11px] text-[color:var(--text-secondary)]">{voiceHybridHint}</div>
+                              ) : null}
                               <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
                                 {activeCallbackTask ? <span>Callback task active</span> : null}
                                 {recoveryInMotion && call.queueCallbackRequested ? <span>Callback queued</span> : null}
@@ -695,6 +712,8 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                     const inboundMappingState = getInboundMappingState(call);
                     const inboundNumberLabel = getInboundNumberLabel(call);
                     const inboundMarketLabel = getInboundMarketLabel(call);
+
+                    const voiceHybridHint = telnyxVoiceIntakeHybridHint(call);
 
                     return (
                       <article
@@ -777,6 +796,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                             <div className="mt-3 grid gap-2">
                               <p>Time: {formattedCreatedAt}</p>
                               <p>Summary: {call.aiSummary ?? call.recordingStatus ?? "Pending review"}</p>
+                              {voiceHybridHint ? <p className="text-[color:var(--text-secondary)]">{voiceHybridHint}</p> : null}
                               <p>Next action: {resolvedCallbackTask ? "Callback resolved." : recoveryInMotion && call.queueCallbackRequested ? "Callback queued" : operationalState.nextAction}</p>
                             </div>
                           </div>
@@ -802,6 +822,8 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                     const inboundMappingState = getInboundMappingState(call);
                     const inboundNumberLabel = getInboundNumberLabel(call);
                     const inboundMarketLabel = getInboundMarketLabel(call);
+
+                    const voiceHybridHint = telnyxVoiceIntakeHybridHint(call);
 
                     return (
                       <article
@@ -889,6 +911,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                           <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Recovery Context</p>
                           <p className="mt-2 font-medium text-[color:var(--text-primary)]">{operationalState.nextAction}</p>
                           <p className="mt-2">{call.aiSummary ?? call.recordingStatus ?? "Pending review"}</p>
+                          {voiceHybridHint ? <p className="mt-2 text-xs text-[color:var(--text-secondary)]">{voiceHybridHint}</p> : null}
                           <p className="mt-3 text-xs text-[color:var(--text-muted)]">{call.aiSentiment ?? (resolvedCallbackTask ? "Callback resolved" : recoveryInMotion && call.queueCallbackRequested ? "Callback queued" : "No follow-up flag")}</p>
                         </div>
                       </article>

@@ -1,6 +1,9 @@
 import { requireServerSession, type SessionRole } from "@/lib/auth/server-session";
 import TechnicianHomeBoard from "@/components/home/technician-home-board";
+import HomeIntelligenceStrip from "@/components/home/intelligence/home-intelligence-strip";
 import { serverApiFetch } from "@/lib/api/server-fetch";
+import { fetchBrainHomeBriefSilent } from "@/lib/api/server-brain-home-brief";
+import type { AiBrainHomeBriefResponse } from "@/lib/ai/brain-brief-types";
 import {
   isOfficeDashboardResponse,
   type OfficeDashboardResponse,
@@ -84,6 +87,7 @@ export default async function HomePage() {
   const officeRole = isOfficeRole(role);
 
   let officeDashboard: OfficeDashboardResponse | null = null;
+  let brainHomeBrief: AiBrainHomeBriefResponse | null = null;
   let loadError: string | null = null;
 
   if (officeRole) {
@@ -96,6 +100,10 @@ export default async function HomePage() {
       }
     } catch {
       loadError = "Office dashboard data is unavailable right now.";
+    }
+
+    if (officeDashboard) {
+      brainHomeBrief = await fetchBrainHomeBriefSilent();
     }
   }
 
@@ -139,6 +147,10 @@ export default async function HomePage() {
             Live dashboard snapshot
           </p>
         </section>
+
+        {officeRole && officeDashboard && brainHomeBrief ? (
+          <HomeIntelligenceStrip brief={brainHomeBrief} />
+        ) : null}
 
         {loadError ? (
           <section className="theme-alert-error rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-5 py-4 text-sm text-[color:var(--sem-text-secondary)]">

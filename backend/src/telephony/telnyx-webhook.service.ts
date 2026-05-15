@@ -1,4 +1,4 @@
-import { randomUUID, verify } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -6,7 +6,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
-import { createTelnyxPublicKey } from "../common/telnyx-signature";
+import { assertTelnyxEd25519SignatureValid } from "../common/verify-telnyx-ed25519-webhook";
 import { CustomerEntity } from "../database/entities/customer.entity";
 import { LeadEntity } from "../database/entities/lead.entity";
 import { RecentCallEntity } from "../database/entities/recent-call.entity";
@@ -16,6 +16,8 @@ import { OwnedPhoneNumbersService } from "../messaging/phone-numbers/owned-phone
 import { CallFlowSettingsService } from "./call-flow-settings.service";
 import { CallbackTaskService, type CallbackTaskSummary } from "./callback-task.service";
 import { TelephonyExecutionService } from "./telephony-execution.service";
+import { TelnyxConversationIngestService } from "./telnyx-conversation-ingest.service";
+import { TelnyxLiveVoiceAttachService } from "./telnyx-live-voice-attach.service";
 import {
   recentCallBelongsToOrgSql,
   recentCallBelongsToOrgSqlNamed,
@@ -268,6 +270,8 @@ export class TelnyxWebhookService {
     private readonly ownedPhoneNumbersService: OwnedPhoneNumbersService,
     private readonly callFlowSettingsService: CallFlowSettingsService,
     private readonly telephonyExecutionService: TelephonyExecutionService,
+    private readonly telnyxLiveVoiceAttachService: TelnyxLiveVoiceAttachService,
+    private readonly conversationIngestService: TelnyxConversationIngestService,
     private readonly callbackTaskService: CallbackTaskService,
   ) {}
 
@@ -293,6 +297,10 @@ export class TelnyxWebhookService {
 
     if (this.isIvrInputEventType(eventType, payload)) {
       return this.handleIvrInputEvent(payload, rawBody, eventType, providerEventId);
+    }
+
+    if (this.isTelnyxConversationEventType(eventType)) {
+      return this.conversationIngestService.handleConversationEvent(payload, rawBody, eventType, providerEventId);
     }
 
     if (this.isLifecycleEventType(eventType)) {
@@ -416,7 +424,15 @@ export class TelnyxWebhookService {
       apiError(500, "recent_call_create_failed", "The recent call record could not be created.");
     }
 
-    const initialExecution = await this.executeInitialCallFlow(saved);
+    const attachResult = await this.telnyxLiveVoiceAttachService.tryAttachAiAssistant(
+      saved,
+      sourceContext.matchOrganizationId ?? null,
+    );
+
+    let initialExecution = false;
+    if (attachResult !== "attached") {
+      initialExecution = await this.executeInitialCallFlow(saved);
+    }
 
     if (initialExecution) {
       saved = await this.recentCallsRepository.save(saved);
@@ -432,6 +448,7 @@ export class TelnyxWebhookService {
       ivrStatus: saved.ivr_status,
       routeExecutionStatus: saved.route_execution_status,
       voicemailStatus: saved.voicemail_status,
+      liveVoiceAiAttached: attachResult === "attached",
     };
   }
 
@@ -1933,58 +1950,13 @@ export class TelnyxWebhookService {
   }
 
   private verifySignature(rawBody: Buffer, signature: string | null, timestamp: string | null) {
-    if (this.toBoolean(this.configService.get<string>("TELNYX_SKIP_SIGNATURE_VERIFICATION"))) {
-      return;
-    }
-
-    const publicKey = this.configService.get<string>("TELNYX_PUBLIC_KEY")?.trim() ?? "";
-
-    if (!publicKey) {
-      apiError(500, "telnyx_public_key_missing", "TELNYX_PUBLIC_KEY is required to verify Telnyx webhooks.");
-    }
-
-    if (!signature || !timestamp) {
-      apiError(400, "telnyx_signature_missing", "Telnyx signature and timestamp headers are required.");
-    }
-
-    const message = Buffer.from(`${timestamp}|${rawBody.toString("utf8")}`, "utf8");
-
-    let signatureBuffer: Buffer | null = null;
-
-    try {
-      signatureBuffer = Buffer.from(signature, "base64");
-      if (!signatureBuffer.length) {
-        signatureBuffer = null;
-      }
-    } catch {
-      signatureBuffer = null;
-    }
-
-    if (!signatureBuffer) {
-      try {
-        signatureBuffer = Buffer.from(signature, "hex");
-      } catch {
-        apiError(400, "telnyx_signature_invalid", "Telnyx signature header is malformed.");
-      }
-    }
-
-    let keyObject;
-
-    try {
-      keyObject = createTelnyxPublicKey(publicKey);
-    } catch {
-      apiError(500, "telnyx_public_key_invalid", "TELNYX_PUBLIC_KEY could not be parsed.");
-    }
-
-    try {
-      const verified = verify(null, message, keyObject, signatureBuffer);
-
-      if (!verified) {
-        apiError(401, "telnyx_signature_verification_failed", "Telnyx webhook signature verification failed.");
-      }
-    } catch {
-      apiError(401, "telnyx_signature_verification_failed", "Telnyx webhook signature verification failed.");
-    }
+    assertTelnyxEd25519SignatureValid({
+      rawBody,
+      signature,
+      timestamp,
+      publicKey: this.configService.get<string>("TELNYX_PUBLIC_KEY")?.trim() ?? "",
+      skipVerification: this.toBoolean(this.configService.get<string>("TELNYX_SKIP_SIGNATURE_VERIFICATION")),
+    });
   }
 
   private parsePayload(rawBody: Buffer) {
@@ -2295,6 +2267,17 @@ export class TelnyxWebhookService {
     }
 
     return eventType.startsWith("call.recording.") || eventType.startsWith("recording.");
+  }
+
+  private isTelnyxConversationEventType(eventType: string | null) {
+    if (!eventType) {
+      return false;
+    }
+    return (
+      eventType === "call.conversation.ended"
+      || eventType === "call.conversation_insights.generated"
+      || eventType === "call.conversation.insights.generated"
+    );
   }
 
   private isLifecycleEventType(eventType: string | null) {

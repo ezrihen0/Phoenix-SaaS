@@ -67,6 +67,10 @@ export class OwnedPhoneNumberEntity {
   @Column({ type: "char", length: 36, nullable: true })
   company_id!: string | null;
 
+  /** FK to `voice_flows.id`; collation must match `voice_flows` for MySQL 8 FK rules. */
+  @Column({ type: "char", length: 36, nullable: true, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  voice_flow_id!: string | null;
+
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;
 

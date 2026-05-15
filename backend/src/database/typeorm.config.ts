@@ -18,6 +18,7 @@ import { AutomationSettingEntity } from "./entities/automation-setting.entity";
 import { AutomationTemplateEntity } from "./entities/automation-template.entity";
 import { BillingAccountEntity } from "./entities/billing-account.entity";
 import { BillingAccountSubscriptionItemEntity } from "./entities/billing-account-subscription-item.entity";
+import { AiRecommendationRunEntity } from "./entities/ai-recommendation-run.entity";
 import { AuthSessionEntity } from "./entities/auth-session.entity";
 import { CustomerOutputTranslationRecordEntity } from "./entities/customer-output-translation-record.entity";
 import { CrmTaskEntity } from "./entities/crm-task.entity";
@@ -69,6 +70,7 @@ import { TechnicianEntity } from "./entities/technician.entity";
 import { TranslationUsageLedgerEntity } from "./entities/translation-usage-ledger.entity";
 import { UserEntity } from "./entities/user.entity";
 import { UserOrganizationLanguagePreferenceEntity } from "./entities/user-organization-language-preference.entity";
+import { VoiceFlowEntity } from "./entities/voice-flow.entity";
 
 type ConfigLookup = Pick<ConfigService, "get">;
 
@@ -112,6 +114,7 @@ export const typeOrmEntities = [
   JobNoteEntity,
   JobStatusEventEntity,
   AuthSessionEntity,
+  AiRecommendationRunEntity,
   InspectionEntity,
   InspectionPhotoEntity,
   InspectionItemEntity,
@@ -134,6 +137,7 @@ export const typeOrmEntities = [
   PricebookBundleEntity,
   PricebookBundleItemEntity,
   OwnedPhoneNumberEntity,
+  VoiceFlowEntity,
   TxtConversationEntity,
   TxtMessageEntity,
 ];

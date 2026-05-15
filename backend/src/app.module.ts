@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
+import { AiModule } from "./ai/ai.module";
 import { AutomationsModule } from "./automations/automations.module";
 import { BillingModule } from "./billing/billing.module";
 import { AuthModule } from "./auth/auth.module";
@@ -33,6 +34,7 @@ import { TelephonyModule } from "./telephony/telephony.module";
     }),
     AuthModule,
     CrmModule,
+    AiModule,
     SearchModule,
     SettingsModule,
     PublicBookingsModule,

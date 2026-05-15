@@ -570,7 +570,7 @@ export class TelephonyExecutionService {
     return configured || null;
   }
 
-  private async executeCallControlAction(callControlId: string | null, action: string, payload: Record<string, unknown> | null): Promise<CommandResult> {
+  public async executeCallControlAction(callControlId: string | null, action: string, payload: Record<string, unknown> | null): Promise<CommandResult> {
     if (!callControlId) {
       return {
         ok: false,
