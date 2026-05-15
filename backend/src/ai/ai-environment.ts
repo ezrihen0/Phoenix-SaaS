@@ -49,3 +49,43 @@ export function resolveAiVoiceIntakeLivePilotEnabled(raw: string | undefined): b
   const normalized = raw.trim().toLowerCase();
   return ["true", "1", "yes", "on"].includes(normalized);
 }
+
+/**
+ * Phase 2 — Operator Copilot master gate (requires `AI_FOUNDATION_ENABLED` first in callers).
+ */
+export function resolveAiOperatorCopilotEnabled(raw: string | undefined): boolean {
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(normalized);
+}
+
+export function resolveAiCopilotCallsSurfaceEnabled(raw: string | undefined): boolean {
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(normalized);
+}
+
+export function resolveAiCopilotCustomerSmsDraftEnabled(raw: string | undefined): boolean {
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(normalized);
+}
+
+/** Path B — allow live LLM for Copilot draft generation (still falls back to template on failure). */
+export function resolveAiCopilotLlmEnabled(raw: string | undefined): boolean {
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(normalized);
+}

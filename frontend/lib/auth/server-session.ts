@@ -149,3 +149,22 @@ export async function requireServerRoles(nextPath: string, allowedRoles: Session
 
   return session;
 }
+
+/**
+ * Mirror backend permission gates (e.g. `calls.view` for telephony recent calls).
+ */
+export async function requireServerPermission(nextPath: string, permission: string) {
+  const session = await requireServerSession(nextPath);
+
+  if (!session.permissions.includes(permission)) {
+    const destination = await getServerDestination();
+
+    if (destination) {
+      redirect(destination);
+    }
+
+    redirect("/login?reason=unsupported-account");
+  }
+
+  return session;
+}

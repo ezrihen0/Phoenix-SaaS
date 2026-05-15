@@ -56,6 +56,16 @@ export const AI_SOURCE_CHANNEL_CALL_RECORDING_DERIVED = "call_recording_derived"
 /** `ai_recommendation_runs.source_channel` for Phase 1.5B Telnyx AI Assistant post-call pipeline. */
 export const AI_SOURCE_CHANNEL_TELNYX_AI_VOICE_WEBHOOK = "telnyx_ai_voice_webhook";
 
+/** Staff-triggered AI features (UI / authenticated API). */
+export const AI_SOURCE_CHANNEL_UI = "ui";
+
+/** Phase 2 — Operator Copilot: SMS follow-up draft from recent call context. */
+export const AI_FEATURE_OPERATOR_COPILOT_CALLS_SMS_V1 = "operator_copilot_calls_sms_v1";
+
+export const AI_DRAFT_TYPE_CUSTOMER_SMS_FOLLOWUP_V1 = "customer_sms_followup_v1";
+
+export const AI_PROMPT_VERSION_OPERATOR_COPILOT_SMS_V1 = "operator_copilot_sms_v1";
+
 /**
  * Canonical section keys for call intake trace payload (Phase 1.5A populates v0; Phase 1.5B may extend).
  */

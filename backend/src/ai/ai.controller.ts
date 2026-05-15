@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 
 import { SessionGuard } from "../auth/session.guard";
 import { apiSuccess } from "../common/api-response";
@@ -6,6 +6,8 @@ import type { RequestWithActor } from "../common/request-types";
 import { AiBrainBriefService } from "./ai-brain-brief.service";
 import type { AiCallIntakeDryRunDto } from "./ai-call-intake.service";
 import { AiCallIntakeService } from "./ai-call-intake.service";
+import type { GenerateSmsDraftBody, PatchSmsDraftBody } from "./ai-operator-copilot.service";
+import { AiOperatorCopilotService } from "./ai-operator-copilot.service";
 import type { AiDryRunDto } from "./ai-orchestration.service";
 import { AiOrchestrationService } from "./ai-orchestration.service";
 
@@ -16,6 +18,7 @@ export class AiController {
     private readonly aiOrchestrationService: AiOrchestrationService,
     private readonly aiBrainBriefService: AiBrainBriefService,
     private readonly aiCallIntakeService: AiCallIntakeService,
+    private readonly aiOperatorCopilotService: AiOperatorCopilotService,
   ) {}
 
   /**
@@ -48,6 +51,39 @@ export class AiController {
   @Post("intake/call-envelope/dry-run")
   async callIntakeEnvelopeDryRun(@Req() request: RequestWithActor, @Body() body: AiCallIntakeDryRunDto) {
     const payload = await this.aiCallIntakeService.runCallIntakeEnvelopeDryRun(request, body ?? {});
+    return apiSuccess(payload);
+  }
+
+  /**
+   * Phase 2 — Operator Copilot SMS follow-up draft (calls surface).
+   * Gates: `AI_FOUNDATION_ENABLED`, `AI_OPERATOR_COPILOT_ENABLED`, `AI_COPILOT_CALLS_SURFACE_ENABLED`, `AI_COPILOT_CUSTOMER_SMS_DRAFT_ENABLED`.
+   * Optional LLM: `AI_COPILOT_LLM_ENABLED` + `OPENAI_API_KEY`.
+   */
+  @Post("copilot/calls/sms-draft/generate")
+  async copilotGenerateSmsDraft(@Req() request: RequestWithActor, @Body() body: GenerateSmsDraftBody) {
+    const payload = await this.aiOperatorCopilotService.generateSmsDraft(request, body ?? {});
+    return apiSuccess(payload);
+  }
+
+  @Get("copilot/calls/sms-draft")
+  async copilotGetSmsDraft(@Req() request: RequestWithActor, @Query("recentCallId") recentCallId: string | undefined) {
+    const payload = await this.aiOperatorCopilotService.getActiveSmsDraft(request, recentCallId ?? "");
+    return apiSuccess(payload);
+  }
+
+  @Patch("copilot/calls/sms-draft/:draftId")
+  async copilotPatchSmsDraft(
+    @Req() request: RequestWithActor,
+    @Param("draftId") draftId: string,
+    @Body() body: PatchSmsDraftBody,
+  ) {
+    const payload = await this.aiOperatorCopilotService.patchSmsDraft(request, draftId, body ?? {});
+    return apiSuccess(payload);
+  }
+
+  @Post("copilot/calls/sms-draft/:draftId/dismiss")
+  async copilotDismissSmsDraft(@Req() request: RequestWithActor, @Param("draftId") draftId: string) {
+    const payload = await this.aiOperatorCopilotService.dismissSmsDraft(request, draftId);
     return apiSuccess(payload);
   }
 }

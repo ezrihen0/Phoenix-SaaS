@@ -2,8 +2,9 @@ import Link from "next/link";
 import { ArrowRight, PhoneCall } from "lucide-react";
 
 import { serverApiFetch } from "@/lib/api/server-fetch";
-import { requireServerRoles } from "@/lib/auth/server-session";
+import { requireServerPermission } from "@/lib/auth/server-session";
 import { formatCallSourceLabel, formatVoicemailStatusLabel } from "@/lib/crm/display";
+import CallsCopilotSmsDraft from "./calls-copilot-sms-draft";
 import CallbackTaskControl, { type CallbackTaskAssigneeOption, type CallbackTaskItem } from "./callback-task-control";
 import CallRowActions from "./call-row-actions";
 import QueueCallbackRequestControl from "./queue-callback-request-control";
@@ -339,7 +340,7 @@ const callsLedgerHeaderCellClass = "border-r border-[color:var(--border-subtle)]
 const callsLedgerBodyCellClass = "border-r border-[color:var(--border-subtle)] px-3 py-3 align-top last:border-r-0";
 
 export default async function CallsPage({ searchParams }: CallsPageContext) {
-  const session = await requireServerRoles("/calls", ["owner", "office_admin", "dispatcher"]);
+  const session = await requireServerPermission("/calls", "calls.view");
 
   const resolvedSearchParams = await searchParams;
   const canManageCrmFromCalls = session.profile?.role === "office_admin";
@@ -688,6 +689,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                                 {negativeSentiment ? <span>Negative AI sentiment</span> : null}
                                 {!activeCallbackTask && !recoveryInMotion ? <span>{call.aiSentiment ?? formatVoicemailStatusLabel(call.voicemailStatus ?? "pending")}</span> : null}
                               </div>
+                              <CallsCopilotSmsDraft recentCallId={call.id} />
                             </td>
                           </tr>
                         );
@@ -799,6 +801,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                               {voiceHybridHint ? <p className="text-[color:var(--text-secondary)]">{voiceHybridHint}</p> : null}
                               <p>Next action: {resolvedCallbackTask ? "Callback resolved." : recoveryInMotion && call.queueCallbackRequested ? "Callback queued" : operationalState.nextAction}</p>
                             </div>
+                            <CallsCopilotSmsDraft recentCallId={call.id} />
                           </div>
                         </div>
                       </article>
@@ -913,6 +916,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                           <p className="mt-2">{call.aiSummary ?? call.recordingStatus ?? "Pending review"}</p>
                           {voiceHybridHint ? <p className="mt-2 text-xs text-[color:var(--text-secondary)]">{voiceHybridHint}</p> : null}
                           <p className="mt-3 text-xs text-[color:var(--text-muted)]">{call.aiSentiment ?? (resolvedCallbackTask ? "Callback resolved" : recoveryInMotion && call.queueCallbackRequested ? "Callback queued" : "No follow-up flag")}</p>
+                          <CallsCopilotSmsDraft recentCallId={call.id} />
                         </div>
                       </article>
                     );
