@@ -16,6 +16,20 @@ type CopilotSmsSendSurface = {
   hasMessagingSendPermission: boolean;
 };
 
+export type CopilotSmsOutcomeStatus = "not_applicable" | "waiting_for_reply" | "customer_replied" | "unknown";
+
+function formatRoughReplyLag(seconds: number): string {
+  if (seconds <= 90) {
+    return "under 2 minutes";
+  }
+  const mins = Math.floor(seconds / 60);
+  if (mins < 60) {
+    return `about ${mins} min`;
+  }
+  const hrs = Math.floor(mins / 60);
+  return `about ${hrs} hr`;
+}
+
 type DraftPayload = {
   draftId: string;
   recentCallId: string;
@@ -30,6 +44,10 @@ type DraftPayload = {
   status: "active" | "dismissed" | "sent";
   outboundTxtMessageId: string | null;
   sendSurface: CopilotSmsSendSurface;
+  outcomeTrackingEnabled?: true;
+  outcomeStatus?: CopilotSmsOutcomeStatus;
+  firstReplyTxtMessageId?: string | null;
+  replyAfterSeconds?: number | null;
 };
 
 type Props = {
@@ -242,7 +260,7 @@ export default function CallsCopilotSmsDraft({ recentCallId, hasMessagingSendPer
             <button
               type="button"
               onClick={() => void generateDraft()}
-              disabled={loading || draft?.status === "sent"}
+              disabled={loading || draft?.status === "active"}
               className="inline-flex items-center gap-1 rounded-full border border-[color:rgba(125,211,252,0.35)] bg-[color:rgba(12,74,110,0.35)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:#e0f2fe] disabled:opacity-50"
             >
               {loading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
@@ -290,10 +308,35 @@ export default function CallsCopilotSmsDraft({ recentCallId, hasMessagingSendPer
           </div>
 
           {draft?.status === "sent" ? (
-            <p className="text-[10px] font-semibold text-[color:#86efac]">
-              Sent — outbound TXT logged in Messaging.
-              {draft.outboundTxtMessageId ? ` (${draft.outboundTxtMessageId.slice(0, 8)}…)` : null}
-            </p>
+            <div className="space-y-1 text-[10px] text-[color:#86efac]">
+              <p className="font-semibold">
+                Sent — outbound TXT logged in Messaging.
+                {draft.outboundTxtMessageId ? ` (${draft.outboundTxtMessageId.slice(0, 8)}…)` : null}
+              </p>
+              {draft.outcomeTrackingEnabled && draft.outcomeStatus === "waiting_for_reply" ? (
+                <p className="font-normal text-[color:var(--text-secondary)]">
+                  Waiting for a customer reply in this SMS thread (based on Messaging timestamps).
+                </p>
+              ) : null}
+              {draft.outcomeTrackingEnabled && draft.outcomeStatus === "customer_replied" ? (
+                <div className="font-normal text-[color:var(--text-secondary)]">
+                  <p>
+                    A customer reply was detected in this SMS thread after this message was sent.
+                    {typeof draft.replyAfterSeconds === "number" ? (
+                      <span>{` First reply (~${formatRoughReplyLag(draft.replyAfterSeconds)} later).`}</span>
+                    ) : null}
+                  </p>
+                  <p className="mt-1 text-[color:var(--text-muted)]">
+                    Based on thread timing only — replies may not be about this specific text.
+                  </p>
+                </div>
+              ) : null}
+              {draft.outcomeTrackingEnabled && draft.outcomeStatus === "unknown" ? (
+                <p className="font-normal text-[color:var(--text-muted)]">
+                  Could not verify thread reply status from messaging records right now.
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
           {sendBlockedHint ? (

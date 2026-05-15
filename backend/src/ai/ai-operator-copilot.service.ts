@@ -27,6 +27,7 @@ import {
   resolveAiCopilotCallsSurfaceEnabled,
   resolveAiCopilotCustomerSmsDraftEnabled,
   resolveAiCopilotCustomerSmsGuardedSendEnabled,
+  resolveAiCopilotCustomerSmsOutcomeTrackingEnabled,
   resolveAiCopilotLlmEnabled,
   resolveAiFoundationEnabled,
   resolveAiOperatorCopilotEnabled,
@@ -49,6 +50,8 @@ export type CopilotSmsSendSurfaceDto = {
   hasMessagingSendPermission: boolean;
 };
 
+export type CopilotSmsOutcomeStatusKey = "not_applicable" | "waiting_for_reply" | "customer_replied" | "unknown";
+
 export type OperatorCopilotSmsDraftDto = {
   draftId: string;
   recentCallId: string;
@@ -63,6 +66,11 @@ export type OperatorCopilotSmsDraftDto = {
   status: AiOperatorDraftStatusKey;
   outboundTxtMessageId: string | null;
   sendSurface: CopilotSmsSendSurfaceDto;
+  /** Present only when `AI_COPILOT_CUSTOMER_SMS_OUTCOME_TRACKING_ENABLED`. */
+  outcomeTrackingEnabled?: true;
+  outcomeStatus?: CopilotSmsOutcomeStatusKey;
+  firstReplyTxtMessageId?: string | null;
+  replyAfterSeconds?: number | null;
 };
 
 export type GenerateSmsDraftBody = { recentCallId?: string };
@@ -294,7 +302,16 @@ export class AiOperatorCopilotService {
     ].join("\n");
   }
 
-  private mapDraftCore(entity: AiOperatorDraftEntity): Omit<OperatorCopilotSmsDraftDto, "sendSurface"> {
+  private mapDraftCore(
+    entity: AiOperatorDraftEntity,
+  ): Omit<
+    OperatorCopilotSmsDraftDto,
+    | "sendSurface"
+    | "outcomeTrackingEnabled"
+    | "outcomeStatus"
+    | "firstReplyTxtMessageId"
+    | "replyAfterSeconds"
+  > {
     let limitations: CopilotLimitationDto[] = [];
     try {
       limitations = JSON.parse(entity.limitations_json) as CopilotLimitationDto[];
@@ -450,6 +467,120 @@ export class AiOperatorCopilotService {
     };
   }
 
+  private normalizeSqlDate(value: unknown): Date | null {
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value;
+    }
+    if (typeof value === "string") {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
+  }
+
+  /** Phase 4: derived observability only — never invokes TXT send APIs. */
+  private async hydrateSmsDraftOutcomeTracking(
+    organizationId: string,
+    draft: AiOperatorDraftEntity,
+  ): Promise<
+    Partial<
+      Pick<
+        OperatorCopilotSmsDraftDto,
+        "outcomeTrackingEnabled" | "outcomeStatus" | "firstReplyTxtMessageId" | "replyAfterSeconds"
+      >
+    >
+  > {
+    const flagRaw = this.mergedEnvPreference("AI_COPILOT_CUSTOMER_SMS_OUTCOME_TRACKING_ENABLED");
+    if (!resolveAiCopilotCustomerSmsOutcomeTrackingEnabled(flagRaw)) {
+      return {};
+    }
+
+    const orgId = organizationId.trim();
+    const base = {
+      outcomeTrackingEnabled: true as const,
+      firstReplyTxtMessageId: null as string | null,
+      replyAfterSeconds: null as number | null,
+    };
+
+    if (draft.status !== "sent") {
+      return { ...base, outcomeStatus: "not_applicable" as const };
+    }
+
+    const outboundId = draft.outbound_txt_message_id?.trim();
+    if (!outboundId) {
+      return { ...base, outcomeStatus: "unknown" as const };
+    }
+
+    const anchorRows = (await this.dataSource.query(
+      `
+        SELECT
+          COALESCE(tm.sent_at, tm.created_at) AS t_anchor,
+          tm.conversation_id AS conversation_id
+        FROM ai_operator_drafts d
+        INNER JOIN txt_messages tm ON BINARY tm.id = BINARY d.outbound_txt_message_id
+        INNER JOIN txt_conversations tc ON BINARY tc.id = BINARY tm.conversation_id
+        WHERE BINARY d.id = BINARY ?
+          AND BINARY d.organization_id = BINARY ?
+          AND tm.direction = 'outbound'
+          AND tc.customer_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM customers c
+            WHERE BINARY c.id = BINARY tc.customer_id
+              AND BINARY c.organization_id = BINARY d.organization_id
+          )
+        LIMIT 1
+      `,
+      [draft.id, orgId],
+    )) as Array<{ t_anchor: unknown; conversation_id: string | null }>;
+
+    const anchorRow = anchorRows[0];
+    const tAnchor = this.normalizeSqlDate(anchorRow?.t_anchor ?? null);
+    const conversationId = anchorRow?.conversation_id?.trim();
+
+    if (!anchorRow || !conversationId || !tAnchor) {
+      return { ...base, outcomeStatus: "unknown" as const };
+    }
+
+    const replyRows = (await this.dataSource.query(
+      `
+        SELECT
+          tm_in.id AS id,
+          TIMESTAMPDIFF(SECOND, ?, COALESCE(tm_in.received_at, tm_in.created_at)) AS reply_after_seconds,
+          COALESCE(tm_in.received_at, tm_in.created_at) AS ti
+        FROM txt_messages tm_in
+        WHERE BINARY tm_in.conversation_id = BINARY ?
+          AND tm_in.direction = 'inbound'
+          AND COALESCE(tm_in.received_at, tm_in.created_at) > ?
+        ORDER BY ti ASC, tm_in.id ASC
+        LIMIT 1
+      `,
+      [tAnchor, conversationId, tAnchor],
+    )) as Array<{ id: string; reply_after_seconds: unknown }>;
+
+    const first = replyRows[0];
+
+    if (!first?.id) {
+      return { ...base, outcomeStatus: "waiting_for_reply" as const };
+    }
+
+    const secsRaw = first.reply_after_seconds;
+    let replyAfterSeconds =
+      typeof secsRaw === "bigint" ? Number(secsRaw) : typeof secsRaw === "number" ? secsRaw : Number(secsRaw);
+
+    if (!Number.isFinite(replyAfterSeconds)) {
+      replyAfterSeconds = 0;
+    }
+
+    replyAfterSeconds = Math.max(0, Math.floor(replyAfterSeconds));
+
+    return {
+      ...base,
+      outcomeStatus: "customer_replied",
+      firstReplyTxtMessageId: String(first.id),
+      replyAfterSeconds,
+    };
+  }
+
   private async presentSmsDraft(
     request: RequestWithActor,
     organizationId: string,
@@ -458,7 +589,8 @@ export class AiOperatorCopilotService {
     const core = this.mapDraftCore(entity);
     const call = await this.recentCallsRepo.findOne({ where: { id: entity.recent_call_id } });
     const sendSurface = await this.buildSendSurface(request, organizationId, call, entity);
-    return { ...core, sendSurface };
+    const outcomeHydration = await this.hydrateSmsDraftOutcomeTracking(organizationId, entity);
+    return { ...core, sendSurface, ...outcomeHydration };
   }
 
   async generateSmsDraft(request: RequestWithActor, body: GenerateSmsDraftBody): Promise<OperatorCopilotSmsDraftDto> {
@@ -578,7 +710,7 @@ export class AiOperatorCopilotService {
     return this.presentSmsDraft(request, organizationId, draft);
   }
 
-  async getActiveSmsDraft(request: RequestWithActor, recentCallIdRaw: string): Promise<OperatorCopilotSmsDraftDto | null> {
+  async getSmsDraftForRecentCall(request: RequestWithActor, recentCallIdRaw: string): Promise<OperatorCopilotSmsDraftDto | null> {
     this.enforceCopilotGates();
     const actor = requirePermission(request.actor, "calls.view", "forbidden", "Only office roles can access telephony.");
     const organizationId = this.requireActiveOrganizationIdFromActor(actor.organization_id);
@@ -589,7 +721,7 @@ export class AiOperatorCopilotService {
 
     await this.assertRecentCallInOrganization(recentCallId, organizationId);
 
-    const existing = await this.draftsRepo.findOne({
+    const activeDraft = await this.draftsRepo.findOne({
       where: {
         organization_id: organizationId,
         recent_call_id: recentCallId,
@@ -598,7 +730,24 @@ export class AiOperatorCopilotService {
       },
     });
 
-    return existing ? this.presentSmsDraft(request, organizationId, existing) : null;
+    if (activeDraft) {
+      return this.presentSmsDraft(request, organizationId, activeDraft);
+    }
+
+    const latestSent = await this.draftsRepo.findOne({
+      where: {
+        organization_id: organizationId,
+        recent_call_id: recentCallId,
+        draft_type: AI_DRAFT_TYPE_CUSTOMER_SMS_FOLLOWUP_V1,
+        status: "sent",
+      },
+      order: {
+        updated_at: "DESC",
+        created_at: "DESC",
+      },
+    });
+
+    return latestSent ? this.presentSmsDraft(request, organizationId, latestSent) : null;
   }
 
   async patchSmsDraft(request: RequestWithActor, draftIdRaw: string, body: PatchSmsDraftBody): Promise<OperatorCopilotSmsDraftDto> {

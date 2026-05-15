@@ -65,9 +65,14 @@ export class AiController {
     return apiSuccess(payload);
   }
 
+  /**
+   * Loads the Copilot SMS draft for a call: **`active` first**, else **latest `sent`**
+   * for the same `recentCallId` + SMS draft type (`updated_at DESC`, `created_at DESC` tie-break).
+   * Phase 4: when `AI_COPILOT_CUSTOMER_SMS_OUTCOME_TRACKING_ENABLED`, response may include read-only outcome fields.
+   */
   @Get("copilot/calls/sms-draft")
   async copilotGetSmsDraft(@Req() request: RequestWithActor, @Query("recentCallId") recentCallId: string | undefined) {
-    const payload = await this.aiOperatorCopilotService.getActiveSmsDraft(request, recentCallId ?? "");
+    const payload = await this.aiOperatorCopilotService.getSmsDraftForRecentCall(request, recentCallId ?? "");
     return apiSuccess(payload);
   }
 

@@ -99,3 +99,13 @@ export function resolveAiCopilotCustomerSmsGuardedSendEnabled(raw: string | unde
   const normalized = raw.trim().toLowerCase();
   return ["true", "1", "yes", "on"].includes(normalized);
 }
+
+/** Phase 4 — read-time Copilot SMS outcome (waiting vs replied) from `txt_messages`; no outbound side effects. */
+export function resolveAiCopilotCustomerSmsOutcomeTrackingEnabled(raw: string | undefined): boolean {
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(normalized);
+}
