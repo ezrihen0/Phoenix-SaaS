@@ -29,7 +29,6 @@ import { apiError, apiSuccess } from "../common/api-response";
 import type { ActorContext, RequestWithActor } from "../common/request-types";
 import {
   canTransitionJobStatus,
-  getJobStatusLabel,
   getJobStatusTimestampUpdates,
   getServiceTypeLabel,
   isOfficeOnlyJobStatus,
@@ -71,25 +70,14 @@ import { ProfileEntity } from "../database/entities/profile.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
 import { ServiceEntity } from "../database/entities/service.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
+import { startOfLocalDashboardDay } from "./crm-dashboard-time-window";
+import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
 import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
 import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 
 type RelatedValue<T> = T | T[] | null;
-
-type DashboardControlItem = {
-  id: string;
-  jobId: string | null;
-  title: string;
-  customerName: string;
-  addressLabel: string;
-  technicianName: string | null;
-  amountCents: number | null;
-  scheduledFor: Date | null;
-  occurredAt: Date | null;
-  statusLabel: string;
-};
 
 type ImportPayload = {
   mode: "preview" | "import";
@@ -149,6 +137,7 @@ export class CrmController {
     private readonly documentPricingService: DocumentPricingService,
     private readonly documentSnapshotService: DocumentSnapshotService,
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
+    private readonly crmOfficeDashboardService: CrmOfficeDashboardService,
   ) {}
 
   private requireActor(request: RequestWithActor) {
@@ -245,96 +234,6 @@ export class CrmController {
     }
 
     return value ?? null;
-  }
-
-  private buildJobControlItem(job: JobEntity): DashboardControlItem {
-    const customer = this.relationValue(job.customer as RelatedValue<CustomerEntity>);
-    const technician = this.relationValue(job.technician as RelatedValue<TechnicianEntity>);
-
-    return {
-      id: job.id,
-      jobId: job.id,
-      title: job.title,
-      customerName: customer?.full_name ?? "Customer pending",
-      addressLabel: formatAddress(
-        job.service_address_line_1,
-        job.service_address_line_2,
-        job.service_city,
-        job.service_state_or_region,
-        job.service_postal_code,
-      ),
-      technicianName: technician?.display_name ?? null,
-      amountCents: null,
-      scheduledFor: job.scheduled_for,
-      occurredAt: job.completed_at ?? job.updated_at,
-      statusLabel: getJobStatusLabel(job.status),
-    };
-  }
-
-  private buildQuoteControlItem(quote: QuoteEntity): DashboardControlItem {
-    const job = this.relationValue(quote.job as RelatedValue<JobEntity>);
-    const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
-    const technician = this.relationValue(job?.technician as RelatedValue<TechnicianEntity>);
-
-    return {
-      id: quote.id,
-      jobId: job?.id ?? quote.job_id,
-      title: job?.title ?? "Quote waiting approval",
-      customerName: customer?.full_name ?? "Customer pending",
-      addressLabel: job
-        ? formatAddress(
-          job.service_address_line_1,
-          job.service_address_line_2,
-          job.service_city,
-          job.service_state_or_region,
-          job.service_postal_code,
-        )
-        : "Address unavailable",
-      technicianName: technician?.display_name ?? null,
-      amountCents: quote.price_cents,
-      scheduledFor: job?.scheduled_for ?? null,
-      occurredAt: quote.sent_at,
-      statusLabel: "Waiting Approval",
-    };
-  }
-
-  private buildInvoiceControlItem(invoice: InvoiceEntity): DashboardControlItem {
-    const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
-    const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
-    const technician = this.relationValue(job?.technician as RelatedValue<TechnicianEntity>);
-
-    return {
-      id: invoice.id,
-      jobId: job?.id ?? invoice.job_id,
-      title: job?.title ?? "Invoice awaiting payment",
-      customerName: customer?.full_name ?? "Customer pending",
-      addressLabel: job
-        ? formatAddress(
-          job.service_address_line_1,
-          job.service_address_line_2,
-          job.service_city,
-          job.service_state_or_region,
-          job.service_postal_code,
-        )
-        : "Address unavailable",
-      technicianName: technician?.display_name ?? null,
-      amountCents: invoice.amount_cents,
-      scheduledFor: job?.scheduled_for ?? null,
-      occurredAt: invoice.issued_at,
-      statusLabel: "Unpaid",
-    };
-  }
-
-  private startOfToday() {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    return date;
-  }
-
-  private endOfToday() {
-    const date = new Date();
-    date.setHours(23, 59, 59, 999);
-    return date;
   }
 
   private async loadJobDetail(jobId: string, organizationId: string) {
@@ -438,188 +337,8 @@ export class CrmController {
     );
     const organizationId = this.requireActiveOrganizationId(actor);
 
-    try {
-      const todayStart = this.startOfToday();
-      const todayEnd = this.endOfToday();
-
-      const [
-        newLeadCount,
-        contactedLeadCount,
-        activeJobCount,
-        todayJobCount,
-        unpaidInvoiceCount,
-        leads,
-        jobs,
-        technicians,
-        services,
-        quotesWaitingApproval,
-        unpaidInvoices,
-        contactedJobs,
-        todaysScheduledJobs,
-        recentCompletedJobs,
-      ] = await Promise.all([
-        this.leadsRepository.countBy({ status: "new_lead", organization_id: organizationId }),
-        this.leadsRepository.countBy({ status: "contacted", organization_id: organizationId }),
-        this.jobsRepository.count({
-          where: {
-            organization_id: organizationId,
-            status: In(openJobStatuses),
-          },
-        }),
-        this.jobsRepository
-          .createQueryBuilder("job")
-          .where("job.organization_id = :organizationId", { organizationId })
-          .andWhere("job.scheduled_for >= :todayStart", { todayStart })
-          .andWhere("job.scheduled_for <= :todayEnd", { todayEnd })
-          .andWhere("job.status != :status", { status: "cancelled" })
-          .getCount(),
-        this.invoicesRepository.countBy({ status: "unpaid", organization_id: organizationId }),
-        this.leadsRepository.find({
-          where: {
-            organization_id: organizationId,
-            status: Not("converted"),
-          },
-          order: {
-            created_at: "DESC",
-          },
-          take: 12,
-        }),
-        this.jobsRepository.find({
-          where: {
-            organization_id: organizationId,
-            status: Not("cancelled"),
-          },
-          relations: {
-            customer: true,
-            service: true,
-            technician: true,
-            quote: true,
-            invoice: true,
-          },
-          order: {
-            scheduled_for: "ASC",
-            created_at: "DESC",
-          },
-          take: 60,
-        }),
-        this.techniciansRepository.find({
-          where: {
-            organization_id: organizationId,
-          },
-          order: {
-            display_name: "ASC",
-          },
-        }),
-        this.servicesRepository.find({
-          where: {
-            organization_id: organizationId,
-            is_active: true,
-          },
-          order: {
-            sort_position: "ASC",
-          },
-        }),
-        this.quotesRepository.find({
-          where: {
-            organization_id: organizationId,
-            status: "sent",
-          },
-          relations: {
-            job: {
-              customer: true,
-              technician: true,
-            },
-          },
-          order: {
-            sent_at: "ASC",
-          },
-          take: 4,
-        }),
-        this.invoicesRepository.find({
-          where: {
-            organization_id: organizationId,
-            status: "unpaid",
-          },
-          relations: {
-            job: {
-              customer: true,
-              technician: true,
-            },
-          },
-          order: {
-            issued_at: "ASC",
-          },
-          take: 4,
-        }),
-        this.jobsRepository.find({
-          where: {
-            organization_id: organizationId,
-            status: "contacted",
-          },
-          relations: {
-            customer: true,
-            technician: true,
-          },
-          order: {
-            updated_at: "DESC",
-          },
-          take: 4,
-        }),
-        this.jobsRepository
-          .createQueryBuilder("job")
-          .leftJoinAndSelect("job.customer", "customer")
-          .leftJoinAndSelect("job.technician", "technician")
-          .where("job.organization_id = :organizationId", { organizationId })
-          .andWhere("job.scheduled_for >= :todayStart", { todayStart })
-          .andWhere("job.scheduled_for <= :todayEnd", { todayEnd })
-          .andWhere("job.status != :cancelledStatus", { cancelledStatus: "cancelled" })
-          .orderBy("job.scheduled_for", "ASC")
-          .limit(4)
-          .getMany(),
-        this.jobsRepository.find({
-          where: {
-            organization_id: organizationId,
-            status: In(["completed", "paid"]),
-          },
-          relations: {
-            customer: true,
-            technician: true,
-          },
-          order: {
-            completed_at: "DESC",
-          },
-          take: 4,
-        }),
-      ]);
-
-      return apiSuccess({
-        summary: {
-          newLeads: newLeadCount,
-          contactedLeads: contactedLeadCount,
-          activeJobs: activeJobCount,
-          jobsScheduledToday: todayJobCount,
-          unpaidInvoices: unpaidInvoiceCount,
-        },
-        controls: {
-          quotesWaitingApproval: quotesWaitingApproval.map((item) => this.buildQuoteControlItem(item)),
-          unpaidInvoices: unpaidInvoices.map((item) => this.buildInvoiceControlItem(item)),
-          followUpsNeeded: contactedJobs.map((item) => this.buildJobControlItem(item)),
-          todaysScheduledJobs: todaysScheduledJobs.map((item) => this.buildJobControlItem(item)),
-          recentCompletedJobs: recentCompletedJobs.map((item) => this.buildJobControlItem(item)),
-        },
-        leads,
-        jobs,
-        technicians,
-        services,
-      });
-    } catch (error) {
-      apiError(
-        500,
-        "dashboard_load_failed",
-        "The office dashboard data could not be loaded.",
-        error,
-      );
-    }
+    const snapshot = await this.crmOfficeDashboardService.loadOfficeDashboardSnapshot(organizationId);
+    return apiSuccess(snapshot);
   }
 
   @Get("technician/dashboard")
@@ -628,7 +347,7 @@ export class CrmController {
     const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
-      const todayStart = this.startOfToday();
+      const todayStart = startOfLocalDashboardDay();
 
       const [openCount, inProgressCount, waitingApprovalCount, completedTodayCount, jobs] = await Promise.all([
         this.jobsRepository.count({

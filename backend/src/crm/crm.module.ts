@@ -20,6 +20,7 @@ import { ServiceEntity } from "../database/entities/service.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
 import { LanguageStoreModule } from "../language-store/language-store.module";
 import { CrmController } from "./crm.controller";
+import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
 import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
@@ -48,6 +49,7 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
     ]),
   ],
   controllers: [CrmController],
-  providers: [DocumentPricingService, DocumentSnapshotService, InvoicePaymentLedgerService],
+  providers: [DocumentPricingService, DocumentSnapshotService, InvoicePaymentLedgerService, CrmOfficeDashboardService],
+  exports: [CrmOfficeDashboardService],
 })
 export class CrmModule {}
