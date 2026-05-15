@@ -171,8 +171,10 @@ The next phase is not "redo SaaS architecture." The next phase is controlled lau
 Use the companion docs this way:
 
 - `WizField_Engineering_Closeout_and_Verification.md` for final engineering evidence and locked closeout truth
+- `WizField_AI_Master_Source_of_Truth.md` for shipped AI program truth (Phases 0–4)
+- `WizField_AI_Engineering_Closeout_and_Gap_Register.md` for AI verification evidence and gap closure
 - `WizField_Owner_Launch_Activation_Checklist.md` for owner-managed launch activation items
-- `WizField_Reverification_Runbook.md` for future production-like reruns and operator replay
+- `WizField_Reverification_Runbook.md` for future production-like reruns and operator replay (see §6B for AI)
 
 Short handoff summary:
 

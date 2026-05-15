@@ -171,6 +171,78 @@ Stop the Language Store portion of the run if any of the following occurs:
 - draft, foreign-org, foreign-document, or field-mismatched translation records can enter customer-facing snapshots
 - a new Language Store verification failure would require schema expansion, billing-model redesign, or product-scope widening to explain
 
+## 6B. AI Program Phases 0–4 reverification addendum
+
+Use this addendum when the shipped AI program (foundation through Copilot outcome loop) must be replayed without reopening Gate 11–14 foundation decisions.
+
+Product truth: `docs/WizField_AI_Master_Source_of_Truth.md`. Evidence matrices: `docs/WizField_AI_Engineering_Closeout_and_Gap_Register.md`.
+
+### AI prerequisites
+
+- backend migrations applied in the target environment
+- MySQL smoke principal with `CREATE DATABASE` / `DROP DATABASE` when running isolation smokes locally
+- controlled test org(s) with `calls.view` and `messaging.send` roles for manual Copilot send replay (optional)
+
+### AI flag bundle (staging / local replay)
+
+Set enabling tokens (`true` / `1` / `yes` / `on`) for the surfaces under test:
+
+```text
+AI_FOUNDATION_ENABLED=true
+AI_BRAIN_V1_ENABLED=true
+AI_VOICE_INTAKE_FOUNDATION_ENABLED=true
+AI_VOICE_INTAKE_LIVE_PILOT_ENABLED=true
+AI_VOICE_INTAKE_LIVE_PILOT_OWNED_PHONE_IDS=<comma-separated owned_phone_numbers.id>
+AI_OPERATOR_COPILOT_ENABLED=true
+AI_COPILOT_CALLS_SURFACE_ENABLED=true
+AI_COPILOT_CUSTOMER_SMS_DRAFT_ENABLED=true
+AI_COPILOT_CUSTOMER_SMS_GUARDED_SEND_ENABLED=true
+AI_COPILOT_CUSTOMER_SMS_OUTCOME_TRACKING_ENABLED=true
+```
+
+Post-call webhook finalize requires `AI_FOUNDATION_ENABLED` + `AI_VOICE_INTAKE_FOUNDATION_ENABLED` only (not live pilot). See AI SoT §4.
+
+### AI exact command set
+
+Run from repo root:
+
+```text
+npm.cmd run migration:run --workspace backend
+npm.cmd run schema:verify --workspace backend
+npm.cmd run telephony-messaging:isolation:smoke --workspace backend
+npm.cmd run operator-copilot:isolation:smoke --workspace backend
+npm.cmd run operator-copilot:contract-check --workspace backend
+npm.cmd run build --workspace backend
+npm.cmd run build --workspace frontend
+git status --short
+```
+
+### AI replay expectations
+
+- telephony smoke **9a–9d** pass (voice ingest + post-call audit)
+- copilot smoke **C1–C5** pass (draft, foreign-org negative, guarded send, outcomes)
+- contract-check confirms Copilot uses `TxtService` only
+- manual (optional): CSR with `messaging.send` confirms send modal on `/calls`; viewer cannot access `/calls`
+
+### AI result logging fields
+
+| Field | Value |
+|---|---|
+| Telephony messaging smoke | PASS / FAIL |
+| Operator Copilot isolation smoke | PASS / FAIL |
+| Operator Copilot contract-check | PASS / FAIL |
+| AI build/schema closeout | PASS / FAIL |
+| AI manual notes |  |
+
+### AI stop conditions
+
+Stop the AI portion if:
+
+- copilot smoke or telephony **9d** fails after flag bundle is confirmed
+- guarded send succeeds without `messaging.send`
+- outcome tracking triggers outbound send
+- verification failure would require a new AI product phase to explain
+
 ## 7. Multi-org UX verification replay
 
 Replay the Gate 11 contract:

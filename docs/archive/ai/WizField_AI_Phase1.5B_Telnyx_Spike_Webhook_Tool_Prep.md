@@ -1,3 +1,6 @@
+> **Status: HISTORICAL** — Superseded by `docs/WizField_AI_Master_Source_of_Truth.md` and
+> `docs/WizField_AI_Engineering_Closeout_and_Gap_Register.md`. Preserved for audit trail only.
+
 # Phase 1.5B Telnyx spike — §6 Webhook tool validation (execution prep)
 
 **Type:** Owner execution preparation only — **no WizField product implementation**, no CRM, no new endpoints in this repo.

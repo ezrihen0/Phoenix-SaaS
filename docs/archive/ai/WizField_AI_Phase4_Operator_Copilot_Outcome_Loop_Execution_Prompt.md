@@ -1,3 +1,6 @@
+> **Status: HISTORICAL** — Superseded by `docs/WizField_AI_Master_Source_of_Truth.md` and
+> `docs/WizField_AI_Engineering_Closeout_and_Gap_Register.md`. Preserved for audit trail only.
+
 # WizField AI — Phase 4 Operator Copilot Outcome Loop V1 (Execution Prompt)
 
 **Status:** **Implemented** in repo; enable with `AI_COPILOT_CUSTOMER_SMS_OUTCOME_TRACKING_ENABLED`.  

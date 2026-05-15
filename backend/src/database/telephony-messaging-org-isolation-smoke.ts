@@ -203,6 +203,7 @@ function buildTelephonyStack(dataSource: DataSource) {
     dataSource.getRepository(OrganizationEntity),
   );
   const voiceIntakePostCall = new VoiceIntakePostCallService(
+    stubConfig,
     dataSource,
     recentCallsRepository,
     customersRepository,
@@ -977,6 +978,11 @@ async function runTelephonyIsolationChecks(
    * (artifact vs lead). Resets P3-affected rows from 9a/9b first for deterministic assertions.
    */
   await expectPass(summary, "9d — P3 voice post-call audit + hybrid CRM (artifact + lead)", async () => {
+    const priorFoundation = process.env.AI_FOUNDATION_ENABLED;
+    const priorVoiceFoundation = process.env.AI_VOICE_INTAKE_FOUNDATION_ENABLED;
+    process.env.AI_FOUNDATION_ENABLED = "true";
+    process.env.AI_VOICE_INTAKE_FOUNDATION_ENABLED = "true";
+
     const p3CallControlId = `v3:p3cc-${seed.callAId.replace(/-/g, "").slice(0, 12)}`;
 
     await dataSource.query(
@@ -1123,6 +1129,17 @@ async function runTelephonyIsolationChecks(
     }
     if (trace2.hybrid_crm.created_lead_id !== callAfter[0].matched_lead_id) {
       throw new Error("created_lead_id should match recent_calls.matched_lead_id.");
+    }
+
+    if (priorFoundation === undefined) {
+      delete process.env.AI_FOUNDATION_ENABLED;
+    } else {
+      process.env.AI_FOUNDATION_ENABLED = priorFoundation;
+    }
+    if (priorVoiceFoundation === undefined) {
+      delete process.env.AI_VOICE_INTAKE_FOUNDATION_ENABLED;
+    } else {
+      process.env.AI_VOICE_INTAKE_FOUNDATION_ENABLED = priorVoiceFoundation;
     }
 
     return {

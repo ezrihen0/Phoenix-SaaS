@@ -1,3 +1,6 @@
+> **Status: HISTORICAL** — Superseded by `docs/WizField_AI_Master_Source_of_Truth.md` and
+> `docs/WizField_AI_Engineering_Closeout_and_Gap_Register.md`. Preserved for audit trail only.
+
 # Phase 2 — Operator Copilot verification matrix
 
 **Scope:** Calls-surface SMS draft Copilot (`ai_operator_drafts`, `/api/ai/copilot/calls/sms-draft/*`, `/calls` UX).  

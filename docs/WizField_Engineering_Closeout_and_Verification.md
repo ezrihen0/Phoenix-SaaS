@@ -172,6 +172,21 @@ This closeout does not add:
 - The shared billing-account migration and billing-provider-field migration applied after it successfully.
 - Any future edit to `1778630000000-organization-billing.ts` requires a separate owner decision and is outside this closeout record.
 
+## 12. AI Program Phases 0–4 addendum
+
+This addendum records the bounded AI program closeout and gap-closure pass only. It does not reopen Gate 11–14 statuses.
+
+- Product and flag truth: [`WizField_AI_Master_Source_of_Truth.md`](WizField_AI_Master_Source_of_Truth.md)
+- Evidence, verification matrices, and gap register: [`WizField_AI_Engineering_Closeout_and_Gap_Register.md`](WizField_AI_Engineering_Closeout_and_Gap_Register.md)
+- Production replay: [`WizField_Reverification_Runbook.md`](WizField_Reverification_Runbook.md) §6B
+
+| Evidence | Result |
+|----------|--------|
+| `telephony-messaging:isolation:smoke` (9a–9d) | PASS |
+| `operator-copilot:isolation:smoke` | PASS |
+| `operator-copilot:contract-check` | PASS |
+| Backend / frontend build | PASS |
+
 ## Closeout statement
 
 WizField completed the internal engineering foundation through Gate 14 with:

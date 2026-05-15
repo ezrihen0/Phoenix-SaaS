@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
 
 import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, Repository } from "typeorm";
 
+import {
+  resolveAiFoundationEnabled,
+  resolveAiVoiceIntakeFoundationEnabled,
+} from "../ai/ai-environment";
 import {
   AI_FEATURE_CALL_INTAKE_VOICE_TELNYX_V1,
   AI_MAX_SERIALIZED_TOOL_OUTPUT_BYTES,
@@ -31,6 +36,7 @@ export class VoiceIntakePostCallService {
   private readonly logger = new Logger(VoiceIntakePostCallService.name);
 
   constructor(
+    private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
     @InjectRepository(RecentCallEntity)
     private readonly recentCallsRepo: Repository<RecentCallEntity>,
@@ -42,11 +48,35 @@ export class VoiceIntakePostCallService {
     private readonly runsRepo: Repository<AiRecommendationRunEntity>,
   ) {}
 
+  private mergedEnv(name: string): string | undefined {
+    const rawEnv = process.env[name];
+    const rawConfig = this.configService.get<string | undefined>(name);
+    if (typeof rawEnv === "string" && rawEnv.trim() !== "") {
+      return rawEnv;
+    }
+    return rawConfig ?? rawEnv ?? undefined;
+  }
+
+  /**
+   * Post-call finalize requires foundation + voice intake foundation only (not live pilot).
+   * Live pilot gates attach/routing; conversations started under pilot may finalize after pilot is disabled.
+   */
+  private isVoiceIntakeFinalizeEnabled(): boolean {
+    return (
+      resolveAiFoundationEnabled(this.mergedEnv("AI_FOUNDATION_ENABLED"))
+      && resolveAiVoiceIntakeFoundationEnabled(this.mergedEnv("AI_VOICE_INTAKE_FOUNDATION_ENABLED"))
+    );
+  }
+
   /**
    * Phase 1.5B P3 — after Telnyx conversation webhook enrichment, persist `ai_recommendation_runs` + optional CRM lead.
    */
   async maybeFinalizeFromTelnyxEvent(recentCallId: string, eventType: string | null): Promise<void> {
     if (!this.shouldFinalizeFromTelnyxEvent(eventType)) {
+      return;
+    }
+
+    if (!this.isVoiceIntakeFinalizeEnabled()) {
       return;
     }
 

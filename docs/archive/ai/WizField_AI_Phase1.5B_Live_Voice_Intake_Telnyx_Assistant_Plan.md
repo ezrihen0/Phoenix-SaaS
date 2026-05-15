@@ -1,3 +1,6 @@
+> **Status: HISTORICAL** — Superseded by `docs/WizField_AI_Master_Source_of_Truth.md` and
+> `docs/WizField_AI_Engineering_Closeout_and_Gap_Register.md`. Preserved for audit trail only.
+
 # WizField AI — Phase 1.5B Live Voice Intake (Telnyx AI Assistants)
 
 **Status:** Planning (not implementation)  

@@ -1,6 +1,6 @@
 # WizField AI — Sales Enablement Risk Register
 
-**Purpose:** Keep demos, videos, website copy, and partner conversations **honest** against current product truth. Aligns with [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md), [WizField_Growth_Center_Source_of_Truth.md](WizField_Growth_Center_Source_of_Truth.md), and the **WizField AI Master Program Plan** (strategic roadmap).
+**Purpose:** Keep demos, videos, website copy, and partner conversations **honest** against current product truth. Aligns with [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md), [WizField_AI_Master_Source_of_Truth.md](WizField_AI_Master_Source_of_Truth.md), and [WizField_Growth_Center_Source_of_Truth.md](WizField_Growth_Center_Source_of_Truth.md).
 
 **How to use:** Before any external AI messaging, scan **Forbidden now** and **Allowed with qualifier**. If unchecked, do not ship copy.
 
@@ -13,7 +13,7 @@
 | F1 | “AI reads all your portal conversations / customer chat in the portal” | **No portal conversation analytics pipeline** is defined in repo truth; portal is token/magic-link/session scoped — add product + logging first |
 | F2 | “AI auto-posts to Google / Facebook / Meta for you” | **Violates Growth Center rule:** publishing is **explicit** via publish jobs — [Growth Center SoT §1](WizField_Growth_Center_Source_of_Truth.md) |
 | F3 | “Autonomous scheduling / dispatch — AI moves your techs” | **Out of bounds** for early phases; dispatch is human-operated product; AI may **suggest**, not execute |
-| F4 | “Self-learning AI that gets smarter every day automatically” | **No outcome loop / eval product** to support this claim yet — use “we log feedback and improve releases” at most |
+| F4 | “Self-learning AI that gets smarter every day automatically” | Phase 4 adds **read-only** SMS reply observation in-thread — **not** autonomous learning, model retraining, or causal ROI claims — use A6 wording instead |
 | F5 | “Guaranteed ROI / guaranteed lead volume from AI” | Unsupported; field-service variance too high |
 | F6 | “AI updates your pricebook / pricing automatically” | Not in Brain V1 or foundation — pricing is high-risk and permission-gated |
 | F7 | “AI sends SMS/email to customers without you” | Phase 2+ requires **explicit send** confirmation — no silent outbound |
@@ -32,7 +32,7 @@
 | A3 | “Follow-up reminders” | “Highlights records by status — **you** decide when to reach out.” |
 | A4 | “Growth suggestions” | “Drafts or opportunities still require **your review**; WizField does not auto-publish.” |
 | A5 | “Voice intake (pilot)” | “**Pilot program** — answers/clarifies under script; escalates humans; **no** guaranteed price/time promises.” |
-| A6 | “Gets better over time” | “We can improve recommendations as we measure outcomes — **not** autonomous self-learning magic.” |
+| A6 | “Gets better over time” / “Did the customer reply?” | “Copilot can show **whether an inbound SMS arrived in the same thread after your sent message** (observation only). Product improvements come from **releases we ship**, not magic self-learning.” |
 
 ---
 
@@ -74,6 +74,6 @@ When comparing to generic CRM AI:
 
 ## References
 
-- [WizField_AI_Phase0_Foundation_Execution_Prompt.md](WizField_AI_Phase0_Foundation_Execution_Prompt.md)
+- [WizField_AI_Master_Source_of_Truth.md](WizField_AI_Master_Source_of_Truth.md)
 - [WizField_AI_Brain_V1_Home_Intelligence_SPEC.md](WizField_AI_Brain_V1_Home_Intelligence_SPEC.md)
 - [docs/AI_WORKFLOW_RULES.md](AI_WORKFLOW_RULES.md)

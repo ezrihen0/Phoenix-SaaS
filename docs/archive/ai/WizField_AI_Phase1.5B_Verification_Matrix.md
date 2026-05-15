@@ -1,3 +1,6 @@
+> **Status: HISTORICAL** — Superseded by `docs/WizField_AI_Master_Source_of_Truth.md` and
+> `docs/WizField_AI_Engineering_Closeout_and_Gap_Register.md`. Preserved for audit trail only.
+
 # Phase 1.5B — Verification matrix (closeout)
 
 **Scope:** Telnyx AI Assistant bridge (live voice intake), aligned with [Execution Prompt](./WizField_AI_Phase1.5B_Execution_Prompt_Telnyx_Assistant_Bridge.md) and [Live Voice Intake Plan](./WizField_AI_Phase1.5B_Live_Voice_Intake_Telnyx_Assistant_Plan.md).  

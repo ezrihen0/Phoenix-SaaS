@@ -1,3 +1,6 @@
+> **Status: HISTORICAL** — Superseded by `docs/WizField_AI_Master_Source_of_Truth.md` and
+> `docs/WizField_AI_Engineering_Closeout_and_Gap_Register.md`. Preserved for audit trail only.
+
 # WizField AI — Phase 1.5B Telnyx Spike Runbook
 
 **Purpose:** Owner-executable **pre-coding capability validation** for Phase 1.5B live voice intake (Telnyx AI Assistants). Not implementation.
