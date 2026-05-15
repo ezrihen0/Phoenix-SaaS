@@ -96,10 +96,19 @@ export class TxtController {
       apiError(400, "messaging_txt_body_required", "TXT message body is required.");
     }
 
-    return apiSuccess(await this.txtService.sendMessage({
+    const organizationId = request.actor?.organization_id?.trim();
+
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required to send TXT messages.");
+    }
+
+    const { thread } = await this.txtService.sendMessage({
       conversationId: payload.conversationId,
       body: payload.body,
       sentByUserId: request.actor?.user.id ?? null,
-    }));
+      organizationIdForCustomerScope: organizationId,
+    });
+
+    return apiSuccess(thread);
   }
 }

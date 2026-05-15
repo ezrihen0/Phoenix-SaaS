@@ -199,7 +199,13 @@ export class TxtService {
     return this.toConversationShortLink(conversation);
   }
 
-  async sendMessage(payload: { conversationId: string; body: string; sentByUserId?: string | null }) {
+  async sendMessage(payload: {
+    conversationId: string;
+    body: string;
+    sentByUserId?: string | null;
+    organizationIdForCustomerScope?: string | null;
+    outboundRawPayloadExtras?: Record<string, unknown> | null;
+  }): Promise<{ thread: MessagingTxtThreadResponse; outboundTxtMessageId: string }> {
     const parsed = this.parseConversationId(payload.conversationId);
     const messageBody = payload.body.trim();
 
@@ -228,7 +234,7 @@ export class TxtService {
       isActive: true,
     });
 
-    const target = await this.resolveConversationTarget(parsed);
+    const target = await this.resolveConversationTarget(parsed, payload.organizationIdForCustomerScope);
     const conversation = await this.txtConversationsService.findOrCreateConversation({
       customerId: target.customerId,
       customerPhoneNumber: target.phoneNumber,
@@ -237,6 +243,13 @@ export class TxtService {
       title: target.displayName,
       displayName: target.displayName,
     });
+
+    const baseRawPayload = {
+      source: "api/messaging/txt/send",
+      legacyConversationId: payload.conversationId,
+      sentByUserId: payload.sentByUserId ?? null,
+      ...(payload.outboundRawPayloadExtras ?? {}),
+    };
 
     const pendingMessage = await this.txtMessagesService.persistMessage({
       conversationId: conversation.id,
@@ -251,11 +264,7 @@ export class TxtService {
       toNumberNormalized: target.phoneNumberNormalized,
       body: messageBody,
       status: "pending",
-      rawPayload: {
-        source: "api/messaging/txt/send",
-        legacyConversationId: payload.conversationId,
-        sentByUserId: payload.sentByUserId ?? null,
-      },
+      rawPayload: baseRawPayload,
     });
 
     try {
@@ -288,7 +297,8 @@ export class TxtService {
         occurredAt: eventTime,
       });
 
-      return this.listConversationMessages(payload.conversationId);
+      const thread = await this.listConversationMessages(payload.conversationId);
+      return { thread, outboundTxtMessageId: pendingMessage.id };
     } catch (error) {
       await this.txtMessagesService.updateMessageDelivery({
         idOrProviderMessageId: pendingMessage.id,
@@ -540,11 +550,21 @@ export class TxtService {
     apiError(400, "messaging_txt_conversation_invalid", "Conversation id must start with customer: or phone:.");
   }
 
-  private async resolveConversationTarget(parsed: { kind: "customer" | "unknown"; value: string }) {
+  private async resolveConversationTarget(
+    parsed: { kind: "customer" | "unknown"; value: string },
+    organizationIdForCustomerScope?: string | null,
+  ) {
     if (parsed.kind === "customer") {
+      const orgScope = organizationIdForCustomerScope?.trim();
+
+      if (!orgScope) {
+        apiError(400, "messaging_txt_organization_scope_missing", "An active organization is required for customer TXT send.");
+      }
+
       const customer = await this.customersRepository.findOne({
         where: {
           id: parsed.value,
+          organization_id: orgScope,
         },
       });
 

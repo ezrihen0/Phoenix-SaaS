@@ -10,12 +10,13 @@ import {
 } from "typeorm";
 
 import { runtimeTimestampColumnType } from "../database-dialect";
+import { TxtMessageEntity } from "../../messaging/txt/txt-message.entity";
 import { AiRecommendationRunEntity } from "./ai-recommendation-run.entity";
 import { OrganizationEntity } from "./organization.entity";
 import { ProfileEntity } from "./profile.entity";
 import { RecentCallEntity } from "./recent-call.entity";
 
-export type AiOperatorDraftStatusKey = "active" | "dismissed";
+export type AiOperatorDraftStatusKey = "active" | "dismissed" | "sent";
 
 @Entity({ name: "ai_operator_drafts" })
 @Index("IDX_ai_operator_drafts_org_recent_type", ["organization_id", "recent_call_id", "draft_type"])
@@ -60,6 +61,9 @@ export class AiOperatorDraftEntity {
   @Column({ type: runtimeTimestampColumnType, precision: 6, nullable: true })
   dismissed_at!: Date | null;
 
+  @Column({ type: "varchar", length: 36, nullable: true })
+  outbound_txt_message_id!: string | null;
+
   @CreateDateColumn({ type: runtimeTimestampColumnType, precision: 6 })
   created_at!: Date;
 
@@ -81,4 +85,8 @@ export class AiOperatorDraftEntity {
   @ManyToOne(() => AiRecommendationRunEntity, { onDelete: "SET NULL", nullable: true })
   @JoinColumn({ name: "recommendation_run_id", referencedColumnName: "id" })
   recommendation_run?: AiRecommendationRunEntity | null;
+
+  @ManyToOne(() => TxtMessageEntity, { onDelete: "SET NULL", nullable: true })
+  @JoinColumn({ name: "outbound_txt_message_id", referencedColumnName: "id" })
+  outbound_txt_message?: TxtMessageEntity | null;
 }

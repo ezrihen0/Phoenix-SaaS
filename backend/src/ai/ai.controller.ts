@@ -86,4 +86,14 @@ export class AiController {
     const payload = await this.aiOperatorCopilotService.dismissSmsDraft(request, draftId);
     return apiSuccess(payload);
   }
+
+  /**
+   * Phase 3 — guarded send (human-confirmed on client). Gates: Phase 2 Copilot flags +
+   * `AI_COPILOT_CUSTOMER_SMS_GUARDED_SEND_ENABLED` + `calls.view` + `messaging.send`.
+   */
+  @Post("copilot/calls/sms-draft/:draftId/send")
+  async copilotSendSmsDraft(@Req() request: RequestWithActor, @Param("draftId") draftId: string) {
+    const payload = await this.aiOperatorCopilotService.executeGuardedSmsSend(request, draftId);
+    return apiSuccess(payload);
+  }
 }

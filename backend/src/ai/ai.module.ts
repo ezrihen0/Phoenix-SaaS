@@ -3,7 +3,9 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthModule } from "../auth/auth.module";
 import { CrmModule } from "../crm/crm.module";
+import { CustomerEntity } from "../database/entities/customer.entity";
 import { AiOperatorDraftEntity } from "../database/entities/ai-operator-draft.entity";
+import { MessagingModule } from "../messaging/messaging.module";
 import { AiRecommendationRunEntity } from "../database/entities/ai-recommendation-run.entity";
 import { RecentCallEntity } from "../database/entities/recent-call.entity";
 import { AiBrainBriefService } from "./ai-brain-brief.service";
@@ -23,7 +25,8 @@ import { BrainRulesEngine } from "./brain-rules.engine";
   imports: [
     AuthModule,
     CrmModule,
-    TypeOrmModule.forFeature([AiRecommendationRunEntity, RecentCallEntity, AiOperatorDraftEntity]),
+    MessagingModule,
+    TypeOrmModule.forFeature([AiRecommendationRunEntity, RecentCallEntity, AiOperatorDraftEntity, CustomerEntity]),
   ],
   controllers: [AiController],
   providers: [

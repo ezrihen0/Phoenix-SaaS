@@ -689,7 +689,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                                 {negativeSentiment ? <span>Negative AI sentiment</span> : null}
                                 {!activeCallbackTask && !recoveryInMotion ? <span>{call.aiSentiment ?? formatVoicemailStatusLabel(call.voicemailStatus ?? "pending")}</span> : null}
                               </div>
-                              <CallsCopilotSmsDraft recentCallId={call.id} />
+                              <CallsCopilotSmsDraft recentCallId={call.id} hasMessagingSendPermission={session.permissions.includes("messaging.send")} />
                             </td>
                           </tr>
                         );
@@ -801,7 +801,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                               {voiceHybridHint ? <p className="text-[color:var(--text-secondary)]">{voiceHybridHint}</p> : null}
                               <p>Next action: {resolvedCallbackTask ? "Callback resolved." : recoveryInMotion && call.queueCallbackRequested ? "Callback queued" : operationalState.nextAction}</p>
                             </div>
-                            <CallsCopilotSmsDraft recentCallId={call.id} />
+                            <CallsCopilotSmsDraft recentCallId={call.id} hasMessagingSendPermission={session.permissions.includes("messaging.send")} />
                           </div>
                         </div>
                       </article>
@@ -916,7 +916,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                           <p className="mt-2">{call.aiSummary ?? call.recordingStatus ?? "Pending review"}</p>
                           {voiceHybridHint ? <p className="mt-2 text-xs text-[color:var(--text-secondary)]">{voiceHybridHint}</p> : null}
                           <p className="mt-3 text-xs text-[color:var(--text-muted)]">{call.aiSentiment ?? (resolvedCallbackTask ? "Callback resolved" : recoveryInMotion && call.queueCallbackRequested ? "Callback queued" : "No follow-up flag")}</p>
-                          <CallsCopilotSmsDraft recentCallId={call.id} />
+                          <CallsCopilotSmsDraft recentCallId={call.id} hasMessagingSendPermission={session.permissions.includes("messaging.send")} />
                         </div>
                       </article>
                     );

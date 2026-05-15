@@ -7,8 +7,11 @@ import { randomUUID } from "crypto";
 import { requirePermission } from "../auth/permissions";
 import { apiError } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
+import { CustomerEntity } from "../database/entities/customer.entity";
 import { AiOperatorDraftEntity, type AiOperatorDraftStatusKey } from "../database/entities/ai-operator-draft.entity";
 import { RecentCallEntity } from "../database/entities/recent-call.entity";
+import { MessagingAccessService } from "../messaging/messaging-access.service";
+import { TxtService } from "../messaging/txt/txt.service";
 import { recentCallBelongsToOrgParams, recentCallBelongsToOrgSql } from "../telephony/telephony-org-scope";
 import { AiAuditService } from "./ai-audit.service";
 import { AiCopilotOpenAiClient } from "./ai-copilot-openai-client.service";
@@ -23,6 +26,7 @@ import {
 import {
   resolveAiCopilotCallsSurfaceEnabled,
   resolveAiCopilotCustomerSmsDraftEnabled,
+  resolveAiCopilotCustomerSmsGuardedSendEnabled,
   resolveAiCopilotLlmEnabled,
   resolveAiFoundationEnabled,
   resolveAiOperatorCopilotEnabled,
@@ -36,6 +40,15 @@ import {
 
 export type CopilotLimitationDto = { code: string; message: string };
 
+export type CopilotSmsSendSurfaceDto = {
+  eligible: boolean;
+  reasonHint: string | null;
+  recipientLabel: string | null;
+  recipientPhoneLast4: string | null;
+  guardedSendEnabled: boolean;
+  hasMessagingSendPermission: boolean;
+};
+
 export type OperatorCopilotSmsDraftDto = {
   draftId: string;
   recentCallId: string;
@@ -47,6 +60,9 @@ export type OperatorCopilotSmsDraftDto = {
   generationPath: "template" | "llm";
   promptVersion: string;
   modelId: string | null;
+  status: AiOperatorDraftStatusKey;
+  outboundTxtMessageId: string | null;
+  sendSurface: CopilotSmsSendSurfaceDto;
 };
 
 export type GenerateSmsDraftBody = { recentCallId?: string };
@@ -70,8 +86,12 @@ export class AiOperatorCopilotService {
     private readonly recentCallsRepo: Repository<RecentCallEntity>,
     @InjectRepository(AiOperatorDraftEntity)
     private readonly draftsRepo: Repository<AiOperatorDraftEntity>,
+    @InjectRepository(CustomerEntity)
+    private readonly customersRepo: Repository<CustomerEntity>,
     private readonly audit: AiAuditService,
     private readonly openAiClient: AiCopilotOpenAiClient,
+    private readonly messagingAccess: MessagingAccessService,
+    private readonly txtService: TxtService,
   ) {}
 
   private mergedEnvPreference(name: string): string | undefined {
@@ -103,6 +123,23 @@ export class AiOperatorCopilotService {
     if (!resolveAiCopilotCustomerSmsDraftEnabled(sms ?? undefined)) {
       apiError(403, "ai_copilot_sms_draft_disabled", "Customer SMS draft workflow is disabled in this environment.");
     }
+  }
+
+  private enforceGuardedSendGate() {
+    this.enforceCopilotGates();
+    const guarded = this.mergedEnvPreference("AI_COPILOT_CUSTOMER_SMS_GUARDED_SEND_ENABLED");
+    if (!resolveAiCopilotCustomerSmsGuardedSendEnabled(guarded ?? undefined)) {
+      apiError(
+        403,
+        "ai_copilot_guarded_send_disabled",
+        "Copilot guarded SMS send is disabled in this environment.",
+      );
+    }
+  }
+
+  private phoneLast4(phoneRaw: string | null | undefined): string | null {
+    const digits = String(phoneRaw ?? "").replace(/\D/g, "");
+    return digits.length >= 4 ? digits.slice(-4) : null;
   }
 
   private requireActiveOrganizationIdFromActor(actorOrgId: string | null | undefined) {
@@ -257,7 +294,7 @@ export class AiOperatorCopilotService {
     ].join("\n");
   }
 
-  private mapDraft(entity: AiOperatorDraftEntity): OperatorCopilotSmsDraftDto {
+  private mapDraftCore(entity: AiOperatorDraftEntity): Omit<OperatorCopilotSmsDraftDto, "sendSurface"> {
     let limitations: CopilotLimitationDto[] = [];
     try {
       limitations = JSON.parse(entity.limitations_json) as CopilotLimitationDto[];
@@ -284,7 +321,144 @@ export class AiOperatorCopilotService {
       generationPath: entity.model_id ? "llm" : "template",
       promptVersion: entity.prompt_version,
       modelId: entity.model_id,
+      status: entity.status,
+      outboundTxtMessageId: entity.outbound_txt_message_id,
     };
+  }
+
+  private async buildSendSurface(
+    request: RequestWithActor,
+    organizationId: string,
+    call: RecentCallEntity | null,
+    draft: AiOperatorDraftEntity,
+  ): Promise<CopilotSmsSendSurfaceDto> {
+    const guarded = resolveAiCopilotCustomerSmsGuardedSendEnabled(
+      this.mergedEnvPreference("AI_COPILOT_CUSTOMER_SMS_GUARDED_SEND_ENABLED"),
+    );
+    const canMsg = this.messagingAccess.canSendMessage(request.actor);
+
+    if (draft.status === "sent") {
+      return {
+        eligible: false,
+        reasonHint: "This SMS draft was already sent.",
+        recipientLabel: null,
+        recipientPhoneLast4: null,
+        guardedSendEnabled: guarded,
+        hasMessagingSendPermission: canMsg,
+      };
+    }
+
+    if (draft.status !== "active") {
+      return {
+        eligible: false,
+        reasonHint: "Draft is no longer available to send.",
+        recipientLabel: null,
+        recipientPhoneLast4: null,
+        guardedSendEnabled: guarded,
+        hasMessagingSendPermission: canMsg,
+      };
+    }
+
+    if (!guarded) {
+      return {
+        eligible: false,
+        reasonHint: "Sending from Copilot is disabled in this environment.",
+        recipientLabel: null,
+        recipientPhoneLast4: null,
+        guardedSendEnabled: false,
+        hasMessagingSendPermission: canMsg,
+      };
+    }
+
+    if (!canMsg) {
+      return {
+        eligible: false,
+        reasonHint: "You need permission to send TXT messages (messaging.send).",
+        recipientLabel: null,
+        recipientPhoneLast4: null,
+        guardedSendEnabled: guarded,
+        hasMessagingSendPermission: false,
+      };
+    }
+
+    if (!call) {
+      return {
+        eligible: false,
+        reasonHint: "Recent call could not be resolved.",
+        recipientLabel: null,
+        recipientPhoneLast4: null,
+        guardedSendEnabled: guarded,
+        hasMessagingSendPermission: canMsg,
+      };
+    }
+
+    const matchedId = call.matched_client_id?.trim();
+    if (!matchedId) {
+      return {
+        eligible: false,
+        reasonHint: "No matched customer on this call — match a customer or send from Messaging manually.",
+        recipientLabel: call.matched_client_display_name?.trim() ?? null,
+        recipientPhoneLast4: null,
+        guardedSendEnabled: guarded,
+        hasMessagingSendPermission: canMsg,
+      };
+    }
+
+    const customer = await this.customersRepo.findOne({
+      where: {
+        id: matchedId,
+        organization_id: organizationId,
+      },
+    });
+
+    const label =
+      customer?.full_name?.trim()
+      || customer?.company_name?.trim()
+      || call.matched_client_display_name?.trim()
+      || null;
+
+    if (!customer) {
+      return {
+        eligible: false,
+        reasonHint: "Matched customer was not found for this organization.",
+        recipientLabel: label,
+        recipientPhoneLast4: null,
+        guardedSendEnabled: guarded,
+        hasMessagingSendPermission: canMsg,
+      };
+    }
+
+    const phone = customer.phone?.trim() ?? "";
+    if (!phone) {
+      return {
+        eligible: false,
+        reasonHint: "Customer has no phone number on file for TXT.",
+        recipientLabel: label,
+        recipientPhoneLast4: null,
+        guardedSendEnabled: guarded,
+        hasMessagingSendPermission: canMsg,
+      };
+    }
+
+    return {
+      eligible: true,
+      reasonHint: null,
+      recipientLabel: label,
+      recipientPhoneLast4: this.phoneLast4(phone),
+      guardedSendEnabled: guarded,
+      hasMessagingSendPermission: canMsg,
+    };
+  }
+
+  private async presentSmsDraft(
+    request: RequestWithActor,
+    organizationId: string,
+    entity: AiOperatorDraftEntity,
+  ): Promise<OperatorCopilotSmsDraftDto> {
+    const core = this.mapDraftCore(entity);
+    const call = await this.recentCallsRepo.findOne({ where: { id: entity.recent_call_id } });
+    const sendSurface = await this.buildSendSurface(request, organizationId, call, entity);
+    return { ...core, sendSurface };
   }
 
   async generateSmsDraft(request: RequestWithActor, body: GenerateSmsDraftBody): Promise<OperatorCopilotSmsDraftDto> {
@@ -312,7 +486,7 @@ export class AiOperatorCopilotService {
       },
     });
     if (existing) {
-      return this.mapDraft(existing);
+      return this.presentSmsDraft(request, organizationId, existing);
     }
 
     const call = await this.recentCallsRepo.findOne({ where: { id: recentCallId } });
@@ -398,9 +572,10 @@ export class AiOperatorCopilotService {
       prompt_version: AI_PROMPT_VERSION_OPERATOR_COPILOT_SMS_V1,
       model_id: modelId,
       dismissed_at: null,
+      outbound_txt_message_id: null,
     });
     await this.draftsRepo.save(draft);
-    return this.mapDraft(draft);
+    return this.presentSmsDraft(request, organizationId, draft);
   }
 
   async getActiveSmsDraft(request: RequestWithActor, recentCallIdRaw: string): Promise<OperatorCopilotSmsDraftDto | null> {
@@ -423,7 +598,7 @@ export class AiOperatorCopilotService {
       },
     });
 
-    return existing ? this.mapDraft(existing) : null;
+    return existing ? this.presentSmsDraft(request, organizationId, existing) : null;
   }
 
   async patchSmsDraft(request: RequestWithActor, draftIdRaw: string, body: PatchSmsDraftBody): Promise<OperatorCopilotSmsDraftDto> {
@@ -455,7 +630,98 @@ export class AiOperatorCopilotService {
 
     draft.edited_body = edited;
     await this.draftsRepo.save(draft);
-    return this.mapDraft(draft);
+    return this.presentSmsDraft(request, organizationId, draft);
+  }
+
+  async executeGuardedSmsSend(request: RequestWithActor, draftIdRaw: string): Promise<OperatorCopilotSmsDraftDto> {
+    this.enforceGuardedSendGate();
+    requirePermission(request.actor, "calls.view", "forbidden", "Only office roles can access telephony.");
+    requirePermission(request.actor, "messaging.send", "forbidden", "Only office roles can send TXT messages.");
+
+    const organizationId = this.requireActiveOrganizationIdFromActor(request.actor?.organization_id);
+    const userId = request.actor?.user?.id?.trim();
+    if (!userId) {
+      apiError(400, "user_context_missing", "A signed-in user is required to send TXT messages.");
+    }
+
+    const draftId = draftIdRaw.trim();
+    if (!draftId) {
+      apiError(400, "draft_id_required", "draftId is required.");
+    }
+
+    const draft = await this.draftsRepo.findOne({
+      where: { id: draftId, organization_id: organizationId },
+    });
+
+    if (!draft || draft.status === "dismissed") {
+      apiError(404, "operator_draft_not_found", "Draft not found or not active.");
+    }
+
+    if (draft.status === "sent") {
+      apiError(409, "copilot_send_draft_already_sent", "This SMS draft was already sent.");
+    }
+
+    if (draft.status !== "active") {
+      apiError(404, "operator_draft_not_found", "Draft not found or not active.");
+    }
+
+    await this.assertRecentCallInOrganization(draft.recent_call_id, organizationId);
+
+    const call = await this.recentCallsRepo.findOne({ where: { id: draft.recent_call_id } });
+    if (!call) {
+      apiError(404, "recent_call_not_found", "The recent call could not be found.");
+    }
+
+    const matchedId = call.matched_client_id?.trim();
+    if (!matchedId) {
+      apiError(400, "copilot_send_no_matched_customer", "This call does not have a matched customer for TXT.");
+    }
+
+    const customer = await this.customersRepo.findOne({
+      where: {
+        id: matchedId,
+        organization_id: organizationId,
+      },
+    });
+
+    if (!customer) {
+      apiError(400, "copilot_send_customer_not_found", "Matched customer could not be loaded for TXT.");
+    }
+
+    if (!customer.phone?.trim()) {
+      apiError(400, "copilot_send_customer_phone_invalid", "Customer must have a valid phone number for TXT.");
+    }
+
+    const effective =
+      draft.edited_body?.trim()
+        ? draft.edited_body.trim()
+        : draft.generated_body.trim();
+    if (!effective) {
+      apiError(400, "copilot_send_body_empty", "Draft message body is empty.");
+    }
+
+    try {
+      const { outboundTxtMessageId } = await this.txtService.sendMessage({
+        conversationId: `customer:${customer.id}`,
+        body: effective,
+        sentByUserId: userId,
+        organizationIdForCustomerScope: organizationId,
+        outboundRawPayloadExtras: {
+          ai_operator_draft_id: draft.id,
+          recent_call_id: draft.recent_call_id,
+          source: "api/ai/copilot/calls/sms-draft/send",
+        },
+      });
+
+      draft.status = "sent";
+      draft.outbound_txt_message_id = outboundTxtMessageId;
+      await this.draftsRepo.save(draft);
+
+      return this.presentSmsDraft(request, organizationId, draft);
+    } catch (error) {
+      this.logger.warn(`Copilot guarded send failed draft=${draft.id}: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
   }
 
   async dismissSmsDraft(request: RequestWithActor, draftIdRaw: string): Promise<{ ok: true }> {

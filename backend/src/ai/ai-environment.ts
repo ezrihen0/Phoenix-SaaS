@@ -89,3 +89,13 @@ export function resolveAiCopilotLlmEnabled(raw: string | undefined): boolean {
   const normalized = raw.trim().toLowerCase();
   return ["true", "1", "yes", "on"].includes(normalized);
 }
+
+/** Phase 3 — guarded outbound SMS from `/calls` Copilot behind `messaging.send`. */
+export function resolveAiCopilotCustomerSmsGuardedSendEnabled(raw: string | undefined): boolean {
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(normalized);
+}
