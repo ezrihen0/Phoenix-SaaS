@@ -2,10 +2,13 @@
 # Sign-Up Activation Master Plan
 ## Product + UX Alignment Plan Before Agent Execution
 
+> Current role: subordinate historical planning context only. This file is not the active execution source of truth.
+
 **Document status:** Product decision locked — ready for PLAN-mode agent analysis  
 **Project:** PhoenixOS / WizField SaaS  
+**Current canonical status:** Subordinate historical planning artifact, not active execution truth. Current signup, billing, and owner activation truth is governed by `docs/WizField_Master_Source_of_Truth.md`, `docs/WizField_Engineering_Closeout_and_Verification.md`, and `docs/WizField_Owner_Launch_Activation_Checklist.md`.
 **Scope:** Self-serve sign-up, subscription activation, unpaid gating, and add-business entitlement alignment  
-**Not an execution prompt:** This document defines the product truth and implementation target. The agent should first audit current repo truth against this plan before proposing files or code changes.
+**Not an execution prompt:** This document preserves the original signup-activation planning target for context. It must not override current canonical SoT or closeout evidence.
 
 ---
 
@@ -20,6 +23,7 @@ PhoenixOS has already completed the core SaaS foundation:
 - Self-serve signup and authenticated add-business flows already exist in current repo truth.
 
 This plan does **not** reopen SaaS architecture.  
+After the Post-AI documentation topology cleanup, this plan also does **not** reopen the closed Pre-AI correction package, Gate 11-14, AI Phase 0-4, or owner launch activation boundaries.
 This plan defines the **final intended product/UX contract** for the Sign-Up flow and instructs the next PLAN-mode pass to verify whether the current implementation matches that contract exactly.
 
 The goal is simple:

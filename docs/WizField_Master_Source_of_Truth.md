@@ -91,6 +91,7 @@ Platform
 - Checkout does not activate billing from the success redirect page.
 - Verified Stripe webhook events reconcile local billing state.
 - Clover is parked as historical traceability only and is not the active Gate 13 path.
+- Clover code, provider references, and schema lineage may remain in repo history for traceability, but Stripe remains the active billing-provider truth unless a future owner-approved provider reactivation explicitly changes that.
 
 ## 9. Tenant isolation rules
 
@@ -164,7 +165,39 @@ What remains is owner-managed launch activation, not unfinished foundation engin
 
 Paid acquisition remains outside engineering closeout and stays gated on owner launch activation completion.
 
-## 15. Current next-phase handoff
+## 15. Pre-AI and Post-AI program posture
+
+The Pre-AI Product Foundation, Pre-AI UX / FE correction package, and Portal V1 lifecycle + hardening pass were closed before the AI workstream began.
+
+The closed Pre-AI correction baseline includes:
+
+- role-aware navigation / role-sensitive shell affordances
+- CRM Automations vs Growth Center Automations clarity
+- Schedule / Dispatch IA visibility
+- Office Home snapshot improvements
+- Pricing / Billing Success credibility cleanup
+- Portal staff magic-link generation lifecycle
+- Portal org/resource read hardening
+- Portal redeem transaction hardening
+- Customer profile Generate + Copy portal link UX
+
+The standalone `WizField_Pre_AI_Final_Correction_Summary.md` is not present in the current checkout. Its closure truth is preserved here and in the engineering closeout record rather than recreated as a new active standalone document.
+
+Owner review accepted the Post-AI full-program audit verdict as:
+
+```text
+B - WIZFIELD POST-AI PROGRAM CLEAN WITH NON-BLOCKING GAPS
+```
+
+This means:
+
+- no P0 or P1 blockers were accepted after AI Phase 0-4 closure
+- the AI Program did not introduce a serious cross-product architecture risk
+- the bounded Post-AI Correction Pass is cleanup and alignment work, not a reopening of Gate 11-14, Growth Center V1, Language Store V1, Portal V1, or AI Phase 0-4
+
+Language Store remains a Settings / add-on-oriented surface for now. It must not be added to primary shell navigation unless a future owner IA decision changes that.
+
+## 16. Current next-phase handoff
 
 The next phase is not "redo SaaS architecture." The next phase is controlled launch activation on top of the completed engineering foundation.
 
@@ -173,8 +206,15 @@ Use the companion docs this way:
 - `WizField_Engineering_Closeout_and_Verification.md` for final engineering evidence and locked closeout truth
 - `WizField_AI_Master_Source_of_Truth.md` for shipped AI program truth (Phases 0–4)
 - `WizField_AI_Engineering_Closeout_and_Gap_Register.md` for AI verification evidence and gap closure
+- `WizField_Growth_Center_Source_of_Truth.md` for active Growth Center V1 implementation truth
+- `WizField_Language_Store_Source_of_Truth.md` for active Language Store product and architecture truth
 - `WizField_Owner_Launch_Activation_Checklist.md` for owner-managed launch activation items
 - `WizField_Reverification_Runbook.md` for future production-like reruns and operator replay (see §6B for AI)
+
+Subordinate planning artifacts:
+
+- `PhoenixOS_WizField_Signup_Activation_Master_Plan.md` preserves signup and activation planning context only; current signup, billing, and owner activation truth comes from this document, the engineering closeout, and the owner launch checklist.
+- `WizField_Growth_Center_Marketing_Master_Plan.md` preserves strategic Growth Center planning context only; active Growth Center V1 truth comes from the Growth Center Source of Truth and closeout records.
 
 Short handoff summary:
 

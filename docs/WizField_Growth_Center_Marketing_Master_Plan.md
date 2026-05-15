@@ -1,9 +1,12 @@
 # WizField Growth Center — `/marketing`
 ## Master Product Plan
 
-**Document status:** Strategic product plan  
+> Current role: subordinate strategic planning context only. This file is not the active Growth Center implementation source of truth.
+
+**Document status:** Historical strategic product plan
 **Module:** `/marketing`  
 **Product:** WizField / PhoenixOS SaaS  
+**Canonical status:** Active Growth Center V1 product truth is governed by `docs/WizField_Growth_Center_Source_of_Truth.md` and `docs/WizField_Growth_Center_Closeout_and_Verification.md`. Any conflict is resolved in favor of those canonical docs and the global WizField SoT/closeout set.
 **Core thesis:** **Marketing by Doing**  
 **Primary business objective:** **Retention moat**  
 **Secondary business objective:** **Lead generation and revenue lift**

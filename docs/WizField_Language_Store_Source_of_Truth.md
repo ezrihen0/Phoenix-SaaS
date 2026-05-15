@@ -33,7 +33,7 @@ After V1 closure, this document remains the only active Language Store product a
 
 > WizField Language Store enables multilingual field-service teams to work internally in their preferred language while ensuring customer-facing business output defaults to professional English.
 
-Language Store is a standalone authenticated WizField product surface, not just a hidden settings toggle and not just generic UI translation.
+Language Store is an authenticated WizField add-on surface oriented around Settings and language/add-on management, not a primary top-level shell module and not just generic UI translation.
 
 It has two layers:
 
@@ -315,11 +315,18 @@ must not rewrite the already-snapshotted customer document.
 
 # 9. Locked UX rule
 
-## 9.1 Product surface
+## 9.1 Product surface and discoverability
 
-Language Store must be a standalone authenticated route.
+Language Store remains a Settings / add-on-oriented authenticated surface for now.
 
-Settings may show a summary or entry point, but the primary product surface must not be buried inside Settings alone.
+The intended access pattern is:
+
+- Settings may show the primary management entry point and current Language Store summary.
+- Add-on, billing, and language-management contexts may deep-link to the Language Store surface.
+- `/language-store` may remain a direct authenticated route where current implementation supports it.
+- `/language-store` must not be added to primary shell navigation in this correction pass.
+
+This IA lock supersedes the earlier wording that treated Language Store as a primary standalone product surface outside Settings-oriented discoverability.
 
 ## 9.2 Admin and staff responsibilities
 

@@ -68,6 +68,7 @@ Historical note only:
 - `billing_accounts` is the authoritative payer / subscription layer.
 - `organization_billing` remains coverage / linkage only.
 - Stripe is the active provider implementation behind a provider abstraction boundary.
+- Clover remains parked historical provider trace only; Stripe is the active billing-provider truth.
 - Owner-authenticated checkout exists and, without live Stripe secrets configured, fails safely with `billing_provider_not_configured`.
 - The Stripe webhook endpoint exists and invalid signatures fail safely.
 - Shared billing entitlement behavior passed locally: starter blocked a second business; after safe local plan expansion, a second organization could be added under the same `billing_account_id`.
@@ -186,6 +187,32 @@ This addendum records the bounded AI program closeout and gap-closure pass only.
 | `operator-copilot:isolation:smoke` | PASS |
 | `operator-copilot:contract-check` | PASS |
 | Backend / frontend build | PASS |
+
+## 13. Post-AI full-program audit and bounded correction pass
+
+Owner review accepted the Post-AI full-program audit verdict as:
+
+```text
+B - WIZFIELD POST-AI PROGRAM CLEAN WITH NON-BLOCKING GAPS
+```
+
+This accepted posture records:
+
+- no P0 or P1 blockers were found
+- the Pre-AI correction package remained closed after the AI workstream
+- AI Phase 0-4 did not introduce a serious cross-product architecture risk
+- the follow-up Post-AI Correction Pass is bounded cleanup and alignment work only
+
+The missing standalone `WizField_Pre_AI_Final_Correction_Summary.md` is an evidence caveat resolved by preserving the closed Pre-AI correction truth in the canonical documentation set, not by creating another active standalone closeout file.
+
+The bounded correction pass closes:
+
+- role/navigation affordance alignment for `/calls` against current `calls.view` permission truth
+- active documentation topology cleanup for signup and Growth Center planning artifacts
+- Clover clarification as parked historical provider trace while Stripe remains active billing truth
+- Language Store IA clarification as a Settings / add-on-oriented surface for now, not primary shell navigation
+
+This pass does not reopen Gate 11-14, Growth Center V1, Language Store V1, Portal V1, or AI Phase 0-4.
 
 ## Closeout statement
 
