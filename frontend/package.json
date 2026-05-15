@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "shell-nav-policy:check": "node scripts/check-shell-nav-policy.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.8.0",

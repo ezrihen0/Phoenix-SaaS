@@ -6,7 +6,15 @@ import type { ClientSession } from "@/lib/auth/client-auth";
  */
 export type ShellNavRole = NonNullable<ClientSession["profile"]>["role"];
 
-const ROLES_LEADS_CALLS: ReadonlySet<ShellNavRole> = new Set(["owner", "office_admin", "dispatcher"]);
+const ROLES_LEADS: ReadonlySet<ShellNavRole> = new Set(["owner", "office_admin", "dispatcher"]);
+
+const ROLES_CALLS_VIEW: ReadonlySet<ShellNavRole> = new Set([
+  "owner",
+  "admin",
+  "office_admin",
+  "dispatcher",
+  "csr",
+]);
 
 const ROLES_MARKETING_AND_LEGACY_AUTOMATIONS: ReadonlySet<ShellNavRole> = new Set([
   "owner",
@@ -64,8 +72,10 @@ export function isShellNavHrefVisible(
       return isOfficeCrmNavRole(role);
 
     case "/leads":
+      return ROLES_LEADS.has(role);
+
     case "/calls":
-      return ROLES_LEADS_CALLS.has(role);
+      return ROLES_CALLS_VIEW.has(role);
 
     case "/messaging":
       return role !== "technician";
