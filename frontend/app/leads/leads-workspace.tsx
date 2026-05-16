@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { ClipboardCheck, Edit3, LoaderCircle, Plus } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 
 import { MasterTable, MasterTableRow } from "@/components/master-table";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import { formatDate } from "@/lib/crm/display";
 import {
   getLeadSourceLabel,
+  getServiceTypeLabel,
   type LeadSource,
   type LeadStatus,
 } from "@/lib/crm/statuses";
@@ -146,20 +148,16 @@ function statusTone(status: LeadStatus) {
   }
 }
 
-function getLeadStatusLabel(status: LeadStatus) {
+function getLeadStatusLabel(status: LeadStatus, t: ReturnType<typeof useTranslations<"leads">>) {
   if (status === "new_lead") {
-    return "New Lead";
+    return t("newLead");
   }
 
   if (status === "contacted") {
-    return "Contacted";
+    return t("contacted");
   }
 
-  return "Converted";
-}
-
-function formatServiceType(serviceType: LeadQueueItem["service_type"]) {
-  return serviceType.charAt(0).toUpperCase() + serviceType.slice(1);
+  return t("converted");
 }
 
 type LeadsWorkspaceProps = {
@@ -168,23 +166,16 @@ type LeadsWorkspaceProps = {
   initialIntakePrefill?: Partial<LeadIntakeFormState> | null;
 };
 
-const desktopLeadColumns = [
-  { key: "actions", label: "Actions" },
-  { key: "name", label: "Name" },
-  { key: "status", label: "Lead Status" },
-  { key: "source", label: "Source" },
-  { key: "service-type", label: "Service Type" },
-  { key: "contact", label: "Phone / Email" },
-  { key: "created-at", label: "Created Date" },
-  { key: "assigned-user", label: "Assigned" },
-];
-
 export default function LeadsWorkspace({
   initialLeads,
   initialFocusLeadId = null,
   initialIntakePrefill = null,
 }: LeadsWorkspaceProps) {
   const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations("leads");
+  const actionT = useTranslations("common.actions");
+  const paginationT = useTranslations("common.pagination");
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const routeFocusLeadId = searchParams.get("leadId") ?? initialFocusLeadId;
@@ -221,6 +212,16 @@ export default function LeadsWorkspace({
   const serializedSearchParams = searchParams.toString();
 
   const currentRouteParams = useMemo(() => new URLSearchParams(serializedSearchParams), [serializedSearchParams]);
+  const desktopLeadColumns = useMemo(() => [
+    { key: "actions", label: t("actions") },
+    { key: "name", label: t("name") },
+    { key: "status", label: t("leadStatus") },
+    { key: "source", label: t("source") },
+    { key: "service-type", label: t("serviceType") },
+    { key: "contact", label: t("contact") },
+    { key: "created-at", label: t("createdDate") },
+    { key: "assigned-user", label: t("assigned") },
+  ], [t]);
   const paginatedLeadsByMode = useMemo<Record<LeadDisplayMode, LeadDisplayPagination>>(() => {
     return (["ledger", "hybrid", "grid"] as LeadDisplayMode[]).reduce((accumulator, mode) => {
       const totalCount = leads.length;
@@ -307,8 +308,8 @@ export default function LeadsWorkspace({
         <button
           type="button"
           onClick={() => openLeadRoute(lead)}
-          title={`Open ${lead.full_name}`}
-          aria-label={`Open ${lead.full_name}`}
+          title={t("openDetails", { name: lead.full_name })}
+          aria-label={t("openDetails", { name: lead.full_name })}
           className={leadActionIconButtonClass}
         >
           <Edit3 className="h-4 w-4" />
@@ -327,10 +328,10 @@ export default function LeadsWorkspace({
           >
             {canEditStatus ? editableStatusOptions.map((status) => (
               <option key={status} value={status}>
-                {status === "new_lead" ? "New Lead" : "Contacted"}
+                {status === "new_lead" ? t("newLead") : t("contacted")}
               </option>
             )) : (
-              <option value="converted">Converted</option>
+              <option value="converted">{t("converted")}</option>
             )}
           </FieldSelect>
           <button
@@ -347,17 +348,17 @@ export default function LeadsWorkspace({
                       }),
                     });
                     updateLeadInState(updatedLead);
-                    setStatusMessage(`${updatedLead.full_name} was updated.`);
+                    setStatusMessage(t("updated", { name: updatedLead.full_name }));
                     setErrorMessage(null);
                   } catch (error) {
-                    setErrorMessage(error instanceof Error ? error.message : "The lead could not be updated.");
+                    setErrorMessage(error instanceof Error ? error.message : t("updatedError"));
                     setStatusMessage(null);
                   }
                 })();
               });
             }}
-            title="Save lead status"
-            aria-label="Save lead status"
+            title={t("saveStatus")}
+            aria-label={t("saveStatus")}
             className="theme-control-surface inline-flex h-10 w-10 items-center justify-center rounded-full text-[color:var(--text-secondary)] transition hover:text-[color:var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-45"
           >
             {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
@@ -384,7 +385,11 @@ export default function LeadsWorkspace({
     return (
       <div className="theme-control-surface mt-4 flex flex-col gap-3 rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.02)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-[color:var(--text-secondary)]">
-          Showing {pagination.startItem}-{pagination.endItem} of {pagination.totalCount}
+          {t("showingResults", {
+            start: pagination.startItem,
+            end: pagination.endItem,
+            totalCount: pagination.totalCount,
+          })}
         </p>
         <div className="flex items-center gap-3">
           <button
@@ -393,10 +398,10 @@ export default function LeadsWorkspace({
             onClick={() => updateDisplayPage(mode, pagination.currentPage - 1)}
             className="theme-btn-secondary inline-flex min-w-[88px] items-center justify-center rounded-[14px] px-4 py-2 text-xs uppercase tracking-[0.18em] transition disabled:cursor-not-allowed disabled:opacity-45"
           >
-            Prev
+            {actionT("prev")}
           </button>
           <span className="text-sm text-[color:var(--text-secondary)]">
-            Page {pagination.currentPage} of {pagination.totalPages}
+            {paginationT("pageOf", { page: pagination.currentPage, totalPages: pagination.totalPages })}
           </span>
           <button
             type="button"
@@ -404,7 +409,7 @@ export default function LeadsWorkspace({
             onClick={() => updateDisplayPage(mode, pagination.currentPage + 1)}
             className="theme-btn-secondary inline-flex min-w-[88px] items-center justify-center rounded-[14px] px-4 py-2 text-xs uppercase tracking-[0.18em] transition disabled:cursor-not-allowed disabled:opacity-45"
           >
-            Next
+            {actionT("next")}
           </button>
         </div>
       </div>
@@ -429,9 +434,9 @@ export default function LeadsWorkspace({
       />
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.02)] px-4 py-4">
-          <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--text-muted)]">Display</p>
+          <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--text-muted)]">{t("display")}</p>
           <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
-            Ledger for queue work, Hybrid for follow-up context, and Grid for quick pipeline review.
+            {t("displayDescription")}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {(["ledger", "hybrid", "grid"] as LeadDisplayMode[]).map((mode) => (
@@ -445,7 +450,7 @@ export default function LeadsWorkspace({
                     : "border-transparent text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)]"
                 }`}
               >
-                {mode === "ledger" ? "Ledger" : mode === "hybrid" ? "Hybrid" : "Grid"}
+                {mode === "ledger" ? t("ledger") : mode === "hybrid" ? t("hybrid") : t("grid")}
               </button>
             ))}
           </div>
@@ -462,7 +467,7 @@ export default function LeadsWorkspace({
           className="theme-btn-secondary inline-flex items-center gap-2 rounded-[18px] px-5 py-3 text-sm transition"
         >
           <Plus className="h-4 w-4" />
-          New Call Lead Intake
+          {t("newLeadIntake")}
         </button>
         </div>
       </div>
@@ -487,7 +492,7 @@ export default function LeadsWorkspace({
                 columns={desktopLeadColumns}
                 state={
                   leads.length === 0
-                    ? { status: "empty", message: "No leads match the current search and filters." }
+                    ? { status: "empty", message: t("noMatches") }
                     : { status: "ready" }
                 }
               >
@@ -514,28 +519,28 @@ export default function LeadsWorkspace({
                     }}
                     tabIndex={0}
                     role="button"
-                    aria-label={`Open details for ${lead.full_name}`}
+                    aria-label={t("openDetails", { name: lead.full_name })}
                   >
                     <td className="master-table-cell master-table-actions-cell align-middle" onClick={(event) => event.stopPropagation()}>
                       {renderLeadActions(lead, draftStatus, canEditStatus, "inline")}
                     </td>
                     <td className="master-table-cell">
                       <p className="font-medium text-[color:var(--text-primary)]">{lead.full_name}</p>
-                      <p className="mt-1 text-xs text-[color:var(--text-muted)]">{lead.description ?? lead.email ?? "No additional context"}</p>
+                      <p className="mt-1 text-xs text-[color:var(--text-muted)]">{lead.description ?? lead.email ?? t("noAdditionalContext")}</p>
                     </td>
                     <td className="master-table-cell">
                       <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.22em] ${statusTone(lead.status)}`}>
-                        {getLeadStatusLabel(lead.status)}
+                        {getLeadStatusLabel(lead.status, t)}
                       </span>
                     </td>
-                    <td className="master-table-cell text-[color:var(--text-secondary)]">{getLeadSourceLabel(lead.source)}</td>
-                    <td className="master-table-cell text-[color:var(--text-secondary)]">{formatServiceType(lead.service_type)}</td>
+                    <td className="master-table-cell text-[color:var(--text-secondary)]">{getLeadSourceLabel(lead.source, locale)}</td>
+                    <td className="master-table-cell text-[color:var(--text-secondary)]">{getServiceTypeLabel(lead.service_type, locale)}</td>
                     <td className="master-table-cell text-[color:var(--text-secondary)]">
                       <p>{lead.phone}</p>
-                      <p className="mt-1 text-xs text-[color:var(--text-muted)]">{lead.email ?? "No email"}</p>
+                      <p className="mt-1 text-xs text-[color:var(--text-muted)]">{lead.email ?? t("noEmail")}</p>
                     </td>
-                    <td className="master-table-cell text-[color:var(--text-secondary)]">{formatDate(lead.created_at)}</td>
-                    <td className="master-table-cell text-[color:var(--text-secondary)]">{lead.created_by_profile?.full_name ?? "Unassigned"}</td>
+                    <td className="master-table-cell text-[color:var(--text-secondary)]">{formatDate(lead.created_at, locale)}</td>
+                    <td className="master-table-cell text-[color:var(--text-secondary)]">{lead.created_by_profile?.full_name ?? t("unassigned")}</td>
                   </MasterTableRow>
                 );
                 })}
@@ -572,7 +577,7 @@ export default function LeadsWorkspace({
                       }}
                       tabIndex={0}
                       role="button"
-                      aria-label={`Open details for ${lead.full_name}`}
+                      aria-label={t("openDetails", { name: lead.full_name })}
                     >
                       <div className="space-y-3" onClick={(event) => event.stopPropagation()}>
                         {renderLeadActions(lead, draftStatus, canEditStatus)}
@@ -580,19 +585,19 @@ export default function LeadsWorkspace({
                       <div>
                         <p className="text-lg font-semibold text-[color:var(--text-primary)]">{lead.full_name}</p>
                         <p className="mt-2 text-sm text-[color:var(--text-secondary)]">{lead.phone}</p>
-                        <p className="mt-2 text-sm text-[color:var(--text-muted)]">{lead.description ?? lead.email ?? "No additional context provided."}</p>
+                        <p className="mt-2 text-sm text-[color:var(--text-muted)]">{lead.description ?? lead.email ?? t("noAdditionalContextProvided")}</p>
                       </div>
                       <div className="rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.02)] px-4 py-4 text-sm text-[color:var(--text-secondary)]">
                         <div className="flex flex-wrap gap-2">
                           <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.22em] ${statusTone(lead.status)}`}>
-                            {getLeadStatusLabel(lead.status)}
+                            {getLeadStatusLabel(lead.status, t)}
                           </span>
                         </div>
                         <div className="mt-4 grid gap-2">
-                          <p>Source: {getLeadSourceLabel(lead.source)}</p>
-                          <p>Service: {formatServiceType(lead.service_type)}</p>
-                          <p>Created: {formatDate(lead.created_at)}</p>
-                          <p>Assigned: {lead.created_by_profile?.full_name ?? "Unassigned"}</p>
+                          <p>{t("source")}: {getLeadSourceLabel(lead.source, locale)}</p>
+                          <p>{t("serviceType")}: {getServiceTypeLabel(lead.service_type, locale)}</p>
+                          <p>{t("created")}: {formatDate(lead.created_at, locale)}</p>
+                          <p>{t("assigned")}: {lead.created_by_profile?.full_name ?? t("unassigned")}</p>
                         </div>
                       </div>
                     </div>
@@ -600,7 +605,7 @@ export default function LeadsWorkspace({
                 );
               }) : (
                 <div className="theme-control-surface-soft rounded-[24px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.01)] px-4 py-8 text-center text-sm text-[color:var(--text-muted)]">
-                  No leads match the current search and filters.
+                  {t("noMatches")}
                 </div>
               )}
             </div>
@@ -629,31 +634,31 @@ export default function LeadsWorkspace({
                       className="mt-5 text-left"
                     >
                       <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.22em] ${statusTone(lead.status)}`}>
-                        {getLeadStatusLabel(lead.status)}
+                        {getLeadStatusLabel(lead.status, t)}
                       </span>
                       <p className="mt-4 text-xl font-semibold text-[color:var(--text-primary)]">{lead.full_name}</p>
-                      <p className="mt-2 text-sm text-[color:var(--text-secondary)]">{formatServiceType(lead.service_type)}</p>
+                      <p className="mt-2 text-sm text-[color:var(--text-secondary)]">{getServiceTypeLabel(lead.service_type, locale)}</p>
                     </button>
                     <div className="mt-5 grid gap-3 rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.02)] px-4 py-4 text-sm text-[color:var(--text-secondary)]">
                       <div className="flex items-center justify-between gap-3">
-                        <span>Source</span>
-                        <span className="text-[color:var(--text-primary)]">{getLeadSourceLabel(lead.source)}</span>
+                        <span>{t("source")}</span>
+                        <span className="text-[color:var(--text-primary)]">{getLeadSourceLabel(lead.source, locale)}</span>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <span>Contact</span>
+                        <span>{t("contact")}</span>
                         <span className="text-[color:var(--text-primary)]">{lead.phone}</span>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <span>Created</span>
-                        <span className="text-[color:var(--text-primary)]">{formatDate(lead.created_at)}</span>
+                        <span>{t("created")}</span>
+                        <span className="text-[color:var(--text-primary)]">{formatDate(lead.created_at, locale)}</span>
                       </div>
                     </div>
-                    <p className="mt-4 text-sm text-[color:var(--text-muted)]">{lead.description ?? lead.email ?? "No additional context provided."}</p>
+                    <p className="mt-4 text-sm text-[color:var(--text-muted)]">{lead.description ?? lead.email ?? t("noAdditionalContextProvided")}</p>
                   </article>
                 );
               }) : (
                 <div className="theme-control-surface-soft col-span-full rounded-[24px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.01)] px-4 py-8 text-center text-sm text-[color:var(--text-muted)]">
-                  No leads match the current search and filters.
+                  {t("noMatches")}
                 </div>
               )}
             </div>
@@ -671,19 +676,19 @@ export default function LeadsWorkspace({
                 <p className="mt-1 text-sm text-[color:var(--text-secondary)]">{lead.phone}</p>
               </div>
               <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.22em] ${statusTone(lead.status)}`}>
-                {getLeadStatusLabel(lead.status)}
+                {getLeadStatusLabel(lead.status, t)}
               </span>
             </div>
             <div className="mt-3 grid gap-2 text-sm text-[color:var(--text-secondary)]">
-              <p>Source: {getLeadSourceLabel(lead.source)}</p>
-              <p>Created: {formatDate(lead.created_at)}</p>
-              <p>Assigned: {lead.created_by_profile?.full_name ?? "Unassigned"}</p>
+              <p>{t("source")}: {getLeadSourceLabel(lead.source, locale)}</p>
+              <p>{t("created")}: {formatDate(lead.created_at, locale)}</p>
+              <p>{t("assigned")}: {lead.created_by_profile?.full_name ?? t("unassigned")}</p>
             </div>
             <button
               type="button"
               onClick={() => openLeadRoute(lead)}
-              title={`Open ${lead.full_name}`}
-              aria-label={`Open ${lead.full_name}`}
+              title={t("openDetails", { name: lead.full_name })}
+              aria-label={t("openDetails", { name: lead.full_name })}
               className={`${leadActionIconButtonClass} mt-4`}
             >
               <Edit3 className="h-4 w-4" />
@@ -691,7 +696,7 @@ export default function LeadsWorkspace({
           </article>
         )) : (
           <div className="theme-control-surface-soft rounded-[24px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.01)] px-4 py-8 text-center text-sm text-[color:var(--text-muted)]">
-            No leads match the current search and filters.
+            {t("noMatches")}
           </div>
         )}
       </div>
@@ -711,7 +716,7 @@ export default function LeadsWorkspace({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">Lead Details</p>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">{t("leadDetails")}</p>
                 <h2 className="mt-3 text-2xl font-semibold text-[color:var(--text-primary)]">{editingLead.full_name}</h2>
               </div>
               <button
@@ -719,20 +724,20 @@ export default function LeadsWorkspace({
                 onClick={() => closeLeadRoute()}
                 className="theme-control-surface rounded-[14px] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color:var(--text-secondary)] transition hover:text-[color:var(--text-primary)]"
               >
-                Close
+                {actionT("close")}
               </button>
             </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">
-                <span>Name</span>
+                <span>{t("name")}</span>
                 <FieldInput
                   value={editForm.fullName}
                   onChange={(event) => setEditForm((current) => current ? { ...current, fullName: event.target.value } : current)}
                 />
               </label>
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">
-                <span>Phone</span>
+                <span>{t("contact")}</span>
                 <FieldInput
                   value={editForm.phone}
                   onChange={(event) => setEditForm((current) => current ? { ...current, phone: event.target.value } : current)}
@@ -747,14 +752,14 @@ export default function LeadsWorkspace({
                 />
               </label>
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">
-                <span>Source</span>
+                <span>{t("source")}</span>
                 <FieldSelect
                   value={editForm.source}
                   onChange={(event) => setEditForm((current) => current ? { ...current, source: event.target.value as LeadSource } : current)}
                 >
                   {sourceOptions.map((source) => (
                     <option key={source} value={source}>
-                      {getLeadSourceLabel(source)}
+                      {getLeadSourceLabel(source, locale)}
                     </option>
                   ))}
                 </FieldSelect>
@@ -762,7 +767,7 @@ export default function LeadsWorkspace({
             </div>
 
             <label className="mt-4 block space-y-2 text-sm text-[color:var(--text-secondary)]">
-              <span>Notes</span>
+              <span>{t("problemSummary")}</span>
               <FieldTextArea
                 value={editForm.description}
                 onChange={(event) => setEditForm((current) => current ? { ...current, description: event.target.value } : current)}
@@ -776,7 +781,7 @@ export default function LeadsWorkspace({
                 disabled={isPending}
                 className="theme-control-surface rounded-[14px] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color:var(--text-secondary)] transition hover:text-[color:var(--text-primary)] disabled:opacity-45"
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -796,11 +801,11 @@ export default function LeadsWorkspace({
                           }),
                         });
                         updateLeadInState(updatedLead);
-                        setStatusMessage(`${updatedLead.full_name} was saved.`);
+                        setStatusMessage(t("leadSaved", { name: updatedLead.full_name }));
                         setErrorMessage(null);
                         closeLeadRoute();
                       } catch (error) {
-                        setErrorMessage(error instanceof Error ? error.message : "The lead could not be saved.");
+                        setErrorMessage(error instanceof Error ? error.message : t("saveError"));
                         setStatusMessage(null);
                       }
                     })();
@@ -808,7 +813,7 @@ export default function LeadsWorkspace({
                 }}
                 className="theme-btn-secondary inline-flex min-w-[120px] items-center justify-center rounded-[14px] px-4 py-2 text-xs uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-45"
               >
-                {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : "Save changes"}
+                {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : t("saveChanges")}
               </button>
             </div>
           </div>
@@ -830,8 +835,8 @@ export default function LeadsWorkspace({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">Lead Intake</p>
-                <h2 className="mt-3 text-2xl font-semibold text-[color:var(--text-primary)]">Capture New Lead</h2>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">{t("leadIntake")}</p>
+                <h2 className="mt-3 text-2xl font-semibold text-[color:var(--text-primary)]">{t("captureNewLead")}</h2>
               </div>
               <button
                 type="button"
@@ -839,13 +844,13 @@ export default function LeadsWorkspace({
                 disabled={isPending}
                 className="theme-control-surface rounded-[14px] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color:var(--text-secondary)] transition hover:text-[color:var(--text-primary)] disabled:opacity-45"
               >
-                Close
+                {actionT("close")}
               </button>
             </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">
-                <span>Customer Name</span>
+                <span>{t("customerName")}</span>
                 <FieldInput
                   value={intakeForm.fullName}
                   onChange={(event) => setIntakeForm((current) => ({ ...current, fullName: event.target.value }))}
@@ -866,11 +871,11 @@ export default function LeadsWorkspace({
                   type="email"
                   value={intakeForm.email}
                   onChange={(event) => setIntakeForm((current) => ({ ...current, email: event.target.value }))}
-                  placeholder="optional@example.com"
+                  placeholder={t("optionalEmailPlaceholder")}
                 />
               </label>
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">
-                <span>Street Address</span>
+                <span>{t("streetAddress")}</span>
                 <FieldInput
                   value={intakeForm.serviceAddressLine1}
                   onChange={(event) => setIntakeForm((current) => ({ ...current, serviceAddressLine1: event.target.value }))}
@@ -878,15 +883,15 @@ export default function LeadsWorkspace({
                 />
               </label>
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">
-                <span>Suite / Unit</span>
+                <span>{t("suiteUnit")}</span>
                 <FieldInput
                   value={intakeForm.serviceAddressLine2}
                   onChange={(event) => setIntakeForm((current) => ({ ...current, serviceAddressLine2: event.target.value }))}
-                  placeholder="Optional"
+                  placeholder={t("suiteOptionalPlaceholder")}
                 />
               </label>
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">
-                <span>City</span>
+                <span>{t("city")}</span>
                 <FieldInput
                   value={intakeForm.serviceCity}
                   onChange={(event) => setIntakeForm((current) => ({ ...current, serviceCity: event.target.value }))}
@@ -894,7 +899,7 @@ export default function LeadsWorkspace({
                 />
               </label>
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">
-                <span>State / Region</span>
+                <span>{t("stateRegion")}</span>
                 <FieldInput
                   value={intakeForm.serviceStateOrRegion}
                   onChange={(event) => setIntakeForm((current) => ({ ...current, serviceStateOrRegion: event.target.value }))}
@@ -902,7 +907,7 @@ export default function LeadsWorkspace({
                 />
               </label>
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">
-                <span>Postal Code</span>
+                <span>{t("postalCode")}</span>
                 <FieldInput
                   value={intakeForm.servicePostalCode}
                   onChange={(event) => setIntakeForm((current) => ({ ...current, servicePostalCode: event.target.value }))}
@@ -910,27 +915,27 @@ export default function LeadsWorkspace({
                 />
               </label>
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">
-                <span>Lead Source</span>
+                <span>{t("leadSource")}</span>
                 <FieldSelect
                   value={intakeForm.source}
                   onChange={(event) => setIntakeForm((current) => ({ ...current, source: event.target.value as LeadSource }))}
                 >
                   {sourceOptions.map((source) => (
                     <option key={source} value={source}>
-                      {getLeadSourceLabel(source)}
+                      {getLeadSourceLabel(source, locale)}
                     </option>
                   ))}
                 </FieldSelect>
               </label>
               <label className="block space-y-2 text-sm text-[color:var(--text-secondary)]">
-                <span>Requested Service</span>
+                <span>{t("requestedService")}</span>
                 <FieldSelect
                   value={intakeForm.serviceType}
                   onChange={(event) => setIntakeForm((current) => ({ ...current, serviceType: event.target.value as LeadQueueItem["service_type"] }))}
                 >
                   {serviceTypeOptions.map((serviceType) => (
                     <option key={serviceType} value={serviceType}>
-                      {serviceType.charAt(0).toUpperCase() + serviceType.slice(1)}
+                      {getServiceTypeLabel(serviceType, locale)}
                     </option>
                   ))}
                 </FieldSelect>
@@ -938,11 +943,11 @@ export default function LeadsWorkspace({
             </div>
 
             <label className="mt-4 block space-y-2 text-sm text-[color:var(--text-secondary)]">
-              <span>Problem Summary</span>
+              <span>{t("problemSummary")}</span>
               <FieldTextArea
                 value={intakeForm.description}
                 onChange={(event) => setIntakeForm((current) => ({ ...current, description: event.target.value }))}
-                placeholder="Describe the fireplace issue, urgency, or visit notes."
+                placeholder={t("problemPlaceholder")}
               />
             </label>
 
@@ -953,7 +958,7 @@ export default function LeadsWorkspace({
                 disabled={isPending}
                 className="theme-control-surface rounded-[14px] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[color:var(--text-secondary)] transition hover:text-[color:var(--text-primary)] disabled:opacity-45"
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -982,12 +987,12 @@ export default function LeadsWorkspace({
 
                         setLeads((currentLeads) => [createdLead, ...currentLeads]);
                         setStatusDrafts((currentDrafts) => ({ ...currentDrafts, [createdLead.id]: createdLead.status }));
-                        setStatusMessage("Lead captured and added to the queue.");
+                        setStatusMessage(t("leadCaptured"));
                         setErrorMessage(null);
                         setIsIntakeOpen(false);
                         setIntakeForm(emptyLeadIntakeForm);
                       } catch (error) {
-                        setErrorMessage(error instanceof Error ? error.message : "The lead could not be created.");
+                        setErrorMessage(error instanceof Error ? error.message : t("createError"));
                         setStatusMessage(null);
                       }
                     })();
@@ -996,7 +1001,7 @@ export default function LeadsWorkspace({
                 className="theme-btn-secondary inline-flex min-w-[140px] items-center justify-center gap-2 rounded-[14px] px-4 py-2 text-xs uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
-                Save lead
+                {t("saveLead")}
               </button>
             </div>
           </div>

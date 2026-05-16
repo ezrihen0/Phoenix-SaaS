@@ -1,3 +1,4 @@
+import { getDefaultWorkerUiLocale, resolveSupportedWorkerUiLocale, type SupportedWorkerUiLocale } from "@/lib/i18n/locales";
 import type { Database } from "@/lib/types/database";
 
 export const leadStatuses = ["new_lead", "contacted", "converted"] as const;
@@ -51,38 +52,168 @@ const jobTransitionMap: Record<JobStatus, JobStatus[]> = {
   cancelled: [],
 };
 
-const jobStatusLabels: Record<JobStatus, string> = {
-  new_lead: "New Lead",
-  contacted: "Contacted",
-  scheduled: "Scheduled",
-  on_the_way: "On The Way",
-  in_progress: "In Progress",
-  waiting_for_approval: "Waiting Approval",
-  completed: "Completed",
-  paid: "Paid",
-  cancelled: "Cancelled",
+type LocalizedMap<T extends string> = Record<SupportedWorkerUiLocale, Record<T, string>>;
+
+const localizedJobStatusLabels: LocalizedMap<JobStatus> = {
+  en: {
+    new_lead: "New Lead",
+    contacted: "Contacted",
+    scheduled: "Scheduled",
+    on_the_way: "On The Way",
+    in_progress: "In Progress",
+    waiting_for_approval: "Waiting Approval",
+    completed: "Completed",
+    paid: "Paid",
+    cancelled: "Cancelled",
+  },
+  es: {
+    new_lead: "Nuevo prospecto",
+    contacted: "Contactado",
+    scheduled: "Programado",
+    on_the_way: "En camino",
+    in_progress: "En progreso",
+    waiting_for_approval: "Esperando aprobacion",
+    completed: "Completado",
+    paid: "Pagado",
+    cancelled: "Cancelado",
+  },
+  he: {
+    new_lead: "ליד חדש",
+    contacted: "נוצר קשר",
+    scheduled: "מתוזמן",
+    on_the_way: "בדרך",
+    in_progress: "בתהליך",
+    waiting_for_approval: "ממתין לאישור",
+    completed: "הושלם",
+    paid: "שולם",
+    cancelled: "בוטל",
+  },
+  uk: {
+    new_lead: "Новий лід",
+    contacted: "Контактовано",
+    scheduled: "Заплановано",
+    on_the_way: "В дорозі",
+    in_progress: "У процесі",
+    waiting_for_approval: "Очікує схвалення",
+    completed: "Завершено",
+    paid: "Оплачено",
+    cancelled: "Скасовано",
+  },
+  pl: {
+    new_lead: "Nowy lead",
+    contacted: "Skontaktowany",
+    scheduled: "Zaplanowany",
+    on_the_way: "W drodze",
+    in_progress: "W trakcie",
+    waiting_for_approval: "Oczekuje na akceptacje",
+    completed: "Zakonczony",
+    paid: "Oplacony",
+    cancelled: "Anulowany",
+  },
 };
 
-const leadStatusLabels: Record<Exclude<LeadStatus, "converted">, string> = {
-  new_lead: "New Lead",
-  contacted: "Contacted",
+const localizedLeadStatusLabels: LocalizedMap<Exclude<LeadStatus, "converted">> = {
+  en: {
+    new_lead: "New Lead",
+    contacted: "Contacted",
+  },
+  es: {
+    new_lead: "Nuevo prospecto",
+    contacted: "Contactado",
+  },
+  he: {
+    new_lead: "ליד חדש",
+    contacted: "נוצר קשר",
+  },
+  uk: {
+    new_lead: "Новий лід",
+    contacted: "Контактовано",
+  },
+  pl: {
+    new_lead: "Nowy lead",
+    contacted: "Skontaktowany",
+  },
 };
 
-const serviceTypeLabels: Record<ServiceType, string> = {
-  inspection: "Inspection",
-  cleaning: "Cleaning",
-  repair: "Repair",
-  rebuild: "Rebuild",
+const localizedServiceTypeLabels: LocalizedMap<ServiceType> = {
+  en: {
+    inspection: "Inspection",
+    cleaning: "Cleaning",
+    repair: "Repair",
+    rebuild: "Rebuild",
+  },
+  es: {
+    inspection: "Inspeccion",
+    cleaning: "Limpieza",
+    repair: "Reparacion",
+    rebuild: "Reconstruccion",
+  },
+  he: {
+    inspection: "בדיקה",
+    cleaning: "ניקוי",
+    repair: "תיקון",
+    rebuild: "בניה מחדש",
+  },
+  uk: {
+    inspection: "Інспекція",
+    cleaning: "Очищення",
+    repair: "Ремонт",
+    rebuild: "Перебудова",
+  },
+  pl: {
+    inspection: "Inspekcja",
+    cleaning: "Czyszczenie",
+    repair: "Naprawa",
+    rebuild: "Odbudowa",
+  },
 };
 
-const leadSourceLabels: Record<LeadSource, string> = {
-  phone: "Phone",
-  website: "Website",
-  google: "Google",
-  referral: "Referral",
-  repeat_customer: "Repeat Customer",
-  other: "Other",
+const localizedLeadSourceLabels: LocalizedMap<LeadSource> = {
+  en: {
+    phone: "Phone",
+    website: "Website",
+    google: "Google",
+    referral: "Referral",
+    repeat_customer: "Repeat Customer",
+    other: "Other",
+  },
+  es: {
+    phone: "Telefono",
+    website: "Sitio web",
+    google: "Google",
+    referral: "Referencia",
+    repeat_customer: "Cliente recurrente",
+    other: "Otro",
+  },
+  he: {
+    phone: "טלפון",
+    website: "אתר",
+    google: "Google",
+    referral: "הפניה",
+    repeat_customer: "לקוח חוזר",
+    other: "אחר",
+  },
+  uk: {
+    phone: "Телефон",
+    website: "Сайт",
+    google: "Google",
+    referral: "Рекомендація",
+    repeat_customer: "Постійний клієнт",
+    other: "Інше",
+  },
+  pl: {
+    phone: "Telefon",
+    website: "Strona",
+    google: "Google",
+    referral: "Polecenie",
+    repeat_customer: "Powracajacy klient",
+    other: "Inne",
+  },
 };
+
+function normalizeLocale(locale?: string | null) {
+  return resolveSupportedWorkerUiLocale(locale ?? getDefaultWorkerUiLocale());
+}
 
 export function canTransitionJobStatus(currentStatus: JobStatus, nextStatus: JobStatus) {
   if (currentStatus === nextStatus) {
@@ -96,18 +227,20 @@ export function isOfficeOnlyJobStatus(status: JobStatus) {
   return officeOnlyJobStatusSet.has(status);
 }
 
-export function getJobStatusLabel(status: JobStatus) {
-  return jobStatusLabels[status];
+export function getJobStatusLabel(status: JobStatus, locale?: string | null) {
+  return localizedJobStatusLabels[normalizeLocale(locale)][status];
 }
 
 export function getDashboardStatusLabel(
   status: Exclude<LeadStatus, "converted"> | JobStatus,
+  locale?: string | null,
 ) {
+  const resolvedLocale = normalizeLocale(locale);
   if (status === "new_lead" || status === "contacted") {
-    return leadStatusLabels[status];
+    return localizedLeadStatusLabels[resolvedLocale][status];
   }
 
-  return getJobStatusLabel(status);
+  return getJobStatusLabel(status, resolvedLocale);
 }
 
 export function getDashboardBoardStatus(
@@ -133,10 +266,10 @@ export function getDashboardBoardStatus(
   return "scheduled";
 }
 
-export function getServiceTypeLabel(serviceType: ServiceType) {
-  return serviceTypeLabels[serviceType];
+export function getServiceTypeLabel(serviceType: ServiceType, locale?: string | null) {
+  return localizedServiceTypeLabels[normalizeLocale(locale)][serviceType];
 }
 
-export function getLeadSourceLabel(source: LeadSource) {
-  return leadSourceLabels[source];
+export function getLeadSourceLabel(source: LeadSource, locale?: string | null) {
+  return localizedLeadSourceLabels[normalizeLocale(locale)][source];
 }

@@ -1,9 +1,11 @@
 import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
+import { getTranslations } from "next-intl/server";
 
 import ScheduleWorkspace from "./schedule-workspace";
 
 export default async function SchedulePage() {
+  const t = await getTranslations("schedule");
   await requireOfficeCrmRoute("/schedule");
 
   let initialJobs: unknown[] = [];
@@ -21,7 +23,7 @@ export default async function SchedulePage() {
   } catch (error) {
     initialErrorMessage = error instanceof Error
       ? error.message
-      : "The schedule board could not be loaded.";
+      : t("refreshError");
   }
 
   return (

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Boxes,
@@ -59,29 +60,6 @@ const HIDDEN_PREFIXES = [
   "/signup",
   "/terms",
   "/warranty-certificate",
-];
-
-const PRIMARY_NAV_ITEMS: NavItem[] = [
-  { href: "/home", label: "Home", icon: House },
-  { href: "/jobs", label: "Jobs", icon: BriefcaseBusiness },
-  { href: "/schedule", label: "Schedule", icon: CalendarDays },
-  { href: "/dispatch", label: "Dispatch", icon: Truck },
-  { href: "/customers", label: "Customers", icon: Users },
-  { href: "/leads", label: "Leads", icon: ClipboardList },
-  { href: "/inventory", label: "Inventory", icon: Boxes },
-  { href: "/pricebook", label: "Pricebook", icon: Package },
-  { href: "/invoices", label: "Invoices", icon: Receipt },
-  { href: "/estimates", label: "Estimates", icon: FileText },
-  { href: "/calls", label: "Calls", icon: Phone },
-  { href: "/messaging", label: "Messaging", icon: MessageSquare },
-  { href: "/marketing", label: "Growth Center", icon: Megaphone },
-  { href: "/inspections", label: "Inspections", icon: ShieldCheck },
-  { href: "/automations", label: "CRM automations", icon: Workflow },
-];
-
-const HEADER_QUICK_LINKS: Array<Pick<NavItem, "href" | "label" | "icon">> = [
-  { href: "/calls", label: "Calls", icon: Phone },
-  { href: "/messaging", label: "Messaging", icon: MessageSquare },
 ];
 
 function shouldShowShell(pathname: string | null) {
@@ -146,6 +124,7 @@ function HeaderQuickLink({ href, label, icon: Icon, active }: NavItem & { active
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const t = useTranslations();
   const pathname = usePathname();
   const router = useRouter();
   const searchPopoverRef = useRef<HTMLDivElement | null>(null);
@@ -157,6 +136,27 @@ export function AppShell({ children }: AppShellProps) {
   const [shellNavRole, setShellNavRole] = useState<ShellNavRole | null>(null);
   const [shellNavRoleResolved, setShellNavRoleResolved] = useState(false);
   const enabled = shouldShowShell(pathname);
+  const primaryNavItems: NavItem[] = [
+    { href: "/home", label: t("shell.nav.home"), icon: House },
+    { href: "/jobs", label: t("shell.nav.jobs"), icon: BriefcaseBusiness },
+    { href: "/schedule", label: t("shell.nav.schedule"), icon: CalendarDays },
+    { href: "/dispatch", label: t("shell.nav.dispatch"), icon: Truck },
+    { href: "/customers", label: t("shell.nav.customers"), icon: Users },
+    { href: "/leads", label: t("shell.nav.leads"), icon: ClipboardList },
+    { href: "/inventory", label: t("shell.nav.inventory"), icon: Boxes },
+    { href: "/pricebook", label: t("shell.nav.pricebook"), icon: Package },
+    { href: "/invoices", label: t("shell.nav.invoices"), icon: Receipt },
+    { href: "/estimates", label: t("shell.nav.estimates"), icon: FileText },
+    { href: "/calls", label: t("shell.nav.calls"), icon: Phone },
+    { href: "/messaging", label: t("shell.nav.messaging"), icon: MessageSquare },
+    { href: "/marketing", label: t("shell.nav.marketing"), icon: Megaphone },
+    { href: "/inspections", label: t("shell.nav.inspections"), icon: ShieldCheck },
+    { href: "/automations", label: t("shell.nav.automations"), icon: Workflow },
+  ];
+  const headerQuickLinks: Array<Pick<NavItem, "href" | "label" | "icon">> = [
+    { href: "/calls", label: t("shell.nav.calls"), icon: Phone },
+    { href: "/messaging", label: t("shell.nav.messaging"), icon: MessageSquare },
+  ];
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -237,11 +237,11 @@ export function AppShell({ children }: AppShellProps) {
     );
   }
 
-  const visiblePrimaryNav = PRIMARY_NAV_ITEMS.filter((item) =>
+  const visiblePrimaryNav = primaryNavItems.filter((item) =>
     isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
   );
 
-  const visibleHeaderQuickLinks = HEADER_QUICK_LINKS.filter((item) =>
+  const visibleHeaderQuickLinks = headerQuickLinks.filter((item) =>
     isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
   );
 
@@ -258,14 +258,14 @@ export function AppShell({ children }: AppShellProps) {
           <div className="flex items-center justify-between gap-3 px-1">
             {!collapsed ? (
               <div>
-                <p className="text-[11px] uppercase tracking-[0.35em] text-[color:var(--sem-text-muted)]">Quick Navigation</p>
+                <p className="text-[11px] uppercase tracking-[0.35em] text-[color:var(--sem-text-muted)]">{t("shell.quickNavigation")}</p>
                 <p className="mt-1 font-[family:var(--font-flat-display)] text-2xl text-[color:var(--sem-text-primary)]">WizField</p>
               </div>
             ) : <div className="h-12" />}
             <button
               type="button"
               onClick={() => setCollapsed((current) => !current)}
-              aria-label={collapsed ? "Expand quick navigation" : "Collapse quick navigation"}
+              aria-label={collapsed ? t("shell.expandQuickNavigation") : t("shell.collapseQuickNavigation")}
               className="theme-control-surface inline-flex h-11 w-11 items-center justify-center rounded-[18px] border transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
             >
               <Menu className="h-5 w-5" />
@@ -286,7 +286,7 @@ export function AppShell({ children }: AppShellProps) {
           <div className="space-y-2 border-t border-[color:var(--cmp-border-subtle)] pt-4">
             <SideNavLink
               href="/settings"
-              label="Settings"
+              label={t("shell.nav.settings")}
               icon={Settings}
               collapsed={collapsed}
               active={Boolean(pathname && isRouteActive(pathname, "/settings"))}
@@ -300,10 +300,10 @@ export function AppShell({ children }: AppShellProps) {
                 "theme-control-surface flex w-full items-center gap-3 rounded-[20px] border px-3 py-3 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
                 collapsed ? "justify-center" : "justify-start",
               ].join(" ")}
-              title={collapsed ? "Log out" : undefined}
+              title={collapsed ? t("common.actions.logOut") : undefined}
             >
               <LogOut className="h-4 w-4 shrink-0" />
-              {!collapsed ? <span>Log out</span> : null}
+              {!collapsed ? <span>{t("common.actions.logOut")}</span> : null}
             </button>
           </div>
         </aside>
@@ -328,7 +328,7 @@ export function AppShell({ children }: AppShellProps) {
                       {buildInitials(userLabel)}
                     </div>
                     <div className="pr-1">
-                      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Signed in</p>
+                      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">{t("shell.signedIn")}</p>
                       <p className="max-w-[180px] truncate text-sm font-medium text-[color:var(--sem-text-primary)]">{userLabel}</p>
                     </div>
                   </div>
@@ -347,7 +347,7 @@ export function AppShell({ children }: AppShellProps) {
                     {searchEnabled ? (
                       <button
                         type="button"
-                        aria-label="Search"
+                        aria-label={t("shell.searchAria")}
                         aria-expanded={searchOpen}
                         onClick={() => setSearchOpen((current) => !current)}
                         className="theme-control-surface-soft inline-flex h-11 w-11 items-center justify-center rounded-full border transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
@@ -358,7 +358,7 @@ export function AppShell({ children }: AppShellProps) {
 
                     <Link
                       href="/settings"
-                      aria-label="Settings"
+                      aria-label={t("shell.settingsAria")}
                       className="theme-control-surface-soft inline-flex h-11 w-11 items-center justify-center rounded-full border transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
                     >
                       <Settings className="h-4 w-4" />

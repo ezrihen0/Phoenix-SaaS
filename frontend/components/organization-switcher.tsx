@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Building2, ChevronDown, Loader2 } from "lucide-react";
 
@@ -20,6 +21,7 @@ function listSwitchableMemberships(session: ClientSession) {
 }
 
 export function OrganizationSwitcher() {
+  const t = useTranslations("shell.workspace");
   const pathname = usePathname();
   const [session, setSession] = useState<ClientSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -34,9 +36,9 @@ export function OrganizationSwitcher() {
       setSession(next);
     } catch (error) {
       setSession(null);
-      setLoadError(error instanceof Error ? error.message : "Session could not be loaded.");
+      setLoadError(error instanceof Error ? error.message : t("loadError"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadSession();
@@ -62,7 +64,7 @@ export function OrganizationSwitcher() {
   const switchable = useMemo(() => (session ? listSwitchableMemberships(session) : []), [session]);
 
   const activeLabel = session?.active_organization?.name?.trim()
-    || session?.memberships.find((m) => m.organization_id === session?.active_membership?.organization_id)
+    || session?.memberships.find((membership) => membership.organization_id === session?.active_membership?.organization_id)
       ?.organization?.name?.trim()
     || null;
 
@@ -87,14 +89,14 @@ export function OrganizationSwitcher() {
     } catch (error) {
       setSwitchingToId(null);
       setMenuOpen(false);
-      setLoadError(error instanceof Error ? error.message : "Could not switch organization.");
+      setLoadError(error instanceof Error ? error.message : t("switchError"));
     }
   }
 
   if (loadError && !session) {
     return (
       <div className="max-w-xs">
-        <p className={mutedClass}>Workspace</p>
+        <p className={mutedClass}>{t("label")}</p>
         <p className={`${labelClass} text-rose-300`}>{loadError}</p>
       </div>
     );
@@ -104,7 +106,7 @@ export function OrganizationSwitcher() {
     return (
       <div className="inline-flex items-center gap-2 rounded-full border border-dashed border-[color:var(--cmp-border-subtle)] px-3 py-2 text-sm text-[color:var(--sem-text-muted)]">
         <Loader2 className="h-4 w-4 animate-spin" />
-        <span>Loading workspace…</span>
+        <span>{t("loading")}</span>
       </div>
     );
   }
@@ -112,28 +114,28 @@ export function OrganizationSwitcher() {
   if (switchable.length === 0) {
     return (
       <div className="max-w-xs">
-        <p className={mutedClass}>Active workspace</p>
+        <p className={mutedClass}>{t("label")}</p>
         <p className={`${labelClass} text-amber-700 dark:text-amber-200`}>
-          No active business membership is available.
+          {t("unavailable")}
         </p>
         <Link
           href="/settings"
           className="mt-1 inline-block text-xs text-[color:var(--sem-accent-primary)] underline-offset-4 hover:underline"
         >
-          Open settings
+          {t("openSettings")}
         </Link>
       </div>
     );
   }
 
   if (switchable.length === 1) {
-    const displayName = activeLabel ?? switchable[0]?.organization?.name?.trim() ?? "Current organization";
+    const displayName = activeLabel ?? switchable[0]?.organization?.name?.trim() ?? t("currentOrganization");
 
     return (
       <div className="inline-flex items-center gap-2">
         <Building2 className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
         <div>
-          <p className={mutedClass}>Active workspace</p>
+          <p className={mutedClass}>{t("label")}</p>
           <p className={`${labelClass} max-w-[14rem] truncate`}>{displayName}</p>
         </div>
       </div>
@@ -142,7 +144,7 @@ export function OrganizationSwitcher() {
 
   return (
     <div className="relative inline-flex flex-col items-start" ref={menuRef}>
-      <p className={mutedClass}>Active workspace</p>
+      <p className={mutedClass}>{t("label")}</p>
       <button
         type="button"
         className={buttonClass}
@@ -154,7 +156,7 @@ export function OrganizationSwitcher() {
       >
         <Building2 className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
         <span className={`truncate ${labelClass}`}>
-          {activeLabel ?? switchable.find((m) => m.organization_id === session.active_membership?.organization_id)?.organization?.name ?? "Select organization"}
+          {activeLabel ?? switchable.find((membership) => membership.organization_id === session.active_membership?.organization_id)?.organization?.name ?? t("selectOrganization")}
         </span>
         <ChevronDown className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
       </button>
@@ -167,7 +169,7 @@ export function OrganizationSwitcher() {
         <div className={panelClass} role="listbox">
           {switchable.map((membership) => {
             const org = membership.organization;
-            const label = org?.name?.trim() || "Unnamed organization";
+            const label = org?.name?.trim() || t("unnamedOrganization");
             const isActive = membership.organization_id === session.active_organization?.id;
             const busy = switchingToId === membership.organization_id;
 

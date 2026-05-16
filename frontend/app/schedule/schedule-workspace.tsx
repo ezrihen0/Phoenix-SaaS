@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowLeft,
   CalendarDays,
@@ -171,15 +172,15 @@ function isSameCalendarDay(left: Date, right: Date) {
     && left.getDate() === right.getDate();
 }
 
-function formatDayHeading(date: Date) {
-  return new Intl.DateTimeFormat("en-US", {
+function formatDayHeading(date: Date, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
   }).format(date);
 }
 
-function formatVisibleRange(dates: Date[]) {
+function formatVisibleRange(dates: Date[], locale: string) {
   const firstDate = dates[0];
   const lastDate = dates[dates.length - 1];
 
@@ -188,51 +189,51 @@ function formatVisibleRange(dates: Date[]) {
   }
 
   if (isSameCalendarDay(firstDate, lastDate)) {
-    return new Intl.DateTimeFormat("en-US", {
+    return new Intl.DateTimeFormat(locale, {
       weekday: "long",
       month: "long",
       day: "numeric",
     }).format(firstDate);
   }
 
-  return `${new Intl.DateTimeFormat("en-US", {
+  return `${new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
-  }).format(firstDate)} - ${new Intl.DateTimeFormat("en-US", {
+  }).format(firstDate)} - ${new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
   }).format(lastDate)}`;
 }
 
-function formatTimeOnly(value: string | null) {
+function formatTimeOnly(value: string | null, locale: string, emptyLabel: string) {
   if (!value) {
-    return "Time not set";
+    return emptyLabel;
   }
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(locale, {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
 }
 
-function formatScheduleTimeRange(value: string | null, windowLabel: string | null) {
+function formatScheduleTimeRange(value: string | null, windowLabel: string | null, locale: string, emptyLabel: string) {
   if (windowLabel?.trim()) {
     return windowLabel.replace(/\s+/g, " ");
   }
 
   if (!value) {
-    return "Time not set";
+    return emptyLabel;
   }
 
   const start = new Date(value);
 
   if (Number.isNaN(start.getTime())) {
-    return "Time not set";
+    return emptyLabel;
   }
 
   const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
 
-  return `${formatTimeOnly(value)} - ${new Intl.DateTimeFormat("en-US", {
+  return `${formatTimeOnly(value, locale, emptyLabel)} - ${new Intl.DateTimeFormat(locale, {
     hour: "numeric",
     minute: "2-digit",
   }).format(end)}`;
@@ -308,42 +309,46 @@ function ScheduleEditor({
   technicians,
   isPending,
   onSave,
+  locale,
+  t,
 }: {
   job: JobRecord;
   technicians: TechnicianRecord[];
   isPending: boolean;
   onSave: (form: ScheduleFormState) => void;
+  locale: string;
+  t: ReturnType<typeof useTranslations<"schedule">>;
 }) {
   const [scheduleForm, setScheduleForm] = useState<ScheduleFormState>(() => buildScheduleForm(job));
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">Basic Scheduling</p>
+      <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">{t("basicScheduling")}</p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <FieldLabel label="Technician">
+        <FieldLabel label={t("technicianField")}>
           <FieldSelect
             value={scheduleForm.assignedTechnicianId}
             onChange={(event) => setScheduleForm((current) => ({ ...current, assignedTechnicianId: event.target.value }))}
           >
-            <option value="">Unassigned</option>
+            <option value="">{t("unassigned")}</option>
             {technicians.map((technician) => (
               <option key={technician.id} value={technician.id}>{technician.display_name}</option>
             ))}
           </FieldSelect>
         </FieldLabel>
-        <FieldLabel label="Service Type">
-          <FieldInput value={getServiceTypeLabel(job.requested_service_type)} readOnly aria-readonly />
+        <FieldLabel label={t("serviceTypeField")}>
+          <FieldInput value={getServiceTypeLabel(job.requested_service_type, locale)} readOnly aria-readonly />
         </FieldLabel>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <FieldLabel label="Scheduled Date">
+        <FieldLabel label={t("scheduledDate")}>
           <FieldInput
             type="date"
             value={scheduleForm.scheduledDate}
             onChange={(event) => setScheduleForm((current) => ({ ...current, scheduledDate: event.target.value }))}
           />
         </FieldLabel>
-        <FieldLabel label="Start Time">
+        <FieldLabel label={t("startTime")}>
           <FieldInput
             type="time"
             value={scheduleForm.scheduledTime}
@@ -351,7 +356,7 @@ function ScheduleEditor({
           />
         </FieldLabel>
       </div>
-      <FieldLabel label="End Time">
+      <FieldLabel label={t("endTime")}>
         <FieldInput
           type="time"
           value={scheduleForm.scheduledEndTime}
@@ -365,7 +370,7 @@ function ScheduleEditor({
         className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-        Save schedule
+        {t("saveSchedule")}
       </button>
     </div>
   );
@@ -381,6 +386,8 @@ export default function ScheduleWorkspace({
   initialErrorMessage: string | null;
 }) {
   const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations("schedule");
   const [jobs, setJobs] = useState<JobRecord[]>(() => sortJobs(initialJobs));
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>("week");
@@ -484,11 +491,11 @@ export default function ScheduleWorkspace({
     const scheduledEnd = combineScheduledDateTime(scheduleForm.scheduledDate, scheduleForm.scheduledEndTime);
 
     if (!scheduledFor || !scheduledEnd) {
-      throw new Error("Choose a valid scheduled date, start time, and end time.");
+      throw new Error(t("validDateTimeError"));
     }
 
     if (new Date(scheduledEnd).getTime() <= new Date(scheduledFor).getTime()) {
-      throw new Error("Choose an end time later than the start time.");
+      throw new Error(t("endAfterStartError"));
     }
 
     const updatedJob = await crmApiFetch<JobRecord>(`/api/jobs/${jobId}`, {
@@ -501,7 +508,7 @@ export default function ScheduleWorkspace({
     });
 
     setJobs((currentJobs) => sortJobs(currentJobs.map((job) => (job.id === updatedJob.id ? { ...job, ...updatedJob } : job))));
-    setStatusMessage("Schedule updates were saved.");
+    setStatusMessage(t("scheduleSaved"));
     setErrorMessage(null);
     setSelectedJobId(updatedJob.id);
   }
@@ -516,13 +523,13 @@ export default function ScheduleWorkspace({
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
-                WizField
+                {t("brand")}
               </p>
               <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] sm:text-6xl">
-                Schedule board for dispatch, technician coverage, and upcoming service work.
+                {t("title")}
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-white/56 sm:text-base">
-                Review jobs by day or week, see who is assigned, and make basic scheduling updates without leaving the calendar view.
+                {t("description")}
               </p>
             </div>
 
@@ -532,14 +539,14 @@ export default function ScheduleWorkspace({
                 className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Back to jobs
+                {t("backToJobs")}
               </Link>
               <Link
                 href="/dispatch"
                 className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
               >
                 <MapPin className="h-4 w-4" />
-                Dispatch view
+                {t("dispatchView")}
               </Link>
               <button
                 type="button"
@@ -551,16 +558,16 @@ export default function ScheduleWorkspace({
                 className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
               >
                 <LogOut className="h-4 w-4" />
-                Sign out
+                {t("signOut")}
               </button>
             </div>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard label="Visible Jobs" value={visibleScheduledJobs.length} />
-            <MetricCard label="Unscheduled" value={unscheduledJobs.length} />
-            <MetricCard label="Active Technicians" value={technicians.length} />
-            <MetricCard label="Selected Range" value={visibleDays.length} />
+            <MetricCard label={t("visibleJobs")} value={visibleScheduledJobs.length} />
+            <MetricCard label={t("unscheduled")} value={unscheduledJobs.length} />
+            <MetricCard label={t("activeTechnicians")} value={technicians.length} />
+            <MetricCard label={t("selectedRange")} value={visibleDays.length} />
           </div>
         </header>
 
@@ -576,10 +583,10 @@ export default function ScheduleWorkspace({
                   void (async () => {
                     try {
                       await refreshJobs();
-                      setStatusMessage("Schedule data was refreshed.");
+                      setStatusMessage(t("refreshed"));
                       setErrorMessage(null);
                     } catch (error) {
-                      setErrorMessage(error instanceof Error ? error.message : "The schedule could not be refreshed.");
+                      setErrorMessage(error instanceof Error ? error.message : t("refreshError"));
                     }
                   })();
                 });
@@ -587,19 +594,19 @@ export default function ScheduleWorkspace({
               className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
             >
               <RefreshCw className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`} />
-              Refresh schedule
+              {t("refreshSchedule")}
             </button>
           </div>
         )}
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_420px]">
           <div className="space-y-6">
-            <SectionFrame title="Schedule View" subtitle="Calendar">
+            <SectionFrame title={t("board")} subtitle={t("calendar")}>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <p className="text-sm text-white/46">{formatVisibleRange(visibleDays)}</p>
+                  <p className="text-sm text-white/46">{formatVisibleRange(visibleDays, locale)}</p>
                   <p className="mt-2 text-sm text-white/38">
-                    Review jobs by date, then select any item for a quick schedule edit.
+                    {t("description")}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -608,21 +615,21 @@ export default function ScheduleWorkspace({
                       className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white"
                     >
                       <ChevronLeft className="h-4 w-4" />
-                      Previous
+                      {t("previous")}
                     </button>
                     <button
                       type="button"
                       onClick={() => setSelectedDate(startOfDay(new Date()))}
                       className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white"
                     >
-                      Today
+                      {t("today")}
                     </button>
                     <button
                       type="button"
                       onClick={() => shiftRange(1)}
                       className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white"
                     >
-                      Next
+                      {t("next")}
                       <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
@@ -637,12 +644,12 @@ export default function ScheduleWorkspace({
                         onClick={() => setViewMode(mode)}
                         className={`rounded-full px-4 py-2 text-sm transition ${viewMode === mode ? "bg-[color:rgba(212,175,55,0.18)] text-[#f5d980]" : "text-white/56 hover:text-white"}`}
                       >
-                        {mode === "day" ? "Day" : "Week"}
+                        {mode === "day" ? t("day") : t("week")}
                       </button>
                     ))}
                   </div>
                   <FieldSelect value={technicianFilter} onChange={(event) => setTechnicianFilter(event.target.value)}>
-                    <option value="all">All technicians</option>
+                    <option value="all">{t("allTechnicians")}</option>
                     {technicians.map((technician) => (
                       <option key={technician.id} value={technician.id}>
                         {technician.display_name}
@@ -661,11 +668,11 @@ export default function ScheduleWorkspace({
                     <article key={day.toISOString()} className={`rounded-[24px] border border-white/10 bg-black/20 p-4 ${viewMode === "week" ? "flex min-h-[420px] flex-col" : ""}`}>
                       <div className="flex shrink-0 items-center justify-between gap-3">
                         <div>
-                          <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">{viewMode === "day" ? "Selected Day" : "Day"}</p>
-                          <h3 className="mt-2 text-lg font-semibold text-[#f5ecd2]">{formatDayHeading(day)}</h3>
+                          <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">{viewMode === "day" ? t("selectedDay") : t("dayLabel")}</p>
+                          <h3 className="mt-2 text-lg font-semibold text-[#f5ecd2]">{formatDayHeading(day, locale)}</h3>
                         </div>
                         <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/56">
-                          {totalJobsForDay} job{totalJobsForDay === 1 ? "" : "s"}
+                          {totalJobsForDay}
                         </span>
                       </div>
 
@@ -674,8 +681,8 @@ export default function ScheduleWorkspace({
                           const customer = relationValue(job.customer);
                           const technician = relationValue(job.technician);
                           const service = relationValue(job.service);
-                          const scheduledDateLabel = job.scheduled_for ? formatDayHeading(new Date(job.scheduled_for)) : "Not scheduled";
-                          const scheduledTimeLabel = formatScheduleTimeRange(job.scheduled_for, job.scheduled_window);
+                          const scheduledDateLabel = job.scheduled_for ? formatDayHeading(new Date(job.scheduled_for), locale) : t("notScheduled");
+                          const scheduledTimeLabel = formatScheduleTimeRange(job.scheduled_for, job.scheduled_window, locale, t("timeNotSet"));
 
                           return (
                             <button
@@ -692,13 +699,13 @@ export default function ScheduleWorkspace({
                                   <p className="font-medium text-white">{job.title}</p>
                                   <p className="mt-1 text-xs text-white/48">
                                     {viewMode === "week"
-                                      ? (service?.name ?? getServiceTypeLabel(job.requested_service_type))
-                                      : (customer?.full_name ?? "Customer pending")}
+                                      ? (service?.name ?? getServiceTypeLabel(job.requested_service_type, locale))
+                                      : (customer?.full_name ?? t("customerPending"))}
                                   </p>
                                 </div>
                                 {viewMode === "day" ? (
                                   <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.2em] text-white/56">
-                                    {getJobStatusLabel(job.status)}
+                                    {getJobStatusLabel(job.status, locale)}
                                   </span>
                                 ) : null}
                               </div>
@@ -706,25 +713,25 @@ export default function ScheduleWorkspace({
                               {viewMode === "week" ? (
                                 <div className="mt-3 space-y-1 text-xs text-white/52">
                                   <p>{scheduledTimeLabel}</p>
-                                  <p>{technician?.display_name ?? "Unassigned"}</p>
+                                  <p>{technician?.display_name ?? t("unassigned")}</p>
                                 </div>
                               ) : (
                               <div className="mt-3 grid gap-2 rounded-[18px] border border-white/10 bg-black/20 p-3 text-xs text-white/52">
                                 <div className="flex items-center justify-between gap-3">
-                                  <span className="uppercase tracking-[0.16em] text-white/34">Date</span>
+                                  <span className="uppercase tracking-[0.16em] text-white/34">{t("date")}</span>
                                   <span className="text-white/74">{scheduledDateLabel}</span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
-                                  <span className="uppercase tracking-[0.16em] text-white/34">Time</span>
+                                  <span className="uppercase tracking-[0.16em] text-white/34">{t("time")}</span>
                                   <span className="text-white/74">{scheduledTimeLabel}</span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
-                                  <span className="uppercase tracking-[0.16em] text-white/34">Customer</span>
-                                  <span className="text-right text-white/74">{customer?.full_name ?? "Customer pending"}</span>
+                                  <span className="uppercase tracking-[0.16em] text-white/34">{t("customer")}</span>
+                                  <span className="text-right text-white/74">{customer?.full_name ?? t("customerPending")}</span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
-                                  <span className="uppercase tracking-[0.16em] text-white/34">Technician</span>
-                                  <span className="text-right text-white/74">{technician?.display_name ?? "Unassigned"}</span>
+                                  <span className="uppercase tracking-[0.16em] text-white/34">{t("technician")}</span>
+                                  <span className="text-right text-white/74">{technician?.display_name ?? t("unassigned")}</span>
                                 </div>
                               </div>
                               )}
@@ -732,7 +739,7 @@ export default function ScheduleWorkspace({
                           );
                         }) : (
                           <div className="rounded-[20px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-8 text-center text-sm text-white/42">
-                            No jobs scheduled for this date.
+                            {t("noJobsForDate")}
                           </div>
                         )}
                       </div>
@@ -744,7 +751,11 @@ export default function ScheduleWorkspace({
               {viewMode === "day" && visibleScheduledJobs.length > 0 ? (
                 <div className="mt-5 flex flex-col gap-3 rounded-[22px] border border-white/10 bg-black/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-white/52">
-                    Showing {scheduleStartIndex + 1}-{Math.min(scheduleStartIndex + SCHEDULE_ITEMS_PER_PAGE, visibleScheduledJobs.length)} of {visibleScheduledJobs.length} scheduled jobs
+                    {t("showingScheduled", {
+                      start: scheduleStartIndex + 1,
+                      end: Math.min(scheduleStartIndex + SCHEDULE_ITEMS_PER_PAGE, visibleScheduledJobs.length),
+                      totalCount: visibleScheduledJobs.length,
+                    })}
                   </p>
                   <div className="flex items-center gap-3">
                     <button
@@ -753,10 +764,10 @@ export default function ScheduleWorkspace({
                       onClick={() => setSchedulePage((current) => Math.max(1, current - 1))}
                       className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Previous
+                      {t("previous")}
                     </button>
                     <span className="text-sm text-white/52">
-                      Page {safeSchedulePage} of {scheduleTotalPages}
+                      {t("pageOf", { page: safeSchedulePage, totalPages: scheduleTotalPages })}
                     </span>
                     <button
                       type="button"
@@ -764,14 +775,14 @@ export default function ScheduleWorkspace({
                       onClick={() => setSchedulePage((current) => Math.min(scheduleTotalPages, current + 1))}
                       className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Next
+                      {t("next")}
                     </button>
                   </div>
                 </div>
               ) : null}
             </SectionFrame>
 
-            <SectionFrame title="Unscheduled Jobs" subtitle="Overflow">
+            <SectionFrame title={t("unscheduledJobs")} subtitle={t("overflow")}>
               {unscheduledJobs.length > 0 ? (
                 <>
                   <div className="grid gap-3 lg:grid-cols-2">
@@ -789,20 +800,20 @@ export default function ScheduleWorkspace({
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="font-medium text-white">{job.title}</p>
-                              <p className="mt-1 text-sm text-white/52">{customer?.full_name ?? "Customer pending"}</p>
+                              <p className="mt-1 text-sm text-white/52">{customer?.full_name ?? t("customerPending")}</p>
                             </div>
                             <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.2em] text-white/56">
-                              {getJobStatusLabel(job.status)}
+                              {getJobStatusLabel(job.status, locale)}
                             </span>
                           </div>
                           <div className="mt-3 flex flex-wrap gap-4 text-xs text-white/46">
                             <span className="inline-flex items-center gap-1.5">
                               <UserRound className="h-3.5 w-3.5 text-[color:var(--flat-gold)]" />
-                              {technician?.display_name ?? "Unassigned"}
+                              {technician?.display_name ?? t("unassigned")}
                             </span>
                             <span className="inline-flex items-center gap-1.5">
                               <CalendarDays className="h-3.5 w-3.5 text-[color:var(--flat-gold)]" />
-                              Not scheduled
+                              {t("notScheduled")}
                             </span>
                           </div>
                         </button>
@@ -811,9 +822,13 @@ export default function ScheduleWorkspace({
                   </div>
 
                   <div className="mt-5 flex flex-col gap-3 rounded-[22px] border border-white/10 bg-black/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-white/52">
-                      Showing {unscheduledStartIndex + 1}-{Math.min(unscheduledStartIndex + SCHEDULE_ITEMS_PER_PAGE, unscheduledJobs.length)} of {unscheduledJobs.length} unscheduled jobs
-                    </p>
+                  <p className="text-sm text-white/52">
+                      {t("showingUnscheduled", {
+                        start: unscheduledStartIndex + 1,
+                        end: Math.min(unscheduledStartIndex + SCHEDULE_ITEMS_PER_PAGE, unscheduledJobs.length),
+                        totalCount: unscheduledJobs.length,
+                      })}
+                  </p>
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
@@ -821,32 +836,32 @@ export default function ScheduleWorkspace({
                         onClick={() => setUnscheduledPage((current) => Math.max(1, current - 1))}
                         className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Previous
-                      </button>
-                      <span className="text-sm text-white/52">
-                        Page {safeUnscheduledPage} of {unscheduledTotalPages}
-                      </span>
+                      {t("previous")}
+                    </button>
+                    <span className="text-sm text-white/52">
+                      {t("pageOf", { page: safeUnscheduledPage, totalPages: unscheduledTotalPages })}
+                    </span>
                       <button
                         type="button"
                         disabled={safeUnscheduledPage >= unscheduledTotalPages}
                         onClick={() => setUnscheduledPage((current) => Math.min(unscheduledTotalPages, current + 1))}
                         className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Next
-                      </button>
+                      {t("next")}
+                    </button>
                     </div>
                   </div>
                 </>
               ) : (
                 <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-8 text-center text-sm text-white/42">
-                  Every visible job already has a scheduled date.
+                  {t("everyVisibleScheduled")}
                 </div>
               )}
             </SectionFrame>
           </div>
 
           <div className="space-y-6 xl:sticky xl:top-5 xl:self-start">
-            <SectionFrame title="Selected Job" subtitle="Quick Edit">
+            <SectionFrame title={t("selectedJob")} subtitle={t("quickEdit")}>
               {selectedJob && selectedCustomer ? (
                 <div className="space-y-6">
                   <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-4">
@@ -856,15 +871,15 @@ export default function ScheduleWorkspace({
                         <p className="mt-1 text-sm text-white/52">{selectedCustomer.full_name}</p>
                       </div>
                       <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-white/60">
-                        {getJobStatusLabel(selectedJob.status)}
+                        {getJobStatusLabel(selectedJob.status, locale)}
                       </span>
                     </div>
                     <div className="mt-4 space-y-2 text-sm text-white/56">
                       <div className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 text-[color:var(--flat-gold)]" />{formatAddress(selectedJob.service_address_line_1, selectedJob.service_address_line_2, selectedJob.service_city, selectedJob.service_state_or_region, selectedJob.service_postal_code)}</div>
                       <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-[color:var(--flat-gold)]" />{selectedCustomer.phone}</div>
-                      <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[color:var(--flat-gold)]" />{selectedJob.scheduled_for ? formatDayHeading(new Date(selectedJob.scheduled_for)) : "No date selected"}</div>
-                      <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[color:var(--flat-gold)]" />{formatScheduleTimeRange(selectedJob.scheduled_for, selectedJob.scheduled_window)}</div>
-                      <div className="flex items-center gap-2"><UserRound className="h-4 w-4 text-[color:var(--flat-gold)]" />{selectedTechnician?.display_name ?? "Unassigned"}</div>
+                      <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[color:var(--flat-gold)]" />{selectedJob.scheduled_for ? formatDayHeading(new Date(selectedJob.scheduled_for), locale) : t("noDateSelected")}</div>
+                      <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[color:var(--flat-gold)]" />{formatScheduleTimeRange(selectedJob.scheduled_for, selectedJob.scheduled_window, locale, t("timeNotSet"))}</div>
+                      <div className="flex items-center gap-2"><UserRound className="h-4 w-4 text-[color:var(--flat-gold)]" />{selectedTechnician?.display_name ?? t("unassigned")}</div>
                     </div>
                   </div>
 
@@ -873,13 +888,15 @@ export default function ScheduleWorkspace({
                       job={selectedJob}
                       technicians={technicians}
                       isPending={isPending}
+                      locale={locale}
+                      t={t}
                       onSave={(form) => {
                         startTransition(() => {
                           void (async () => {
                             try {
                               await saveSchedule(selectedJob.id, form);
                             } catch (error) {
-                              setErrorMessage(error instanceof Error ? error.message : "The schedule could not be updated.");
+                              setErrorMessage(error instanceof Error ? error.message : t("updateError"));
                               setStatusMessage(null);
                             }
                           })();
@@ -889,7 +906,7 @@ export default function ScheduleWorkspace({
                 </div>
               ) : (
                 <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-10 text-center text-sm text-white/42">
-                  Select a job from the schedule to review the assignment and update its timing.
+                  {t("selectJob")}
                 </div>
               )}
             </SectionFrame>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { HTMLAttributes, ReactNode } from "react";
 
 // Step 7 baseline reference component: extend by role-based token migration, do not rewrite.
@@ -134,13 +135,14 @@ export function MasterTablePagination({
   previousHref,
   nextHref,
 }: MasterTablePaginationProps) {
+  const t = useTranslations();
   const start = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, totalCount);
 
   return (
     <div className="master-table-pagination">
       <p className="text-sm text-[color:var(--text-muted)]">
-        Showing {start}-{end} of {totalCount}
+        {t("common.pagination.showing", { start, end, totalCount })}
       </p>
       <div className="flex items-center gap-3">
         <Link
@@ -152,10 +154,10 @@ export function MasterTablePagination({
               : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)] hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)]"
           }`}
         >
-          Prev
+          {t("common.actions.prev")}
         </Link>
         <span className="text-sm text-[color:var(--text-secondary)]">
-          Page {page} of {totalPages}
+          {t("common.pagination.pageOf", { page, totalPages })}
         </span>
         <Link
           href={page < totalPages ? nextHref : "#"}
@@ -166,7 +168,7 @@ export function MasterTablePagination({
               : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)] hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)]"
           }`}
         >
-          Next
+          {t("common.actions.next")}
         </Link>
       </div>
     </div>

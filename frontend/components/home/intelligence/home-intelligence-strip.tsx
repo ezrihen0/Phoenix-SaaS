@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import type { AiBrainHomeBriefResponse } from "@/lib/ai/brain-brief-types";
@@ -20,13 +21,15 @@ export default function HomeIntelligenceStrip({
 }: {
   brief: AiBrainHomeBriefResponse;
 }) {
+  const homeT = useTranslations("home");
+  const commonT = useTranslations("common.actions");
   const [explainIndex, setExplainIndex] = useState<number | null>(null);
 
   return (
     <section className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Office Intelligence</p>
+          <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{homeT("liveDashboardSnapshot")}</p>
           <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
             Template briefing • deterministic rules • no external model ({brief.wordingMode})
           </p>
@@ -39,7 +42,7 @@ export default function HomeIntelligenceStrip({
       <details className="mt-4 rounded-[16px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-3">
         <summary className="cursor-pointer list-none outline-none [&::-webkit-details-marker]:hidden">
           <span className="text-base font-semibold text-[color:var(--sem-text-primary)]">{brief.briefing.headline}</span>
-          <span className="ml-2 text-xs text-[color:var(--sem-text-muted)]">Tap to expand</span>
+          <span className="ml-2 text-xs text-[color:var(--sem-text-muted)]">{homeT("tapToExpand")}</span>
         </summary>
         <p className="mt-3 text-sm leading-relaxed text-[color:var(--sem-text-secondary)]">{brief.briefing.body}</p>
       </details>
@@ -60,7 +63,7 @@ export default function HomeIntelligenceStrip({
                 href={action.href}
                 className="theme-control-surface inline-flex rounded-full border border-[color:var(--cmp-border-accent)] px-3 py-1.5 text-xs font-medium hover:bg-[color:var(--cmp-hover-surface)]"
               >
-                Open
+                {commonT("open")}
               </Link>
               <button
                 type="button"

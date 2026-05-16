@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import type { FlattenedResult } from "./global-search.types";
 
@@ -21,6 +22,7 @@ export function GlobalSearchCombobox({
   flatResults,
   autoFocus = false,
 }: Props) {
+  const t = useTranslations("search");
   const router = useRouter();
 
   return (
@@ -46,9 +48,9 @@ export function GlobalSearchCombobox({
           router.push(flatResults[activeIndex].destination);
         }
       }}
-      placeholder="Search jobs and customers"
+      placeholder={t("placeholder")}
       className="theme-input-control w-full rounded-[18px] px-4 py-3 text-sm outline-none placeholder:text-[color:var(--cmp-input-placeholder)]"
-      aria-label="Global search"
+      aria-label={t("ariaLabel")}
     />
   );
 }

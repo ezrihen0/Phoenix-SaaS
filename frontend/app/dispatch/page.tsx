@@ -1,10 +1,12 @@
 import type { DispatchJobRecord, DispatchTechnicianRecord } from "@/lib/crm/dispatch";
 import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
+import { getTranslations } from "next-intl/server";
 
 import DispatchWorkspace from "./dispatch-workspace";
 
 export default async function DispatchPage() {
+  const t = await getTranslations("dispatch");
   await requireOfficeCrmRoute("/dispatch");
 
   let initialJobs: DispatchJobRecord[] = [];
@@ -22,7 +24,7 @@ export default async function DispatchPage() {
   } catch (error) {
     initialErrorMessage = error instanceof Error
       ? error.message
-      : "The dispatch layer could not be loaded.";
+      : t("refreshError");
   }
 
   return (

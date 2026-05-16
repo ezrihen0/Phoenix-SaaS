@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   ArrowLeft,
   CalendarDays,
@@ -101,6 +102,7 @@ export default function DispatchWorkspace({
   initialErrorMessage: string | null;
 }) {
   const router = useRouter();
+  const t = useTranslations("dispatch");
   const [jobs, setJobs] = useState<DispatchJobRecord[]>(() => sortJobs(initialJobs));
   const [technicianFilter, setTechnicianFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("");
@@ -144,13 +146,13 @@ export default function DispatchWorkspace({
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
-                WizField
+                {t("brand")}
               </p>
               <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] sm:text-6xl">
-                Dispatch layer for address visibility, technician coverage, and map handoff.
+                {t("title")}
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-white/56 sm:text-base">
-                Keep every stop address visible, open any job in Google Maps, and filter the current dispatch list by technician or schedule date.
+                {t("description")}
               </p>
             </div>
 
@@ -160,14 +162,14 @@ export default function DispatchWorkspace({
                 className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Back to jobs
+                {t("backToJobs")}
               </Link>
               <Link
                 href="/schedule"
                 className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
               >
                 <CalendarDays className="h-4 w-4" />
-                Schedule view
+                {t("scheduleView")}
               </Link>
               <button
                 type="button"
@@ -179,16 +181,16 @@ export default function DispatchWorkspace({
                 className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
               >
                 <LogOut className="h-4 w-4" />
-                Sign out
+                {t("signOut")}
               </button>
             </div>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard label="Visible Stops" value={visibleStops.length} />
-            <MetricCard label="Scheduled Stops" value={scheduledStopCount} />
-            <MetricCard label="Active Technicians" value={technicians.length} />
-            <MetricCard label="Date Groups" value={dayGroups.length} />
+            <MetricCard label={t("visibleStops")} value={visibleStops.length} />
+            <MetricCard label={t("scheduledStops")} value={scheduledStopCount} />
+            <MetricCard label={t("activeTechnicians")} value={technicians.length} />
+            <MetricCard label={t("dateGroups")} value={dayGroups.length} />
           </div>
         </header>
 
@@ -204,10 +206,10 @@ export default function DispatchWorkspace({
                   void (async () => {
                     try {
                       await refreshJobs();
-                      setStatusMessage("Dispatch data was refreshed.");
+                      setStatusMessage(t("refreshed"));
                       setErrorMessage(null);
                     } catch (error) {
-                      setErrorMessage(error instanceof Error ? error.message : "The dispatch layer could not be refreshed.");
+                      setErrorMessage(error instanceof Error ? error.message : t("refreshError"));
                     }
                   })();
                 });
@@ -215,18 +217,18 @@ export default function DispatchWorkspace({
               className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
             >
               <RefreshCw className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`} />
-              Refresh dispatch
+              {t("refreshDispatch")}
             </button>
           </div>
         )}
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_420px]">
           <div className="space-y-6">
-            <SectionFrame title="Dispatch Board" subtitle="Maps / Stops">
+            <SectionFrame title={t("dispatchBoard")} subtitle={t("mapsStops")}>
               <div className="grid gap-4 lg:grid-cols-[0.8fr_0.8fr_auto]">
-                <FieldLabel label="Filter by Technician">
+                <FieldLabel label={t("filterTechnician")}>
                   <FieldSelect value={technicianFilter} onChange={(event) => setTechnicianFilter(event.target.value)}>
-                    <option value="all">All technicians</option>
+                    <option value="all">{t("allTechnicians")}</option>
                     {technicians.map((technician) => (
                       <option key={technician.id} value={technician.id}>
                         {technician.display_name}
@@ -234,7 +236,7 @@ export default function DispatchWorkspace({
                     ))}
                   </FieldSelect>
                 </FieldLabel>
-                <FieldLabel label="Filter by Date">
+                <FieldLabel label={t("filterDate")}>
                   <FieldInput type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} />
                 </FieldLabel>
                 <div className="flex items-end">
@@ -246,7 +248,7 @@ export default function DispatchWorkspace({
                     }}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-[18px] border border-white/10 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
                   >
-                    Clear filters
+                    {t("clearFilters")}
                   </button>
                 </div>
               </div>
@@ -256,11 +258,11 @@ export default function DispatchWorkspace({
                   <section key={dayGroup.dayKey ?? "unscheduled"} className="rounded-[24px] border border-white/10 bg-black/20 p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">Dispatch Day</p>
+                        <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">{t("dispatchDay")}</p>
                         <h3 className="mt-2 text-xl font-semibold text-[#f5ecd2]">{dayGroup.dayLabel}</h3>
                       </div>
                       <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/56">
-                        {dayGroup.stopCount} stop{dayGroup.stopCount === 1 ? "" : "s"}
+                        {t("stopCount", { count: dayGroup.stopCount })}
                       </span>
                     </div>
 
@@ -272,7 +274,7 @@ export default function DispatchWorkspace({
                               <UserRound className="h-4 w-4 text-[color:var(--flat-gold)]" />
                               <span>{cluster.technicianLabel}</span>
                             </div>
-                            <span className="text-xs text-white/46">{cluster.stopCount} assigned stop{cluster.stopCount === 1 ? "" : "s"}</span>
+                            <span className="text-xs text-white/46">{t("assignedStopCount", { count: cluster.stopCount })}</span>
                           </div>
 
                           <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -294,27 +296,27 @@ export default function DispatchWorkspace({
                   </section>
                 )) : (
                   <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-10 text-center text-sm text-white/42">
-                    No dispatch stops match the current filters.
+                    {t("noStops")}
                   </div>
                 )}
               </div>
             </SectionFrame>
 
-            <SectionFrame title="Route Prep" subtitle="Future Optimization">
+            <SectionFrame title={t("routePrep")} subtitle={t("futureOptimization")}>
               <p className="text-sm leading-6 text-white/58">
-                The current dispatch layer already normalizes each stop into a future routing seed: grouped by day, grouped by technician, and paired with a reusable Google Maps address query. That keeps the UI useful now without adding live route optimization yet.
+                {t("routePrepDescription")}
               </p>
 
               <div className="mt-5 grid gap-4 md:grid-cols-3">
-                <MetricCard label="Seed Stops" value={optimizationSeed.stopCount} />
-                <MetricCard label="Seed Days" value={optimizationSeed.dayCount} />
-                <MetricCard label="Seed Technicians" value={optimizationSeed.technicianCount} />
+                <MetricCard label={t("seedStops")} value={optimizationSeed.stopCount} />
+                <MetricCard label={t("seedDays")} value={optimizationSeed.dayCount} />
+                <MetricCard label={t("seedTechnicians")} value={optimizationSeed.technicianCount} />
               </div>
             </SectionFrame>
           </div>
 
           <div className="space-y-6 xl:sticky xl:top-5 xl:self-start">
-            <SectionFrame title="Selected Stop" subtitle="Dispatch Detail">
+            <SectionFrame title={t("selectedStop")} subtitle={t("dispatchDetail")}>
               {selectedStop ? (
                 <div className="space-y-5">
                   <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
@@ -339,10 +341,10 @@ export default function DispatchWorkspace({
                   <div className="rounded-[24px] border border-white/10 bg-black/20 p-4 text-sm text-white/62">
                     <div className="flex items-center gap-2 text-white">
                       <Route className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                      <span>Route handoff</span>
+                      <span>{t("routeHandoff")}</span>
                     </div>
                     <p className="mt-3 leading-6">
-                      Open the stop directly in Google Maps for turn-by-turn navigation. The dispatch seed is already normalized for a later route optimizer, but this layer stays intentionally simple for MVP dispatch operations.
+                      {t("routeHandoffDescription")}
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <a
@@ -352,14 +354,14 @@ export default function DispatchWorkspace({
                         className="inline-flex items-center gap-2 rounded-full border border-[color:rgba(212,175,55,0.22)] px-4 py-2 text-sm text-[color:var(--flat-gold)] transition hover:border-[color:rgba(212,175,55,0.34)] hover:bg-[color:rgba(212,175,55,0.08)]"
                       >
                         <ExternalLink className="h-4 w-4" />
-                        Open in Google Maps
+                        {t("openInGoogleMaps")}
                       </a>
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-10 text-center text-sm text-white/42">
-                  Select a stop from the dispatch board to review the address and open it in Google Maps.
+                  {t("selectStop")}
                 </div>
               )}
             </SectionFrame>

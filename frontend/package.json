@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "i18n:check": "node scripts/check-i18n-catalog-parity.mjs",
     "shell-nav-policy:check": "node scripts/check-shell-nav-policy.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.8.0",
     "next": "16.2.4",
+    "next-intl": "^4.12.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

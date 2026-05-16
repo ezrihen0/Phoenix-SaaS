@@ -2,8 +2,13 @@
 
 import { Languages, Loader2 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  getWorkerUiLanguageLabel,
+  isSupportedWorkerUiLocale,
+} from "@/lib/i18n/locales";
 import {
   getClientLanguagePreference,
   updateClientLanguagePreference,
@@ -15,6 +20,7 @@ type LanguageSwitcherProps = {
 };
 
 export function LanguageSwitcher({ variant }: LanguageSwitcherProps) {
+  const t = useTranslations("shell.language");
   const pathname = usePathname();
   const [payload, setPayload] = useState<LanguagePreferencePayload | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -27,9 +33,9 @@ export function LanguageSwitcher({ variant }: LanguageSwitcherProps) {
       setPayload(next);
     } catch (error) {
       setPayload(null);
-      setLoadError(error instanceof Error ? error.message : "Language preference could not be loaded.");
+      setLoadError(error instanceof Error ? error.message : t("loadError"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadPreference();
@@ -48,11 +54,12 @@ export function LanguageSwitcher({ variant }: LanguageSwitcherProps) {
     setLoadError(null);
 
     try {
-      const next = await updateClientLanguagePreference(nextLanguageCode);
-      setPayload(next);
+      await updateClientLanguagePreference(nextLanguageCode);
+      if (typeof window !== "undefined") {
+        window.location.reload();
+      }
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Language preference could not be updated.");
-    } finally {
+      setLoadError(error instanceof Error ? error.message : t("updateError"));
       setSaving(false);
     }
   }
@@ -61,14 +68,14 @@ export function LanguageSwitcher({ variant }: LanguageSwitcherProps) {
     return (
       <div className="inline-flex items-center gap-2 rounded-full border border-dashed border-[color:var(--cmp-border-subtle)] px-3 py-2 text-sm text-[color:var(--sem-text-muted)]">
         <Loader2 className="h-4 w-4 animate-spin" />
-        <span>Loading language…</span>
+        <span>{t("loading")}</span>
       </div>
     );
   }
 
   return (
     <div className="inline-flex flex-col items-start gap-1">
-      <p className={mutedClass}>Workspace language</p>
+      <p className={mutedClass}>{t("label")}</p>
       <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] px-3 py-2 text-left text-sm transition hover:border-[color:var(--cmp-border-accent)]">
         <Languages className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
         <select
@@ -77,19 +84,19 @@ export function LanguageSwitcher({ variant }: LanguageSwitcherProps) {
             void handleChange(event.target.value);
           }}
           disabled={saving}
-          aria-label="Workspace language"
+          aria-label={t("label")}
           className={`${labelClass} bg-transparent outline-none`}
         >
           {payload.enabled_languages.map((language) => (
             <option key={language.code} value={language.code}>
-              {language.label}
+              {isSupportedWorkerUiLocale(language.code) ? getWorkerUiLanguageLabel(language.code) : language.label}
             </option>
           ))}
         </select>
       </div>
       {payload.fallback_to_default ? (
         <p className="max-w-[14rem] text-xs text-amber-700 dark:text-amber-200">
-          {payload.fallback_reason}
+          {t("fallback")}
         </p>
       ) : null}
       {loadError ? (

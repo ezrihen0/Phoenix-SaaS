@@ -1,7 +1,9 @@
 "use client";
 
 import { Globe2, LockKeyhole, Sparkles } from "lucide-react";
+import { useTranslations } from "next-intl";
 
+import { getWorkerUiLanguageLabel, isSupportedWorkerUiLocale } from "@/lib/i18n/locales";
 import type { LanguageStoreLanguageCard as LanguageStoreLanguageCardPayload } from "@/lib/language-store/client-language-store";
 
 type LanguageStoreLanguageCardProps = {
@@ -11,17 +13,17 @@ type LanguageStoreLanguageCardProps = {
   onDeactivate: (languageCode: string) => void;
 };
 
-function stateLabel(state: LanguageStoreLanguageCardPayload["state"]) {
+function stateMessageKey(state: LanguageStoreLanguageCardPayload["state"]) {
   switch (state) {
     case "active":
-      return "Active";
+      return "active";
     case "available":
-      return "Available";
+      return "available";
     case "slot_full":
-      return "Slot full";
+      return "slotFull";
     case "locked":
     default:
-      return "Locked";
+      return "locked";
   }
 }
 
@@ -31,7 +33,9 @@ export function LanguageStoreLanguageCard({
   onActivate,
   onDeactivate,
 }: LanguageStoreLanguageCardProps) {
+  const t = useTranslations();
   const busy = busyCode === language.code;
+  const displayLabel = isSupportedWorkerUiLocale(language.code) ? getWorkerUiLanguageLabel(language.code) : language.label;
 
   return (
     <article className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
@@ -46,27 +50,25 @@ export function LanguageStoreLanguageCard({
           </div>
           <div>
             <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-accent-primary)]">{language.code}</p>
-            <h2 className="mt-1 text-xl font-semibold text-[color:var(--sem-text-primary)]">{language.label}</h2>
+            <h2 className="mt-1 text-xl font-semibold text-[color:var(--sem-text-primary)]">{displayLabel}</h2>
             <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">
-              {language.direction === "rtl" ? "Right-to-left interface support." : "Left-to-right interface support."}
+              {language.direction === "rtl" ? t("languageStore.direction.rtl") : t("languageStore.direction.ltr")}
             </p>
           </div>
         </div>
         <span className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
-          {stateLabel(language.state)}
+          {t(`languageStore.state.${stateMessageKey(language.state)}`)}
         </span>
       </div>
 
       <div className="mt-5 space-y-3">
         {language.is_default ? (
           <p className="text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-            English is always available and never consumes a paid slot.
+            {t("languageStore.englishAlwaysAvailable")}
           </p>
         ) : (
           <p className="text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-            {language.consumes_paid_slot
-              ? "This language consumes one additional worker-language slot when active."
-              : "This language does not consume a paid slot."}
+            {language.consumes_paid_slot ? t("languageStore.consumesSlot") : t("languageStore.doesNotConsumeSlot")}
           </p>
         )}
 
@@ -85,7 +87,7 @@ export function LanguageStoreLanguageCard({
             disabled={busy}
             className="rounded-full border border-[color:var(--cmp-border-accent)] bg-[color:var(--sem-accent-primary)] px-5 py-2 text-sm font-semibold text-[color:var(--cmp-surface-canvas)] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {busy ? "Activating..." : "Activate"}
+            {busy ? t("common.actions.activating") : t("common.actions.activate")}
           </button>
         ) : null}
 
@@ -96,7 +98,7 @@ export function LanguageStoreLanguageCard({
             disabled={busy}
             className="theme-control-surface inline-flex items-center justify-center rounded-full border px-5 py-2 text-sm font-semibold transition hover:border-[color:var(--cmp-border-accent)] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {busy ? "Updating..." : "Deactivate"}
+            {busy ? t("common.actions.updating") : t("common.actions.deactivate")}
           </button>
         ) : null}
       </div>

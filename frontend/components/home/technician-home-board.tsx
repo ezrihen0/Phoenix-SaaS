@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import {
   CalendarDays,
   CheckCircle2,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
+import { formatAddress, formatDateTime } from "@/lib/crm/display";
 import {
   canTransitionJobStatus,
   getJobStatusLabel,
@@ -148,31 +150,6 @@ function relationValue<T>(value: RelatedValue<T> | undefined) {
   return value ?? null;
 }
 
-function formatAddress(
-  line1: string,
-  line2: string | null,
-  city: string,
-  stateOrRegion: string | null,
-  postalCode: string,
-) {
-  return [line1, line2, [city, stateOrRegion].filter(Boolean).join(", "), postalCode]
-    .filter(Boolean)
-    .join(" • ");
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not scheduled";
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 function statusTone(status: string) {
   if (status === "cancelled") {
     return "border-rose-500/30 bg-rose-500/12 text-rose-100";
@@ -252,6 +229,8 @@ function MetricCard({ icon: Icon, label, value }: { icon: typeof Flame; label: s
 }
 
 export default function TechnicianHomeBoard() {
+  const locale = useLocale();
+  const t = useTranslations("home.tech");
   const [dashboard, setDashboard] = useState<TechnicianDashboardResponse | null>(null);
   const [jobDetail, setJobDetail] = useState<JobDetail | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -323,7 +302,7 @@ export default function TechnicianHomeBoard() {
       await onRun();
       setStatusMessage(successMessage);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "The action could not be completed.");
+      setErrorMessage(error instanceof Error ? error.message : t("actionError"));
     } finally {
       setBusyAction(null);
     }
@@ -349,7 +328,7 @@ export default function TechnicianHomeBoard() {
           return;
         }
 
-        setErrorMessage(error instanceof Error ? error.message : "The technician dashboard could not be loaded.");
+        setErrorMessage(error instanceof Error ? error.message : t("loadError"));
       } finally {
         if (isMounted) {
           setIsBooting(false);
@@ -362,7 +341,7 @@ export default function TechnicianHomeBoard() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!selectedJobId) {
@@ -389,7 +368,7 @@ export default function TechnicianHomeBoard() {
           return;
         }
 
-        setErrorMessage(error instanceof Error ? error.message : "The selected job could not be loaded.");
+        setErrorMessage(error instanceof Error ? error.message : t("selectedJobError"));
       }
     }
 
@@ -398,284 +377,305 @@ export default function TechnicianHomeBoard() {
     return () => {
       isMounted = false;
     };
-  }, [selectedJobId]);
+  }, [selectedJobId, t]);
 
   if (isBooting && !dashboard) {
     return (
       <div className="flex min-h-[220px] items-center justify-center rounded-[34px] bg-[color:var(--flat-canvas)] text-white">
         <div className="inline-flex items-center gap-3 text-sm text-white/62">
           <LoaderCircle className="h-4 w-4 animate-spin text-[color:var(--flat-gold)]" />
-          Loading the technician board...
+          {t("loading")}
         </div>
       </div>
     );
   }
 
   const boardBody = (
-      <div className="relative mx-auto max-w-none px-5 py-6 lg:px-8">
-        <header className="rounded-[34px] border border-[color:rgba(212,175,55,0.18)] bg-[linear-gradient(180deg,rgba(9,9,9,0.94),rgba(18,18,18,0.88))] p-6 shadow-[0_34px_120px_rgba(0,0,0,0.42)] backdrop-blur-2xl">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h1 className="max-w-3xl font-[family:var(--font-flat-display)] text-4xl leading-none tracking-tight text-[#f5ecd2] sm:text-5xl">
-                Technician board for live job progress and clean field handoff.
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/56 sm:text-base">
-                See what is assigned today, update arrival and work status in real time, and leave notes the office can quote and invoice from.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard icon={Wrench} label="Open Jobs" value={dashboard?.summary.openJobs ?? 0} />
-            <MetricCard icon={Flame} label="In Progress" value={dashboard?.summary.inProgressJobs ?? 0} />
-            <MetricCard icon={ShieldCheck} label="Waiting Approval" value={dashboard?.summary.waitingForApprovalJobs ?? 0} />
-            <MetricCard icon={CheckCircle2} label="Completed Today" value={dashboard?.summary.completedToday ?? 0} />
-          </div>
-        </header>
-
-        {(errorMessage || statusMessage) && (
-          <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <div className={`rounded-[22px] border px-4 py-3 text-sm ${errorMessage ? "border-rose-500/30 bg-rose-500/10 text-rose-100" : "border-[color:rgba(212,175,55,0.24)] bg-[color:rgba(212,175,55,0.1)] text-[#f5d980]"}`}>
-              {errorMessage ?? statusMessage}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                void runAction(
-                  "refresh",
-                  async () => {
-                    await Promise.all([
-                      refreshDashboard(selectedJobId),
-                      refreshJobDetail(selectedJobId),
-                    ]);
-                  },
-                  "The technician board was refreshed.",
-                );
-              }}
-              className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
-            >
-              <RefreshCw className={`h-4 w-4 ${busyAction === "refresh" || isPending ? "animate-spin" : ""}`} />
-              Refresh board
-            </button>
-          </div>
-        )}
-
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <SectionFrame title="Assigned Jobs" subtitle="Field Queue">
-            <div className="grid gap-4 lg:grid-cols-2">
-              {dashboard?.jobs.length ? dashboard.jobs.map((job) => {
-                const customer = relationValue(job.customer);
-                const service = relationValue(job.service);
-
-                return (
-                  <button
-                    key={job.id}
-                    type="button"
-                    onClick={() => {
-                      startTransition(() => {
-                        setSelectedJobId(job.id);
-                        setJobDetail(null);
-                        setNoteForm(emptyNoteForm);
-                        setStatusNote("");
-                      });
-                    }}
-                    className={`rounded-[28px] border p-5 text-left transition ${selectedJobId === job.id ? "border-[color:rgba(212,175,55,0.3)] bg-[color:rgba(212,175,55,0.08)]" : "border-white/10 bg-white/[0.03] hover:border-white/18 hover:bg-white/[0.05]"}`}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-lg font-semibold tracking-tight text-white">{job.title}</p>
-                        <p className="mt-1 text-sm text-white/46">{customer?.full_name ?? "Customer pending"}</p>
-                      </div>
-                      <span className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.24em] ${statusTone(job.status)}`}>
-                        {getJobStatusLabel(job.status)}
-                      </span>
-                    </div>
-                    <div className="mt-4 space-y-2 text-sm text-white/56">
-                      <div className="flex items-start gap-2">
-                        <MapPin className="mt-0.5 h-4 w-4 text-[color:var(--flat-gold)]" />
-                        <span>{formatAddress(job.service_address_line_1, job.service_address_line_2, job.service_city, job.service_state_or_region, job.service_postal_code)}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                        <span>{customer?.phone ?? "No phone on file"}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                        <span>{formatDateTime(job.scheduled_for)}{job.scheduled_window ? ` • ${job.scheduled_window}` : ""}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                        <span>{service?.name ?? getServiceTypeLabel(job.requested_service_type)}</span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              }) : (
-                <div className="rounded-[28px] border border-dashed border-white/10 bg-white/[0.03] px-5 py-10 text-center text-sm text-white/46 lg:col-span-2">
-                  No jobs are assigned right now. The office board will send the next ticket here.
-                </div>
-              )}
-            </div>
-          </SectionFrame>
-
-          <div className="space-y-6 xl:sticky xl:top-5 xl:self-start">
-            <SectionFrame title="Selected Job" subtitle="Field Detail">
-              {displayedJob && displayedCustomer ? (
-                <div className="space-y-6">
-                  <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xl font-semibold tracking-tight text-white">{displayedJob.title}</p>
-                        <p className="mt-1 text-sm text-white/52">{displayedCustomer.full_name}</p>
-                      </div>
-                      <span className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.24em] ${statusTone(displayedJob.status)}`}>
-                        {getJobStatusLabel(displayedJob.status)}
-                      </span>
-                    </div>
-
-                    <div className="mt-4 space-y-2 text-sm text-white/56">
-                      <div className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 text-[color:var(--flat-gold)]" />{formatAddress(displayedJob.service_address_line_1, displayedJob.service_address_line_2, displayedJob.service_city, displayedJob.service_state_or_region, displayedJob.service_postal_code)}</div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                        <a href={`tel:${displayedCustomer.phone}`} className="transition hover:text-white">
-                          {displayedCustomer.phone}
-                        </a>
-                      </div>
-                      <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[color:var(--flat-gold)]" />{formatDateTime(displayedJob.scheduled_for)}{displayedJob.scheduled_window ? ` • ${displayedJob.scheduled_window}` : ""}</div>
-                      <div className="flex items-center gap-2"><UserRound className="h-4 w-4 text-[color:var(--flat-gold)]" />{displayedService?.name ?? getServiceTypeLabel(displayedJob.requested_service_type)}</div>
-                      <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[color:var(--flat-gold)]" />Current status: {getJobStatusLabel(displayedJob.status)}</div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">Status Actions</p>
-                    <FieldLabel label="Status Note">
-                      <FieldTextArea value={statusNote} onChange={(event) => setStatusNote(event.target.value)} placeholder="Optional update for the office team." className="min-h-[90px]" />
-                    </FieldLabel>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      {technicianJobStatuses.map((typedStatus) => {
-                        const isCurrentStatus = displayedJob.status === typedStatus;
-                        const canTransition = !isCurrentStatus && canTransitionJobStatus(displayedJob.status, typedStatus);
-
-                        return (
-                          <button
-                            key={typedStatus}
-                            type="button"
-                            disabled={!selectedJobId || Boolean(busyAction) || !canTransition}
-                            onClick={() => {
-                              if (!selectedJobId) {
-                                return;
-                              }
-
-                              void runAction(
-                                `status-${selectedJobId}-${typedStatus}`,
-                                async () => {
-                                  await crmApiFetch(`/api/jobs/${selectedJobId}/status`, {
-                                    method: "POST",
-                                    body: JSON.stringify({ status: typedStatus, note: statusNote || null }),
-                                  });
-                                  await Promise.all([
-                                    refreshDashboard(selectedJobId),
-                                    refreshJobDetail(selectedJobId),
-                                  ]);
-                                },
-                                `Job marked ${getJobStatusLabel(typedStatus)}.`,
-                              );
-                            }}
-                            className={`rounded-[18px] border px-4 py-4 text-xs uppercase tracking-[0.24em] transition ${isCurrentStatus ? `${statusTone(typedStatus)} border-[color:rgba(212,175,55,0.28)]` : "border-white/10 bg-black/20 text-white/66 hover:border-white/20 hover:text-white"} disabled:cursor-not-allowed disabled:opacity-45`}
-                          >
-                            {getJobStatusLabel(typedStatus)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">Field Notes</p>
-                    <FieldLabel label="Findings">
-                      <FieldTextArea value={noteForm.findings} onChange={(event) => setNoteForm((current) => ({ ...current, findings: event.target.value }))} />
-                    </FieldLabel>
-                    <FieldLabel label="Recommendations">
-                      <FieldTextArea value={noteForm.recommendations} onChange={(event) => setNoteForm((current) => ({ ...current, recommendations: event.target.value }))} />
-                    </FieldLabel>
-                    <button
-                      type="button"
-                      disabled={!selectedJobId || Boolean(busyAction)}
-                      onClick={() => {
-                        if (!selectedJobId) {
-                          return;
-                        }
-
-                        void runAction(
-                          `note-${selectedJobId}`,
-                          async () => {
-                            await crmApiFetch(`/api/jobs/${selectedJobId}/notes`, {
-                              method: "POST",
-                              body: JSON.stringify({
-                                findings: noteForm.findings || null,
-                                recommendations: noteForm.recommendations || null,
-                                photoUrls: [],
-                              }),
-                            });
-                            setNoteForm(emptyNoteForm);
-                            await refreshJobDetail(selectedJobId);
-                          },
-                          "Field note saved.",
-                        );
-                      }}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {busyAction === `note-${selectedJobId}` ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                      Save field note
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">Recent Notes</p>
-                    {sortedNotes.length ? sortedNotes.map((note) => (
-                      <article key={note.id} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4 text-sm text-white/58">
-                        <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.24em] text-white/34">
-                          <span>Note #{note.id}</span>
-                          <span>{formatDateTime(note.created_at)}</span>
-                        </div>
-                        {note.findings ? <p className="mt-3"><span className="text-white/84">Findings:</span> {note.findings}</p> : null}
-                        {note.recommendations ? <p className="mt-2"><span className="text-white/84">Recommendations:</span> {note.recommendations}</p> : null}
-                      </article>
-                    )) : (
-                      <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-white/42">
-                        No field notes have been attached yet.
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-3">
-                    <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">Status Timeline</p>
-                    {sortedStatusEvents.length ? sortedStatusEvents.map((event) => (
-                      <div key={event.id} className="flex gap-3 rounded-[20px] border border-white/10 bg-white/[0.03] p-4 text-sm text-white/56">
-                        <span className={`mt-0.5 h-3 w-3 rounded-full border ${statusTone(event.status)}`} />
-                        <div>
-                          <p className="text-white/84">{getJobStatusLabel(event.status)}</p>
-                          <p className="mt-1 text-xs uppercase tracking-[0.24em] text-white/32">{formatDateTime(event.created_at)}</p>
-                          {event.note ? <p className="mt-2">{event.note}</p> : null}
-                        </div>
-                      </div>
-                    )) : (
-                      <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-white/42">
-                        No status timeline entries yet.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-[26px] border border-dashed border-white/10 bg-white/[0.03] px-5 py-14 text-center text-sm text-white/44">
-                  Select an assigned job to update progress, add findings, and keep the office board current.
-                </div>
-              )}
-            </SectionFrame>
+    <div className="relative mx-auto max-w-none px-5 py-6 lg:px-8">
+      <header className="rounded-[34px] border border-[color:rgba(212,175,55,0.18)] bg-[linear-gradient(180deg,rgba(9,9,9,0.94),rgba(18,18,18,0.88))] p-6 shadow-[0_34px_120px_rgba(0,0,0,0.42)] backdrop-blur-2xl">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="max-w-3xl font-[family:var(--font-flat-display)] text-4xl leading-none tracking-tight text-[#f5ecd2] sm:text-5xl">
+              {t("heroTitle")}
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-white/56 sm:text-base">
+              {t("heroBody")}
+            </p>
           </div>
         </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard icon={Wrench} label={t("summary.openJobs")} value={dashboard?.summary.openJobs ?? 0} />
+          <MetricCard icon={Flame} label={t("summary.inProgress")} value={dashboard?.summary.inProgressJobs ?? 0} />
+          <MetricCard icon={ShieldCheck} label={t("summary.waitingApproval")} value={dashboard?.summary.waitingForApprovalJobs ?? 0} />
+          <MetricCard icon={CheckCircle2} label={t("summary.completedToday")} value={dashboard?.summary.completedToday ?? 0} />
+        </div>
+      </header>
+
+      {(errorMessage || statusMessage) && (
+        <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <div className={`rounded-[22px] border px-4 py-3 text-sm ${errorMessage ? "border-rose-500/30 bg-rose-500/10 text-rose-100" : "border-[color:rgba(212,175,55,0.24)] bg-[color:rgba(212,175,55,0.1)] text-[#f5d980]"}`}>
+            {errorMessage ?? statusMessage}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              void runAction(
+                "refresh",
+                async () => {
+                  await Promise.all([
+                    refreshDashboard(selectedJobId),
+                    refreshJobDetail(selectedJobId),
+                  ]);
+                },
+                t("refreshed"),
+              );
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+          >
+            <RefreshCw className={`h-4 w-4 ${busyAction === "refresh" || isPending ? "animate-spin" : ""}`} />
+            {t("refreshBoard")}
+          </button>
+        </div>
+      )}
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <SectionFrame title={t("assignedJobs")} subtitle={t("fieldQueue")}>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {dashboard?.jobs.length ? dashboard.jobs.map((job) => {
+              const customer = relationValue(job.customer);
+              const service = relationValue(job.service);
+
+              return (
+                <button
+                  key={job.id}
+                  type="button"
+                  onClick={() => {
+                    startTransition(() => {
+                      setSelectedJobId(job.id);
+                      setJobDetail(null);
+                      setNoteForm(emptyNoteForm);
+                      setStatusNote("");
+                    });
+                  }}
+                  className={`rounded-[28px] border p-5 text-left transition ${selectedJobId === job.id ? "border-[color:rgba(212,175,55,0.3)] bg-[color:rgba(212,175,55,0.08)]" : "border-white/10 bg-white/[0.03] hover:border-white/18 hover:bg-white/[0.05]"}`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-lg font-semibold tracking-tight text-white">{job.title}</p>
+                      <p className="mt-1 text-sm text-white/46">{customer?.full_name ?? t("customerPending")}</p>
+                    </div>
+                    <span className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.24em] ${statusTone(job.status)}`}>
+                      {getJobStatusLabel(job.status, locale)}
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-2 text-sm text-white/56">
+                    <div className="flex items-start gap-2">
+                      <MapPin className="mt-0.5 h-4 w-4 text-[color:var(--flat-gold)]" />
+                      <span>{formatAddress(job.service_address_line_1, job.service_address_line_2, job.service_city, job.service_state_or_region, job.service_postal_code)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-[color:var(--flat-gold)]" />
+                      <span>{customer?.phone ?? t("noPhone")}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CalendarDays className="h-4 w-4 text-[color:var(--flat-gold)]" />
+                      <span>
+                        {formatDateTime(job.scheduled_for, locale, "Not scheduled")}
+                        {job.scheduled_window ? ` | ${job.scheduled_window}` : ""}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-[color:var(--flat-gold)]" />
+                      <span>{service?.name ?? getServiceTypeLabel(job.requested_service_type, locale)}</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            }) : (
+              <div className="rounded-[28px] border border-dashed border-white/10 bg-white/[0.03] px-5 py-10 text-center text-sm text-white/46 lg:col-span-2">
+                {t("noAssignedJobs")}
+              </div>
+            )}
+          </div>
+        </SectionFrame>
+
+        <div className="space-y-6 xl:sticky xl:top-5 xl:self-start">
+          <SectionFrame title={t("selectedJob")} subtitle={t("fieldDetail")}>
+            {displayedJob && displayedCustomer ? (
+              <div className="space-y-6">
+                <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xl font-semibold tracking-tight text-white">{displayedJob.title}</p>
+                      <p className="mt-1 text-sm text-white/52">{displayedCustomer.full_name}</p>
+                    </div>
+                    <span className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.24em] ${statusTone(displayedJob.status)}`}>
+                      {getJobStatusLabel(displayedJob.status, locale)}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 space-y-2 text-sm text-white/56">
+                    <div className="flex items-start gap-2">
+                      <MapPin className="mt-0.5 h-4 w-4 text-[color:var(--flat-gold)]" />
+                      {formatAddress(displayedJob.service_address_line_1, displayedJob.service_address_line_2, displayedJob.service_city, displayedJob.service_state_or_region, displayedJob.service_postal_code)}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-[color:var(--flat-gold)]" />
+                      <a href={`tel:${displayedCustomer.phone}`} className="transition hover:text-white">
+                        {displayedCustomer.phone}
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CalendarDays className="h-4 w-4 text-[color:var(--flat-gold)]" />
+                      {formatDateTime(displayedJob.scheduled_for, locale, "Not scheduled")}
+                      {displayedJob.scheduled_window ? ` | ${displayedJob.scheduled_window}` : ""}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <UserRound className="h-4 w-4 text-[color:var(--flat-gold)]" />
+                      {displayedService?.name ?? getServiceTypeLabel(displayedJob.requested_service_type, locale)}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-[color:var(--flat-gold)]" />
+                      {t("currentStatus", { status: getJobStatusLabel(displayedJob.status, locale) })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">{t("statusActions")}</p>
+                  <FieldLabel label={t("statusNote")}>
+                    <FieldTextArea
+                      value={statusNote}
+                      onChange={(event) => setStatusNote(event.target.value)}
+                      placeholder={t("statusNotePlaceholder")}
+                      className="min-h-[90px]"
+                    />
+                  </FieldLabel>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {technicianJobStatuses.map((typedStatus) => {
+                      const isCurrentStatus = displayedJob.status === typedStatus;
+                      const canTransition = !isCurrentStatus && canTransitionJobStatus(displayedJob.status, typedStatus);
+
+                      return (
+                        <button
+                          key={typedStatus}
+                          type="button"
+                          disabled={!selectedJobId || Boolean(busyAction) || !canTransition}
+                          onClick={() => {
+                            if (!selectedJobId) {
+                              return;
+                            }
+
+                            void runAction(
+                              `status-${selectedJobId}-${typedStatus}`,
+                              async () => {
+                                await crmApiFetch(`/api/jobs/${selectedJobId}/status`, {
+                                  method: "POST",
+                                  body: JSON.stringify({ status: typedStatus, note: statusNote || null }),
+                                });
+                                await Promise.all([
+                                  refreshDashboard(selectedJobId),
+                                  refreshJobDetail(selectedJobId),
+                                ]);
+                              },
+                              t("markedStatus", { status: getJobStatusLabel(typedStatus, locale) }),
+                            );
+                          }}
+                          className={`rounded-[18px] border px-4 py-4 text-xs uppercase tracking-[0.24em] transition ${isCurrentStatus ? `${statusTone(typedStatus)} border-[color:rgba(212,175,55,0.28)]` : "border-white/10 bg-black/20 text-white/66 hover:border-white/20 hover:text-white"} disabled:cursor-not-allowed disabled:opacity-45`}
+                        >
+                          {getJobStatusLabel(typedStatus, locale)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">{t("fieldNotes")}</p>
+                  <FieldLabel label={t("findings")}>
+                    <FieldTextArea value={noteForm.findings} onChange={(event) => setNoteForm((current) => ({ ...current, findings: event.target.value }))} />
+                  </FieldLabel>
+                  <FieldLabel label={t("recommendations")}>
+                    <FieldTextArea value={noteForm.recommendations} onChange={(event) => setNoteForm((current) => ({ ...current, recommendations: event.target.value }))} />
+                  </FieldLabel>
+                  <button
+                    type="button"
+                    disabled={!selectedJobId || Boolean(busyAction)}
+                    onClick={() => {
+                      if (!selectedJobId) {
+                        return;
+                      }
+
+                      void runAction(
+                        `note-${selectedJobId}`,
+                        async () => {
+                          await crmApiFetch(`/api/jobs/${selectedJobId}/notes`, {
+                            method: "POST",
+                            body: JSON.stringify({
+                              findings: noteForm.findings || null,
+                              recommendations: noteForm.recommendations || null,
+                              photoUrls: [],
+                            }),
+                          });
+                          setNoteForm(emptyNoteForm);
+                          await refreshJobDetail(selectedJobId);
+                        },
+                        t("fieldNoteSaved"),
+                      );
+                    }}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {busyAction === `note-${selectedJobId}` ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    {t("saveFieldNote")}
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">{t("recentNotes")}</p>
+                  {sortedNotes.length ? sortedNotes.map((note) => (
+                    <article key={note.id} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4 text-sm text-white/58">
+                      <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.24em] text-white/34">
+                        <span>{t("noteLabel", { id: note.id })}</span>
+                        <span>{formatDateTime(note.created_at, locale, "Not scheduled")}</span>
+                      </div>
+                      {note.findings ? <p className="mt-3"><span className="text-white/84">{t("noteFindings")}</span> {note.findings}</p> : null}
+                      {note.recommendations ? <p className="mt-2"><span className="text-white/84">{t("noteRecommendations")}</span> {note.recommendations}</p> : null}
+                    </article>
+                  )) : (
+                    <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-white/42">
+                      {t("noFieldNotes")}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">{t("statusTimeline")}</p>
+                  {sortedStatusEvents.length ? sortedStatusEvents.map((event) => (
+                    <div key={event.id} className="flex gap-3 rounded-[20px] border border-white/10 bg-white/[0.03] p-4 text-sm text-white/56">
+                      <span className={`mt-0.5 h-3 w-3 rounded-full border ${statusTone(event.status)}`} />
+                      <div>
+                        <p className="text-white/84">{getJobStatusLabel(event.status, locale)}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.24em] text-white/32">{formatDateTime(event.created_at, locale, "Not scheduled")}</p>
+                        {event.note ? <p className="mt-2">{event.note}</p> : null}
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-white/42">
+                      {t("noStatusTimeline")}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-[26px] border border-dashed border-white/10 bg-white/[0.03] px-5 py-14 text-center text-sm text-white/44">
+                {t("selectJob")}
+              </div>
+            )}
+          </SectionFrame>
+        </div>
       </div>
+    </div>
   );
 
   return (

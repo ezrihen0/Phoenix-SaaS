@@ -1,15 +1,17 @@
-import { requireServerSession, type SessionRole } from "@/lib/auth/server-session";
+import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+
 import TechnicianHomeBoard from "@/components/home/technician-home-board";
 import HomeIntelligenceStrip from "@/components/home/intelligence/home-intelligence-strip";
+import type { AiBrainHomeBriefResponse } from "@/lib/ai/brain-brief-types";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { fetchBrainHomeBriefSilent } from "@/lib/api/server-brain-home-brief";
-import type { AiBrainHomeBriefResponse } from "@/lib/ai/brain-brief-types";
+import { requireServerSession, type SessionRole } from "@/lib/auth/server-session";
 import {
   isOfficeDashboardResponse,
   type OfficeDashboardResponse,
 } from "@/lib/crm/home-dashboard-types";
 import { canAccessShellHref } from "@/lib/navigation/shell-nav-policy";
-import Link from "next/link";
 
 function isOfficeRole(role: SessionRole | null) {
   return role === "owner"
@@ -19,20 +21,41 @@ function isOfficeRole(role: SessionRole | null) {
     || role === "viewer";
 }
 
-function OfficeSnapshotQuickLinks({ role }: { role: SessionRole | null }) {
+function OfficeSnapshotQuickLinks({
+  role,
+  title,
+  description,
+  labels,
+}: {
+  role: SessionRole | null;
+  title: string;
+  description: string;
+  labels: {
+    leads: string;
+    jobs: string;
+    schedule: string;
+    dispatch: string;
+    invoices: string;
+    estimates: string;
+    marketing: string;
+    automations: string;
+    calls: string;
+    messaging: string;
+  };
+}) {
   type QuickItem = { href: string; label: string };
 
   const candidates: QuickItem[] = [
-    { href: "/leads", label: "Leads queue" },
-    { href: "/jobs", label: "Jobs board" },
-    { href: "/schedule", label: "Schedule" },
-    { href: "/dispatch", label: "Dispatch" },
-    { href: "/invoices", label: "Invoices" },
-    { href: "/estimates", label: "Estimates" },
-    { href: "/marketing", label: "Growth Center" },
-    { href: "/automations", label: "CRM automations" },
-    { href: "/calls", label: "Calls" },
-    { href: "/messaging", label: "Messaging" },
+    { href: "/leads", label: labels.leads },
+    { href: "/jobs", label: labels.jobs },
+    { href: "/schedule", label: labels.schedule },
+    { href: "/dispatch", label: labels.dispatch },
+    { href: "/invoices", label: labels.invoices },
+    { href: "/estimates", label: labels.estimates },
+    { href: "/marketing", label: labels.marketing },
+    { href: "/automations", label: labels.automations },
+    { href: "/calls", label: labels.calls },
+    { href: "/messaging", label: labels.messaging },
   ];
 
   const links = candidates.filter((item) => canAccessShellHref(item.href, role));
@@ -43,9 +66,9 @@ function OfficeSnapshotQuickLinks({ role }: { role: SessionRole | null }) {
 
   return (
     <section className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Jump to operations</p>
+      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{title}</p>
       <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
-        Open the module behind each snapshot metric—without hunting the sidebar.
+        {description}
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         {links.map((item) => (
@@ -83,6 +106,8 @@ function SummaryCard({
 export default async function HomePage() {
   const session = await requireServerSession("/home");
   const role = session.profile?.role ?? null;
+  const t = await getTranslations("home");
+  const shellT = await getTranslations("shell.nav");
   const technicianRole = role === "technician";
   const officeRole = isOfficeRole(role);
 
@@ -96,10 +121,10 @@ export default async function HomePage() {
       if (isOfficeDashboardResponse(payload)) {
         officeDashboard = payload;
       } else {
-        loadError = "Office dashboard data is unavailable right now.";
+        loadError = t("loadError");
       }
     } catch {
-      loadError = "Office dashboard data is unavailable right now.";
+      loadError = t("loadError");
     }
 
     if (officeDashboard) {
@@ -112,16 +137,15 @@ export default async function HomePage() {
       <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
         <div className="mx-auto max-w-7xl space-y-6">
           <section className="theme-surface-modal rounded-[34px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-7 sm:p-8">
-            <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Home</p>
+            <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">{t("subtitle")}</p>
             <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
-              Operations home
+              {t("title")}
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-              Your field queue and job progress live below. Open any job card for full detail, field notes, and status —
-              your shortcuts stay on this board between visits.
+              {t("technicianDescription")}
             </p>
             <p className="mt-4 inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-secondary)]">
-              Technician board
+              {t("technicianBoard")}
             </p>
           </section>
           <TechnicianHomeBoard />
@@ -134,17 +158,15 @@ export default async function HomePage() {
     <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="theme-surface-modal rounded-[34px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-7 sm:p-8">
-          <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Home</p>
+          <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">{t("subtitle")}</p>
           <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
-            Operations home
+            {t("title")}
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-            Tiles summarize today&apos;s intake, workload, and billing health whenever the dashboard responds.{" "}
-            <strong className="font-medium text-[color:var(--sem-text-primary)]">Jump to operations</strong>
-            {" "}is always available for one-click entry into the modules that matter now.
+            {t("officeDescription")}
           </p>
           <p className="mt-4 inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-secondary)]">
-            Live dashboard snapshot
+            {t("liveDashboardSnapshot")}
           </p>
         </section>
 
@@ -161,36 +183,36 @@ export default async function HomePage() {
         {officeRole && officeDashboard ? (
           <section className="space-y-4">
             <div className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Today Focus</p>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{t("todayFocus")}</p>
               <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <SummaryCard
-                  label="New Leads"
-                  helper="Fresh leads captured today."
+                  label={t("summary.newLeads.label")}
+                  helper={t("summary.newLeads.helper")}
                   value={officeDashboard.summary.newLeads}
                 />
                 <SummaryCard
-                  label="Contacted Leads"
-                  helper="Leads actively followed up."
+                  label={t("summary.contactedLeads.label")}
+                  helper={t("summary.contactedLeads.helper")}
                   value={officeDashboard.summary.contactedLeads}
                 />
                 <SummaryCard
-                  label="Scheduled Today"
-                  helper="Jobs currently scheduled for today."
+                  label={t("summary.scheduledToday.label")}
+                  helper={t("summary.scheduledToday.helper")}
                   value={officeDashboard.summary.jobsScheduledToday}
                 />
               </div>
             </div>
             <div className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Backlog Health</p>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{t("backlogHealth")}</p>
               <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
                 <SummaryCard
-                  label="Active Jobs"
-                  helper="Open operational workload in progress."
+                  label={t("summary.activeJobs.label")}
+                  helper={t("summary.activeJobs.helper")}
                   value={officeDashboard.summary.activeJobs}
                 />
                 <SummaryCard
-                  label="Unpaid Invoices"
-                  helper="Invoices still pending payment."
+                  label={t("summary.unpaidInvoices.label")}
+                  helper={t("summary.unpaidInvoices.helper")}
                   value={officeDashboard.summary.unpaidInvoices}
                 />
               </div>
@@ -198,14 +220,31 @@ export default async function HomePage() {
           </section>
         ) : null}
 
-        {officeRole ? <OfficeSnapshotQuickLinks role={role} /> : null}
+        {officeRole ? (
+          <OfficeSnapshotQuickLinks
+            role={role}
+            title={t("jumpToOperations")}
+            description={t("quickLinksDescription")}
+            labels={{
+              leads: shellT("leads"),
+              jobs: shellT("jobs"),
+              schedule: shellT("schedule"),
+              dispatch: shellT("dispatch"),
+              invoices: shellT("invoices"),
+              estimates: shellT("estimates"),
+              marketing: shellT("marketing"),
+              automations: shellT("automations"),
+              calls: shellT("calls"),
+              messaging: shellT("messaging"),
+            }}
+          />
+        ) : null}
 
         {!technicianRole && !officeRole ? (
           <section className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5 text-sm text-[color:var(--sem-text-secondary)]">
-            This account role does not have a dedicated home dashboard view yet.
+            {t("noDashboard")}
           </section>
         ) : null}
-
       </div>
     </main>
   );

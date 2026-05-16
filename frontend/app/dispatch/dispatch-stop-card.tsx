@@ -1,4 +1,5 @@
 import { CalendarDays, ExternalLink, MapPin, Phone, UserRound } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import type { DispatchStop } from "@/lib/crm/dispatch";
 
@@ -11,6 +12,8 @@ export default function DispatchStopCard({
   isSelected: boolean;
   onSelect: () => void;
 }) {
+  const t = useTranslations("dispatch");
+
   return (
     <article className={`rounded-[24px] border p-4 transition ${isSelected ? "border-[color:rgba(212,175,55,0.28)] bg-[color:rgba(212,175,55,0.08)]" : "border-white/10 bg-white/[0.03] hover:border-white/18 hover:bg-white/[0.05]"}`}>
       <div className="flex items-start justify-between gap-3">
@@ -52,7 +55,7 @@ export default function DispatchStopCard({
           onClick={onSelect}
           className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/24 hover:text-white"
         >
-          Open details
+          {t("openDetails")}
         </button>
         <a
           href={stop.googleMapsUrl}
@@ -61,7 +64,7 @@ export default function DispatchStopCard({
           className="inline-flex items-center gap-2 rounded-full border border-[color:rgba(212,175,55,0.22)] px-4 py-2 text-sm text-[color:var(--flat-gold)] transition hover:border-[color:rgba(212,175,55,0.34)] hover:bg-[color:rgba(212,175,55,0.08)]"
         >
           <ExternalLink className="h-4 w-4" />
-          Open in Google Maps
+          {t("openInGoogleMaps")}
         </a>
       </div>
     </article>

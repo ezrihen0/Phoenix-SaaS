@@ -1,15 +1,16 @@
 "use client";
 
 import { Languages, LockKeyhole, Sparkles } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 
 import { LanguageStoreLanguageCard } from "@/components/language-store-language-card";
+import type { SessionRole } from "@/lib/auth/server-session";
 import {
   activateOrganizationLanguage,
   deactivateOrganizationLanguage,
   type LanguageStoreSurfacePayload,
 } from "@/lib/language-store/client-language-store";
-import type { SessionRole } from "@/lib/auth/server-session";
 
 type LanguageStoreWorkspaceProps = {
   initial: LanguageStoreSurfacePayload | null;
@@ -22,6 +23,7 @@ function formatRoleLabel(role: SessionRole | null) {
 }
 
 export function LanguageStoreWorkspace({ initial, loadError, role }: LanguageStoreWorkspaceProps) {
+  const t = useTranslations("languageStore");
   const [payload, setPayload] = useState(initial);
   const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(loadError);
@@ -40,9 +42,9 @@ export function LanguageStoreWorkspace({ initial, loadError, role }: LanguageSto
     try {
       const next = await activateOrganizationLanguage(languageCode);
       setPayload(next);
-      setMessage(`${languageCode.toUpperCase()} is now active for this workspace.`);
+      setMessage(t("activated", { code: languageCode.toUpperCase() }));
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "The language could not be activated.");
+      setErrorMessage(error instanceof Error ? error.message : t("activateError"));
     } finally {
       setBusyCode(null);
     }
@@ -56,9 +58,9 @@ export function LanguageStoreWorkspace({ initial, loadError, role }: LanguageSto
     try {
       const next = await deactivateOrganizationLanguage(languageCode);
       setPayload(next);
-      setMessage(`${languageCode.toUpperCase()} was removed from this workspace.`);
+      setMessage(t("deactivated", { code: languageCode.toUpperCase() }));
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "The language could not be deactivated.");
+      setErrorMessage(error instanceof Error ? error.message : t("deactivateError"));
     } finally {
       setBusyCode(null);
     }
@@ -69,7 +71,7 @@ export function LanguageStoreWorkspace({ initial, loadError, role }: LanguageSto
       <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
         <div className="mx-auto max-w-6xl">
           <section className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6">
-            <p className="text-sm text-[color:var(--sem-text-secondary)]">{errorMessage ?? "Language Store is unavailable right now."}</p>
+            <p className="text-sm text-[color:var(--sem-text-secondary)]">{errorMessage ?? t("unavailable")}</p>
           </section>
         </div>
       </main>
@@ -84,22 +86,22 @@ export function LanguageStoreWorkspace({ initial, loadError, role }: LanguageSto
             <div className="max-w-3xl">
               <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Language Store</p>
               <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
-                Workspace languages
+                {t("title")}
               </h1>
               <p className="mt-4 text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-                Enable the worker languages available for the active workspace. Customer-facing document translation is not part of this page yet.
+                {t("description")}
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="theme-control-surface-soft rounded-[20px] border px-4 py-4">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Current Role</p>
-                <p className="mt-2 text-sm font-semibold capitalize text-[color:var(--sem-text-primary)]">{formatRoleLabel(role)}</p>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">{t("currentRole")}</p>
+                <p className="mt-2 text-sm font-semibold capitalize text-[color:var(--sem-text-primary)]">{role ? formatRoleLabel(role) : t("roleUnknown")}</p>
               </div>
               <div className="theme-control-surface-soft rounded-[20px] border px-4 py-4">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Language Admin</p>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">{t("languageAdmin")}</p>
                 <p className="mt-2 text-sm font-semibold text-[color:var(--sem-text-primary)]">
-                  {payload.can_manage_languages ? "Owner/admin controls enabled" : "Read-only"}
+                  {payload.can_manage_languages ? t("controlsEnabled") : t("readOnly")}
                 </p>
               </div>
             </div>
@@ -108,27 +110,27 @@ export function LanguageStoreWorkspace({ initial, loadError, role }: LanguageSto
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <article className="theme-surface-card rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Plan</p>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">{t("plan")}</p>
             <p className="mt-3 text-2xl font-semibold capitalize text-[color:var(--sem-text-primary)]">{payload.plan_key}</p>
           </article>
 
           <article className="theme-surface-card rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Additional slots</p>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">{t("additionalSlots")}</p>
             <p className="mt-3 text-2xl font-semibold text-[color:var(--sem-text-primary)]">
               {payload.active_additional_language_count} / {payload.total_additional_language_slots}
             </p>
             <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
-              {payload.remaining_additional_language_slots} remaining
+              {t("remaining", { count: payload.remaining_additional_language_slots })}
             </p>
           </article>
 
           <article className="theme-surface-card rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Billing status</p>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">{t("billingStatus")}</p>
             <p className="mt-3 text-2xl font-semibold text-[color:var(--sem-text-primary)]">{payload.billing_status}</p>
           </article>
 
           <article className="theme-surface-card rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Languages active</p>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">{t("activeLanguages")}</p>
             <p className="mt-3 text-2xl font-semibold text-[color:var(--sem-text-primary)]">{activeLanguages}</p>
           </article>
         </section>
@@ -142,7 +144,7 @@ export function LanguageStoreWorkspace({ initial, loadError, role }: LanguageSto
                   : <Sparkles className="h-5 w-5 text-[color:var(--sem-accent-primary)]" />}
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-accent-primary)]">Workspace prompt</p>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-accent-primary)]">{t("workspacePrompt")}</p>
                 <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-text-primary)]">{payload.prompt.title}</h2>
                 <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{payload.prompt.message}</p>
               </div>
@@ -157,9 +159,9 @@ export function LanguageStoreWorkspace({ initial, loadError, role }: LanguageSto
                 <Languages className="h-5 w-5 text-[color:var(--sem-accent-primary)]" />
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-accent-primary)]">Read-only</p>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-accent-primary)]">{t("readOnlyLabel")}</p>
                 <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                  Owners and admins can activate or deactivate organization languages. This workspace view is read-only for your current role.
+                  {t("readOnlyBody")}
                 </p>
               </div>
             </div>

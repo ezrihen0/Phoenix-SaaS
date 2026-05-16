@@ -1,5 +1,6 @@
 import { requireServerRoles } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
+import { getTranslations } from "next-intl/server";
 
 import LeadsWorkspace, { type LeadQueueItem } from "./leads-workspace";
 
@@ -40,6 +41,7 @@ function includesQuery(query: string, lead: LeadQueueItem) {
 }
 
 export default async function LeadsPage({ searchParams }: LeadsPageContext) {
+  const t = await getTranslations("leads");
   await requireServerRoles("/leads", ["owner", "office_admin", "dispatcher"]);
 
   const resolvedSearchParams = await searchParams;
@@ -58,7 +60,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageContext) {
     const data = await serverApiFetch<LeadQueueItem[]>("/api/leads");
     leads = query ? data.filter((lead) => includesQuery(query, lead)) : data;
   } catch (error) {
-    loadError = error instanceof Error ? error.message : "The lead queue could not be loaded.";
+    loadError = error instanceof Error ? error.message : t("loadError");
   }
 
   return (

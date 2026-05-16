@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
 import Script from "next/script";
 import { Cormorant_Garamond, Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "@/components/app-shell";
+import { getWorkerUiDirection, resolveSupportedWorkerUiLocale } from "@/lib/i18n/locales";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,18 +29,24 @@ export const metadata: Metadata = {
     "Field-service operating system for owners who are tired of losing calls, jobs, estimates, invoices, and customer history.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = resolveSupportedWorkerUiLocale(await getLocale());
+  const direction = getWorkerUiDirection(locale);
+
   return (
     <html
-      lang="en"
+      lang={locale}
+      dir={direction}
       className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <AppShell>{children}</AppShell>
+        <NextIntlClientProvider>
+          <AppShell>{children}</AppShell>
+        </NextIntlClientProvider>
         {process.env.NEXT_PUBLIC_ANALYTICS_SCRIPT_URL ? (
           <Script
             src={process.env.NEXT_PUBLIC_ANALYTICS_SCRIPT_URL}

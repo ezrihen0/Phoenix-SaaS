@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getLocale, getTranslations } from "next-intl/server";
 import {
   ArrowLeft,
   Briefcase,
@@ -85,6 +86,8 @@ function customerStatusBadgeClass(openJobs: number) {
 
 export default async function CustomersPage({ searchParams }: CustomersPageContext) {
   await requireOfficeCrmRoute("/customers");
+  const locale = await getLocale();
+  const t = await getTranslations("customers");
   const resolvedSearchParams = await searchParams;
   const pageValue = Number.parseInt((firstValue(resolvedSearchParams.page) ?? "1").trim(), 10);
   const pageSizeValue = Number.parseInt((firstValue(resolvedSearchParams.pageSize) ?? "10").trim(), 10);
@@ -99,7 +102,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
     customers = await serverApiFetch<CustomerListItem[]>("/api/customers");
     relatedJobs = customers.flatMap((customer) => customer.relatedJobs ?? []);
   } catch (error) {
-    loadError = error instanceof Error ? error.message : "The customer list could not be loaded.";
+    loadError = error instanceof Error ? error.message : t("listUnavailable");
   }
 
   const activeCustomerCount = customers.filter((customer) => customer.relatedJobs.some((job) => openJobStatuses.includes(job.status))).length;
@@ -116,9 +119,9 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
     pageSize: String(pageSize),
   });
   const tableState: MasterTableState = loadError
-    ? { status: "error", message: "Customer list unavailable." }
+    ? { status: "error", message: t("listUnavailable") }
     : totalCount === 0
-      ? { status: "empty", message: "No customers have been created yet." }
+      ? { status: "empty", message: t("noCustomers") }
       : { status: "ready" };
 
   return (
@@ -149,22 +152,22 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                 <div className="max-w-3xl">
                   <div className="inline-flex items-center gap-3 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/85 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)] backdrop-blur">
                     <span className="h-2 w-2 rounded-full bg-[color:var(--sem-accent-primary)]" />
-                    Customer workspace
+                    {t("workspace")}
                   </div>
                   <h1 className="mt-6 font-[family:var(--font-flat-display)] text-4xl leading-[0.95] tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl lg:text-6xl">
-                    Customers
+                    {t("title")}
                   </h1>
                   <p className="mt-5 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-                    Review contact details, service addresses, notes, and related jobs in the same ledger layout used by invoices.
+                    {t("description")}
                   </p>
                   <div className="mt-6 flex flex-wrap gap-3 text-xs text-[color:var(--sem-text-secondary)]">
                     <div className="theme-control-surface inline-flex items-center gap-2 rounded-full px-4 py-2">
                       <span className="font-medium text-[color:var(--sem-text-primary)]">{totalCount}</span>
-                      records in view
+                      {t("recordsInView")}
                     </div>
                     <div className="theme-control-surface inline-flex items-center gap-2 rounded-full px-4 py-2">
                       <span className="font-medium text-[color:var(--sem-text-primary)]">{activeCustomerCount}</span>
-                      with open jobs
+                      {t("withOpenJobs")}
                     </div>
                   </div>
                 </div>
@@ -175,7 +178,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                     className="theme-btn-secondary inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-medium transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--cmp-focus-ring)] xl:self-end"
                   >
                     <ArrowLeft className="h-4 w-4" />
-                    Back to jobs
+                    {t("backToJobs")}
                   </Link>
                 </div>
               </div>
@@ -188,13 +191,13 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                   />
                   <div className="relative">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Total customers</p>
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">{t("totalCustomers")}</p>
                       <div className="rounded-full border border-[color:var(--cmp-border-subtle)] p-2 text-[color:var(--sem-accent-primary)]">
                         <UserRound className="h-4 w-4" />
                       </div>
                     </div>
                     <p className="mt-5 text-4xl font-semibold leading-none text-[color:var(--sem-text-primary)]">{customers.length}</p>
-                    <p className="mt-3 text-sm text-[color:var(--sem-text-secondary)]">Full customer ledger currently visible in this workspace.</p>
+                    <p className="mt-3 text-sm text-[color:var(--sem-text-secondary)]">{t("totalCustomersHelper")}</p>
                   </div>
                 </div>
 
@@ -205,13 +208,13 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                   />
                   <div className="relative">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">With open jobs</p>
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">{t("openJobsTitle")}</p>
                       <div className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-accent-primary)]">
-                        Active
+                        {t("open")}
                       </div>
                     </div>
                     <p className="mt-5 text-4xl font-semibold leading-none text-[color:var(--sem-text-primary)]">{activeCustomerCount}</p>
-                    <p className="mt-3 text-sm text-[color:var(--sem-text-secondary)]">Customers with at least one open operational job.</p>
+                    <p className="mt-3 text-sm text-[color:var(--sem-text-secondary)]">{t("openJobsHelper")}</p>
                   </div>
                 </div>
 
@@ -222,13 +225,13 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                   />
                   <div className="relative">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Related jobs</p>
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">{t("relatedJobsTitle")}</p>
                       <div className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-secondary)]">
                         Linked
                       </div>
                     </div>
                     <p className="mt-5 text-4xl font-semibold leading-none text-[color:var(--sem-text-primary)]">{relatedJobs.length}</p>
-                    <p className="mt-3 text-sm text-[color:var(--sem-text-secondary)]">Total jobs linked to the visible customer records.</p>
+                    <p className="mt-3 text-sm text-[color:var(--sem-text-secondary)]">{t("relatedJobsHelper")}</p>
                   </div>
                 </div>
               </div>
@@ -286,27 +289,27 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                   />
                   <div className="mb-5 flex flex-col gap-3 border-b border-[color:var(--cmp-border-subtle)] pb-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Customer workspace</p>
+                      <p className="text-xs uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">{t("workspace")}</p>
                       <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
-                        Use the action icons to open a customer record or create a linked job while keeping the ledger compact.
+                        {t("ledgerDescription")}
                       </p>
                     </div>
                     <div className="theme-control-surface inline-flex items-center gap-2 self-start rounded-full px-4 py-2 text-xs text-[color:var(--sem-text-secondary)] sm:self-auto">
                       <span className="font-medium text-[color:var(--sem-text-primary)]">{totalCount}</span>
-                      total records
+                      {t("totalRecords")}
                     </div>
                   </div>
 
                   <div className="customer-display-panel hidden lg:block">
                     <MasterTable
                       columns={[
-                        { key: "actions", label: "Actions", align: "center" },
-                        { key: "customer", label: "Customer Name", align: "center" },
-                        { key: "phone", label: "Phone", align: "center" },
-                        { key: "email", label: "Email", align: "center" },
-                        { key: "openJobs", label: "Open Jobs", align: "center" },
-                        { key: "totalJobs", label: "Total Jobs", align: "center" },
-                        { key: "updated", label: "Updated", align: "center" },
+                        { key: "actions", label: t("columns.actions"), align: "center" },
+                        { key: "customer", label: t("columns.customerName"), align: "center" },
+                        { key: "phone", label: t("columns.phone"), align: "center" },
+                        { key: "email", label: t("columns.email"), align: "center" },
+                        { key: "openJobs", label: t("columns.openJobs"), align: "center" },
+                        { key: "totalJobs", label: t("columns.totalJobs"), align: "center" },
+                        { key: "updated", label: t("columns.updated"), align: "center" },
                       ]}
                       state={tableState}
                     >
@@ -319,16 +322,16 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                               <div className="flex items-center justify-center gap-2">
                                 <Link
                                   href={`/customers/${customer.id}`}
-                                  title="Open customer"
-                                  aria-label="Open customer"
+                                  title={t("openCustomer")}
+                                  aria-label={t("openCustomer")}
                                   className={customerOpenIconClass}
                                 >
                                   <UserRound className="h-[0.8rem] w-[0.8rem]" />
                                 </Link>
                                 <Link
                                   href={`/jobs/new?customerId=${customer.id}`}
-                                  title="Create job"
-                                  aria-label="Create job"
+                                  title={t("createJob")}
+                                  aria-label={t("createJob")}
                                   className={customerJobIconClass}
                                 >
                                   <Briefcase className="h-[0.8rem] w-[0.8rem]" />
@@ -358,7 +361,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                                   {customer.email}
                                 </a>
                               ) : (
-                                <span className="text-[color:var(--sem-text-muted)]">No email</span>
+                                <span className="text-[color:var(--sem-text-muted)]">{t("noEmail")}</span>
                               )}
                             </td>
                             <td className="master-table-cell text-center">
@@ -370,7 +373,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                               {customer.relatedJobs.length}
                             </td>
                             <td className="master-table-cell text-center">
-                              <span className="whitespace-nowrap">{formatDate(customer.updated_at)}</span>
+                              <span className="whitespace-nowrap">{formatDate(customer.updated_at, locale)}</span>
                             </td>
                           </MasterTableRow>
                         );
@@ -381,7 +384,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                   <div className="lg:hidden">
                     <MasterMobileList
                       items={pagedCustomers}
-                      emptyState="No customers have been created yet."
+                      emptyState={t("noCustomers")}
                       renderItem={(customer) => {
                         const openJobs = activeJobCount(customer);
 
@@ -391,9 +394,9 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <p className="font-medium text-[color:var(--sem-text-primary)]">{customer.full_name}</p>
-                                  <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{formatDate(customer.updated_at)}</p>
+                                  <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{formatDate(customer.updated_at, locale)}</p>
                                 </div>
-                                <span className={customerStatusBadgeClass(openJobs)}>{openJobs} open</span>
+                                <span className={customerStatusBadgeClass(openJobs)}>{openJobs} {t("open")}</span>
                               </div>
                               <div className="grid gap-2">
                                 <span className="inline-flex items-start gap-2">
@@ -402,7 +405,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                                 </span>
                                 <span className="inline-flex items-start gap-2">
                                   <Mail className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
-                                  {customer.email ?? "No email"}
+                                  {customer.email ?? t("noEmail")}
                                 </span>
                                 <span className="inline-flex items-start gap-2">
                                   <MapPin className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
@@ -418,26 +421,26 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                               <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-canvas)]/60 px-4 py-3">
                                 <p className="inline-flex items-start gap-2">
                                   <ClipboardList className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
-                                  <span className="whitespace-pre-line">{customer.notes?.trim() || "No customer notes yet."}</span>
+                                  <span className="whitespace-pre-line">{customer.notes?.trim() || t("noCustomerNotes")}</span>
                                 </p>
                                 <p className="mt-3 text-xs text-[color:var(--sem-text-muted)]">
-                                  {customer.relatedJobs.length} total linked job{customer.relatedJobs.length === 1 ? "" : "s"}
+                                  {t("totalLinkedJobs", { count: customer.relatedJobs.length })}
                                 </p>
                               </div>
                               <div className="border-t border-[color:var(--cmp-border-subtle)] pt-3">
                                 <div className="flex items-center justify-center gap-2">
                                   <Link
                                     href={`/customers/${customer.id}`}
-                                    title="Open customer"
-                                    aria-label="Open customer"
+                                    title={t("openCustomer")}
+                                    aria-label={t("openCustomer")}
                                     className={customerOpenIconClass}
                                   >
                                     <UserRound className="h-[0.8rem] w-[0.8rem]" />
                                   </Link>
                                   <Link
                                     href={`/jobs/new?customerId=${customer.id}`}
-                                    title="Create job"
-                                    aria-label="Create job"
+                                    title={t("createJob")}
+                                    aria-label={t("createJob")}
                                     className={customerJobIconClass}
                                   >
                                     <Briefcase className="h-[0.8rem] w-[0.8rem]" />
@@ -457,10 +460,10 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                     <div className="rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-3 text-[color:var(--sem-accent-primary)]">
                       <UserRound className="h-5 w-5" />
                     </div>
-                    <p className="mt-4 text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Customer workspace</p>
-                    <p className="mt-3 text-base font-medium text-[color:var(--sem-text-primary)]">No customers have been created yet.</p>
+                    <p className="mt-4 text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">{t("workspace")}</p>
+                    <p className="mt-3 text-base font-medium text-[color:var(--sem-text-primary)]">{t("noCustomers")}</p>
                     <p className="mt-2 leading-7">
-                      Create a customer from the job workflow to populate this workspace.
+                      {t("createFromJobWorkflow")}
                     </p>
                   </div>
                 </div>
@@ -478,7 +481,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
               </div>
 
               {activeCustomerCount ? (
-                <p className="text-xs text-[color:var(--sem-text-muted)]">{activeCustomerCount} customers currently have open jobs.</p>
+                <p className="text-xs text-[color:var(--sem-text-muted)]">{t("openJobsFooter", { count: activeCustomerCount })}</p>
               ) : null}
             </div>
           </section>

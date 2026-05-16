@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerSession } from "@/lib/auth/server-session";
 import type { SessionRole } from "@/lib/auth/server-session";
@@ -36,6 +38,7 @@ const defaultOrganizationSettings: OrganizationSettings = {
 
 export default async function SettingsPage() {
   const session = await requireServerSession("/settings");
+  const t = await getTranslations("settings");
   const role = session.profile?.role ?? "technician";
   const ownerMode = role === "owner" && Boolean(session.profile?.id);
   let staffProfiles: StaffProfile[] = [];
@@ -52,7 +55,7 @@ export default async function SettingsPage() {
     try {
       staffProfiles = await serverApiFetch<StaffProfile[]>("/api/auth/staff");
     } catch (error) {
-      staffLoadError = error instanceof Error ? error.message : "Staff roles could not be loaded.";
+      staffLoadError = error instanceof Error ? error.message : t("pageLoadError");
     }
   }
 
@@ -63,7 +66,7 @@ export default async function SettingsPage() {
     try {
       billingSummary = await serverApiFetch<BillingSummaryPayload>("/api/billing/summary");
     } catch (error) {
-      billingLoadError = error instanceof Error ? error.message : "Billing summary could not be loaded.";
+      billingLoadError = error instanceof Error ? error.message : t("billing.loadError");
     }
   }
 

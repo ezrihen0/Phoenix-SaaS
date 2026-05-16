@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 import type { GlobalSearchResponse } from "@/lib/search/global-search-contract";
 
@@ -23,10 +24,11 @@ export function GlobalSearchResults({
   flatResults,
   onHover,
 }: Props) {
+  const t = useTranslations("search");
   if (loading) {
     return (
       <div className="theme-control-surface rounded-[18px] border p-3 text-sm text-[color:var(--sem-text-secondary)]">
-        Searching...
+        {t("searching")}
       </div>
     );
   }
@@ -46,7 +48,7 @@ export function GlobalSearchResults({
   if (!flatResults.length) {
     return (
       <div className="theme-control-surface rounded-[18px] border p-3 text-sm text-[color:var(--sem-text-secondary)]">
-        No matches found.
+        {t("noMatches")}
       </div>
     );
   }
@@ -55,7 +57,7 @@ export function GlobalSearchResults({
     <div className="theme-surface-card overflow-hidden rounded-[18px] border shadow-sm">
       {results.meta.partial ? (
         <div className="theme-alert-warning border-b px-3 py-2 text-xs">
-          Partial results returned.
+          {t("partial")}
         </div>
       ) : null}
       <ul className="max-h-96 overflow-auto py-1">
