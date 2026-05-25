@@ -4,7 +4,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
 import { randomBytes, createHash } from "crypto";
 import type { Request, Response } from "express";
-import { DataSource, EntityManager, IsNull, MoreThan, Repository } from "typeorm";
+import { DataSource, EntityManager, IsNull, LessThanOrEqual, MoreThan, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import { OrganizationBillingService } from "../billing/organization-billing.service";
@@ -14,6 +14,7 @@ import type { ProfileRole } from "../crm/constants";
 import { BillingAccountEntity } from "../database/entities/billing-account.entity";
 import { listPermissionsForRole } from "./permissions";
 import { AuthSessionEntity } from "../database/entities/auth-session.entity";
+import { ControlledAccessGrantEntity } from "../database/entities/controlled-access-grant.entity";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
 import { OrganizationBillingEntity } from "../database/entities/organization-billing.entity";
@@ -43,6 +44,8 @@ export class AuthService {
     private readonly membershipsRepository: Repository<MembershipEntity>,
     @InjectRepository(AuthSessionEntity)
     private readonly sessionsRepository: Repository<AuthSessionEntity>,
+    @InjectRepository(ControlledAccessGrantEntity)
+    private readonly controlledAccessGrantsRepository: Repository<ControlledAccessGrantEntity>,
     private readonly organizationBillingService: OrganizationBillingService,
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
@@ -996,7 +999,29 @@ export class AuthService {
       && context.account.provider_price_id?.trim()
       && context.account.last_webhook_at,
     );
+    const hasVerifiedStripeAccess = accessEligibleBillingStatuses.has(billingStatus) && hasVerifiedStripeSync;
 
-    return accessEligibleBillingStatuses.has(billingStatus) && hasVerifiedStripeSync;
+    if (hasVerifiedStripeAccess) {
+      return true;
+    }
+
+    return this.hasActiveControlledAccessGrant(organizationId);
+  }
+
+  private async hasActiveControlledAccessGrant(organizationId: string) {
+    const now = new Date();
+    const grant = await this.controlledAccessGrantsRepository.findOne({
+      where: {
+        organization_id: organizationId,
+        starts_at: LessThanOrEqual(now),
+        expires_at: MoreThan(now),
+        revoked_at: IsNull(),
+      },
+      order: {
+        created_at: "DESC",
+      },
+    });
+
+    return Boolean(grant);
   }
 }

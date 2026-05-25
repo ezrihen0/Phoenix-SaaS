@@ -5,6 +5,7 @@ export const requiredTables = [
   "customer_output_translation_records",
   "profiles",
   "auth_sessions",
+  "controlled_access_grants",
   "organizations",
   "organization_billing",
   "organization_enabled_languages",
@@ -130,6 +131,22 @@ export const requiredColumns = [
     ],
   },
   { table: "memberships", columns: ["user_id", "organization_id", "role", "status"] },
+  {
+    table: "controlled_access_grants",
+    columns: [
+      "id",
+      "organization_id",
+      "grant_type",
+      "reason_code",
+      "starts_at",
+      "expires_at",
+      "revoked_at",
+      "notes",
+      "created_by_user_id",
+      "created_at",
+      "updated_at",
+    ],
+  },
   { table: "organization_billing", columns: ["organization_id", "billing_account_id", "plan_key", "billing_status"] },
   {
     table: "organization_enabled_languages",
@@ -483,6 +500,8 @@ export const requiredIndexes = [
   },
   { table: "memberships", columns: ["user_id", "organization_id"], isUnique: true },
   { table: "auth_sessions", columns: ["session_token_hash"], isUnique: true },
+  { table: "controlled_access_grants", columns: ["organization_id", "starts_at", "expires_at"], isUnique: false },
+  { table: "controlled_access_grants", columns: ["organization_id", "revoked_at"], isUnique: false },
   { table: "ai_recommendation_runs", columns: ["organization_id", "created_at"], isUnique: false },
   {
     table: "ai_operator_drafts",
@@ -632,6 +651,18 @@ export const requiredForeignKeys = [
   },
   { table: "auth_sessions", column: "user_id", referencedTable: "users", referencedColumn: "id" },
   { table: "auth_sessions", column: "active_organization_id", referencedTable: "organizations", referencedColumn: "id" },
+  {
+    table: "controlled_access_grants",
+    column: "organization_id",
+    referencedTable: "organizations",
+    referencedColumn: "id",
+  },
+  {
+    table: "controlled_access_grants",
+    column: "created_by_user_id",
+    referencedTable: "users",
+    referencedColumn: "id",
+  },
   {
     table: "ai_recommendation_runs",
     column: "organization_id",

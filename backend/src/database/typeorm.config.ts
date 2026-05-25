@@ -21,6 +21,7 @@ import { BillingAccountSubscriptionItemEntity } from "./entities/billing-account
 import { AiOperatorDraftEntity } from "./entities/ai-operator-draft.entity";
 import { AiRecommendationRunEntity } from "./entities/ai-recommendation-run.entity";
 import { AuthSessionEntity } from "./entities/auth-session.entity";
+import { ControlledAccessGrantEntity } from "./entities/controlled-access-grant.entity";
 import { CustomerOutputTranslationRecordEntity } from "./entities/customer-output-translation-record.entity";
 import { CrmTaskEntity } from "./entities/crm-task.entity";
 import { CustomerEntity } from "./entities/customer.entity";
@@ -115,6 +116,7 @@ export const typeOrmEntities = [
   JobNoteEntity,
   JobStatusEventEntity,
   AuthSessionEntity,
+  ControlledAccessGrantEntity,
   AiRecommendationRunEntity,
   AiOperatorDraftEntity,
   InspectionEntity,
