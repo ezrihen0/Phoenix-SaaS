@@ -245,11 +245,11 @@ export default function JobInvoiceSection({
 
   async function saveInvoice(nextStatus: InvoiceStatus, successText: string) {
     setErrorMessage(null);
-    const lineItems = buildInvoiceLineItemPayload(lines);
-    const taxRateBps = taxRateInputToBps(taxRateInput);
     setIsSaving(true);
 
     try {
+      const lineItems = buildInvoiceLineItemPayload(lines);
+      const taxRateBps = taxRateInputToBps(taxRateInput);
       const response = await crmApiFetch<{ id: string; status: InvoiceStatus }>(`/api/jobs/${jobId}/invoice`, {
         method: "PUT",
         body: JSON.stringify({

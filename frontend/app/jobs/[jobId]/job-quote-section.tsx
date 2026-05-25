@@ -161,16 +161,25 @@ export default function JobQuoteSection({
       return;
     }
 
+    const trimmedDescription = description.trim();
+
+    if (!trimmedDescription) {
+      const nextMessage = "Quote description is required before saving.";
+      setErrorMessage(nextMessage);
+      onToast?.(nextMessage, "warning");
+      return;
+    }
+
     setErrorMessage(null);
-    const lineItems = buildQuoteLineItemPayload(lines);
-    const taxRateBps = taxRateInputToBps(taxRateInput);
     setIsSaving(true);
 
     try {
+      const lineItems = buildQuoteLineItemPayload(lines);
+      const taxRateBps = taxRateInputToBps(taxRateInput);
       const response = await crmApiFetch<{ id: string; status: QuoteStatus }>(`/api/jobs/${jobId}/quote`, {
         method: "PUT",
         body: JSON.stringify({
-          description,
+          description: trimmedDescription,
           priceCents: previewTotals.totalCents,
           status: nextStatus,
           lineItems,
