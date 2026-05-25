@@ -3,6 +3,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthModule } from "../auth/auth.module";
 import { CustomerEntity } from "../database/entities/customer.entity";
+import { EmailModule } from "../email/email.module";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
 import { InvoiceLineItemEntity } from "../database/entities/invoice-line-item.entity";
 import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
@@ -31,6 +32,7 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
   imports: [
     AuthModule,
     LanguageStoreModule,
+    EmailModule,
     TypeOrmModule.forFeature([
       ProfileEntity,
       TechnicianEntity,
