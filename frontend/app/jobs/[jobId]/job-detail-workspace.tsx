@@ -563,7 +563,13 @@ export default function JobDetailWorkspace({
   }, [job.id, noteFindingsDraft, noteRecommendationsDraft]);
 
   useEffect(() => {
-    if (!scheduleForm.assignedTechnicianId || !hasValidScheduleWindow || scheduleForm.scheduledDate === "") {
+    const conflictCheckStart = combineDateTime(scheduleForm.scheduledDate, scheduleForm.startTime);
+    const conflictCheckEnd = combineDateTime(scheduleForm.scheduledDate, scheduleForm.endTime);
+    const hasValidConflictWindow = Boolean(
+      conflictCheckStart && conflictCheckEnd && conflictCheckEnd.getTime() > conflictCheckStart.getTime(),
+    );
+
+    if (!scheduleForm.assignedTechnicianId || !hasValidConflictWindow || scheduleForm.scheduledDate === "") {
       setConflicts([]);
       return;
     }
@@ -573,7 +579,7 @@ export default function JobDetailWorkspace({
 
     void crmApiFetch<JobListRecord[]>(`/api/jobs?technicianId=${encodeURIComponent(scheduleForm.assignedTechnicianId)}`)
       .then((jobs) => {
-        if (ignore || !nextScheduledStart || !nextScheduledEnd) {
+        if (ignore || !conflictCheckStart || !conflictCheckEnd) {
           return;
         }
 
@@ -589,8 +595,8 @@ export default function JobDetailWorkspace({
           }
 
           return windowsOverlap(
-            nextScheduledStart,
-            nextScheduledEnd,
+            conflictCheckStart,
+            conflictCheckEnd,
             comparisonWindow.start,
             comparisonWindow.end,
           );
@@ -613,12 +619,11 @@ export default function JobDetailWorkspace({
       ignore = true;
     };
   }, [
-    hasValidScheduleWindow,
     job.id,
-    nextScheduledEnd,
-    nextScheduledStart,
     scheduleForm.assignedTechnicianId,
     scheduleForm.scheduledDate,
+    scheduleForm.startTime,
+    scheduleForm.endTime,
   ]);
 
   function updateQuery(next: Record<string, string | null>) {
