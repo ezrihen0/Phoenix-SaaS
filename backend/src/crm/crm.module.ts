@@ -3,6 +3,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthModule } from "../auth/auth.module";
 import { CustomerEntity } from "../database/entities/customer.entity";
+import { CustomerPortalModule } from "../customer-portal/customer-portal.module";
 import { EmailModule } from "../email/email.module";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
 import { InvoiceLineItemEntity } from "../database/entities/invoice-line-item.entity";
@@ -22,6 +23,7 @@ import { QuoteLineItemEntity } from "../database/entities/quote-line-item.entity
 import { ServiceEntity } from "../database/entities/service.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
 import { LanguageStoreModule } from "../language-store/language-store.module";
+import { MessagingModule } from "../messaging/messaging.module";
 import { CrmController } from "./crm.controller";
 import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
 import { DocumentPricingService } from "./document-pricing.service";
@@ -33,6 +35,8 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
     AuthModule,
     LanguageStoreModule,
     EmailModule,
+    MessagingModule,
+    CustomerPortalModule,
     TypeOrmModule.forFeature([
       ProfileEntity,
       TechnicianEntity,

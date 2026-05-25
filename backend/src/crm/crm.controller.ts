@@ -13,9 +13,10 @@ import {
   StreamableFile,
   UseGuards,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Not, Repository } from "typeorm";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 
 import {
   actorHasPermission,
@@ -78,6 +79,7 @@ import { ServiceEntity } from "../database/entities/service.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
 import { startOfLocalDashboardDay } from "./crm-dashboard-time-window";
 import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
+import { CustomerPortalService } from "../customer-portal/customer-portal.service";
 import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
 import { EmailService } from "../email/email.service";
@@ -85,6 +87,7 @@ import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entit
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
+import { TxtService } from "../messaging/txt/txt.service";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -173,6 +176,9 @@ export class CrmController {
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
     private readonly crmOfficeDashboardService: CrmOfficeDashboardService,
     private readonly emailService: EmailService,
+    private readonly txtService: TxtService,
+    private readonly customerPortalService: CustomerPortalService,
+    private readonly configService: ConfigService,
   ) {}
 
   private requireActor(request: RequestWithActor) {
@@ -1734,6 +1740,107 @@ export class CrmController {
       sent_at: now.toISOString(),
       to: [toEmail],
       message_id: emailResult.messageId,
+    });
+  }
+
+  @Post("invoices/:invoiceId/send-sms")
+  async sendInvoiceSms(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+  ) {
+    const actor = this.requireActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    const invoice = await this.invoicesRepository.findOne({
+      where: { id: invoiceId, organization_id: organizationId },
+      relations: {
+        job: { customer: true },
+        line_items: true,
+        payments: true,
+      },
+    });
+
+    if (!invoice) {
+      apiError(404, "invoice_not_found", "The invoice could not be found.");
+    }
+
+    const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
+
+    if (!canAccessInvoiceResource(actor, job?.assigned_technician_id)) {
+      apiError(403, "invoice_access_denied", "You do not have access to this invoice.");
+    }
+
+    const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
+    const customerPhone = customer?.phone?.trim();
+    if (!customerPhone) {
+      apiError(400, "invoice_sms_missing_phone", "Customer has no phone number on file. Add a phone number to send invoice via SMS.");
+    }
+
+    if (!job || !customer) {
+      apiError(400, "invoice_sms_missing_job", "Invoice is missing required job or customer data.");
+    }
+
+    const orgSettings = await this.organizationSettingsRepository.findOne({
+      where: { settings_key: "default", organization_id: organizationId },
+    });
+
+    const businessName = orgSettings?.business_name?.trim() || null;
+    const documentNumber = this.buildInvoiceDocumentNumber(invoice);
+    const totalCents = invoice.total_cents || (invoice.subtotal_cents || invoice.amount_cents);
+
+    // Resolve SMS template
+    const smsVars = {
+      business_name: businessName ?? "your service provider",
+      invoice_number: documentNumber,
+      customer_name: customer?.full_name ?? "Customer",
+      total: `$${(totalCents / 100).toFixed(2)}`,
+      due_date: this.formatDueDate(invoice.issued_at),
+      invoice_link: "", // filled below
+      business_phone: orgSettings?.phone?.trim() ?? "",
+      business_email: orgSettings?.company_email?.trim() ?? "",
+    };
+
+    // Generate portal magic link for invoice
+    const portalLink = await this.customerPortalService.createMagicLinkForStaff({
+      organizationId,
+      customerId: job.customer_id,
+      actorProfileId: actor.profile.id,
+      request: request as unknown as Request,
+    });
+
+    // Build the invoice portal URL
+    const baseUrl = this.configService.get<string>("PUBLIC_BASE_URL") ?? "http://localhost:3000";
+    const invoiceLink = `${baseUrl}/access/${portalLink.raw_token}`;
+    smsVars.invoice_link = invoiceLink;
+
+    const smsBody = this.resolveTemplate(
+      orgSettings?.invoice_sms_body || "Invoice {invoice_number} from {business_name}: {total}. View: {invoice_link}",
+      smsVars,
+    );
+
+    // Send SMS via TxtService
+    // Build a conversation key for this customer
+    const conversationId = `customer:${customer.id}`;
+
+    await this.txtService.sendMessage({
+      conversationId,
+      body: smsBody,
+      sentByUserId: actor.user.id,
+      organizationIdForCustomerScope: organizationId,
+    });
+
+    const now = new Date();
+    invoice.sms_sent_at = now;
+    invoice.last_sent_at = now;
+    invoice.last_sent_via = "sms";
+    await this.invoicesRepository.save(invoice);
+
+    return apiSuccess({
+      invoice_id: documentNumber,
+      document_number: documentNumber,
+      sent_at: now.toISOString(),
+      to: [customerPhone],
+      portal_link: invoiceLink,
     });
   }
 
