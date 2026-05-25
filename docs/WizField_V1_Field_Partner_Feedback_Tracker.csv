@@ -1,0 +1,2 @@
+date_reported,partner,organization,email,workflow,issue_summary,severity,expected_result,actual_result,evidence_link,reproducible,status,decision,owner_note,follow_up_package,target_fix_window
+2026-05-24,TEST_PARTNER,WizField Test Org,test.partner@example.com,Lead,Test submission for tracker validation,P3,Lead creation and conversion flow should complete end-to-end,Flow completed with minor copy confusion on status wording,https://example.com/test-evidence,Yes,Triaged,Accepted for V1 note,Validation row confirms tracker pipeline is operational,Package 3,Before June 1 2026
