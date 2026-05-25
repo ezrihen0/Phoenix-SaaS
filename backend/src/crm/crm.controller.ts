@@ -9,10 +9,13 @@ import {
   Put,
   Query,
   Req,
+  Res,
+  StreamableFile,
   UseGuards,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Not, Repository } from "typeorm";
+import type { Response } from "express";
 
 import {
   actorHasPermission,
@@ -80,6 +83,7 @@ import { DocumentSnapshotService } from "./document-snapshot.service";
 import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 import { MembershipEntity } from "../database/entities/membership.entity";
+import { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -161,6 +165,8 @@ export class CrmController {
     private readonly jobNotesRepository: Repository<JobNoteEntity>,
     @InjectRepository(JobStatusEventEntity)
     private readonly jobStatusEventsRepository: Repository<JobStatusEventEntity>,
+    @InjectRepository(OrganizationSettingEntity)
+    private readonly organizationSettingsRepository: Repository<OrganizationSettingEntity>,
     private readonly documentPricingService: DocumentPricingService,
     private readonly documentSnapshotService: DocumentSnapshotService,
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
@@ -1460,6 +1466,143 @@ export class CrmController {
     } catch (error) {
       apiError(400, "invoice_lookup_failed", "The invoice could not be loaded.", error);
     }
+  }
+
+  @Get("invoices/:invoiceId/pdf")
+  async invoicePdf(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+    @Query("download") download: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const actor = this.requireActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    const invoice = await this.invoicesRepository.findOne({
+      where: { id: invoiceId, organization_id: organizationId },
+      relations: {
+        job: { customer: true },
+        line_items: true,
+        payments: true,
+      },
+    });
+
+    if (!invoice) {
+      apiError(404, "invoice_not_found", "The invoice could not be found.");
+    }
+
+    const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
+
+    if (!canAccessInvoiceResource(actor, job?.assigned_technician_id)) {
+      apiError(403, "invoice_access_denied", "You do not have access to this invoice.");
+    }
+
+    const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
+    const documentNumber = this.buildInvoiceDocumentNumber(invoice);
+    const ledgerSummary = this.summarizeInvoiceLedger(invoice);
+    const orgSettings = await this.organizationSettingsRepository.findOne({
+      where: { settings_key: "default", organization_id: organizationId },
+    });
+
+    const businessName = orgSettings?.business_name?.trim() || null;
+    const businessPhone = orgSettings?.phone?.trim() || null;
+    const businessEmail = orgSettings?.company_email?.trim() || null;
+    const businessWebsite = orgSettings?.website?.trim() || null;
+
+    const formatCents = (cents: number | null | undefined) => {
+      if (typeof cents !== "number") return "$0.00";
+      return `$${(cents / 100).toFixed(2)}`;
+    };
+
+    const formatDate = (value: Date | string | null | undefined) => {
+      if (!value) return "-";
+      const d = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(d.getTime())) return "-";
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    };
+
+    const lines: string[] = [];
+
+    if (businessName) {
+      lines.push(businessName);
+    }
+    lines.push("INVOICE");
+    lines.push("");
+    lines.push(`Invoice Number: ${documentNumber}`);
+    lines.push(`Date: ${formatDate(invoice.issued_at)}`);
+    lines.push(`Status: ${ledgerSummary.lifecycleStatus}`);
+    lines.push("");
+
+    if (customer) {
+      lines.push("Bill To:");
+      lines.push(`  ${customer.full_name}`);
+      if (customer.company_name?.trim()) lines.push(`  ${customer.company_name.trim()}`);
+      const addr = [customer.service_address_line_1, customer.service_address_line_2, customer.service_city, customer.service_state_or_region, customer.service_postal_code]
+        .filter(Boolean).join(", ");
+      if (addr) lines.push(`  ${addr}`);
+      if (customer.email?.trim()) lines.push(`  ${customer.email.trim()}`);
+      if (customer.phone?.trim()) lines.push(`  ${customer.phone.trim()}`);
+      lines.push("");
+    }
+
+    if (businessName || businessPhone || businessEmail || businessWebsite) {
+      lines.push("From:");
+      if (businessName) lines.push(`  ${businessName}`);
+      if (businessPhone) lines.push(`  Phone: ${businessPhone}`);
+      if (businessEmail) lines.push(`  Email: ${businessEmail}`);
+      if (businessWebsite) lines.push(`  ${businessWebsite}`);
+      lines.push("");
+    }
+
+    if (invoice.description?.trim()) {
+      lines.push(`Description: ${invoice.description.trim()}`);
+      lines.push("");
+    }
+
+    const sortedLineItems = [...(invoice.line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+
+    if (sortedLineItems.length > 0) {
+      lines.push("Line Items:");
+      lines.push("  Item                           Qty      Unit Price     Subtotal");
+      lines.push("  ----                           ---      ----------     --------");
+      for (const item of sortedLineItems) {
+        const name = (item.name_snapshot || "Item").padEnd(30).substring(0, 30);
+        const qty = String(item.quantity).padStart(5);
+        const price = formatCents(item.unit_price_cents_snapshot).padStart(13);
+        const subtotal = formatCents(item.line_subtotal_cents).padStart(12);
+        lines.push(`  ${name} ${qty} ${price} ${subtotal}`);
+      }
+      lines.push("");
+    }
+
+    const subtotal = invoice.subtotal_cents || invoice.amount_cents;
+    const taxCents = invoice.tax_cents ?? 0;
+    const total = invoice.total_cents || ledgerSummary.totalCents;
+
+    lines.push(`Subtotal:  ${formatCents(subtotal)}`);
+    if (taxCents > 0 || (invoice.tax_rate_bps_snapshot ?? 0) > 0) {
+      const bps = invoice.tax_rate_bps_snapshot ?? 0;
+      const pct = `${(bps / 100).toFixed(2).replace(/\.00$/, "").replace(/(\.\d*[1-9])0+$/, "$1")}%`;
+      lines.push(`Tax (${pct}):  ${formatCents(taxCents)}`);
+    }
+    lines.push(`Total:     ${formatCents(total)}`);
+
+    if (ledgerSummary.netPaidCents > 0) {
+      lines.push(`Paid:      ${formatCents(ledgerSummary.netPaidCents)}`);
+      lines.push(`Balance:   ${formatCents(ledgerSummary.balanceCents)}`);
+    }
+
+    lines.push("");
+    lines.push(`Generated: ${new Date().toISOString()}`);
+
+    const pdfBuffer = this.buildSimplePdf(lines);
+    const shouldDownload = download === "1" || download === "true";
+    response.setHeader("Content-Type", "application/pdf");
+    response.setHeader(
+      "Content-Disposition",
+      `${shouldDownload ? "attachment" : "inline"}; filename="invoice-${documentNumber}.pdf"`,
+    );
+    return new StreamableFile(pdfBuffer);
   }
 
   @Post("invoices/:invoiceId/request-approval")
@@ -3472,6 +3615,47 @@ export class CrmController {
     } catch (error) {
       apiError(400, "invalid_customer_import_payload", "The customer import payload is invalid.", error);
     }
+  }
+
+  private escapePdfText(value: string) {
+    return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  }
+
+  private buildSimplePdf(lines: string[]) {
+    const content = [
+      "BT",
+      "/F1 10 Tf",
+      "40 800 Td",
+      ...lines.flatMap((line, index) =>
+        index === 0
+          ? [`(${this.escapePdfText(line)}) Tj`]
+          : ["0 -14 Td", `(${this.escapePdfText(line)}) Tj`],
+      ),
+      "ET",
+    ].join("\n");
+
+    const objects = [
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+      `<< /Length ${Buffer.byteLength(content, "utf8")} >>\nstream\n${content}\nendstream`,
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ];
+
+    let pdf = "%PDF-1.4\n";
+    const offsets = [0];
+    objects.forEach((object, index) => {
+      offsets.push(Buffer.byteLength(pdf, "utf8"));
+      pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+    });
+
+    const xrefStart = Buffer.byteLength(pdf, "utf8");
+    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    for (let index = 1; index < offsets.length; index += 1) {
+      pdf += `${offsets[index].toString().padStart(10, "0")} 00000 n \n`;
+    }
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+    return Buffer.from(pdf, "utf8");
   }
 }
 

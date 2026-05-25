@@ -11,6 +11,7 @@ import { JobStatusEventEntity } from "../database/entities/job-status-event.enti
 import { JobEntity } from "../database/entities/job.entity";
 import { LeadEntity } from "../database/entities/lead.entity";
 import { MembershipEntity } from "../database/entities/membership.entity";
+import { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
 import { PricebookBundleItemEntity } from "../database/entities/pricebook-bundle-item.entity";
 import { PricebookBundleEntity } from "../database/entities/pricebook-bundle.entity";
 import { PricebookItemEntity } from "../database/entities/pricebook-item.entity";
@@ -48,6 +49,7 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
       PricebookItemEntity,
       PricebookBundleEntity,
       PricebookBundleItemEntity,
+      OrganizationSettingEntity,
     ]),
   ],
   controllers: [CrmController],
