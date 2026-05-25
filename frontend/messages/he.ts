@@ -89,6 +89,7 @@ const messages = {
     jumpToOperations: "קפיצה לתפעול",
     noDashboard: "לתפקיד החשבון הזה עדיין אין לוח בית ייעודי.",
     quickLinksDescription: "פתח את המודול שמאחורי כל מדד בלי לחפש בסרגל הצד.",
+    firstSessionTip: "First session tip: Start in Leads to capture your first lead, then continue to Jobs, Estimate, and Invoice.",
     tapToExpand: "הקש כדי להרחיב",
     summary: {
       newLeads: {
@@ -204,6 +205,7 @@ const messages = {
     grid: "רשת",
     newLeadIntake: "קליטת ליד חדש משיחה",
     noMatches: "אין לידים שתואמים לחיפוש ולמסננים הנוכחיים.",
+    noLeadsYet: "No leads yet. Click New Call Lead Intake to create your first lead and start the V1 workflow.",
     noAdditionalContext: "אין הקשר נוסף",
     noAdditionalContextProvided: "לא סופק הקשר נוסף.",
     openDetails: "פתח פרטים עבור {name}",

@@ -89,6 +89,7 @@ const messages = {
     jumpToOperations: "Ir a operaciones",
     noDashboard: "Este rol de cuenta todavia no tiene una vista dedicada de inicio.",
     quickLinksDescription: "Abre el modulo detras de cada metrica sin buscar en la barra lateral.",
+    firstSessionTip: "First session tip: Start in Leads to capture your first lead, then continue to Jobs, Estimate, and Invoice.",
     tapToExpand: "Toca para expandir",
     summary: {
       newLeads: {
@@ -285,6 +286,7 @@ const messages = {
     grid: "Cuadricula",
     newLeadIntake: "Nueva entrada de llamada",
     noMatches: "Ningun prospecto coincide con la busqueda y filtros actuales.",
+    noLeadsYet: "No leads yet. Click New Call Lead Intake to create your first lead and start the V1 workflow.",
     noAdditionalContext: "Sin contexto adicional",
     noAdditionalContextProvided: "No se proporciono contexto adicional.",
     openDetails: "Abrir detalles de {name}",

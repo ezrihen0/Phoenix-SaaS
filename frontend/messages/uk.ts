@@ -89,6 +89,7 @@ const messages = {
     jumpToOperations: "Перейти до операцій",
     noDashboard: "Для цієї ролі ще немає окремої домашньої панелі.",
     quickLinksDescription: "Відкрийте модуль за кожною метрикою без пошуку в бічній панелі.",
+    firstSessionTip: "First session tip: Start in Leads to capture your first lead, then continue to Jobs, Estimate, and Invoice.",
     tapToExpand: "Натисніть, щоб розгорнути",
     summary: {
       newLeads: {
@@ -204,6 +205,7 @@ const messages = {
     grid: "Сітка",
     newLeadIntake: "Нове звернення з дзвінка",
     noMatches: "Жоден лід не відповідає поточному пошуку та фільтрам.",
+    noLeadsYet: "No leads yet. Click New Call Lead Intake to create your first lead and start the V1 workflow.",
     noAdditionalContext: "Немає додаткового контексту",
     noAdditionalContextProvided: "Додатковий контекст не надано.",
     openDetails: "Відкрити деталі для {name}",

@@ -89,6 +89,7 @@ const messages = {
     jumpToOperations: "Przejdz do operacji",
     noDashboard: "Ta rola konta nie ma jeszcze dedykowanego pulpitu startowego.",
     quickLinksDescription: "Otworz modul za kazda metryka bez szukania na pasku bocznym.",
+    firstSessionTip: "First session tip: Start in Leads to capture your first lead, then continue to Jobs, Estimate, and Invoice.",
     tapToExpand: "Dotknij, aby rozwinac",
     summary: {
       newLeads: {
@@ -204,6 +205,7 @@ const messages = {
     grid: "Siatka",
     newLeadIntake: "Nowe przyjecie leadu z rozmowy",
     noMatches: "Zaden lead nie pasuje do biezacego wyszukiwania i filtrow.",
+    noLeadsYet: "No leads yet. Click New Call Lead Intake to create your first lead and start the V1 workflow.",
     noAdditionalContext: "Brak dodatkowego kontekstu",
     noAdditionalContextProvided: "Nie podano dodatkowego kontekstu.",
     openDetails: "Otworz szczegoly dla {name}",
