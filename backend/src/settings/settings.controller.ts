@@ -16,6 +16,10 @@ type OrganizationSettingsPayload = {
   googleReviewUrl?: unknown;
   defaultSmsNumber?: unknown;
   businessHours?: unknown;
+  invoiceEmailSubject?: unknown;
+  invoiceEmailBody?: unknown;
+  invoiceSmsBody?: unknown;
+  invoicePdfFooter?: unknown;
 };
 
 function readNullableString(value: unknown, fieldName: string, maxLength: number) {
@@ -59,6 +63,10 @@ function parseOrganizationSettingsPayload(payload: OrganizationSettingsPayload) 
     googleReviewUrl: readOptionalNullableString(payload.googleReviewUrl, "Google review URL", 512),
     defaultSmsNumber: readOptionalNullableString(payload.defaultSmsNumber, "Default SMS number", 64),
     businessHours: readOptionalNullableString(payload.businessHours, "Business hours", 2000),
+    invoiceEmailSubject: readOptionalNullableString(payload.invoiceEmailSubject, "Invoice email subject", 255),
+    invoiceEmailBody: readOptionalNullableString(payload.invoiceEmailBody, "Invoice email body", 5000),
+    invoiceSmsBody: readOptionalNullableString(payload.invoiceSmsBody, "Invoice SMS body", 480),
+    invoicePdfFooter: readOptionalNullableString(payload.invoicePdfFooter, "Invoice PDF footer", 255),
   };
 }
 

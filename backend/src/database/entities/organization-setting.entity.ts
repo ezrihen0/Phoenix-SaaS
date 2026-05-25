@@ -57,6 +57,18 @@ export class OrganizationSettingEntity {
   @Column({ type: "text", nullable: true })
   business_hours!: string | null;
 
+  @Column({ type: "varchar", length: 255, nullable: true })
+  invoice_email_subject!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  invoice_email_body!: string | null;
+
+  @Column({ type: "varchar", length: 480, nullable: true })
+  invoice_sms_body!: string | null;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  invoice_pdf_footer!: string | null;
+
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;
 

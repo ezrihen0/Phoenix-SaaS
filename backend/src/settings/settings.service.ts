@@ -19,6 +19,10 @@ export type OrganizationSettingsResponse = {
   googleReviewUrl?: string | null;
   defaultSmsNumber?: string | null;
   businessHours?: string | null;
+  invoiceEmailSubject?: string | null;
+  invoiceEmailBody?: string | null;
+  invoiceSmsBody?: string | null;
+  invoicePdfFooter?: string | null;
   taxRateBps: number;
 };
 
@@ -32,6 +36,10 @@ export type OrganizationSettingsUpdateInput = {
   googleReviewUrl: string | null | undefined;
   defaultSmsNumber: string | null | undefined;
   businessHours: string | null | undefined;
+  invoiceEmailSubject?: string | null | undefined;
+  invoiceEmailBody?: string | null | undefined;
+  invoiceSmsBody?: string | null | undefined;
+  invoicePdfFooter?: string | null | undefined;
 };
 
 const ORGANIZATION_SETTINGS_KEY = "default";
@@ -67,6 +75,10 @@ export class SettingsService {
         googleReviewUrl: null,
         defaultSmsNumber: null,
         businessHours: null,
+        invoiceEmailSubject: null,
+        invoiceEmailBody: null,
+        invoiceSmsBody: null,
+        invoicePdfFooter: null,
         taxRateBps: this.readNumber("ORG_TAX_RATE_BPS", 0),
       };
     }
@@ -114,6 +126,18 @@ export class SettingsService {
     if (input.businessHours !== undefined) {
       settings.business_hours = input.businessHours;
     }
+    if (input.invoiceEmailSubject !== undefined) {
+      settings.invoice_email_subject = input.invoiceEmailSubject;
+    }
+    if (input.invoiceEmailBody !== undefined) {
+      settings.invoice_email_body = input.invoiceEmailBody;
+    }
+    if (input.invoiceSmsBody !== undefined) {
+      settings.invoice_sms_body = input.invoiceSmsBody;
+    }
+    if (input.invoicePdfFooter !== undefined) {
+      settings.invoice_pdf_footer = input.invoicePdfFooter;
+    }
 
     const savedSettings = await this.organizationSettingsRepository.save(settings);
     return this.buildOrganizationSettingsResponse(savedSettings);
@@ -134,6 +158,10 @@ export class SettingsService {
       googleReviewUrl: settings.google_review_url,
       defaultSmsNumber: settings.default_sms_number,
       businessHours: settings.business_hours,
+      invoiceEmailSubject: settings.invoice_email_subject,
+      invoiceEmailBody: settings.invoice_email_body,
+      invoiceSmsBody: settings.invoice_sms_body,
+      invoicePdfFooter: settings.invoice_pdf_footer,
       taxRateBps: this.readNumber("ORG_TAX_RATE_BPS", 0),
     };
   }
