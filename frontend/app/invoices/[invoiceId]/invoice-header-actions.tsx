@@ -90,6 +90,7 @@ export default function InvoiceHeaderActions({
   const [isSignaturePadOpen, setIsSignaturePadOpen] = useState(false);
   const [isRefreshingInvoice, setIsRefreshingInvoice] = useState(false);
   const [isSendingInvoice, setIsSendingInvoice] = useState(false);
+  const [isSendingSms, setIsSendingSms] = useState(false);
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null);
   const [sendSuccessMessage, setSendSuccessMessage] = useState<string | null>(null);
   const [invoiceSnapshot, setInvoiceSnapshot] = useState<InvoiceSnapshot>(initialInvoice);
@@ -213,6 +214,24 @@ export default function InvoiceHeaderActions({
       setActionErrorMessage(error instanceof Error ? error.message : "Invoice email could not be sent.");
     } finally {
       setIsSendingInvoice(false);
+    }
+  }
+
+  async function handleSendSms() {
+    setActionErrorMessage(null);
+    setSendSuccessMessage(null);
+    setIsSendingSms(true);
+
+    try {
+      const response = await crmApiFetch<{ sent_at: string; to: string[] }>(`/api/invoices/${invoiceId}/send-sms`, {
+        method: "POST",
+      });
+
+      setSendSuccessMessage(`Invoice link sent via SMS to ${response.to.join(", ")}.`);
+    } catch (error) {
+      setActionErrorMessage(error instanceof Error ? error.message : "Invoice SMS could not be sent.");
+    } finally {
+      setIsSendingSms(false);
     }
   }
 
@@ -394,6 +413,18 @@ export default function InvoiceHeaderActions({
                 className="theme-menu-item flex w-full items-center rounded-[12px] px-3 py-2 text-left text-sm"
               >
                 Request Signature
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsActionsOpen(false);
+                  void handleSendSms();
+                }}
+                disabled={isSendingSms}
+                className="theme-menu-item flex w-full items-center rounded-[12px] px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSendingSms ? "Sending SMS..." : "Send via SMS"}
               </button>
             </div>
           ) : null}
