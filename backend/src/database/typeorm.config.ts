@@ -195,6 +195,7 @@ function buildBaseTypeOrmOptions(readEnv: (key: string) => string | undefined): 
   return {
     type: "mysql",
     ...baseOptions,
+    timezone: "Z",
   } satisfies MysqlConnectionOptions;
 }
 
