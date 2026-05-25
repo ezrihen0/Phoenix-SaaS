@@ -4,7 +4,9 @@
 -- Target: execute this script against the active application database explicitly.
 -- Current local/dev detection (2026-05-13): phoenix_crm_rebase_run_20260512
 -- Run as a MySQL user with INSERT/UPDATE on these tables.
--- Password for both fixture users: Gate12Test!2026
+-- Passwords:
+--   gate12-user1@fixture.local => Password123!
+--   gate12-user2@fixture.local => Gate12Test!2026
 -- Includes: orgs, users, memberships, customers, leads, jobs, quotes, invoices, portal_magic_links.
 -- Re-run safety: DELETE fixture rows in reverse FK order if emails already exist.
 --
@@ -25,9 +27,9 @@ INSERT INTO `organizations` (`id`, `name`, `slug`, `is_active`, `created_at`, `u
   ('c1111111-1111-4111-8111-0000000000d1', 'Gate 12 Org Inactive', 'g12-or-inactive', 0, NOW(6), NOW(6))
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `is_active` = VALUES(`is_active`), `updated_at` = NOW(6);
 
--- Users (bcrypt hash for password Gate12Test!2026 — generated with bcrypt cost 10)
+-- Users (bcrypt hashes generated with bcrypt cost 10 to match AuthService)
 INSERT INTO `users` (`id`, `email`, `password_hash`, `is_active`, `created_at`, `updated_at`) VALUES
-  ('c2222222-2222-4222-8222-000000000001', 'gate12-user1@fixture.local', '$2b$10$ehIV6OYdF.W/d8S8omQj6eVfQDI96EqEnuoR/u8VnTl5n4Prnv2Ei', 1, NOW(6), NOW(6)),
+  ('c2222222-2222-4222-8222-000000000001', 'gate12-user1@fixture.local', '$2b$10$/I/VjK6fJu6K5o31nzxlMuRIKh0C.I1fwbBGNbG8qFpoNPIhvKWjm', 1, NOW(6), NOW(6)),
   ('c2222222-2222-4222-8222-000000000002', 'gate12-user2@fixture.local', '$2b$10$ehIV6OYdF.W/d8S8omQj6eVfQDI96EqEnuoR/u8VnTl5n4Prnv2Ei', 1, NOW(6), NOW(6))
 ON DUPLICATE KEY UPDATE `password_hash` = VALUES(`password_hash`), `is_active` = 1, `updated_at` = NOW(6);
 
@@ -181,7 +183,7 @@ COMMIT;
 -- After run: record in docs/gate-12-verification-log.md fixture table:
 --   Target DB used at execution time: choose the active app DB explicitly
 --     (current local/dev detection 2026-05-13: phoenix_crm_rebase_run_20260512)
---   User1 email: gate12-user1@fixture.local  /  password: Gate12Test!2026
+--   User1 email: gate12-user1@fixture.local  /  password: Password123!
 --   User2 email: gate12-user2@fixture.local  /  password: Gate12Test!2026
 --   Org A id: c1111111-1111-4111-8111-0000000000a1  slug (booking): g12-or-a
 --   Org B id: c1111111-1111-4111-8111-0000000000b1  slug: g12-or-b
