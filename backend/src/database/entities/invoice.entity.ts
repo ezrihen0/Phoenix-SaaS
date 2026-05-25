@@ -73,6 +73,18 @@ export class InvoiceEntity {
   @Column({ type: "varchar", length: 255, nullable: true })
   signed_by_name!: string | null;
 
+  @Column({ type: "datetime", precision: 6, nullable: true })
+  email_sent_at!: Date | null;
+
+  @Column({ type: "datetime", precision: 6, nullable: true })
+  sms_sent_at!: Date | null;
+
+  @Column({ type: "datetime", precision: 6, nullable: true })
+  last_sent_at!: Date | null;
+
+  @Column({ type: "varchar", length: 16, nullable: true })
+  last_sent_via!: string | null;
+
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;
 
