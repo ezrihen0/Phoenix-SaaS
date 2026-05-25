@@ -4,6 +4,7 @@ import { ArrowLeft, Receipt, ShieldCheck } from "lucide-react";
 
 import DocumentApprovalActions from "@/components/document-approval-actions";
 import DocumentPreview from "@/components/document-preview";
+import InvoiceHeaderActions from "./invoice-header-actions";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerRoles } from "@/lib/auth/server-session";
 import {
@@ -181,6 +182,26 @@ export default async function InvoiceDetailPage({
                 Warranty certificate
               </Link>
             ) : null}
+          </div>
+
+          <div className="mt-4 print:hidden">
+            <InvoiceHeaderActions
+              invoiceId={invoice.id}
+              initialInvoice={{
+                id: invoice.id,
+                invoice_id: invoice.invoice_id,
+                document_number: invoice.document_number,
+                total_cents: invoice.total_cents,
+                issued_at: invoice.issued_at,
+                signature_requested: invoice.signature_requested,
+                customer: invoice.customer
+                  ? { full_name: invoice.customer.full_name, email: invoice.customer.email }
+                  : null,
+              }}
+              organizationEmail={invoice.customer?.email ?? null}
+              businessName={null}
+              hasInvoiceLineItems={(invoice.line_items?.length ?? 0) > 0}
+            />
           </div>
 
           <div className="mt-6">

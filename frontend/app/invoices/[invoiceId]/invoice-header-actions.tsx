@@ -23,10 +23,7 @@ type SendInvoiceResponse = {
   document_number: string;
   sent_at: string;
   to: string[];
-  from_email: string;
-  pay_now_url: string | null;
-  signature_url: string | null;
-  signature_requested: boolean;
+  message_id: string;
 };
 
 function formatCurrency(cents: number) {
@@ -53,16 +50,18 @@ function formatDueDateFromIssuedAt(issuedAt: string) {
   }).format(dueDate);
 }
 
-function buildDefaultSubject(invoice: InvoiceSnapshot) {
-  return `View invoice #${invoice.invoice_id || invoice.document_number} from Phoenix Chimney and Fireplace`;
+function buildDefaultSubject(invoice: InvoiceSnapshot, businessName?: string | null) {
+  const from = businessName?.trim() || "your service provider";
+  return `Invoice #${invoice.invoice_id || invoice.document_number} from ${from}`;
 }
 
-function buildDefaultBody(invoice: InvoiceSnapshot) {
+function buildDefaultBody(invoice: InvoiceSnapshot, businessName?: string | null) {
   const customerName = invoice.customer?.full_name?.trim() || "there";
   const totalLabel = formatCurrency(invoice.total_cents);
   const dueDateLabel = formatDueDateFromIssuedAt(invoice.issued_at);
+  const from = businessName?.trim() || "us";
 
-  return `Hi ${customerName},\n\nThanks again for choosing Phoenix! Your invoice total is ${totalLabel}, and needs to be paid by ${dueDateLabel}.`;
+  return `Hi ${customerName},\n\nThanks again for choosing ${from}! Your invoice total is ${totalLabel}, and is due by ${dueDateLabel}.`;
 }
 
 function getThemeCanvasColors() {
@@ -77,11 +76,13 @@ export default function InvoiceHeaderActions({
   invoiceId,
   initialInvoice,
   organizationEmail,
+  businessName,
   hasInvoiceLineItems,
 }: {
   invoiceId: string;
   initialInvoice: InvoiceSnapshot;
   organizationEmail: string | null;
+  businessName: string | null;
   hasInvoiceLineItems: boolean;
 }) {
   const [isActionsOpen, setIsActionsOpen] = useState(false);
@@ -168,7 +169,7 @@ export default function InvoiceHeaderActions({
     setIsSignaturePadOpen(false);
   }
 
-  async function refreshInvoiceForCompose(preselectRequestSignature: boolean) {
+  async function refreshInvoiceForCompose() {
     setActionErrorMessage(null);
     setIsRefreshingInvoice(true);
 
@@ -179,9 +180,8 @@ export default function InvoiceHeaderActions({
       setInvoiceSnapshot(latestInvoice);
       setFromField(organizationEmail?.trim() || "");
       setToField(latestCustomerEmail);
-      setSubjectField(buildDefaultSubject(latestInvoice));
-      setBodyField(buildDefaultBody(latestInvoice));
-      setRequestSignature(preselectRequestSignature || Boolean(latestInvoice.signature_requested));
+      setSubjectField(buildDefaultSubject(latestInvoice, businessName));
+      setBodyField(buildDefaultBody(latestInvoice, businessName));
       setIsSendModalOpen(true);
     } catch (error) {
       setActionErrorMessage(error instanceof Error ? error.message : "Invoice data could not be refreshed.");
@@ -197,23 +197,16 @@ export default function InvoiceHeaderActions({
 
     try {
       const payload = {
-        from: sendFromAddress,
-        to: toField,
-        subject: subjectField,
-        body: bodyField,
-        creditCardEnabled,
-        requestSignature,
+        to: toField || undefined,
+        subject: subjectField || undefined,
+        body: bodyField || undefined,
       };
 
-      const response = await crmApiFetch<SendInvoiceResponse>(`/api/invoices/${invoiceId}/send`, {
+      const response = await crmApiFetch<SendInvoiceResponse>(`/api/invoices/${invoiceId}/send-email`, {
         method: "POST",
         body: JSON.stringify(payload),
       });
 
-      setInvoiceSnapshot((current) => ({
-        ...current,
-        signature_requested: response.signature_requested,
-      }));
       setSendSuccessMessage(`Invoice sent to ${response.to.join(", ")}.`);
       setIsSendModalOpen(false);
     } catch (error) {
@@ -338,7 +331,7 @@ export default function InvoiceHeaderActions({
         <button
           type="button"
           onClick={() => {
-            void refreshInvoiceForCompose(false);
+            void refreshInvoiceForCompose();
           }}
           disabled={isRefreshingInvoice}
           className="theme-btn-primary inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
@@ -396,7 +389,7 @@ export default function InvoiceHeaderActions({
                 role="menuitem"
                 onClick={() => {
                   setIsActionsOpen(false);
-                  void refreshInvoiceForCompose(true);
+                  void refreshInvoiceForCompose();
                 }}
                 className="theme-menu-item flex w-full items-center rounded-[12px] px-3 py-2 text-left text-sm"
               >
