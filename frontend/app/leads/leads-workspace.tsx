@@ -492,7 +492,7 @@ export default function LeadsWorkspace({
                 columns={desktopLeadColumns}
                 state={
                   leads.length === 0
-                    ? { status: "empty", message: t("noMatches") }
+                    ? { status: "empty", message: t("noLeadsYet") }
                     : { status: "ready" }
                 }
               >
@@ -605,7 +605,7 @@ export default function LeadsWorkspace({
                 );
               }) : (
                 <div className="theme-control-surface-soft rounded-[24px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.01)] px-4 py-8 text-center text-sm text-[color:var(--text-muted)]">
-                  {t("noMatches")}
+                  {t("noLeadsYet")}
                 </div>
               )}
             </div>
@@ -658,7 +658,7 @@ export default function LeadsWorkspace({
                 );
               }) : (
                 <div className="theme-control-surface-soft col-span-full rounded-[24px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.01)] px-4 py-8 text-center text-sm text-[color:var(--text-muted)]">
-                  {t("noMatches")}
+                  {t("noLeadsYet")}
                 </div>
               )}
             </div>
@@ -696,7 +696,7 @@ export default function LeadsWorkspace({
           </article>
         )) : (
           <div className="theme-control-surface-soft rounded-[24px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.01)] px-4 py-8 text-center text-sm text-[color:var(--text-muted)]">
-            {t("noMatches")}
+            {t("noLeadsYet")}
           </div>
         )}
       </div>

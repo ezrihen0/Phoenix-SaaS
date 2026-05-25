@@ -1277,7 +1277,20 @@ export default function JobsWorkspace() {
               <div className="mt-6 rounded-[28px] theme-control-surface-soft border-dashed bg-[color:var(--cmp-surface-panel)] px-5 py-10 text-center text-sm text-[color:var(--sem-text-secondary)]">
                 {queueFilterActive
                   ? "No jobs match the current technician and date filters."
-                  : "No jobs are active yet. Convert a lead to start the first service ticket."}
+                  : "No jobs are active yet. Start in Leads, then convert a lead to create the first service ticket."}
+                {!queueFilterActive ? (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        router.push("/leads");
+                      }}
+                      className="inline-flex items-center justify-center rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-2 text-sm text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-hover-surface)] hover:text-[color:var(--sem-text-primary)]"
+                    >
+                      Open Leads
+                    </button>
+                  </div>
+                ) : null}
               </div>
             )}
           </SectionFrame>

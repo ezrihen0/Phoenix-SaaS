@@ -25,11 +25,13 @@ function OfficeSnapshotQuickLinks({
   role,
   title,
   description,
+  firstSessionTip,
   labels,
 }: {
   role: SessionRole | null;
   title: string;
   description: string;
+  firstSessionTip: string;
   labels: {
     leads: string;
     jobs: string;
@@ -69,6 +71,9 @@ function OfficeSnapshotQuickLinks({
       <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{title}</p>
       <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
         {description}
+      </p>
+      <p className="mt-2 text-sm text-[color:var(--sem-text-primary)]">
+        {firstSessionTip}
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         {links.map((item) => (
@@ -225,6 +230,7 @@ export default async function HomePage() {
             role={role}
             title={t("jumpToOperations")}
             description={t("quickLinksDescription")}
+            firstSessionTip={t("firstSessionTip")}
             labels={{
               leads: shellT("leads"),
               jobs: shellT("jobs"),

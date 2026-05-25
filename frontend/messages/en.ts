@@ -89,6 +89,7 @@ const messages = {
     jumpToOperations: "Jump to operations",
     noDashboard: "This account role does not have a dedicated home dashboard view yet.",
     quickLinksDescription: "Open the module behind each snapshot metric without hunting the sidebar.",
+    firstSessionTip: "First session tip: Start in Leads to capture your first lead, then continue to Jobs, Estimate, and Invoice.",
     tapToExpand: "Tap to expand",
     summary: {
       newLeads: {
@@ -285,6 +286,7 @@ const messages = {
     grid: "Grid",
     newLeadIntake: "New Call Lead Intake",
     noMatches: "No leads match the current search and filters.",
+    noLeadsYet: "No leads yet. Click New Call Lead Intake to create your first lead and start the V1 workflow.",
     noAdditionalContext: "No additional context",
     noAdditionalContextProvided: "No additional context provided.",
     openDetails: "Open details for {name}",
