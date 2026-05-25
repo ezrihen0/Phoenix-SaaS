@@ -57,6 +57,7 @@ import {
   parseJobStatusPayload,
   parseRecordInvoicePaymentPayload,
   parseSignDocumentPayload,
+  parseUpdateCustomerPayload,
   parseUpdateJobPayload,
   parseUpdateLeadPayload,
   parseUpsertInvoicePayload,
@@ -2681,6 +2682,88 @@ export class CrmController {
       });
     } catch (error) {
       apiError(400, "customer_lookup_failed", "The customer could not be loaded.", error);
+    }
+  }
+
+  @Patch("customers/:customerId")
+  async updateCustomer(
+    @Req() request: RequestWithActor,
+    @Param("customerId") customerId: string,
+    @Body() body: unknown,
+  ) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "customers.manage",
+      "customer_manage_forbidden",
+      "This account cannot change customers.",
+    );
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    try {
+      const payload = parseUpdateCustomerPayload(body);
+      const customer = await this.customersRepository.findOne({
+        where: {
+          id: customerId,
+          organization_id: organizationId,
+        },
+      });
+
+      if (!customer) {
+        apiError(404, "customer_not_found", "The customer could not be found.");
+      }
+
+      if (payload.fullName !== undefined) {
+        customer.full_name = payload.fullName;
+      }
+
+      if (payload.phone !== undefined) {
+        customer.phone = payload.phone;
+      }
+
+      if (payload.email !== undefined) {
+        customer.email = payload.email;
+      }
+
+      if (payload.companyName !== undefined) {
+        customer.company_name = payload.companyName;
+      }
+
+      if (payload.serviceAddressLine1 !== undefined) {
+        customer.service_address_line_1 = payload.serviceAddressLine1;
+      }
+
+      if (payload.serviceAddressLine2 !== undefined) {
+        customer.service_address_line_2 = payload.serviceAddressLine2;
+      }
+
+      if (payload.serviceCity !== undefined) {
+        customer.service_city = payload.serviceCity;
+      }
+
+      if (payload.serviceStateOrRegion !== undefined) {
+        customer.service_state_or_region = payload.serviceStateOrRegion;
+      }
+
+      if (payload.servicePostalCode !== undefined) {
+        customer.service_postal_code = payload.servicePostalCode;
+      }
+
+      if (payload.notes !== undefined) {
+        customer.notes = payload.notes;
+      }
+
+      if (payload.preferredServiceType !== undefined) {
+        customer.preferred_service_type = payload.preferredServiceType;
+      }
+
+      const result = await this.customersRepository.save(customer);
+
+      return apiSuccess(result);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      apiError(400, "invalid_customer_update_payload", "The customer update payload is invalid.", error);
     }
   }
 

@@ -41,6 +41,20 @@ export type UpdateLeadPayload = {
   status?: LeadStatus;
 };
 
+export type UpdateCustomerPayload = {
+  fullName?: string;
+  phone?: string;
+  email?: string | null;
+  companyName?: string | null;
+  serviceAddressLine1?: string;
+  serviceAddressLine2?: string | null;
+  serviceCity?: string;
+  serviceStateOrRegion?: string | null;
+  servicePostalCode?: string;
+  notes?: string | null;
+  preferredServiceType?: ServiceType | null;
+};
+
 export type ConvertLeadPayload = {
   title: string;
   description: string | null;
@@ -448,6 +462,61 @@ export function parseUpdateLeadPayload(jsonBody: unknown): UpdateLeadPayload {
         ? undefined
         : optionalTrimmedString(payload.description, "description", 3000),
     status: optionalEnumValue(payload.status, "status", leadStatuses),
+  };
+}
+
+export function parseUpdateCustomerPayload(jsonBody: unknown): UpdateCustomerPayload {
+  const payload = requireRecord(jsonBody, "Customer update");
+
+  return {
+    fullName:
+      payload.fullName === undefined
+        ? undefined
+        : requireTrimmedString(payload.fullName, "fullName"),
+    phone:
+      payload.phone === undefined
+        ? undefined
+        : requireTrimmedString(payload.phone, "phone", 64),
+    email:
+      payload.email === undefined
+        ? undefined
+        : optionalEmail(payload.email, "email"),
+    companyName:
+      payload.companyName === undefined
+        ? undefined
+        : optionalTrimmedString(payload.companyName, "companyName"),
+    serviceAddressLine1:
+      payload.serviceAddressLine1 === undefined
+        ? undefined
+        : requireTrimmedString(payload.serviceAddressLine1, "serviceAddressLine1"),
+    serviceAddressLine2:
+      payload.serviceAddressLine2 === undefined
+        ? undefined
+        : optionalTrimmedString(payload.serviceAddressLine2, "serviceAddressLine2"),
+    serviceCity:
+      payload.serviceCity === undefined
+        ? undefined
+        : requireTrimmedString(payload.serviceCity, "serviceCity", 120),
+    serviceStateOrRegion:
+      payload.serviceStateOrRegion === undefined
+        ? undefined
+        : optionalTrimmedString(
+            payload.serviceStateOrRegion,
+            "serviceStateOrRegion",
+            120,
+          ),
+    servicePostalCode:
+      payload.servicePostalCode === undefined
+        ? undefined
+        : requireTrimmedString(payload.servicePostalCode, "servicePostalCode", 20),
+    notes:
+      payload.notes === undefined
+        ? undefined
+        : optionalTrimmedString(payload.notes, "notes", 3000),
+    preferredServiceType:
+      payload.preferredServiceType === undefined
+        ? undefined
+        : optionalEnumValue(payload.preferredServiceType, "preferredServiceType", serviceTypes),
   };
 }
 

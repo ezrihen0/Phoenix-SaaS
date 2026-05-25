@@ -18,6 +18,7 @@ import {
   UserRound,
 } from "lucide-react";
 
+import { crmApiFetch } from "@/lib/crm/browser-api";
 import { openJobStatuses } from "@/lib/crm/data";
 import { formatAddress, formatDate, formatDateTime } from "@/lib/crm/display";
 import { formatLocalizedCurrency } from "@/lib/i18n/formatters";
@@ -89,6 +90,22 @@ type CustomerProfileWorkspaceProps = {
   inspections: InspectionListRow[];
   loadError: string | null;
   canMintPortalMagicLink?: boolean;
+};
+
+type ServiceType = Database["public"]["Enums"]["service_type"];
+
+type CustomerEditFormState = {
+  fullName: string;
+  phone: string;
+  email: string;
+  companyName: string;
+  serviceAddressLine1: string;
+  serviceAddressLine2: string;
+  serviceCity: string;
+  serviceStateOrRegion: string;
+  servicePostalCode: string;
+  notes: string;
+  preferredServiceType: ServiceType | "";
 };
 
 type CustomerTab = "info" | "jobs" | "estimates" | "invoices" | "inspections";
@@ -187,6 +204,31 @@ function usePagedItems<T>(items: T[], page: number) {
     totalPages,
     pageItems: items.slice(startIndex, startIndex + ITEMS_PER_PAGE),
   };
+}
+
+function toEditFormState(customer: CustomerRecord): CustomerEditFormState {
+  return {
+    fullName: customer.full_name,
+    phone: customer.phone,
+    email: customer.email ?? "",
+    companyName: customer.company_name ?? "",
+    serviceAddressLine1: customer.service_address_line_1,
+    serviceAddressLine2: customer.service_address_line_2 ?? "",
+    serviceCity: customer.service_city,
+    serviceStateOrRegion: customer.service_state_or_region ?? "",
+    servicePostalCode: customer.service_postal_code,
+    notes: customer.notes ?? "",
+    preferredServiceType: customer.preferred_service_type ?? "",
+  };
+}
+
+function trimRequired(value: string) {
+  return value.trim();
+}
+
+function trimOptional(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function EmptyState({ label, href, actionLabel }: { label: string; href?: string; actionLabel?: string }) {
@@ -334,6 +376,12 @@ export default function CustomerProfileWorkspace({
   const router = useRouter();
   const locale = useLocale();
   const t = useTranslations("customerProfile");
+  const [customerRecord, setCustomerRecord] = useState<CustomerRecord>(customer);
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [editForm, setEditForm] = useState<CustomerEditFormState>(() => toEditFormState(customer));
+  const [savePending, setSavePending] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeTab = (searchParams.get("tab") ?? "info") as CustomerTab;
@@ -357,6 +405,70 @@ export default function CustomerProfileWorkspace({
     { id: "invoices" as const, label: t("invoices"), count: invoices.length, icon: Receipt },
     { id: "inspections" as const, label: t("inspections"), count: inspections.length, icon: ShieldCheck },
   ], [estimates.length, inspections.length, invoices.length, relatedJobs.length, t]);
+
+  const serviceTypeOptions: ServiceType[] = ["inspection", "cleaning", "repair", "rebuild"];
+
+  function updateEditField<Key extends keyof CustomerEditFormState>(key: Key, value: CustomerEditFormState[Key]) {
+    setEditForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function openEditPanel() {
+    setEditForm(toEditFormState(customerRecord));
+    setIsEditingCustomer(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+  }
+
+  function closeEditPanel() {
+    setIsEditingCustomer(false);
+    setSaveError(null);
+  }
+
+  async function saveCustomerEdits() {
+    const fullName = trimRequired(editForm.fullName);
+    const phone = trimRequired(editForm.phone);
+    const serviceAddressLine1 = trimRequired(editForm.serviceAddressLine1);
+    const serviceCity = trimRequired(editForm.serviceCity);
+    const servicePostalCode = trimRequired(editForm.servicePostalCode);
+
+    if (!fullName || !phone || !serviceAddressLine1 || !serviceCity || !servicePostalCode) {
+      setSaveError("Please fill customer name, phone, service address, city, and postal code before saving.");
+      setSaveSuccess(null);
+      return;
+    }
+
+    setSavePending(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+
+    try {
+      const updatedCustomer = await crmApiFetch<CustomerRecord>(`/api/customers/${customerRecord.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          fullName,
+          phone,
+          email: trimOptional(editForm.email),
+          companyName: trimOptional(editForm.companyName),
+          serviceAddressLine1,
+          serviceAddressLine2: trimOptional(editForm.serviceAddressLine2),
+          serviceCity,
+          serviceStateOrRegion: trimOptional(editForm.serviceStateOrRegion),
+          servicePostalCode,
+          notes: trimOptional(editForm.notes),
+          preferredServiceType: editForm.preferredServiceType || null,
+        }),
+      });
+
+      setCustomerRecord(updatedCustomer);
+      setEditForm(toEditFormState(updatedCustomer));
+      setIsEditingCustomer(false);
+      setSaveSuccess("Customer details were saved.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "The customer details could not be saved.");
+    } finally {
+      setSavePending(false);
+    }
+  }
 
   function updateQuery(next: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -416,7 +528,7 @@ export default function CustomerProfileWorkspace({
               <div>
                 <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">{t("profile")}</p>
                 <h1 className="mt-3 max-w-3xl font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
-                  {customer.full_name}
+                  {customerRecord.full_name}
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
                   {t("description")}
@@ -447,46 +559,131 @@ export default function CustomerProfileWorkspace({
           <div className="p-5 sm:p-6">
             {safeActiveTab === "info" ? (
               <>
+                {saveSuccess ? (
+                  <div className="theme-status-success mb-5 rounded-[16px] border px-4 py-3 text-sm">
+                    {saveSuccess}
+                  </div>
+                ) : null}
                 <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
                   <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] p-5">
-                  <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{t("customerInfo")}</p>
-                  <div className="mt-5 grid gap-4 text-sm text-[color:var(--sem-text-secondary)]">
-                    <div className="flex items-start gap-3">
-                      <UserRound className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
-                      <div>
-                        <p className="text-[color:var(--sem-text-primary)]">{customer.full_name}</p>
-                        <p className="mt-1 text-[color:var(--sem-text-muted)]">{t("created", { date: formatDate(customer.created_at, locale) })}</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{t("customerInfo")}</p>
+                      <button
+                        type="button"
+                        onClick={isEditingCustomer ? closeEditPanel : openEditPanel}
+                        className="theme-btn-secondary rounded-full px-4 py-2 text-sm"
+                      >
+                        {isEditingCustomer ? "Cancel" : "Edit customer"}
+                      </button>
+                    </div>
+                    {isEditingCustomer ? (
+                      <form
+                        className="mt-4 grid gap-3 text-sm"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void saveCustomerEdits();
+                        }}
+                      >
+                        <label className="grid gap-1">
+                          <span>Name</span>
+                          <input value={editForm.fullName} onChange={(event) => updateEditField("fullName", event.target.value)} className="theme-control-surface rounded-[14px] border px-3 py-2" />
+                        </label>
+                        <label className="grid gap-1">
+                          <span>Phone</span>
+                          <input value={editForm.phone} onChange={(event) => updateEditField("phone", event.target.value)} className="theme-control-surface rounded-[14px] border px-3 py-2" />
+                        </label>
+                        <label className="grid gap-1">
+                          <span>Email</span>
+                          <input value={editForm.email} onChange={(event) => updateEditField("email", event.target.value)} className="theme-control-surface rounded-[14px] border px-3 py-2" />
+                        </label>
+                        <label className="grid gap-1">
+                          <span>Company</span>
+                          <input value={editForm.companyName} onChange={(event) => updateEditField("companyName", event.target.value)} className="theme-control-surface rounded-[14px] border px-3 py-2" />
+                        </label>
+                        <label className="grid gap-1">
+                          <span>Service Address Line 1</span>
+                          <input value={editForm.serviceAddressLine1} onChange={(event) => updateEditField("serviceAddressLine1", event.target.value)} className="theme-control-surface rounded-[14px] border px-3 py-2" />
+                        </label>
+                        <label className="grid gap-1">
+                          <span>Service Address Line 2</span>
+                          <input value={editForm.serviceAddressLine2} onChange={(event) => updateEditField("serviceAddressLine2", event.target.value)} className="theme-control-surface rounded-[14px] border px-3 py-2" />
+                        </label>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <label className="grid gap-1 sm:col-span-2">
+                            <span>City</span>
+                            <input value={editForm.serviceCity} onChange={(event) => updateEditField("serviceCity", event.target.value)} className="theme-control-surface rounded-[14px] border px-3 py-2" />
+                          </label>
+                          <label className="grid gap-1">
+                            <span>Region</span>
+                            <input value={editForm.serviceStateOrRegion} onChange={(event) => updateEditField("serviceStateOrRegion", event.target.value)} className="theme-control-surface rounded-[14px] border px-3 py-2" />
+                          </label>
+                        </div>
+                        <label className="grid gap-1">
+                          <span>Postal Code</span>
+                          <input value={editForm.servicePostalCode} onChange={(event) => updateEditField("servicePostalCode", event.target.value)} className="theme-control-surface rounded-[14px] border px-3 py-2" />
+                        </label>
+                        <label className="grid gap-1">
+                          <span>Preferred Service Type</span>
+                          <select value={editForm.preferredServiceType} onChange={(event) => updateEditField("preferredServiceType", event.target.value as ServiceType | "")} className="theme-control-surface rounded-[14px] border px-3 py-2">
+                            <option value="">No preference</option>
+                            {serviceTypeOptions.map((serviceType) => (
+                              <option key={serviceType} value={serviceType}>
+                                {getServiceTypeLabel(serviceType, locale)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="grid gap-1">
+                          <span>Notes</span>
+                          <textarea value={editForm.notes} onChange={(event) => updateEditField("notes", event.target.value)} rows={3} className="theme-control-surface rounded-[14px] border px-3 py-2" />
+                        </label>
+                        {saveError ? (
+                          <p className="theme-alert-error rounded-[14px] border px-3 py-2 text-sm">{saveError}</p>
+                        ) : null}
+                        <div className="flex justify-end">
+                          <button type="submit" disabled={savePending} className="theme-btn-secondary rounded-full px-4 py-2 text-sm disabled:opacity-60">
+                            {savePending ? "Saving..." : "Save changes"}
+                          </button>
+                        </div>
+                      </form>
+                    ) : null}
+                    <div className="mt-5 grid gap-4 text-sm text-[color:var(--sem-text-secondary)]">
+                      <div className="flex items-start gap-3">
+                        <UserRound className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
+                        <div>
+                          <p className="text-[color:var(--sem-text-primary)]">{customerRecord.full_name}</p>
+                          <p className="mt-1 text-[color:var(--sem-text-muted)]">{t("created", { date: formatDate(customerRecord.created_at, locale) })}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Phone className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
+                        <a href={`tel:${customerRecord.phone}`} className="transition hover:text-[color:var(--sem-text-primary)]">{customerRecord.phone}</a>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Mail className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
+                        {customerRecord.email ? (
+                          <a href={`mailto:${customerRecord.email}`} className="transition hover:text-[color:var(--sem-text-primary)]">{customerRecord.email}</a>
+                        ) : (
+                          <span className="text-[color:var(--sem-text-muted)]">{t("noEmailOnFile")}</span>
+                        )}
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <MapPin className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
+                        <span>{formatAddress(customerRecord.service_address_line_1, customerRecord.service_address_line_2, customerRecord.service_city, customerRecord.service_state_or_region, customerRecord.service_postal_code)}</span>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <ClipboardList className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
+                        <span className="whitespace-pre-line">{customerRecord.notes?.trim() || t("noCustomerNotes")}</span>
                       </div>
                     </div>
-                    <div className="flex items-start gap-3">
-                      <Phone className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
-                      <a href={`tel:${customer.phone}`} className="transition hover:text-[color:var(--sem-text-primary)]">{customer.phone}</a>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Mail className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
-                      {customer.email ? (
-                        <a href={`mailto:${customer.email}`} className="transition hover:text-[color:var(--sem-text-primary)]">{customer.email}</a>
-                      ) : (
-                        <span className="text-[color:var(--sem-text-muted)]">{t("noEmailOnFile")}</span>
-                      )}
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <MapPin className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
-                      <span>{formatAddress(customer.service_address_line_1, customer.service_address_line_2, customer.service_city, customer.service_state_or_region, customer.service_postal_code)}</span>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <ClipboardList className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
-                      <span className="whitespace-pre-line">{customer.notes?.trim() || t("noCustomerNotes")}</span>
-                    </div>
-                  </div>
-                </section>
+                  </section>
 
                 <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] p-5">
                   <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{t("recordSummary")}</p>
                   <div className="mt-5 grid gap-3">
                     <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
                       <p className="text-xs text-[color:var(--sem-text-muted)]">{t("lastUpdated")}</p>
-                      <p className="mt-2 text-sm font-semibold text-[color:var(--sem-text-primary)]">{formatDate(customer.updated_at, locale)}</p>
+                      <p className="mt-2 text-sm font-semibold text-[color:var(--sem-text-primary)]">{formatDate(customerRecord.updated_at, locale)}</p>
                     </div>
                     <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
                       <p className="text-xs text-[color:var(--sem-text-muted)]">{t("relatedJobs")}</p>
@@ -499,14 +696,14 @@ export default function CustomerProfileWorkspace({
                   </div>
                 </section>
               </div>
-              {canMintPortalMagicLink ? <CustomerPortalMintSection customerId={customer.id} /> : null}
+              {canMintPortalMagicLink ? <CustomerPortalMintSection customerId={customerRecord.id} /> : null}
             </>
             ) : null}
 
             {safeActiveTab === "jobs" ? (
               <section>
-                <TabHeader title={t("relatedJobs")} href={`/jobs/new?customerId=${customer.id}`} actionLabel={t("addNewJob")} />
-                {relatedJobs.length === 0 ? <EmptyState label={t("noRelatedJobs")} href={`/jobs/new?customerId=${customer.id}`} actionLabel={t("createJob")} /> : (
+                <TabHeader title={t("relatedJobs")} href={`/jobs/new?customerId=${customerRecord.id}`} actionLabel={t("addNewJob")} />
+                {relatedJobs.length === 0 ? <EmptyState label={t("noRelatedJobs")} href={`/jobs/new?customerId=${customerRecord.id}`} actionLabel={t("createJob")} /> : (
                   <>
                     <div className="grid gap-4 md:grid-cols-2">
                       {jobs.pageItems.map((job) => {
@@ -528,8 +725,8 @@ export default function CustomerProfileWorkspace({
 
             {safeActiveTab === "estimates" ? (
               <section>
-                <TabHeader title={t("estimates")} href={`/estimates/new?customerId=${customer.id}`} actionLabel={t("addNewEstimate")} />
-                {estimates.length === 0 ? <EmptyState label={t("noEstimates")} href={`/estimates/new?customerId=${customer.id}`} actionLabel={t("createEstimate")} /> : (
+                <TabHeader title={t("estimates")} href={`/estimates/new?customerId=${customerRecord.id}`} actionLabel={t("addNewEstimate")} />
+                {estimates.length === 0 ? <EmptyState label={t("noEstimates")} href={`/estimates/new?customerId=${customerRecord.id}`} actionLabel={t("createEstimate")} /> : (
                   <>
                     <div className="grid gap-4 md:grid-cols-2">
                       {pagedEstimates.pageItems.map((estimate) => (
@@ -548,8 +745,8 @@ export default function CustomerProfileWorkspace({
 
             {safeActiveTab === "invoices" ? (
               <section>
-                <TabHeader title={t("invoices")} href={`/invoices/new?customerId=${customer.id}`} actionLabel={t("addNewInvoice")} />
-                {invoices.length === 0 ? <EmptyState label={t("noInvoices")} href={`/invoices/new?customerId=${customer.id}`} actionLabel={t("createInvoice")} /> : (
+                <TabHeader title={t("invoices")} href={`/invoices/new?customerId=${customerRecord.id}`} actionLabel={t("addNewInvoice")} />
+                {invoices.length === 0 ? <EmptyState label={t("noInvoices")} href={`/invoices/new?customerId=${customerRecord.id}`} actionLabel={t("createInvoice")} /> : (
                   <>
                     <div className="grid gap-4 md:grid-cols-2">
                       {pagedInvoices.pageItems.map((invoice) => (
