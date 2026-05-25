@@ -1521,81 +1521,55 @@ export class CrmController {
       return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     };
 
-    const lines: string[] = [];
-
-    if (businessName) {
-      lines.push(businessName);
-    }
-    lines.push("INVOICE");
-    lines.push("");
-    lines.push(`Invoice Number: ${documentNumber}`);
-    lines.push(`Date: ${formatDate(invoice.issued_at)}`);
-    lines.push(`Status: ${ledgerSummary.lifecycleStatus}`);
-    lines.push("");
-
-    if (customer) {
-      lines.push("Bill To:");
-      lines.push(`  ${customer.full_name}`);
-      if (customer.company_name?.trim()) lines.push(`  ${customer.company_name.trim()}`);
-      const addr = [customer.service_address_line_1, customer.service_address_line_2, customer.service_city, customer.service_state_or_region, customer.service_postal_code]
-        .filter(Boolean).join(", ");
-      if (addr) lines.push(`  ${addr}`);
-      if (customer.email?.trim()) lines.push(`  ${customer.email.trim()}`);
-      if (customer.phone?.trim()) lines.push(`  ${customer.phone.trim()}`);
-      lines.push("");
-    }
-
-    if (businessName || businessPhone || businessEmail || businessWebsite) {
-      lines.push("From:");
-      if (businessName) lines.push(`  ${businessName}`);
-      if (businessPhone) lines.push(`  Phone: ${businessPhone}`);
-      if (businessEmail) lines.push(`  Email: ${businessEmail}`);
-      if (businessWebsite) lines.push(`  ${businessWebsite}`);
-      lines.push("");
-    }
-
-    if (invoice.description?.trim()) {
-      lines.push(`Description: ${invoice.description.trim()}`);
-      lines.push("");
-    }
-
     const sortedLineItems = [...(invoice.line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
 
-    if (sortedLineItems.length > 0) {
-      lines.push("Line Items:");
-      lines.push("  Item                           Qty      Unit Price     Subtotal");
-      lines.push("  ----                           ---      ----------     --------");
-      for (const item of sortedLineItems) {
-        const name = (item.name_snapshot || "Item").padEnd(30).substring(0, 30);
-        const qty = String(item.quantity).padStart(5);
-        const price = formatCents(item.unit_price_cents_snapshot).padStart(13);
-        const subtotal = formatCents(item.line_subtotal_cents).padStart(12);
-        lines.push(`  ${name} ${qty} ${price} ${subtotal}`);
-      }
-      lines.push("");
-    }
+    const customerAddress = customer
+      ? [customer.service_address_line_1, customer.service_address_line_2, customer.service_city, customer.service_state_or_region, customer.service_postal_code]
+        .filter(Boolean).join(", ")
+      : "";
 
-    const subtotal = invoice.subtotal_cents || invoice.amount_cents;
+    const subtotalCents = invoice.subtotal_cents || invoice.amount_cents;
     const taxCents = invoice.tax_cents ?? 0;
-    const total = invoice.total_cents || ledgerSummary.totalCents;
+    const totalCents = invoice.total_cents || ledgerSummary.totalCents;
 
-    lines.push(`Subtotal:  ${formatCents(subtotal)}`);
+    let taxLabel: string | null = null;
     if (taxCents > 0 || (invoice.tax_rate_bps_snapshot ?? 0) > 0) {
       const bps = invoice.tax_rate_bps_snapshot ?? 0;
-      const pct = `${(bps / 100).toFixed(2).replace(/\.00$/, "").replace(/(\.\d*[1-9])0+$/, "$1")}%`;
-      lines.push(`Tax (${pct}):  ${formatCents(taxCents)}`);
-    }
-    lines.push(`Total:     ${formatCents(total)}`);
-
-    if (ledgerSummary.netPaidCents > 0) {
-      lines.push(`Paid:      ${formatCents(ledgerSummary.netPaidCents)}`);
-      lines.push(`Balance:   ${formatCents(ledgerSummary.balanceCents)}`);
+      taxLabel = `(${(bps / 100).toFixed(2).replace(/\.00$/, "").replace(/(\.\d*[1-9])0+$/, "$1")}%)`;
     }
 
-    lines.push("");
-    lines.push(`Generated: ${new Date().toISOString()}`);
+    const content = this.buildInvoicePdfContent({
+      documentNumber,
+      issuedAt: formatDate(invoice.issued_at),
+      lifecycleStatus: ledgerSummary.lifecycleStatus,
+      businessName,
+      businessPhone,
+      businessEmail,
+      businessWebsite,
+      customerName: customer?.full_name ?? "Unknown",
+      customerCompany: customer?.company_name?.trim() || null,
+      customerAddress,
+      customerEmail: customer?.email?.trim() || null,
+      customerPhone: customer?.phone?.trim() || null,
+      description: invoice.description?.trim() || null,
+      lineItems: sortedLineItems.map((item) => ({
+        name: item.name_snapshot || "Item",
+        qty: String(item.quantity),
+        unitPrice: formatCents(item.unit_price_cents_snapshot),
+        subtotal: formatCents(item.line_subtotal_cents),
+      })),
+      subtotal: formatCents(subtotalCents),
+      taxLabel,
+      taxAmount: formatCents(taxCents),
+      total: formatCents(totalCents),
+      paid: ledgerSummary.netPaidCents > 0 ? formatCents(ledgerSummary.netPaidCents) : null,
+      balance: ledgerSummary.balanceCents > 0 ? formatCents(ledgerSummary.balanceCents) : null,
+    });
 
-    const pdfBuffer = this.buildSimplePdf(lines);
+    const pdfBuffer = this.buildPdf(content, [
+      { name: "F1", baseFont: "Helvetica" },
+      { name: "F2", baseFont: "Helvetica-Bold" },
+    ]);
     const shouldDownload = download === "1" || download === "true";
     response.setHeader("Content-Type", "application/pdf");
     response.setHeader(
@@ -3621,25 +3595,18 @@ export class CrmController {
     return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
   }
 
-  private buildSimplePdf(lines: string[]) {
-    const content = [
-      "BT",
-      "/F1 10 Tf",
-      "40 800 Td",
-      ...lines.flatMap((line, index) =>
-        index === 0
-          ? [`(${this.escapePdfText(line)}) Tj`]
-          : ["0 -14 Td", `(${this.escapePdfText(line)}) Tj`],
-      ),
-      "ET",
-    ].join("\n");
+  private buildPdf(contentStream: string, fonts: Array<{ name: string; baseFont: string }>) {
+    const fontObjects = fonts.map((font, index) =>
+      `<< /Type /Font /Subtype /Type1 /BaseFont /${font.baseFont} >>`,
+    );
+    const fontDict = fonts.map((font, index) => `/${font.name} ${5 + index} 0 R`).join(" ");
 
     const objects = [
       "<< /Type /Catalog /Pages 2 0 R >>",
       "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
-      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-      `<< /Length ${Buffer.byteLength(content, "utf8")} >>\nstream\n${content}\nendstream`,
-      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 4 0 R /Resources << /Font << ${fontDict} >> >> >>`,
+      `<< /Length ${Buffer.byteLength(contentStream, "utf8")} >>\nstream\n${contentStream}\nendstream`,
+      ...fontObjects,
     ];
 
     let pdf = "%PDF-1.4\n";
@@ -3656,6 +3623,255 @@ export class CrmController {
     }
     pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
     return Buffer.from(pdf, "utf8");
+  }
+
+  private buildSimplePdf(lines: string[]) {
+    const content = [
+      "BT",
+      "/F1 10 Tf",
+      "40 800 Td",
+      ...lines.flatMap((line, index) =>
+        index === 0
+          ? [`(${this.escapePdfText(line)}) Tj`]
+          : ["0 -14 Td", `(${this.escapePdfText(line)}) Tj`],
+      ),
+      "ET",
+    ].join("\n");
+
+    return this.buildPdf(content, [{ name: "F1", baseFont: "Helvetica" }]);
+  }
+
+  private buildInvoicePdfContent(input: {
+    documentNumber: string;
+    issuedAt: string;
+    lifecycleStatus: string;
+    businessName: string | null;
+    businessPhone: string | null;
+    businessEmail: string | null;
+    businessWebsite: string | null;
+    customerName: string;
+    customerCompany: string | null;
+    customerAddress: string;
+    customerEmail: string | null;
+    customerPhone: string | null;
+    description: string | null;
+    lineItems: Array<{ name: string; qty: string; unitPrice: string; subtotal: string }>;
+    subtotal: string;
+    taxLabel: string | null;
+    taxAmount: string;
+    total: string;
+    paid: string | null;
+    balance: string | null;
+  }) {
+    const e = (v: string) => this.escapePdfText(v);
+    const L = 50;  // left margin
+    const R = 545; // right edge
+    const W = 495; // content width
+    let y = 790;   // current Y position (top of page)
+    const out: string[] = [];
+
+    // Helper: draw text at absolute position
+    const text = (font: string, size: number, x: number, yPos: number, value: string, rightAlign = false) => {
+      out.push("BT");
+      out.push(`/${font} ${size} Tf`);
+      if (rightAlign) {
+        // PDF doesn't have native right-align; approximate with show-width calculation isn't trivial
+        // Use simple offset: place at x and hope it fits
+        out.push(`${x} ${yPos} Td`);
+        out.push(`(${e(value)}) Tj`);
+      } else {
+        out.push(`${x} ${yPos} Td`);
+        out.push(`(${e(value)}) Tj`);
+      }
+      out.push("ET");
+    };
+
+    // Helper: horizontal rule
+    const rule = (yPos: number) => {
+      out.push(`0.6 G`);
+      out.push(`0.5 w`);
+      out.push(`${L} ${yPos} m`);
+      out.push(`${R} ${yPos} l`);
+      out.push(`S`);
+      out.push(`0 G`); // reset to black
+    };
+
+    // Helper: right-aligned text (simple approximation using fixed offset)
+    const rightText = (font: string, size: number, yPos: number, value: string) => {
+      const approxWidth = value.length * size * 0.55; // rough estimate for Helvetica
+      const x = R - approxWidth;
+      text(font, size, Math.max(x, L), yPos, value);
+    };
+
+    // ===== HEADER =====
+    if (input.businessName) {
+      text("F2", 11, L, y, input.businessName);
+    }
+    if (input.businessPhone) {
+      text("F1", 8, L, y - 14, `Phone: ${input.businessPhone}`);
+    }
+    if (input.businessEmail) {
+      text("F1", 8, L, y - 26, input.businessEmail);
+    }
+    if (input.businessWebsite) {
+      text("F1", 8, L, y - 38, input.businessWebsite);
+    }
+
+    // INVOICE title - right side
+    text("F2", 22, L, y, "INVOICE", false);
+    // Actually, right-align INVOICE
+    rightText("F2", 22, y, "INVOICE");
+
+    // Invoice meta below title
+    text("F1", 9, R - 160, y - 28, `# ${input.documentNumber}`, false);
+    text("F1", 8, R - 160, y - 42, `Date: ${input.issuedAt}`, false);
+    text("F1", 8, R - 160, y - 54, `Status: ${input.lifecycleStatus}`, false);
+
+    y -= input.businessName ? 65 : 40;
+    rule(y);
+    y -= 20;
+
+    // ===== BILL TO =====
+    text("F2", 9, L, y, "Bill To");
+    y -= 14;
+    text("F1", 9, L, y, input.customerName);
+    y -= 14;
+    if (input.customerCompany) {
+      text("F1", 9, L, y, input.customerCompany);
+      y -= 14;
+    }
+    if (input.customerAddress) {
+      text("F1", 9, L, y, input.customerAddress);
+      y -= 14;
+    }
+    if (input.customerEmail) {
+      text("F1", 8, L, y, input.customerEmail);
+      y -= 12;
+    }
+    if (input.customerPhone) {
+      text("F1", 8, L, y, input.customerPhone);
+      y -= 12;
+    }
+
+    // From block on right side of bill-to area
+    const fromY = y + (input.customerCompany ? 56 : 42) + (input.customerAddress ? 14 : 0) + (input.customerEmail ? 12 : 0) + (input.customerPhone ? 12 : 0);
+    if (input.businessName) {
+      text("F1", 8, R - 160, fromY, `From: ${input.businessName}`, false);
+    }
+
+    y -= 12;
+    rule(y);
+    y -= 16;
+
+    // ===== DESCRIPTION =====
+    if (input.description) {
+      text("F2", 9, L, y, "Description");
+      y -= 14;
+      text("F1", 8, L, y, input.description);
+      y -= 20;
+    }
+
+    // ===== LINE ITEMS TABLE =====
+    if (input.lineItems.length > 0) {
+      // Column positions
+      const colDesc = L;
+      const colQty = L + 280;
+      const colPrice = L + 340;
+      const colAmt = L + 430;
+
+      text("F2", 9, L, y, "Line Items");
+      y -= 18;
+
+      // Table header
+      out.push(`0.6 G`);
+      out.push(`0.5 w`);
+      out.push(`${L} ${y + 6} m`);
+      out.push(`${R} ${y + 6} l`);
+      out.push(`S`);
+      out.push(`0 G`);
+
+      text("F2", 7, colDesc, y, "Description");
+      text("F2", 7, colQty, y, "Qty");
+      text("F2", 7, colPrice, y, "Unit Price");
+      text("F2", 7, colAmt, y, "Amount");
+      y -= 12;
+
+      out.push(`0.6 G`);
+      out.push(`0.3 w`);
+      out.push(`${L} ${y + 2} m`);
+      out.push(`${R} ${y + 2} l`);
+      out.push(`S`);
+      out.push(`0 G`);
+      y -= 10;
+
+      for (const item of input.lineItems) {
+        text("F1", 8, colDesc, y, item.name.length > 44 ? item.name.substring(0, 43) + "\u2026" : item.name);
+        text("F1", 8, colQty, y, item.qty, false);
+        text("F1", 8, colPrice, y, item.unitPrice, false);
+        text("F1", 8, colAmt, y, item.subtotal, false);
+        y -= 14;
+      }
+
+      // Bottom rule of table
+      out.push(`0.6 G`);
+      out.push(`0.5 w`);
+      out.push(`${L} ${y + 6} m`);
+      out.push(`${R} ${y + 6} l`);
+      out.push(`S`);
+      out.push(`0 G`);
+      y -= 16;
+    }
+
+    // ===== TOTALS BLOCK (right-aligned) =====
+    const totalsX = R - 160;  // label column
+    const amountsX = R;       // amounts (right-aligned)
+
+    y -= 4;
+
+    text("F1", 9, totalsX, y, "Subtotal");
+    rightText("F1", 9, y, input.subtotal);
+    y -= 16;
+
+    if (input.taxLabel) {
+      text("F1", 9, totalsX, y, `Tax ${input.taxLabel}`);
+      rightText("F1", 9, y, input.taxAmount);
+      y -= 16;
+    }
+
+    out.push(`0.6 G`);
+    out.push(`0.5 w`);
+    out.push(`${totalsX} ${y + 6} m`);
+    out.push(`${amountsX} ${y + 6} l`);
+    out.push(`S`);
+    out.push(`0 G`);
+    y -= 10;
+
+    text("F2", 11, totalsX, y, "Total");
+    rightText("F2", 11, y, input.total);
+    y -= 20;
+
+    if (input.paid) {
+      text("F1", 9, totalsX, y, "Paid");
+      rightText("F1", 9, y, input.paid);
+      y -= 16;
+    }
+
+    if (input.balance) {
+      text("F2", 9, totalsX, y, "Balance Due");
+      rightText("F2", 9, y, input.balance);
+      y -= 20;
+    }
+
+    // ===== FOOTER =====
+    y = Math.max(y, 80); // ensure we don't go below page
+    rule(y);
+    y -= 18;
+
+    text("F1", 7, L, y, "Thank you for your business.");
+    y -= 12;
+    text("F1", 6, L, y, `Generated: ${new Date().toISOString()}`);
+
+    return out.join("\n");
   }
 }
 
