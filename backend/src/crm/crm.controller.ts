@@ -80,6 +80,7 @@ import { startOfLocalDashboardDay } from "./crm-dashboard-time-window";
 import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
 import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
+import { EmailService } from "../email/email.service";
 import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 import { MembershipEntity } from "../database/entities/membership.entity";
@@ -171,6 +172,7 @@ export class CrmController {
     private readonly documentSnapshotService: DocumentSnapshotService,
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
     private readonly crmOfficeDashboardService: CrmOfficeDashboardService,
+    private readonly emailService: EmailService,
   ) {}
 
   private requireActor(request: RequestWithActor) {
@@ -1577,6 +1579,162 @@ export class CrmController {
       `${shouldDownload ? "attachment" : "inline"}; filename="invoice-${documentNumber}.pdf"`,
     );
     return new StreamableFile(pdfBuffer);
+  }
+
+  @Post("invoices/:invoiceId/send-email")
+  async sendInvoiceEmail(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+    @Body() sendPayload: unknown,
+  ) {
+    const actor = this.requireActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    const payload = this.parseSendEmailPayload(sendPayload);
+
+    const invoice = await this.invoicesRepository.findOne({
+      where: { id: invoiceId, organization_id: organizationId },
+      relations: {
+        job: { customer: true },
+        line_items: true,
+        payments: true,
+      },
+    });
+
+    if (!invoice) {
+      apiError(404, "invoice_not_found", "The invoice could not be found.");
+    }
+
+    const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
+
+    if (!canAccessInvoiceResource(actor, job?.assigned_technician_id)) {
+      apiError(403, "invoice_access_denied", "You do not have access to this invoice.");
+    }
+
+    const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
+    const toEmail = payload.to?.trim() || customer?.email?.trim();
+    if (!toEmail) {
+      apiError(400, "invoice_email_missing_recipient", "No recipient email address available. Provide a 'to' address or ensure the customer has an email on file.");
+    }
+
+    if (!this.emailService.isConfigured()) {
+      apiError(500, "email_not_configured", "Email service is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM.");
+    }
+
+    const orgSettings = await this.organizationSettingsRepository.findOne({
+      where: { settings_key: "default", organization_id: organizationId },
+    });
+
+    const businessName = orgSettings?.business_name?.trim() || null;
+    const documentNumber = this.buildInvoiceDocumentNumber(invoice);
+    const ledgerSummary = this.summarizeInvoiceLedger(invoice);
+
+    // Build template variables
+    const vars = {
+      business_name: businessName ?? "",
+      invoice_number: documentNumber,
+      customer_name: customer?.full_name ?? "Customer",
+      total: `$${((invoice.total_cents || ledgerSummary.totalCents) / 100).toFixed(2)}`,
+      due_date: this.formatDueDate(invoice.issued_at),
+      invoice_link: "",
+      business_phone: orgSettings?.phone?.trim() ?? "",
+      business_email: orgSettings?.company_email?.trim() ?? "",
+    };
+
+    const subject = this.resolveTemplate(
+      payload.subject || orgSettings?.invoice_email_subject || "Invoice {invoice_number} from {business_name}",
+      vars,
+    );
+    const emailBody = this.resolveTemplate(
+      payload.body || orgSettings?.invoice_email_body || "Hi {customer_name},\n\nYour invoice {invoice_number} for {total} is ready.\n\nThank you for your business.",
+      vars,
+    );
+
+    // Generate PDF attachment
+    const sortedLineItems = [...(invoice.line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+    const formatCents = (cents: number | null | undefined) => {
+      if (typeof cents !== "number") return "$0.00";
+      return `$${(cents / 100).toFixed(2)}`;
+    };
+    const formatDate = (value: Date | string | null | undefined) => {
+      if (!value) return "-";
+      const d = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(d.getTime())) return "-";
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    };
+
+    const customerAddress = customer
+      ? [customer.service_address_line_1, customer.service_address_line_2, customer.service_city, customer.service_state_or_region, customer.service_postal_code]
+        .filter(Boolean).join(", ")
+      : "";
+
+    const subtotalCents = invoice.subtotal_cents || invoice.amount_cents;
+    const taxCents = invoice.tax_cents ?? 0;
+    const totalCents = invoice.total_cents || ledgerSummary.totalCents;
+
+    let taxLabel: string | null = null;
+    if (taxCents > 0 || (invoice.tax_rate_bps_snapshot ?? 0) > 0) {
+      const bps = invoice.tax_rate_bps_snapshot ?? 0;
+      taxLabel = `(${(bps / 100).toFixed(2).replace(/\.00$/, "").replace(/(\.\d*[1-9])0+$/, "$1")}%)`;
+    }
+
+    const pdfContent = this.buildInvoicePdfContent({
+      documentNumber,
+      issuedAt: formatDate(invoice.issued_at),
+      lifecycleStatus: ledgerSummary.lifecycleStatus,
+      businessName: orgSettings?.business_name?.trim() || null,
+      businessPhone: orgSettings?.phone?.trim() || null,
+      businessEmail: orgSettings?.company_email?.trim() || null,
+      businessWebsite: orgSettings?.website?.trim() || null,
+      customerName: customer?.full_name ?? "Unknown",
+      customerCompany: customer?.company_name?.trim() || null,
+      customerAddress,
+      customerEmail: customer?.email?.trim() || null,
+      customerPhone: customer?.phone?.trim() || null,
+      description: invoice.description?.trim() || null,
+      lineItems: sortedLineItems.map((item) => ({
+        name: item.name_snapshot || "Item",
+        qty: String(item.quantity),
+        unitPrice: formatCents(item.unit_price_cents_snapshot),
+        subtotal: formatCents(item.line_subtotal_cents),
+      })),
+      subtotal: formatCents(subtotalCents),
+      taxLabel,
+      taxAmount: formatCents(taxCents),
+      total: formatCents(totalCents),
+      paid: ledgerSummary.netPaidCents > 0 ? formatCents(ledgerSummary.netPaidCents) : null,
+      balance: ledgerSummary.balanceCents > 0 ? formatCents(ledgerSummary.balanceCents) : null,
+    });
+
+    const pdfBuffer = this.buildPdf(pdfContent, [
+      { name: "F1", baseFont: "Helvetica" },
+      { name: "F2", baseFont: "Helvetica-Bold" },
+    ]);
+
+    const emailResult = await this.emailService.send({
+      to: toEmail,
+      subject,
+      body: emailBody,
+      attachments: [{
+        filename: `invoice-${documentNumber}.pdf`,
+        content: pdfBuffer,
+        contentType: "application/pdf",
+      }],
+    });
+
+    const now = new Date();
+    invoice.email_sent_at = now;
+    invoice.last_sent_at = now;
+    invoice.last_sent_via = "email";
+    await this.invoicesRepository.save(invoice);
+
+    return apiSuccess({
+      invoice_id: documentNumber,
+      document_number: documentNumber,
+      sent_at: now.toISOString(),
+      to: [toEmail],
+      message_id: emailResult.messageId,
+    });
   }
 
   @Post("invoices/:invoiceId/request-approval")
@@ -3589,6 +3747,32 @@ export class CrmController {
     } catch (error) {
       apiError(400, "invalid_customer_import_payload", "The customer import payload is invalid.", error);
     }
+  }
+
+  private parseSendEmailPayload(raw: unknown) {
+    if (typeof raw !== "object" || raw === null) {
+      return { to: null as string | null, subject: null as string | null, body: null as string | null };
+    }
+    const payload = raw as Record<string, unknown>;
+    return {
+      to: typeof payload.to === "string" ? (payload.to as string).trim() : null,
+      subject: typeof payload.subject === "string" ? (payload.subject as string).trim() : null,
+      body: typeof payload.body === "string" ? (payload.body as string).trim() : null,
+    };
+  }
+
+  private formatDueDate(issuedAt: Date) {
+    const due = new Date(issuedAt);
+    due.setDate(due.getDate() + 30);
+    return due.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  private resolveTemplate(template: string, vars: Record<string, string>) {
+    let result = template;
+    for (const [key, value] of Object.entries(vars)) {
+      result = result.replace(new RegExp(`\\{${key}\\}`, "g"), value);
+    }
+    return result;
   }
 
   private escapePdfText(value: string) {
