@@ -29,10 +29,12 @@ import { apiError, apiSuccess } from "../common/api-response";
 import type { ActorContext, RequestWithActor } from "../common/request-types";
 import {
   canTransitionJobStatus,
+  customerLifecycleStatuses,
   getJobStatusTimestampUpdates,
   getServiceTypeLabel,
   isOfficeOnlyJobStatus,
   openJobStatuses,
+  type CustomerLifecycleStatus,
   type InvoiceStatus,
 } from "./constants";
 import {
@@ -76,6 +78,7 @@ import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
 import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
+import { MembershipEntity } from "../database/entities/membership.entity";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -108,6 +111,27 @@ type PreviewRowAnalysis = CustomerImportPreviewRow & {
   normalizedAddressKey: string | null;
 };
 
+type LeadIdentityInput = {
+  full_name: string;
+  phone: string;
+  email: string | null;
+  service_address_line_1: string;
+  service_address_line_2: string | null;
+  service_city: string;
+  service_state_or_region: string | null;
+  service_postal_code: string;
+  source: LeadEntity["source"];
+  service_type: LeadEntity["service_type"];
+  description: string | null;
+};
+
+const TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES = ["owner", "admin", "office_admin"] as const;
+const TECHNICIAN_FALLBACK_ROLE_PRIORITY: Record<(typeof TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES)[number], number> = {
+  owner: 0,
+  admin: 1,
+  office_admin: 2,
+};
+
 @UseGuards(SessionGuard)
 @Controller("api")
 export class CrmController {
@@ -130,6 +154,8 @@ export class CrmController {
     private readonly invoicesRepository: Repository<InvoiceEntity>,
     @InjectRepository(InvoicePaymentEntity)
     private readonly invoicePaymentsRepository: Repository<InvoicePaymentEntity>,
+    @InjectRepository(MembershipEntity)
+    private readonly membershipsRepository: Repository<MembershipEntity>,
     @InjectRepository(JobNoteEntity)
     private readonly jobNotesRepository: Repository<JobNoteEntity>,
     @InjectRepository(JobStatusEventEntity)
@@ -490,7 +516,8 @@ export class CrmController {
       let customerLabel = "Customer";
       let leadSource: JobEntity["lead_source"] = "website";
       let requestTimestamp = new Date();
-      let leadToConvertId: string | null = null;
+      let leadToConvert: LeadEntity | null = null;
+      let leadCustomer: CustomerEntity | null = null;
 
       if (payload.leadId) {
         const lead = await this.leadsRepository.findOne({
@@ -508,27 +535,13 @@ export class CrmController {
           apiError(400, "lead_already_converted", "This lead has already been converted into a job.");
         }
 
-        const customerInsert = this.customersRepository.create(this.withOrganizationId(organizationId, {
-          full_name: lead.full_name,
-          phone: lead.phone,
-          email: lead.email,
-          service_address_line_1: lead.service_address_line_1,
-          service_address_line_2: lead.service_address_line_2,
-          service_city: lead.service_city,
-          service_state_or_region: lead.service_state_or_region,
-          service_postal_code: lead.service_postal_code,
-          source: lead.source,
-          preferred_service_type: lead.service_type,
-          notes: lead.description,
-        }));
-
-        const customer = await this.customersRepository.save(customerInsert);
-
-        customerId = customer.id;
-        customerLabel = customer.full_name;
+        const customerResolution = await this.resolveCustomerForLead(organizationId, lead);
+        customerId = customerResolution.customer.id;
+        customerLabel = customerResolution.customer.full_name;
         leadSource = lead.source;
         requestTimestamp = lead.created_at;
-        leadToConvertId = lead.id;
+        leadToConvert = lead;
+        leadCustomer = customerResolution.customer;
       } else if (customerId) {
         const customer = await this.customersRepository.findOne({
           where: {
@@ -575,17 +588,23 @@ export class CrmController {
         }),
       );
 
-      if (leadToConvertId) {
-        await this.leadsRepository.update(
-          {
-            id: leadToConvertId,
-            organization_id: organizationId,
-          },
-          {
-            status: "converted",
-            converted_job_id: job.id,
-          },
-        );
+      if (leadToConvert && leadCustomer) {
+        if (this.deriveCustomerLifecycleStatus(leadCustomer) !== "active") {
+          await this.customersRepository.update(
+            {
+              id: leadCustomer.id,
+              organization_id: organizationId,
+            },
+            {
+              lifecycle_status: "active",
+            },
+          );
+        }
+
+        leadToConvert.customer_id = leadCustomer.id;
+        leadToConvert.status = "converted";
+        leadToConvert.converted_job_id = job.id;
+        await this.leadsRepository.save(leadToConvert);
       }
 
       await this.jobStatusEventsRepository.save(
@@ -594,7 +613,7 @@ export class CrmController {
           job_id: job.id,
           author_profile_id: actor.profile.id,
           status: "scheduled",
-          note: leadToConvertId
+          note: leadToConvert
             ? "Lead converted to scheduled job."
             : "Job created from customer record.",
         }),
@@ -604,8 +623,158 @@ export class CrmController {
 
       return apiSuccess({ job: detail ? this.buildJobDetailResponse(detail) : job });
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       apiError(400, "invalid_job_payload", "The job payload is invalid.", error);
     }
+  }
+
+  private async provisionFallbackTechniciansIfNeeded(organizationId: string) {
+    const activeTechnicianCount = await this.techniciansRepository.countBy({
+      organization_id: organizationId,
+      is_active: true,
+    });
+
+    if (activeTechnicianCount > 0) {
+      return;
+    }
+
+    const memberships = await this.membershipsRepository.find({
+      where: {
+        organization_id: organizationId,
+        status: "active",
+        role: In([...TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES]),
+      },
+      relations: {
+        user: true,
+      },
+      order: {
+        created_at: "ASC",
+      },
+    });
+
+    if (memberships.length === 0) {
+      return;
+    }
+
+    const activeMemberships = memberships.filter((membership) => membership.user?.is_active === true);
+    if (activeMemberships.length === 0) {
+      return;
+    }
+
+    const sortedMemberships = [...activeMemberships].sort((left, right) => {
+      const leftPriority = TECHNICIAN_FALLBACK_ROLE_PRIORITY[left.role as keyof typeof TECHNICIAN_FALLBACK_ROLE_PRIORITY] ?? 99;
+      const rightPriority = TECHNICIAN_FALLBACK_ROLE_PRIORITY[right.role as keyof typeof TECHNICIAN_FALLBACK_ROLE_PRIORITY] ?? 99;
+
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+
+      return left.created_at.getTime() - right.created_at.getTime();
+    });
+
+    const userIds = Array.from(new Set(sortedMemberships.map((membership) => membership.user_id)));
+    if (userIds.length === 0) {
+      return;
+    }
+
+    const [profiles, organizationTechnicians, globalTechnicians] = await Promise.all([
+      this.profilesRepository.find({
+        where: {
+          auth_user_id: In(userIds),
+        },
+      }),
+      this.techniciansRepository.find({
+        where: {
+          organization_id: organizationId,
+          auth_user_id: In(userIds),
+        },
+      }),
+      this.techniciansRepository.find({
+        where: {
+          auth_user_id: In(userIds),
+        },
+      }),
+    ]);
+
+    const profileByUserId = new Map(profiles.map((profile) => [profile.auth_user_id, profile] as const));
+    const organizationTechnicianByUserId = new Map<string, TechnicianEntity>();
+    for (const technician of organizationTechnicians) {
+      if (technician.auth_user_id) {
+        organizationTechnicianByUserId.set(technician.auth_user_id, technician);
+      }
+    }
+
+    const globalTechnicianByUserId = new Map<string, TechnicianEntity>();
+    for (const technician of globalTechnicians) {
+      if (technician.auth_user_id) {
+        globalTechnicianByUserId.set(technician.auth_user_id, technician);
+      }
+    }
+
+    for (const membership of sortedMemberships) {
+      const existingInOrganization = organizationTechnicianByUserId.get(membership.user_id);
+      const profile = profileByUserId.get(membership.user_id);
+      const displayName = profile?.full_name?.trim() || membership.user?.email?.trim() || "Staff Member";
+      const phone = profile?.phone ?? null;
+
+      if (existingInOrganization) {
+        let shouldSave = false;
+
+        if (!existingInOrganization.is_active) {
+          existingInOrganization.is_active = true;
+          shouldSave = true;
+        }
+
+        if (existingInOrganization.display_name !== displayName) {
+          existingInOrganization.display_name = displayName;
+          shouldSave = true;
+        }
+
+        if ((existingInOrganization.phone ?? null) !== phone) {
+          existingInOrganization.phone = phone;
+          shouldSave = true;
+        }
+
+        if (shouldSave) {
+          await this.techniciansRepository.save(existingInOrganization);
+        }
+
+        continue;
+      }
+
+      // auth_user_id is globally unique in technicians; skip cross-org links we cannot safely move in V1 fallback.
+      if (globalTechnicianByUserId.has(membership.user_id)) {
+        continue;
+      }
+
+      const created = await this.techniciansRepository.save(
+        this.techniciansRepository.create({
+          organization_id: organizationId,
+          auth_user_id: membership.user_id,
+          display_name: displayName,
+          phone,
+          specialties: [],
+          is_active: true,
+        }),
+      );
+      organizationTechnicianByUserId.set(membership.user_id, created);
+      globalTechnicianByUserId.set(membership.user_id, created);
+    }
+  }
+
+  private async listTechniciansWithV1Fallback(organizationId: string, activeOnly: boolean) {
+    await this.provisionFallbackTechniciansIfNeeded(organizationId);
+
+    return this.techniciansRepository.find({
+      where: activeOnly
+        ? { organization_id: organizationId, is_active: true }
+        : { organization_id: organizationId },
+      order: {
+        display_name: "ASC",
+      },
+    });
   }
 
   @Get("jobs/:jobId")
@@ -2127,6 +2296,19 @@ export class CrmController {
 
     try {
       const payload = parseCreateLeadPayload(body);
+      const customerResolution = await this.resolveCustomerForLeadIdentity(organizationId, {
+        full_name: payload.fullName,
+        phone: payload.phone,
+        email: payload.email,
+        service_address_line_1: payload.serviceAddressLine1,
+        service_address_line_2: payload.serviceAddressLine2,
+        service_city: payload.serviceCity,
+        service_state_or_region: payload.serviceStateOrRegion,
+        service_postal_code: payload.servicePostalCode,
+        source: payload.source,
+        service_type: payload.serviceType,
+        description: payload.description,
+      });
       const lead = await this.leadsRepository.save(
         this.leadsRepository.create(this.withOrganizationId(organizationId, {
           full_name: payload.fullName,
@@ -2140,12 +2322,16 @@ export class CrmController {
           source: payload.source,
           service_type: payload.serviceType,
           description: payload.description,
+          customer_id: customerResolution.customer.id,
           created_by_auth_user_id: actor.user.id,
         })),
       );
 
       return apiSuccess(lead);
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       apiError(400, "invalid_lead_payload", "The lead payload is invalid.", error);
     }
   }
@@ -2304,21 +2490,8 @@ export class CrmController {
         apiError(400, "lead_already_converted", "This lead has already been converted into a job.");
       }
 
-      const customer = await this.customersRepository.save(
-        this.customersRepository.create(this.withOrganizationId(organizationId, {
-          full_name: lead.full_name,
-          phone: lead.phone,
-          email: lead.email,
-          service_address_line_1: lead.service_address_line_1,
-          service_address_line_2: lead.service_address_line_2,
-          service_city: lead.service_city,
-          service_state_or_region: lead.service_state_or_region,
-          service_postal_code: lead.service_postal_code,
-          source: lead.source,
-          preferred_service_type: lead.service_type,
-          notes: lead.description,
-        })),
-      );
+      const customerResolution = await this.resolveCustomerForLead(organizationId, lead);
+      const customer = customerResolution.customer;
 
       await this.requireServiceInOrganization(payload.serviceId, organizationId);
       await this.requireTechnicianInOrganization(payload.assignedTechnicianId, organizationId);
@@ -2347,6 +2520,20 @@ export class CrmController {
         }),
       );
 
+      if (this.deriveCustomerLifecycleStatus(customer) !== "active") {
+        await this.customersRepository.update(
+          {
+            id: customer.id,
+            organization_id: organizationId,
+          },
+          {
+            lifecycle_status: "active",
+          },
+        );
+        customer.lifecycle_status = "active";
+      }
+
+      lead.customer_id = customer.id;
       lead.status = "converted";
       lead.converted_job_id = job.id;
       const updatedLead = await this.leadsRepository.save(lead);
@@ -2369,6 +2556,9 @@ export class CrmController {
         job: detail ? this.buildJobDetailResponse(detail) : job,
       });
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       apiError(400, "invalid_lead_conversion_payload", "The lead conversion payload is invalid.", error);
     }
   }
@@ -2389,14 +2579,7 @@ export class CrmController {
     try {
       const activeOnly = active === undefined ? true : active === "true";
 
-      const technicians = await this.techniciansRepository.find({
-        where: activeOnly
-          ? { organization_id: organizationId, is_active: true }
-          : { organization_id: organizationId },
-        order: {
-          display_name: "ASC",
-        },
-      });
+      const technicians = await this.listTechniciansWithV1Fallback(organizationId, activeOnly);
 
       return apiSuccess(technicians);
     } catch (error) {
@@ -2669,6 +2852,111 @@ export class CrmController {
     }
 
     return allowedValues.find((allowedValue) => this.normalizeLookupToken(allowedValue) === normalizedValue) ?? null;
+  }
+
+  private deriveCustomerLifecycleStatus(customer: CustomerEntity): CustomerLifecycleStatus | null {
+    const normalizedValue = this.normalizeLookupToken((customer as { lifecycle_status?: string | null }).lifecycle_status ?? null);
+    if (!normalizedValue) {
+      return null;
+    }
+
+    return customerLifecycleStatuses.find((status) => this.normalizeLookupToken(status) === normalizedValue) ?? null;
+  }
+
+  private async createProspectCustomerFromLeadIdentity(
+    organizationId: string,
+    input: LeadIdentityInput,
+  ) {
+    return this.customersRepository.save(
+      this.customersRepository.create(this.withOrganizationId(organizationId, {
+        full_name: input.full_name,
+        phone: input.phone,
+        email: input.email,
+        service_address_line_1: input.service_address_line_1,
+        service_address_line_2: input.service_address_line_2,
+        service_city: input.service_city,
+        service_state_or_region: input.service_state_or_region,
+        service_postal_code: input.service_postal_code,
+        source: input.source,
+        preferred_service_type: input.service_type,
+        notes: input.description,
+        lifecycle_status: "prospect" as CustomerLifecycleStatus,
+      })),
+    );
+  }
+
+  private async resolveCustomerForLeadIdentity(
+    organizationId: string,
+    input: LeadIdentityInput,
+  ) {
+    const normalizedPhone = this.normalizePhone(input.phone);
+    const normalizedEmail = this.normalizeEmail(input.email);
+    const customers = await this.customersRepository.find({
+      where: {
+        organization_id: organizationId,
+      },
+    });
+    const phoneMatches = normalizedPhone
+      ? customers.filter((customer) => this.normalizePhone(customer.phone) === normalizedPhone)
+      : [];
+    const emailMatches = normalizedEmail
+      ? customers.filter((customer) => this.normalizeEmail(customer.email) === normalizedEmail)
+      : [];
+
+    const uniqueMatches = new Map<string, CustomerEntity>();
+    for (const match of [...phoneMatches, ...emailMatches]) {
+      uniqueMatches.set(match.id, match);
+    }
+
+    if (uniqueMatches.size > 1) {
+      apiError(
+        409,
+        "lead_customer_identity_conflict",
+        "Lead phone/email matches different customer records. Resolve customer identity manually before creating the lead.",
+      );
+    }
+
+    const matchedCustomer = uniqueMatches.values().next().value as CustomerEntity | undefined;
+    if (matchedCustomer) {
+      return { customer: matchedCustomer, created: false as const };
+    }
+
+    const createdCustomer = await this.createProspectCustomerFromLeadIdentity(organizationId, input);
+    return { customer: createdCustomer, created: true as const };
+  }
+
+  private async resolveCustomerForLead(
+    organizationId: string,
+    lead: LeadEntity,
+  ) {
+    const identity: LeadIdentityInput = {
+      full_name: lead.full_name,
+      phone: lead.phone,
+      email: lead.email,
+      service_address_line_1: lead.service_address_line_1,
+      service_address_line_2: lead.service_address_line_2,
+      service_city: lead.service_city,
+      service_state_or_region: lead.service_state_or_region,
+      service_postal_code: lead.service_postal_code,
+      source: lead.source,
+      service_type: lead.service_type,
+      description: lead.description,
+    };
+
+    if (lead.customer_id) {
+      const linkedCustomer = await this.customersRepository.findOne({
+        where: {
+          id: lead.customer_id,
+          organization_id: organizationId,
+        },
+      });
+
+      if (linkedCustomer) {
+        return { customer: linkedCustomer, created: false as const };
+      }
+    }
+
+    return this.resolveCustomerForLeadIdentity(organizationId, identity);
   }
 
   private parseImportPayload(jsonBody: unknown): ImportPayload {

@@ -33,6 +33,7 @@ type CustomersPageContext = {
 };
 
 type CustomerRecord = Database["public"]["Tables"]["customers"]["Row"];
+type CustomerLifecycleStatus = Database["public"]["Enums"]["customer_lifecycle_status"];
 type CustomerJobSummary = Pick<
   Database["public"]["Tables"]["jobs"]["Row"],
   | "id"
@@ -76,12 +77,44 @@ function activeJobCount(customer: CustomerListItem) {
   return customer.relatedJobs.filter((job) => openJobStatuses.includes(job.status)).length;
 }
 
-function customerStatusBadgeClass(openJobs: number) {
-  if (openJobs > 0) {
+function resolveCustomerLifecycleStatus(customer: CustomerListItem): CustomerLifecycleStatus {
+  if (customer.lifecycle_status === "prospect" || customer.lifecycle_status === "active" || customer.lifecycle_status === "past" || customer.lifecycle_status === "archived") {
+    return customer.lifecycle_status;
+  }
+
+  return activeJobCount(customer) > 0 ? "active" : "past";
+}
+
+function customerLifecycleBadgeClass(status: CustomerLifecycleStatus) {
+  if (status === "prospect") {
     return "theme-status-warning inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em]";
   }
 
-  return "theme-status-success inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em]";
+  if (status === "active") {
+    return "theme-status-success inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em]";
+  }
+
+  if (status === "past") {
+    return "theme-control-surface inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-secondary)]";
+  }
+
+  return "theme-alert-error inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em]";
+}
+
+function customerLifecycleLabel(status: CustomerLifecycleStatus) {
+  if (status === "prospect") {
+    return "Prospect";
+  }
+
+  if (status === "active") {
+    return "Active";
+  }
+
+  if (status === "past") {
+    return "Past";
+  }
+
+  return "Archived";
 }
 
 export default async function CustomersPage({ searchParams }: CustomersPageContext) {
@@ -307,14 +340,14 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                         { key: "customer", label: t("columns.customerName"), align: "center" },
                         { key: "phone", label: t("columns.phone"), align: "center" },
                         { key: "email", label: t("columns.email"), align: "center" },
-                        { key: "openJobs", label: t("columns.openJobs"), align: "center" },
+                        { key: "lifecycle", label: "Lifecycle", align: "center" },
                         { key: "totalJobs", label: t("columns.totalJobs"), align: "center" },
                         { key: "updated", label: t("columns.updated"), align: "center" },
                       ]}
                       state={tableState}
                     >
                       {pagedCustomers.map((customer) => {
-                        const openJobs = activeJobCount(customer);
+                        const lifecycleStatus = resolveCustomerLifecycleStatus(customer);
 
                         return (
                           <MasterTableRow key={customer.id}>
@@ -365,8 +398,8 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                               )}
                             </td>
                             <td className="master-table-cell text-center">
-                              <span className={customerStatusBadgeClass(openJobs)}>
-                                {openJobs}
+                              <span className={customerLifecycleBadgeClass(lifecycleStatus)}>
+                                {customerLifecycleLabel(lifecycleStatus)}
                               </span>
                             </td>
                             <td className="master-table-cell text-center font-medium text-[color:var(--sem-text-primary)]">
@@ -387,6 +420,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                       emptyState={t("noCustomers")}
                       renderItem={(customer) => {
                         const openJobs = activeJobCount(customer);
+                        const lifecycleStatus = resolveCustomerLifecycleStatus(customer);
 
                         return (
                           <article key={customer.id} className="master-mobile-card theme-surface-card rounded-[26px] border border-[color:var(--cmp-border-subtle)] p-4 text-sm text-[color:var(--sem-text-secondary)] shadow-[0_18px_34px_rgba(15,23,42,0.04)]">
@@ -396,7 +430,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                                   <p className="font-medium text-[color:var(--sem-text-primary)]">{customer.full_name}</p>
                                   <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{formatDate(customer.updated_at, locale)}</p>
                                 </div>
-                                <span className={customerStatusBadgeClass(openJobs)}>{openJobs} {t("open")}</span>
+                                <span className={customerLifecycleBadgeClass(lifecycleStatus)}>{customerLifecycleLabel(lifecycleStatus)}</span>
                               </div>
                               <div className="grid gap-2">
                                 <span className="inline-flex items-start gap-2">
@@ -424,7 +458,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                                   <span className="whitespace-pre-line">{customer.notes?.trim() || t("noCustomerNotes")}</span>
                                 </p>
                                 <p className="mt-3 text-xs text-[color:var(--sem-text-muted)]">
-                                  {t("totalLinkedJobs", { count: customer.relatedJobs.length })}
+                                  {t("totalLinkedJobs", { count: customer.relatedJobs.length })} • {openJobs} {t("open")}
                                 </p>
                               </div>
                               <div className="border-t border-[color:var(--cmp-border-subtle)] pt-3">

@@ -7,6 +7,8 @@ import { CustomerEntity } from "../database/entities/customer.entity";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
 import { JobEntity } from "../database/entities/job.entity";
 import { LeadEntity } from "../database/entities/lead.entity";
+import { MembershipEntity } from "../database/entities/membership.entity";
+import { ProfileEntity } from "../database/entities/profile.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
 import { ServiceEntity } from "../database/entities/service.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
@@ -27,6 +29,13 @@ type DashboardControlItem = {
   scheduledFor: Date | null;
   occurredAt: Date | null;
   statusLabel: string;
+};
+
+const TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES = ["owner", "admin", "office_admin"] as const;
+const TECHNICIAN_FALLBACK_ROLE_PRIORITY: Record<(typeof TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES)[number], number> = {
+  owner: 0,
+  admin: 1,
+  office_admin: 2,
 };
 
 /**
@@ -66,6 +75,10 @@ export class CrmOfficeDashboardService {
     private readonly invoicesRepository: Repository<InvoiceEntity>,
     @InjectRepository(TechnicianEntity)
     private readonly techniciansRepository: Repository<TechnicianEntity>,
+    @InjectRepository(MembershipEntity)
+    private readonly membershipsRepository: Repository<MembershipEntity>,
+    @InjectRepository(ProfileEntity)
+    private readonly profilesRepository: Repository<ProfileEntity>,
     @InjectRepository(ServiceEntity)
     private readonly servicesRepository: Repository<ServiceEntity>,
   ) {}
@@ -156,6 +169,153 @@ export class CrmOfficeDashboardService {
     };
   }
 
+  private async provisionFallbackTechniciansIfNeeded(organizationId: string) {
+    const activeTechnicianCount = await this.techniciansRepository.countBy({
+      organization_id: organizationId,
+      is_active: true,
+    });
+
+    if (activeTechnicianCount > 0) {
+      return;
+    }
+
+    const memberships = await this.membershipsRepository.find({
+      where: {
+        organization_id: organizationId,
+        status: "active",
+        role: In([...TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES]),
+      },
+      relations: {
+        user: true,
+      },
+      order: {
+        created_at: "ASC",
+      },
+    });
+
+    if (memberships.length === 0) {
+      return;
+    }
+
+    const activeMemberships = memberships.filter((membership) => membership.user?.is_active === true);
+    if (activeMemberships.length === 0) {
+      return;
+    }
+
+    const sortedMemberships = [...activeMemberships].sort((left, right) => {
+      const leftPriority = TECHNICIAN_FALLBACK_ROLE_PRIORITY[left.role as keyof typeof TECHNICIAN_FALLBACK_ROLE_PRIORITY] ?? 99;
+      const rightPriority = TECHNICIAN_FALLBACK_ROLE_PRIORITY[right.role as keyof typeof TECHNICIAN_FALLBACK_ROLE_PRIORITY] ?? 99;
+
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+
+      return left.created_at.getTime() - right.created_at.getTime();
+    });
+
+    const userIds = Array.from(new Set(sortedMemberships.map((membership) => membership.user_id)));
+    if (userIds.length === 0) {
+      return;
+    }
+
+    const [profiles, organizationTechnicians, globalTechnicians] = await Promise.all([
+      this.profilesRepository.find({
+        where: {
+          auth_user_id: In(userIds),
+        },
+      }),
+      this.techniciansRepository.find({
+        where: {
+          organization_id: organizationId,
+          auth_user_id: In(userIds),
+        },
+      }),
+      this.techniciansRepository.find({
+        where: {
+          auth_user_id: In(userIds),
+        },
+      }),
+    ]);
+
+    const profileByUserId = new Map(profiles.map((profile) => [profile.auth_user_id, profile] as const));
+    const organizationTechnicianByUserId = new Map<string, TechnicianEntity>();
+    for (const technician of organizationTechnicians) {
+      if (technician.auth_user_id) {
+        organizationTechnicianByUserId.set(technician.auth_user_id, technician);
+      }
+    }
+
+    const globalTechnicianByUserId = new Map<string, TechnicianEntity>();
+    for (const technician of globalTechnicians) {
+      if (technician.auth_user_id) {
+        globalTechnicianByUserId.set(technician.auth_user_id, technician);
+      }
+    }
+
+    for (const membership of sortedMemberships) {
+      const existingInOrganization = organizationTechnicianByUserId.get(membership.user_id);
+      const profile = profileByUserId.get(membership.user_id);
+      const displayName = profile?.full_name?.trim() || membership.user?.email?.trim() || "Staff Member";
+      const phone = profile?.phone ?? null;
+
+      if (existingInOrganization) {
+        let shouldSave = false;
+
+        if (!existingInOrganization.is_active) {
+          existingInOrganization.is_active = true;
+          shouldSave = true;
+        }
+
+        if (existingInOrganization.display_name !== displayName) {
+          existingInOrganization.display_name = displayName;
+          shouldSave = true;
+        }
+
+        if ((existingInOrganization.phone ?? null) !== phone) {
+          existingInOrganization.phone = phone;
+          shouldSave = true;
+        }
+
+        if (shouldSave) {
+          await this.techniciansRepository.save(existingInOrganization);
+        }
+
+        continue;
+      }
+
+      // auth_user_id is globally unique in technicians; skip cross-org links we cannot safely move in V1 fallback.
+      if (globalTechnicianByUserId.has(membership.user_id)) {
+        continue;
+      }
+
+      const created = await this.techniciansRepository.save(
+        this.techniciansRepository.create({
+          organization_id: organizationId,
+          auth_user_id: membership.user_id,
+          display_name: displayName,
+          phone,
+          specialties: [],
+          is_active: true,
+        }),
+      );
+      organizationTechnicianByUserId.set(membership.user_id, created);
+      globalTechnicianByUserId.set(membership.user_id, created);
+    }
+  }
+
+  private async listTechniciansWithV1FallbackForDashboard(organizationId: string) {
+    await this.provisionFallbackTechniciansIfNeeded(organizationId);
+
+    return this.techniciansRepository.find({
+      where: {
+        organization_id: organizationId,
+      },
+      order: {
+        display_name: "ASC",
+      },
+    });
+  }
+
   async loadOfficeDashboardSnapshot(organizationId: string): Promise<OfficeDashboardSnapshotPayload> {
     const todayStart = startOfLocalDashboardDay();
     const todayEnd = endOfLocalDashboardDay();
@@ -221,14 +381,7 @@ export class CrmOfficeDashboardService {
           },
           take: 60,
         }),
-        this.techniciansRepository.find({
-          where: {
-            organization_id: organizationId,
-          },
-          order: {
-            display_name: "ASC",
-          },
-        }),
+        this.listTechniciansWithV1FallbackForDashboard(organizationId),
         this.servicesRepository.find({
           where: {
             organization_id: organizationId,

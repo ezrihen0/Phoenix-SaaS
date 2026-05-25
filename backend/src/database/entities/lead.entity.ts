@@ -16,6 +16,7 @@ import {
   type LeadStatus,
   type ServiceType,
 } from "../../crm/constants";
+import { CustomerEntity } from "./customer.entity";
 import { JobEntity } from "./job.entity";
 import { OrganizationEntity } from "./organization.entity";
 
@@ -75,6 +76,9 @@ export class LeadEntity {
   status!: LeadStatus;
 
   @Column({ type: "varchar", length: 36, nullable: true })
+  customer_id!: string | null;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
   converted_job_id!: string | null;
 
   @Column({ type: "varchar", length: 36, nullable: true })
@@ -92,6 +96,13 @@ export class LeadEntity {
   })
   @JoinColumn({ name: "converted_job_id", referencedColumnName: "id" })
   converted_job?: JobEntity | null;
+
+  @ManyToOne(() => CustomerEntity, {
+    nullable: true,
+    onDelete: "RESTRICT",
+  })
+  @JoinColumn({ name: "customer_id", referencedColumnName: "id" })
+  customer?: CustomerEntity | null;
 
   @ManyToOne(() => OrganizationEntity, {
     nullable: true,

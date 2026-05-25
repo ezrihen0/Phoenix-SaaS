@@ -10,6 +10,7 @@ import { JobNoteEntity } from "../database/entities/job-note.entity";
 import { JobStatusEventEntity } from "../database/entities/job-status-event.entity";
 import { JobEntity } from "../database/entities/job.entity";
 import { LeadEntity } from "../database/entities/lead.entity";
+import { MembershipEntity } from "../database/entities/membership.entity";
 import { PricebookBundleItemEntity } from "../database/entities/pricebook-bundle-item.entity";
 import { PricebookBundleEntity } from "../database/entities/pricebook-bundle.entity";
 import { PricebookItemEntity } from "../database/entities/pricebook-item.entity";
@@ -35,6 +36,7 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
       ServiceEntity,
       CustomerEntity,
       LeadEntity,
+      MembershipEntity,
       JobEntity,
       QuoteEntity,
       InvoiceEntity,

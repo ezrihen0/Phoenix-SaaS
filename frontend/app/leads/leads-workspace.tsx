@@ -364,6 +364,18 @@ export default function LeadsWorkspace({
             {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
           </button>
         </div>
+        {!lead.converted_job_id && lead.status !== "converted" ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              router.push(`/jobs/new?leadId=${encodeURIComponent(lead.id)}`);
+            }}
+            className="theme-btn-secondary inline-flex items-center justify-center rounded-full px-3 py-2 text-[11px] uppercase tracking-[0.18em] transition"
+          >
+            Create Job
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -966,22 +978,45 @@ export default function LeadsWorkspace({
                 onClick={() => {
                   startTransition(() => {
                     void (async () => {
+                      const fullName = intakeForm.fullName.trim();
+                      const phone = intakeForm.phone.trim();
+                      const email = intakeForm.email.trim();
+                      const serviceAddressLine1 = intakeForm.serviceAddressLine1.trim();
+                      const serviceAddressLine2 = intakeForm.serviceAddressLine2.trim();
+                      const serviceCity = intakeForm.serviceCity.trim();
+                      const serviceStateOrRegion = intakeForm.serviceStateOrRegion.trim();
+                      const servicePostalCode = intakeForm.servicePostalCode.trim();
+                      const description = intakeForm.description.trim();
+                      const serviceType = intakeForm.serviceType;
+
+                      if (
+                        !fullName
+                        || !phone
+                        || !serviceAddressLine1
+                        || !serviceCity
+                        || !servicePostalCode
+                        || !serviceType
+                      ) {
+                        setErrorMessage("Please fill customer name, phone, service address, city, postal code, and service type before creating the lead.");
+                        setStatusMessage(null);
+                        return;
+                      }
+
                       try {
                         const createdLead = await crmApiFetch<LeadQueueItem>("/api/leads", {
                           method: "POST",
                           body: JSON.stringify({
-                            fullName: intakeForm.fullName,
-                            phone: intakeForm.phone,
-                            email: intakeForm.email || null,
-                            serviceAddressLine1: intakeForm.serviceAddressLine1,
-                            serviceAddressLine2: intakeForm.serviceAddressLine2 || null,
-                            serviceCity: intakeForm.serviceCity,
-                            serviceStateOrRegion: intakeForm.serviceStateOrRegion || null,
-                            servicePostalCode: intakeForm.servicePostalCode,
+                            fullName,
+                            phone,
+                            email: email || null,
+                            serviceAddressLine1,
+                            serviceAddressLine2: serviceAddressLine2 || null,
+                            serviceCity,
+                            serviceStateOrRegion: serviceStateOrRegion || null,
+                            servicePostalCode,
                             source: intakeForm.source,
-                            serviceType: intakeForm.serviceType,
-                            description: intakeForm.description || null,
-                            recentCallId: intakeForm.recentCallId || null,
+                            serviceType,
+                            description: description || null,
                           }),
                         });
 

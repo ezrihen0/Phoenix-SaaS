@@ -15,6 +15,7 @@ export const leadSources = [
   "repeat_customer",
   "other",
 ] as const;
+export const customerLifecycleStatuses = ["prospect", "active", "past", "archived"] as const;
 export const serviceTypes = ["inspection", "cleaning", "repair", "rebuild"] as const;
 export const leadStatuses = ["new_lead", "contacted", "converted"] as const;
 export const jobStatuses = [
@@ -35,6 +36,7 @@ export const invoicePaymentMethods = ["cash", "check", "card_manual", "bank_tran
 
 export type ProfileRole = (typeof profileRoles)[number];
 export type LeadSource = (typeof leadSources)[number];
+export type CustomerLifecycleStatus = (typeof customerLifecycleStatuses)[number];
 export type ServiceType = (typeof serviceTypes)[number];
 export type LeadStatus = (typeof leadStatuses)[number];
 export type JobStatus = (typeof jobStatuses)[number];

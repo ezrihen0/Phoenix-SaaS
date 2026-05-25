@@ -74,6 +74,7 @@ export type Database = {
           source: Database["public"]["Enums"]["lead_source"];
           preferred_service_type: Database["public"]["Enums"]["service_type"] | null;
           notes: string | null;
+          lifecycle_status: Database["public"]["Enums"]["customer_lifecycle_status"] | null;
           created_at: string;
           updated_at: string;
         };
@@ -93,6 +94,7 @@ export type Database = {
           source?: Database["public"]["Enums"]["lead_source"];
           preferred_service_type?: Database["public"]["Enums"]["service_type"] | null;
           notes?: string | null;
+          lifecycle_status?: Database["public"]["Enums"]["customer_lifecycle_status"] | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -142,6 +144,7 @@ export type Database = {
           service_type: Database["public"]["Enums"]["service_type"];
           description: string | null;
           status: Database["public"]["Enums"]["lead_status"];
+          customer_id: string | null;
           converted_job_id: string | null;
           created_by_auth_user_id: string | null;
           created_at: string;
@@ -161,6 +164,7 @@ export type Database = {
           service_type: Database["public"]["Enums"]["service_type"];
           description?: string | null;
           status?: Database["public"]["Enums"]["lead_status"];
+          customer_id?: string | null;
           converted_job_id?: string | null;
           created_by_auth_user_id?: string | null;
           created_at?: string;
@@ -335,6 +339,7 @@ export type Database = {
     Enums: {
       profile_role: "owner" | "admin" | "office_admin" | "dispatcher" | "csr" | "technician" | "viewer";
       lead_source: "phone" | "website" | "google" | "referral" | "repeat_customer" | "other";
+      customer_lifecycle_status: "prospect" | "active" | "past" | "archived";
       service_type: "inspection" | "cleaning" | "repair" | "rebuild";
       lead_status: "new_lead" | "contacted" | "converted";
       job_status: "new_lead" | "contacted" | "scheduled" | "on_the_way" | "in_progress" | "waiting_for_approval" | "completed" | "paid" | "cancelled";

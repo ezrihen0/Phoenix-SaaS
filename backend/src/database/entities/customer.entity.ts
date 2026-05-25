@@ -10,8 +10,10 @@ import {
 } from "typeorm";
 
 import {
+  customerLifecycleStatuses,
   leadSources,
   serviceTypes,
+  type CustomerLifecycleStatus,
   type LeadSource,
   type ServiceType,
 } from "../../crm/constants";
@@ -75,6 +77,13 @@ export class CustomerEntity {
 
   @Column({ type: "text", nullable: true })
   notes!: string | null;
+
+  @Column({
+    type: "enum",
+    enum: customerLifecycleStatuses,
+    nullable: true,
+  })
+  lifecycle_status!: CustomerLifecycleStatus | null;
 
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;
