@@ -11,7 +11,8 @@ export default async function PricebookBundleDetailPage({
   params: Promise<{ bundleId: string }>;
 }) {
   const { bundleId } = await params;
-  await requireServerSession(`/pricebook/bundles/${bundleId}`);
+  const session = await requireServerSession(`/pricebook/bundles/${bundleId}`);
+  const sessionRole = session.profile?.role ?? session.active_membership?.role ?? null;
 
   let bundle: PricebookBundleDetail | null = null;
 
@@ -31,5 +32,5 @@ export default async function PricebookBundleDetailPage({
     notFound();
   }
 
-  return <PricebookBundleEditor initialBundle={bundle} />;
+  return <PricebookBundleEditor initialBundle={bundle} sessionRole={sessionRole} />;
 }

@@ -19,7 +19,8 @@ function firstValue(value: SearchParam) {
 }
 
 export default async function PricebookBundlesPage({ searchParams }: PricebookBundlesPageContext) {
-  await requireServerSession("/pricebook/bundles");
+  const session = await requireServerSession("/pricebook/bundles");
+  const sessionRole = session.profile?.role ?? session.active_membership?.role ?? null;
   const resolvedSearchParams = await searchParams;
 
   const filters: PricebookBundleFilters = {
@@ -55,5 +56,12 @@ export default async function PricebookBundlesPage({ searchParams }: PricebookBu
     loadError = error instanceof Error ? error.message : "The bundle workspace could not be loaded.";
   }
 
-  return <PricebookBundlesWorkspace initialResult={initialResult} initialFilters={filters} loadError={loadError} />;
+  return (
+    <PricebookBundlesWorkspace
+      sessionRole={sessionRole}
+      initialResult={initialResult}
+      initialFilters={filters}
+      loadError={loadError}
+    />
+  );
 }
