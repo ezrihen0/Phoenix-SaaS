@@ -59,6 +59,11 @@ type PatchInspectionMetaPayload = {
   gas_license_holder_name?: string | null;
 };
 
+type ArchiveInspectionPayload = {
+  reasonCode?: string;
+  reasonText?: string;
+};
+
 type AssignPhotoPayload = {
   photo_id?: string;
   item_id?: string;
@@ -171,14 +176,20 @@ export class InspectionsAdminController {
     @Query("reportType") reportType?: string,
     @Query("status") status?: string,
     @Query("customerId") customerId?: string,
+    @Query("activeState") activeState?: string,
   ) {
     const actor = this.requireOfficeActor(request);
     const organizationId = this.requireActiveOrganizationId(actor);
+    const normalizedActiveState = activeState?.trim().toLowerCase();
+    const activeStateFilter = normalizedActiveState === "archived" || normalizedActiveState === "all"
+      ? normalizedActiveState
+      : "active";
     const rows = await this.inspectionsAdminService.listInspections({
       query,
       report_type: reportType,
       status,
       customer_id: customerId,
+      activeState: activeStateFilter,
       organizationId,
     });
     return apiSuccess(rows);
@@ -319,6 +330,40 @@ export class InspectionsAdminController {
     const actor = this.requireCorrectionAdminActor(request);
     const organizationId = this.requireActiveOrganizationId(actor);
     const workspace = await this.inspectionsAdminService.unlockForCorrection(inspectionId, organizationId);
+    return apiSuccess(workspace);
+  }
+
+  @Post(":inspectionId/archive")
+  async archiveInspection(
+    @Req() request: RequestWithActor,
+    @Param("inspectionId") inspectionId: string,
+    @Body() body: ArchiveInspectionPayload,
+  ) {
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    if (!body.reasonCode?.trim()) {
+      apiError(400, "invalid_archive_reason_code", "reasonCode is required.");
+    }
+    if (!body.reasonText?.trim()) {
+      apiError(400, "invalid_archive_reason", "reasonText is required.");
+    }
+    const workspace = await this.inspectionsAdminService.archiveInspection(
+      inspectionId,
+      {
+        reasonCode: body.reasonCode.trim(),
+        reasonText: body.reasonText.trim(),
+      },
+      actor,
+      organizationId,
+    );
+    return apiSuccess(workspace);
+  }
+
+  @Post(":inspectionId/restore")
+  async restoreInspection(@Req() request: RequestWithActor, @Param("inspectionId") inspectionId: string) {
+    const actor = this.requireOfficeActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const workspace = await this.inspectionsAdminService.restoreInspection(inspectionId, actor, organizationId);
     return apiSuccess(workspace);
   }
 

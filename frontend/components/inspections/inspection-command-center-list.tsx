@@ -16,6 +16,7 @@ import {
   type InspectionCustomerSearchRow,
   type InspectionJobSearchRow,
   type InspectionListRow,
+  type InspectionActiveState,
 } from "@/lib/inspections/browser-api";
 
 import {
@@ -32,6 +33,7 @@ import {
 } from "./inspection-command-shell";
 import {
   canManageInspections,
+  archiveReasonCodeLabel,
   formatInspectionDate,
   jurisdictionLabel,
   reportTypeLabel,
@@ -52,6 +54,7 @@ export function InspectionCommandCenterList({ permissions, sessionRole }: Inspec
   const [q, setQ] = useState("");
   const [reportType, setReportType] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [activeState, setActiveState] = useState<InspectionActiveState>("active");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -76,7 +79,7 @@ export function InspectionCommandCenterList({ permissions, sessionRole }: Inspec
   async function load() {
     setBusy(true);
     try {
-      const data = await listInspections({ q, reportType, status: statusFilter || undefined });
+      const data = await listInspections({ q, reportType, status: statusFilter || undefined, activeState });
       setRows(data);
       setPage(1);
       setError(null);
@@ -305,6 +308,16 @@ export function InspectionCommandCenterList({ permissions, sessionRole }: Inspec
                 <option value="fail">Fail</option>
               </select>
             </label>
+            <label className="w-full lg:w-40">
+              <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)] lg:sr-only">
+                Library
+              </span>
+              <select className="theme-input-control h-10 w-full rounded-xl px-3 text-sm" value={activeState} onChange={(e) => setActiveState(e.target.value as InspectionActiveState)}>
+                <option value="active">Active</option>
+                <option value="archived">Archived</option>
+                <option value="all">All</option>
+              </select>
+            </label>
             <button type="button" className="theme-btn-secondary h-10 w-full shrink-0 rounded-xl px-4 text-sm font-medium lg:w-auto" onClick={() => void load()}>
               Search
             </button>
@@ -321,7 +334,11 @@ export function InspectionCommandCenterList({ permissions, sessionRole }: Inspec
           <MetricTile icon={FileCheck2} label="Compliance generated" value={listStats.complianceGenerated} helper="WETT compliance reports generated" />
         </section>
 
-        <InspectionLightPanel title="Active records" eyebrow="Inspection library" icon={<FileText className="h-4 w-4" />}>
+        <InspectionLightPanel
+          title={activeState === "archived" ? "Archived records" : activeState === "all" ? "All records" : "Active records"}
+          eyebrow="Inspection library"
+          icon={<FileText className="h-4 w-4" />}
+        >
           {busy ? (
             <p className="text-sm text-[color:var(--sem-text-secondary)]">Loading inspections...</p>
           ) : null}
@@ -346,9 +363,15 @@ export function InspectionCommandCenterList({ permissions, sessionRole }: Inspec
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <span className="font-mono text-[10px] text-[color:var(--sem-text-muted)]">{jurisdictionLabel(row.province_code, row.country_code)}</span>
                       <StatusPill status={row.compliance_status ?? row.status} />
+                      {row.archived_at ? <StatusPill status="archived" /> : null}
                       {row.sent_to_customer_at ? <StatusPill status="sent" /> : null}
                       <span className="font-mono text-[10px] text-[color:var(--sem-text-muted)]">{formatInspectionDate(row.updated_at)}</span>
                     </div>
+                    {row.archived_at && row.archive_reason ? (
+                      <p className="mt-2 text-xs leading-5 text-[color:var(--sem-text-secondary)]">
+                        {archiveReasonCodeLabel(row.archive_reason_code)} · {row.archive_reason}
+                      </p>
+                    ) : null}
                   </div>
                   <Link
                     href={`/inspections/${row.id}/workspace`}

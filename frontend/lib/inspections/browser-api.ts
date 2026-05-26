@@ -15,7 +15,20 @@ export type InspectionListRow = {
   safety_score: number | null;
   updated_at: string;
   sent_to_customer_at: string | null;
+  archived_at: string | null;
+  archive_reason_code: string | null;
+  archive_reason: string | null;
 };
+
+export type InspectionArchiveReasonCode =
+  | "customer_repaired_issue"
+  | "duplicate_report"
+  | "created_by_mistake"
+  | "superseded_by_new_inspection"
+  | "internal_test"
+  | "other";
+
+export type InspectionActiveState = "active" | "archived" | "all";
 
 export type InspectionWorkspacePayload = {
   inspectionMeta: {
@@ -38,6 +51,9 @@ export type InspectionWorkspacePayload = {
     generated_pdf_at: string | null;
     sent_to_customer_at: string | null;
     locked_at: string | null;
+    archived_at: string | null;
+    archive_reason_code: string | null;
+    archive_reason: string | null;
     public_job_code: string | null;
     quote_number: string | null;
     invoice_number: string | null;
@@ -95,12 +111,19 @@ export type InspectionWorkspacePayload = {
   pdfPreviewUrl: string | null;
 };
 
-export function listInspections(input: { q?: string; reportType?: string; status?: string; customerId?: string }) {
+export function listInspections(input: {
+  q?: string;
+  reportType?: string;
+  status?: string;
+  customerId?: string;
+  activeState?: InspectionActiveState;
+}) {
   const params = new URLSearchParams();
   if (input.q?.trim()) params.set("q", input.q.trim());
   if (input.reportType?.trim()) params.set("reportType", input.reportType.trim());
   if (input.status?.trim()) params.set("status", input.status.trim());
   if (input.customerId?.trim()) params.set("customerId", input.customerId.trim());
+  if (input.activeState && input.activeState !== "active") params.set("activeState", input.activeState);
   const query = params.toString();
   return crmApiFetch<InspectionListRow[]>(`/api/inspections${query ? `?${query}` : ""}`);
 }
@@ -211,6 +234,22 @@ export function sendInspection(inspectionId: string) {
 
 export function unlockInspectionForCorrection(inspectionId: string) {
   return crmApiFetch<InspectionWorkspacePayload>(`/api/inspections/${inspectionId}/unlock`, {
+    method: "POST",
+  });
+}
+
+export function archiveInspection(
+  inspectionId: string,
+  input: { reasonCode: InspectionArchiveReasonCode; reasonText: string },
+) {
+  return crmApiFetch<InspectionWorkspacePayload>(`/api/inspections/${inspectionId}/archive`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function restoreInspection(inspectionId: string) {
+  return crmApiFetch<InspectionWorkspacePayload>(`/api/inspections/${inspectionId}/restore`, {
     method: "POST",
   });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Archive,
   CheckCircle2,
   FileCheck2,
   FileText,
@@ -38,6 +39,7 @@ type InspectionReportConfidencePanelProps = {
   busy: string | null;
   generatedPdfUrl: string | null;
   canManage: boolean;
+  isArchived: boolean;
   onGasLicenseNumberChange: (value: string) => void;
   onGasLicenseHolderNameChange: (value: string) => void;
   onSaveGasLicense: () => void;
@@ -48,6 +50,8 @@ type InspectionReportConfidencePanelProps = {
   onOpenPdf: () => void;
   onDownloadPdf: () => void;
   onRequiredFieldBlur: (fieldId: string, value: string) => void;
+  onOpenArchive: () => void;
+  onRestore: () => void;
 };
 
 export function InspectionReportConfidencePanel({
@@ -65,6 +69,7 @@ export function InspectionReportConfidencePanel({
   busy,
   generatedPdfUrl,
   canManage,
+  isArchived,
   onGasLicenseNumberChange,
   onGasLicenseHolderNameChange,
   onSaveGasLicense,
@@ -75,10 +80,13 @@ export function InspectionReportConfidencePanel({
   onOpenPdf,
   onDownloadPdf,
   onRequiredFieldBlur,
+  onOpenArchive,
+  onRestore,
 }: InspectionReportConfidencePanelProps) {
   const locked = Boolean(workspace.inspectionMeta.locked_at);
   const generated = Boolean(workspace.inspectionMeta.generated_pdf_at || workspace.inspectionMeta.generated_pdf_url);
   const workflow = workspace.inspectionMeta.workflow_type;
+  const readOnly = !canManage || locked || isArchived;
 
   return (
     <aside className="space-y-4 overflow-auto">
@@ -137,9 +145,9 @@ export function InspectionReportConfidencePanel({
           {workflow === "gas_simplified" ? (
             <div className="theme-control-surface space-y-2 rounded-2xl p-4">
               <p className="text-xs text-[color:var(--sem-text-secondary)]">Provincial Gas License</p>
-              <input className="theme-input-control w-full rounded-xl px-2 py-2 text-xs" placeholder="License Number" value={gasLicenseNumber} disabled={!canManage || locked} onChange={(e) => onGasLicenseNumberChange(e.target.value)} />
-              <input className="theme-input-control w-full rounded-xl px-2 py-2 text-xs" placeholder="License Holder Name" value={gasLicenseHolderName} disabled={!canManage || locked} onChange={(e) => onGasLicenseHolderNameChange(e.target.value)} />
-              {canManage ? (
+              <input className="theme-input-control w-full rounded-xl px-2 py-2 text-xs" placeholder="License Number" value={gasLicenseNumber} disabled={readOnly} onChange={(e) => onGasLicenseNumberChange(e.target.value)} />
+              <input className="theme-input-control w-full rounded-xl px-2 py-2 text-xs" placeholder="License Holder Name" value={gasLicenseHolderName} disabled={readOnly} onChange={(e) => onGasLicenseHolderNameChange(e.target.value)} />
+              {canManage && !isArchived ? (
                 <button type="button" className="theme-btn-secondary w-full rounded-xl px-2 py-2 text-xs font-medium disabled:opacity-50" disabled={locked || Boolean(busy)} onClick={onSaveGasLicense}>
                   Save gas license
                 </button>
@@ -152,7 +160,7 @@ export function InspectionReportConfidencePanel({
             </div>
           ) : null}
 
-          {canManage ? (
+          {canManage && !isArchived ? (
             <div className="grid gap-2 border-t border-[color:var(--cmp-border-subtle)] pt-4">
               <span className="group relative w-full" title={generateDisabledTooltip}>
                 <button
@@ -180,6 +188,34 @@ export function InspectionReportConfidencePanel({
                   Unlock for correction
                 </button>
               ) : null}
+            </div>
+          ) : null}
+
+          {canManage && isArchived ? (
+            <div className="border-t border-[color:var(--cmp-border-subtle)] pt-4">
+              <button
+                type="button"
+                className="theme-btn-secondary inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold disabled:opacity-40"
+                disabled={Boolean(busy)}
+                onClick={onRestore}
+              >
+                {busy === "restore" ? "Restoring..." : "Restore report"}
+              </button>
+            </div>
+          ) : null}
+
+          {canManage && !isArchived ? (
+            <div className="border-t border-[color:var(--cmp-border-subtle)] pt-4">
+              <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">Danger zone</p>
+              <button
+                type="button"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15 disabled:opacity-40"
+                disabled={Boolean(busy)}
+                onClick={onOpenArchive}
+              >
+                <Archive className="h-4 w-4" />
+                Archive report
+              </button>
             </div>
           ) : null}
 
@@ -216,9 +252,9 @@ export function InspectionReportConfidencePanel({
                 <input
                   className={`theme-input-control mt-2 w-full rounded-xl px-2 py-2 text-xs ${field.is_mandatory && !field.is_satisfied ? "border-[color:var(--cmp-status-error-border)]" : ""}`}
                   defaultValue={field.field_value ?? ""}
-                  readOnly={!canManage || locked}
+                  readOnly={readOnly}
                   onBlur={(event) => {
-                    if (canManage && !locked) {
+                    if (canManage && !readOnly) {
                       onRequiredFieldBlur(field.id, event.target.value);
                     }
                   }}

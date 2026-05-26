@@ -1,19 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { InspectionArchiveModal } from "@/components/inspections/inspection-archive-modal";
 import { InspectionWorkspaceDesk } from "@/components/inspections/inspection-workspace-desk";
 import { canManageInspections, formatSectionLabel } from "@/components/inspections/inspection-labels";
 import type { StructuredRecommendationDraft } from "@/components/inspections/inspection-checklist-row";
 import {
+  archiveInspection,
   assignInspectionPhoto,
   generateInspection,
   getInspectionWorkspace,
   patchInspectionItem,
   patchInspectionMeta,
   patchRequiredField,
+  restoreInspection,
   sendInspection,
+  type InspectionArchiveReasonCode,
   type InspectionWorkspacePayload,
   unlockInspectionForCorrection,
   uploadInspectionPhotos,
@@ -163,6 +168,7 @@ function resolveStandardPenalty(item: InspectionWorkspacePayload["items"][number
 }
 
 export default function InspectionWorkspaceClient({ inspectionId, permissions, sessionRole }: InspectionWorkspaceClientProps) {
+  const router = useRouter();
   const canManage = canManageInspections(permissions);
   const [workspace, setWorkspace] = useState<InspectionWorkspacePayload | null>(null);
   const [localItems, setLocalItems] = useState<InspectionWorkspacePayload["items"]>([]);
@@ -178,6 +184,8 @@ export default function InspectionWorkspaceClient({ inspectionId, permissions, s
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
   const [recommendationDrafts, setRecommendationDrafts] = useState<Record<string, StructuredRecommendationDraft>>({});
   const [activeSectionKey, setActiveSectionKey] = useState<string | "all" | null>("all");
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const isFlushingItemPatchesRef = useRef(false);
   const pendingItemPatchesRef = useRef(pendingItemPatches);
   const recommendationDraftsRef = useRef(recommendationDrafts);
@@ -698,6 +706,34 @@ export default function InspectionWorkspaceClient({ inspectionId, permissions, s
     }
   }
 
+  async function handleArchive(input: { reasonCode: InspectionArchiveReasonCode; reasonText: string }) {
+    setBusy("archive");
+    setArchiveError(null);
+    try {
+      await archiveInspection(inspectionId, input);
+      setIsArchiveModalOpen(false);
+      router.push("/inspections");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Archive failed.";
+      setArchiveError(message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleRestore() {
+    setBusy("restore");
+    try {
+      const data = await restoreInspection(inspectionId);
+      applyWorkspace(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Restore failed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleSaveGasLicense() {
     const data = await patchInspectionMeta(inspectionId, {
       gas_license_number: gasLicenseNumber,
@@ -735,12 +771,16 @@ export default function InspectionWorkspaceClient({ inspectionId, permissions, s
     }));
   }
 
+  const isArchived = Boolean(workspace?.inspectionMeta.archived_at);
+
   const sendDisabled = Boolean(busy)
+    || isArchived
     || Boolean(workspace?.inspectionMeta.is_internal_draft)
     || !workspace?.inspectionMeta.generated_pdf_at
     || Boolean(workspace?.inspectionMeta.locked_at);
 
   const generateDisabled = Boolean(busy)
+    || isArchived
     || Boolean(workspace?.inspectionMeta.is_internal_draft)
     || !liveClientScoreOrCompliance.can_generate
     || !canManage;
@@ -752,15 +792,23 @@ export default function InspectionWorkspaceClient({ inspectionId, permissions, s
         ? "Internal drafts must be converted before generating."
         : "Generate report is not available yet."
     : undefined;
-  const photoButtonsDisabled = Boolean(busy) || Boolean(workspace?.inspectionMeta.locked_at) || !canManage;
+  const photoButtonsDisabled = Boolean(busy) || Boolean(workspace?.inspectionMeta.locked_at) || isArchived || !canManage;
 
-  const sendDisabledReason = workspace?.inspectionMeta.locked_at
+  const sendDisabledReason = isArchived
+    ? "Archived reports are read-only history."
+    : workspace?.inspectionMeta.locked_at
     ? "Report already sent and locked."
     : workspace?.inspectionMeta.is_internal_draft
       ? "Internal drafts must be converted before Generate/Send."
     : !workspace?.inspectionMeta.generated_pdf_at
       ? "Generate PDF before sending report."
       : null;
+
+  const requiresStrongerArchiveReason = Boolean(
+    workspace?.inspectionMeta.generated_pdf_at
+    || workspace?.inspectionMeta.sent_to_customer_at
+    || workspace?.inspectionMeta.locked_at,
+  );
 
   if (isDesktop === null) {
     return <main className="p-6 text-sm text-zinc-500">Loading workspace...</main>;
@@ -1249,6 +1297,21 @@ export default function InspectionWorkspaceClient({ inspectionId, permissions, s
   return (
     <>
       {fileInputs}
+      <InspectionArchiveModal
+        open={isArchiveModalOpen}
+        busy={busy === "archive"}
+        error={archiveError}
+        requiresStrongerReason={requiresStrongerArchiveReason}
+        onClose={() => {
+          if (busy !== "archive") {
+            setIsArchiveModalOpen(false);
+            setArchiveError(null);
+          }
+        }}
+        onConfirm={(input) => {
+          void handleArchive(input);
+        }}
+      />
       <InspectionWorkspaceDesk
         error={error}
         workspace={workspace}
@@ -1295,6 +1358,13 @@ export default function InspectionWorkspaceClient({ inspectionId, permissions, s
         onDownloadPdf={downloadGeneratedPdf}
         onRequiredFieldBlur={(fieldId, value) => {
           void handleRequiredFieldBlur(fieldId, value);
+        }}
+        onOpenArchive={() => {
+          setArchiveError(null);
+          setIsArchiveModalOpen(true);
+        }}
+        onRestore={() => {
+          void handleRestore();
         }}
       />
       {previewModal}

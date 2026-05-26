@@ -74,6 +74,7 @@ const STATUS_LABELS: Record<string, string> = {
   generated: "Generated",
   sent: "Marked sent",
   locked: "Locked",
+  archived: "Archived",
   draft: "Draft",
   satisfactory: "Satisfactory",
   unsatisfactory: "Unsatisfactory",
@@ -111,6 +112,8 @@ export function StatusPill({ status, className = "" }: StatusPillProps) {
 
   if (normalized.includes("pass") || normalized.includes("generated") || normalized.includes("sent") || normalized.includes("complete") || normalized.includes("ready") || normalized.includes("satisfactory")) {
     tone = "border-[color:var(--cmp-status-success-border)] bg-[color:var(--cmp-status-success-bg)] text-[color:var(--cmp-status-success-text)]";
+  } else if (normalized.includes("archived")) {
+    tone = "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-muted)]";
   } else if (normalized.includes("fail") || normalized.includes("blocked") || normalized.includes("unsatisfactory")) {
     tone = "border-[color:var(--cmp-status-error-border)] bg-[color:var(--cmp-status-error-bg)] text-[color:var(--cmp-status-error-text)]";
   }
@@ -125,3 +128,29 @@ export function StatusPill({ status, className = "" }: StatusPillProps) {
 export function canManageInspections(permissions: string[]) {
   return permissions.includes("inspections.admin");
 }
+
+const ARCHIVE_REASON_LABELS: Record<string, string> = {
+  customer_repaired_issue: "Customer repaired issue",
+  duplicate_report: "Duplicate report",
+  created_by_mistake: "Created by mistake",
+  superseded_by_new_inspection: "Superseded by new inspection",
+  internal_test: "Internal test",
+  other: "Other",
+};
+
+export function archiveReasonCodeLabel(code: string | null | undefined) {
+  const normalized = String(code || "").trim();
+  if (!normalized) {
+    return "—";
+  }
+  return ARCHIVE_REASON_LABELS[normalized] ?? normalized.replaceAll("_", " ");
+}
+
+export const INSPECTION_ARCHIVE_REASON_CODES = [
+  "customer_repaired_issue",
+  "duplicate_report",
+  "created_by_mistake",
+  "superseded_by_new_inspection",
+  "internal_test",
+  "other",
+] as const;

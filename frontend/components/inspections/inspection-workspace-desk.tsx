@@ -15,7 +15,7 @@ import {
   inspectionPanelClass,
   inspectionPanelHeaderClass,
 } from "./inspection-command-shell";
-import { formatSectionLabel, jurisdictionLabel, reportTypeLabel, StatusPill, workflowTypeLabel } from "./inspection-labels";
+import { formatSectionLabel, archiveReasonCodeLabel, formatInspectionDate, jurisdictionLabel, reportTypeLabel, StatusPill, workflowTypeLabel } from "./inspection-labels";
 import { InspectionReportConfidencePanel } from "./inspection-report-confidence-panel";
 import { InspectionSectionRail } from "./inspection-section-rail";
 
@@ -64,13 +64,16 @@ type InspectionWorkspaceDeskProps = {
   onOpenPdf: () => void;
   onDownloadPdf: () => void;
   onRequiredFieldBlur: (fieldId: string, value: string) => void;
+  onOpenArchive: () => void;
+  onRestore: () => void;
 };
 
 export function InspectionWorkspaceDesk(props: InspectionWorkspaceDeskProps) {
   const meta = props.workspace.inspectionMeta;
+  const isArchived = Boolean(meta.archived_at);
   const isStandardWorkflow = meta.workflow_type === "safety_standard";
-  const photoButtonsDisabled = Boolean(props.busy) || Boolean(meta.locked_at) || !props.canManage;
-  const itemButtonsDisabled = Boolean(props.busy) || Boolean(meta.locked_at) || !props.canManage;
+  const photoButtonsDisabled = Boolean(props.busy) || Boolean(meta.locked_at) || isArchived || !props.canManage;
+  const itemButtonsDisabled = Boolean(props.busy) || Boolean(meta.locked_at) || isArchived || !props.canManage;
 
   const stats = {
     total: props.localItems.length,
@@ -102,6 +105,7 @@ export function InspectionWorkspaceDesk(props: InspectionWorkspaceDeskProps) {
             {meta.generated_pdf_at ? <StatusPill status="generated" /> : null}
             {meta.sent_to_customer_at ? <StatusPill status="sent" /> : null}
             {meta.locked_at ? <StatusPill status="locked" /> : null}
+            {isArchived ? <StatusPill status="archived" /> : null}
             {meta.public_job_code ? (
               <span className="font-mono text-[10px] text-[color:var(--sem-text-muted)]">
                 Job {meta.public_job_code}
@@ -121,6 +125,16 @@ export function InspectionWorkspaceDesk(props: InspectionWorkspaceDeskProps) {
           {!props.canManage ? (
             <p className="theme-alert-warning rounded-[20px] border px-4 py-3 text-sm">
               Read-only view{props.sessionRole ? ` (${props.sessionRole})` : ""}. Changes require inspections.admin permission.
+            </p>
+          ) : null}
+
+          {isArchived ? (
+            <p className="theme-control-surface rounded-[20px] border border-[color:var(--cmp-border-subtle)] px-4 py-3 text-sm text-[color:var(--sem-text-secondary)]">
+              <span className="font-semibold text-[color:var(--sem-text-primary)]">Archived report — read-only history.</span>
+              {" "}
+              {archiveReasonCodeLabel(meta.archive_reason_code)}
+              {meta.archive_reason ? ` · ${meta.archive_reason}` : ""}
+              {meta.archived_at ? ` · Archived ${formatInspectionDate(meta.archived_at)}` : ""}
             </p>
           ) : null}
 
@@ -187,6 +201,7 @@ export function InspectionWorkspaceDesk(props: InspectionWorkspaceDeskProps) {
             busy={props.busy}
             generatedPdfUrl={props.generatedPdfUrl}
             canManage={props.canManage}
+            isArchived={isArchived}
             onGasLicenseNumberChange={props.onGasLicenseNumberChange}
             onGasLicenseHolderNameChange={props.onGasLicenseHolderNameChange}
             onSaveGasLicense={props.onSaveGasLicense}
@@ -197,6 +212,8 @@ export function InspectionWorkspaceDesk(props: InspectionWorkspaceDeskProps) {
             onOpenPdf={props.onOpenPdf}
             onDownloadPdf={props.onDownloadPdf}
             onRequiredFieldBlur={props.onRequiredFieldBlur}
+            onOpenArchive={props.onOpenArchive}
+            onRestore={props.onRestore}
           />
           </div>
         </div>

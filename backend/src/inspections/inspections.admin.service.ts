@@ -17,8 +17,10 @@ import {
 import { InspectionPhotoEntity } from "../database/entities/inspection-photo.entity";
 import { InspectionRequiredFieldEntity } from "../database/entities/inspection-required-field.entity";
 import {
+  type InspectionArchiveReasonCode,
   type InspectionReportType,
   InspectionEntity,
+  inspectionArchiveReasonCodes,
 } from "../database/entities/inspection.entity";
 import { JobEntity } from "../database/entities/job.entity";
 import { InspectionWorkflowService, TemplateNotConfiguredError } from "./inspection-workflow.service";
@@ -309,8 +311,10 @@ export class InspectionsAdminService {
     report_type?: string;
     status?: string;
     customer_id?: string;
+    activeState?: "active" | "archived" | "all";
   }) {
     const organizationId = this.requireOrganizationId(input.organizationId);
+    const activeState = input.activeState ?? "active";
     const qb = this.inspectionsRepository.createQueryBuilder("inspection")
       .select([
         "inspection.id",
@@ -328,10 +332,19 @@ export class InspectionsAdminService {
         "inspection.safety_score",
         "inspection.updated_at",
         "inspection.sent_to_customer_at",
+        "inspection.archived_at",
+        "inspection.archive_reason_code",
+        "inspection.archive_reason",
       ])
       .where("inspection.organization_id = :organizationId", { organizationId })
       .orderBy("inspection.updated_at", "DESC")
       .take(200);
+
+    if (activeState === "active") {
+      qb.andWhere("inspection.archived_at IS NULL");
+    } else if (activeState === "archived") {
+      qb.andWhere("inspection.archived_at IS NOT NULL");
+    }
 
     if (input.report_type?.trim()) {
       qb.andWhere("inspection.report_type = :reportType", { reportType: input.report_type.trim() });
@@ -362,6 +375,9 @@ export class InspectionsAdminService {
       safety_score: row.safety_score,
       updated_at: row.updated_at.toISOString(),
       sent_to_customer_at: row.sent_to_customer_at?.toISOString() ?? null,
+      archived_at: row.archived_at?.toISOString() ?? null,
+      archive_reason_code: row.archive_reason_code,
+      archive_reason: row.archive_reason,
       public_job_code: publicJobCode,
       quote_number: publicJobCode ? this.buildQuoteNumber(publicJobCode) : null,
       invoice_number: publicJobCode ? this.buildInvoiceNumber(publicJobCode) : null,
@@ -482,6 +498,9 @@ export class InspectionsAdminService {
         generated_pdf_at: inspection.generated_pdf_at?.toISOString() ?? null,
         sent_to_customer_at: inspection.sent_to_customer_at?.toISOString() ?? null,
         locked_at: inspection.locked_at?.toISOString() ?? null,
+        archived_at: inspection.archived_at?.toISOString() ?? null,
+        archive_reason_code: inspection.archive_reason_code,
+        archive_reason: inspection.archive_reason,
         send_mode: "metadata_lock_only",
         send_delivery_status: inspection.sent_to_customer_at ? "metadata_marked_not_dispatched" : "not_sent",
         send_delivery_channels: [],
@@ -565,6 +584,7 @@ export class InspectionsAdminService {
     if (inspection.locked_at) {
       apiError(409, "inspection_locked", "Inspection is locked and cannot be edited.");
     }
+    this.assertInspectionNotArchived(inspection);
 
     if (input.status) {
       item.status = input.status;
@@ -598,6 +618,7 @@ export class InspectionsAdminService {
     if (inspection.locked_at) {
       apiError(409, "inspection_locked", "Inspection is locked and cannot be regenerated.");
     }
+    this.assertInspectionNotArchived(inspection);
     if (inspection.verification_code === "INTERNAL_DRAFT") {
       apiError(400, "inspection_internal_draft_blocked", "Internal drafts must be converted before generating.");
     }
@@ -649,6 +670,7 @@ export class InspectionsAdminService {
   async send(inspectionId: string, organizationId: string) {
     const scopedOrganizationId = this.requireOrganizationId(organizationId);
     const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
+    this.assertInspectionNotArchived(inspection);
     if (!inspection.generated_pdf_at) {
       apiError(400, "inspection_not_generated", "Generate the report PDF before sending.");
     }
@@ -699,6 +721,7 @@ export class InspectionsAdminService {
   async unlockForCorrection(inspectionId: string, organizationId: string) {
     const scopedOrganizationId = this.requireOrganizationId(organizationId);
     const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
+    this.assertInspectionNotArchived(inspection);
     if (!inspection.locked_at) {
       apiError(409, "inspection_not_locked", "Inspection is already unlocked.");
     }
@@ -712,6 +735,67 @@ export class InspectionsAdminService {
     if (inspection.workflow_type === "compliance_wett" && inspection.compliance_status === "sent") {
       inspection.compliance_status = "incomplete";
     }
+    await this.inspectionsRepository.save(inspection);
+
+    return this.getWorkspace(inspectionId, scopedOrganizationId);
+  }
+
+  async archiveInspection(
+    inspectionId: string,
+    input: { reasonCode: string; reasonText: string },
+    actor: ActorContext,
+    organizationId: string,
+  ) {
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
+
+    if (inspection.archived_at) {
+      apiError(409, "inspection_already_archived", "Inspection is already archived.");
+    }
+
+    const reasonCode = input.reasonCode?.trim();
+    if (!reasonCode || !(inspectionArchiveReasonCodes as readonly string[]).includes(reasonCode)) {
+      apiError(400, "invalid_archive_reason_code", "reasonCode is invalid.");
+    }
+
+    const reasonText = input.reasonText?.trim() ?? "";
+    if (!reasonText) {
+      apiError(400, "invalid_archive_reason", "reasonText is required.");
+    }
+
+    const requiresStrongerReason = Boolean(
+      inspection.generated_pdf_at || inspection.sent_to_customer_at || inspection.locked_at,
+    );
+    const minLength = requiresStrongerReason ? 20 : 10;
+    if (reasonText.length < minLength) {
+      apiError(
+        400,
+        "invalid_archive_reason",
+        `reasonText must be at least ${minLength} characters for this report.`,
+      );
+    }
+
+    inspection.archived_at = new Date();
+    inspection.archived_by_user_id = actor.user.id;
+    inspection.archive_reason_code = reasonCode as InspectionArchiveReasonCode;
+    inspection.archive_reason = reasonText;
+    await this.inspectionsRepository.save(inspection);
+
+    return this.getWorkspace(inspectionId, scopedOrganizationId);
+  }
+
+  async restoreInspection(inspectionId: string, actor: ActorContext, organizationId: string) {
+    const scopedOrganizationId = this.requireOrganizationId(organizationId);
+    const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
+
+    if (!inspection.archived_at) {
+      apiError(409, "inspection_not_archived", "Inspection is not archived.");
+    }
+
+    inspection.archived_at = null;
+    inspection.archived_by_user_id = null;
+    inspection.archive_reason_code = null;
+    inspection.archive_reason = null;
     await this.inspectionsRepository.save(inspection);
 
     return this.getWorkspace(inspectionId, scopedOrganizationId);
@@ -731,6 +815,7 @@ export class InspectionsAdminService {
     if (inspection.locked_at) {
       apiError(409, "inspection_locked", "Inspection is locked and cannot be edited.");
     }
+    this.assertInspectionNotArchived(inspection);
     if (!field) {
       apiError(404, "inspection_required_field_not_found", "Inspection required field not found.");
     }
@@ -767,6 +852,7 @@ export class InspectionsAdminService {
     if (inspection.locked_at) {
       apiError(409, "inspection_locked", "Inspection is locked and cannot be edited.");
     }
+    this.assertInspectionNotArchived(inspection);
 
     if (input.gas_license_number !== undefined) {
       inspection.gas_license_number = input.gas_license_number?.trim() || null;
@@ -805,6 +891,7 @@ export class InspectionsAdminService {
     if (inspection.locked_at) {
       apiError(409, "inspection_locked", "Inspection is locked and cannot be edited.");
     }
+    this.assertInspectionNotArchived(inspection);
 
     if (!photo) {
       apiError(404, "inspection_photo_not_found", "Inspection photo not found.");
@@ -849,6 +936,7 @@ export class InspectionsAdminService {
     if (inspection.locked_at) {
       apiError(409, "inspection_locked", "Inspection is locked and cannot be edited.");
     }
+    this.assertInspectionNotArchived(inspection);
 
     if (!files.length) {
       apiError(400, "no_files_uploaded", "At least one image file is required.");
@@ -2669,6 +2757,12 @@ export class InspectionsAdminService {
       apiError(404, "inspection_not_found", "Inspection not found.");
     }
     return inspection;
+  }
+
+  private assertInspectionNotArchived(inspection: InspectionEntity) {
+    if (inspection.archived_at) {
+      apiError(409, "inspection_archived", "Inspection is archived and cannot be modified.");
+    }
   }
 
   private async loadPhotoAssetOrFail(storageKey: string, organizationId: string) {

@@ -36,6 +36,16 @@ export type InspectionReportType = (typeof inspectionReportTypes)[number];
 export const inspectionWorkflowTypes = ["safety_standard", "compliance_wett", "gas_simplified"] as const;
 export type InspectionWorkflowType = (typeof inspectionWorkflowTypes)[number];
 
+export const inspectionArchiveReasonCodes = [
+  "customer_repaired_issue",
+  "duplicate_report",
+  "created_by_mistake",
+  "superseded_by_new_inspection",
+  "internal_test",
+  "other",
+] as const;
+export type InspectionArchiveReasonCode = (typeof inspectionArchiveReasonCodes)[number];
+
 @Entity({ name: "inspections" })
 @Index("IDX_inspections_report_type_created_at", ["report_type", "created_at"])
 @Index("IDX_inspections_customer_created_at", ["customer_id", "created_at"])
@@ -143,6 +153,18 @@ export class InspectionEntity {
 
   @Column({ type: "datetime", precision: 6, nullable: true })
   locked_at!: Date | null;
+
+  @Column({ type: "datetime", precision: 6, nullable: true })
+  archived_at!: Date | null;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  archived_by_user_id!: string | null;
+
+  @Column({ type: "varchar", length: 64, nullable: true })
+  archive_reason_code!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  archive_reason!: string | null;
 
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;
