@@ -11,7 +11,8 @@ export default async function PricebookItemDetailPage({
   params: Promise<{ itemId: string }>;
 }) {
   const { itemId } = await params;
-  await requireServerSession(`/pricebook/${itemId}`);
+  const session = await requireServerSession(`/pricebook/${itemId}`);
+  const sessionRole = session.profile?.role ?? session.active_membership?.role ?? null;
 
   let item: PricebookItem | null = null;
 
@@ -31,5 +32,5 @@ export default async function PricebookItemDetailPage({
     notFound();
   }
 
-  return <PricebookForm mode="edit" initialItem={item} />;
+  return <PricebookForm mode="edit" initialItem={item} sessionRole={sessionRole} />;
 }
