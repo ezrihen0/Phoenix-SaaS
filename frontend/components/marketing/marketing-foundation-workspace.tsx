@@ -1,16 +1,16 @@
 import Link from "next/link";
-import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import {
-  BarChart3,
-  CalendarDays,
-  FilePenLine,
-  Lightbulb,
-  Link2,
-  Megaphone,
+  CheckCircle2,
+  ChevronRight,
+  Globe2,
   Rocket,
-  Settings2,
-  Workflow,
+  ShieldCheck,
+  Sparkles,
 } from "lucide-react";
+
+import { BoardShell } from "@/components/board/board-shell";
+import { MetricTile } from "@/components/board/metric-tile";
 
 import { MarketingAutomationsPanel } from "./marketing-automations-panel";
 import { MarketingAnalyticsPanel } from "./marketing-analytics-panel";
@@ -20,76 +20,26 @@ import { MarketingChannelsPanel } from "./marketing-channels-panel";
 import { MarketingContentStudio } from "./marketing-content-studio";
 import { MarketingOpportunitiesPanel } from "./marketing-opportunities-panel";
 import { MarketingProfileSettingsPanel } from "./marketing-profile-settings";
+import {
+  formatWorkflowBadge,
+  getLegacyRouteIcon,
+  getMarketingRoute,
+  isGrowthCenterProgramV1Complete,
+  LATER_GROWTH_ROADMAP,
+  MARKETING_ROUTES,
+  resolveHeroBody,
+  resolvePhaseBadge,
+  resolvePhaseLabel,
+  resolveSummaryCardIcon,
+  resolveSummaryCards,
+  START_HERE_STEPS,
+  type MarketingFoundationData,
+  type MarketingRouteKey,
+} from "./marketing-sections";
 
-export type MarketingRouteKey =
-  | "overview"
-  | "opportunities"
-  | "create"
-  | "calendar"
-  | "campaigns"
-  | "channels"
-  | "automations"
-  | "analytics"
-  | "settings";
+export type { MarketingFoundationData, MarketingRouteKey } from "./marketing-sections";
 
-export type MarketingFoundationData = {
-  phase:
-    | "growth_center_v1_program_complete"
-    | "phase_5_campaign_builder"
-    | "phase_4_crm_intelligence"
-    | "phase_3_publishing_integrations"
-    | "phase_2_content_studio";
-  capabilities?: {
-    can_manage_channels: boolean;
-    can_enqueue_publishing: boolean;
-    can_refresh_opportunities?: boolean;
-    can_mutate_campaigns?: boolean;
-  };
-  organization: {
-    id: string;
-    name: string | null;
-    slug: string | null;
-  };
-  profile_saved: boolean;
-  profile_hint_complete: boolean;
-  drafts: {
-    draft: number;
-    needs_review: number;
-    approved: number;
-    scheduled_metadata_next_14d: number;
-  };
-  opportunities?: {
-    open_count: number;
-  };
-  campaigns?: {
-    active_count: number;
-  };
-  recommended_next_action?: {
-    opportunity_type: string | null;
-    opportunity_id: string | null;
-    headline: string;
-    subheadline: string;
-    href: string | null;
-  } | null;
-  recent_drafts: Array<{
-    id: string;
-    title: string;
-    workflow_state: string;
-    updated_at: string;
-  }>;
-  summaryCards: Array<{
-    label: string;
-    value: string;
-    helper: string;
-  }>;
-  publishing_disclaimer: string;
-  protectedBoundaries: string[];
-  analytics_overview_pulse?: {
-    window_note: string;
-    terminal_publish_jobs_last_30d: number;
-    opportunities_updated_converted_last_30d: number;
-  };
-};
+export const SHOW_LEGACY_MARKETING = false;
 
 type MarketingFoundationWorkspaceProps = {
   activeRouteKey: MarketingRouteKey;
@@ -98,253 +48,11 @@ type MarketingFoundationWorkspaceProps = {
   studioDraftQuery?: string | null;
 };
 
-type RouteDefinition = {
-  key: MarketingRouteKey;
-  href: string;
-  label: string;
-  eyebrow: string;
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  includedNow: string[];
-  laterPhaseWork: string[];
-};
-
-const routeDefinitions: RouteDefinition[] = [
-  {
-    key: "overview",
-    href: "/marketing",
-    label: "Overview",
-    eyebrow: "Growth Center · Operating home",
-    title: "Office Growth Center pulse",
-    description:
-      "Session-scoped workspace for marketing profile, drafts, calendar metadata, OAuth channels, CRM opportunities, campaigns, automations, analytics, and explicit publish jobs — all organization-owned. Three clocks stay distinct: draft `scheduled_at` metadata, Growth Center `publish_job.scheduled_at` (UTC), and each provider’s UI.",
-    icon: Megaphone,
-    includedNow: [
-      "Foundation metrics, recent drafts, recommended next action, and Phase 7 analytics pulse strip",
-      "Publishing disclaimer and protected boundaries from authenticated foundation APIs",
-      "Single navigation rail into every Growth Center surface",
-    ],
-    laterPhaseWork: [
-      "Growth Center plan entitlements and commercial packaging (architecture only today)",
-      "Instagram outbound publishing (V1.5) and richer media workflows",
-    ],
-  },
-  {
-    key: "opportunities",
-    href: "/marketing/opportunities",
-    label: "Opportunities",
-    eyebrow: "Growth Intelligence",
-    title: "Operational signals → marketing drafts",
-    description:
-      "WizField scans recent jobs and inspection photo types (no media URLs surfaced) to suggest opportunities. Owners, admins, and office admins refresh, dismiss, archive, or convert to Content Studio drafts — dispatchers read only.",
-    icon: Lightbulb,
-    includedNow: [
-      "Core V1 detectors: work showcase, service momentum, local geographic density, before/after signal",
-      "Convert to Draft opens Content Studio with empty platform variants",
-      "Tenant-safe dedupe keyed per organization",
-    ],
-    laterPhaseWork: [
-      "Availability and premium invoice heuristics",
-      "Inbound review ingestion when CRM domain deepens",
-      "Tighter Opportunity → Campaign orchestration beyond informational entry points",
-    ],
-  },
-  {
-    key: "create",
-    href: "/marketing/create",
-    label: "Create",
-    eyebrow: "Content Studio",
-    title: "Draft compositions with seeded variants",
-    description:
-      "Create organization-owned drafts, edit Google Business Profile, Facebook, and Instagram copy tracks, submit for reviewer approval, and capture calendar metadata without implying outbound posting.",
-    icon: FilePenLine,
-    includedNow: [
-      "Sidebar draft list scoped to your active organization",
-      "Mandatory three-variant seeding on creation",
-      "Tabs per platform variant with explicit save actions",
-      "Workflow badges for draft, review, and approved states",
-    ],
-    laterPhaseWork: [
-      "Calendar drag-and-drop with conflict detection",
-      "Shared asset libraries and moderation tooling",
-      "Richer per-provider outbound validation as channels evolve",
-    ],
-  },
-  {
-    key: "calendar",
-    href: "/marketing/calendar",
-    label: "Calendar",
-    eyebrow: "Scheduling metadata",
-    title: "Calendar placeholders for planned posts",
-    description:
-      "Surface drafts carrying `scheduled_at` metadata grouped by UTC day. This grid is editorial context only — outbound execution always flows through explicit Growth Center publish jobs tied to channel targets.",
-    icon: CalendarDays,
-    includedNow: [
-      "Month grid powered by authenticated calendar API responses",
-      "Links back into `/marketing/create?draft=id` composer",
-      "UTC-normalized placeholders aligned with server contracts",
-    ],
-    laterPhaseWork: [
-      "Timezone-aware collaborator views",
-      "Conflict detection tied to staffing dispatch",
-      "Optional publish-attempt overlays on calendar reads",
-    ],
-  },
-  {
-    key: "campaigns",
-    href: "/marketing/campaigns",
-    label: "Campaigns",
-    eyebrow: "Campaign Builder",
-    title: "Objective-first plans with templated slots",
-    description:
-      "Create campaign shells with deterministic slots, optionally attach Content Studio drafts per slot, and close or archive plans without implying automatic outbound publishing. Slots never replace explicit publish jobs.",
-    icon: Rocket,
-    includedNow: [
-      "Canonical campaign kinds with seeded slot templates",
-      "Per-slot draft creation, attach existing drafts, or detach without deleting drafts",
-      "Optional bulk draft creation for empty slots",
-      "Terminal statuses lock structural edits; detach rules enforced server-side",
-    ],
-    laterPhaseWork: [
-      "Deeper Opportunity → Campaign workflows",
-      "Post-approval automation sequencing",
-      "Cross-channel readiness scoring inside campaigns",
-    ],
-  },
-  {
-    key: "channels",
-    href: "/marketing/channels",
-    label: "Channels",
-    eyebrow: "Publishing integrations",
-    title: "Google, Facebook, and deferred Instagram",
-    description:
-      "Connect Google Business Profile and a Facebook Page per organization. Tokens encrypt at rest; Instagram stays visibly deferred until Growth Center V1.5.",
-    icon: Link2,
-    includedNow: [
-      "Google + Meta OAuth handoffs with location/Page selection when multiple targets exist",
-      "Disconnect/reconnect flows scoped to owners and admins",
-      "Instagram card labeled Coming Soon without outbound IG calls",
-    ],
-    laterPhaseWork: [
-      "Instagram containers, media libraries, and IG publishing",
-      "Multi-location or multi-page management beyond MVP singles",
-      "Rich media payloads mapped per provider",
-    ],
-  },
-  {
-    key: "automations",
-    href: "/marketing/automations",
-    label: "Automations",
-    eyebrow: "Autopilot (V1)",
-    title: "Opportunity-triggered rules with safe actions",
-    description:
-      "Growth Center marketing automation—distinct from CRM operational rules under Automations in the main navigation. React to CRM opportunity signals; actions stay suggest-only or auto-create drafts in Content Studio—no auto-publish and no scheduled scanner triggers in V1.",
-    icon: Workflow,
-    includedNow: [
-      "Rules keyed to opportunity types surfaced in CRM Intelligence",
-      "Suggest-only and auto-create draft actions with idempotent runs",
-      "Dry-run preview and run history for auditors",
-    ],
-    laterPhaseWork: [
-      "Scheduled scanners and additional trigger families",
-      "Tighter orchestration between Growth Center campaigns and CRM operational triggers where product allows",
-      "Selective auto-publish only after explicit commercial and safety sign-off",
-    ],
-  },
-  {
-    key: "analytics",
-    href: "/marketing/analytics",
-    label: "Analytics",
-    eyebrow: "Operating visibility",
-    title: "Org-scoped Growth Center aggregates",
-    description:
-      "Bounded UTC windows summarize opportunities, drafts, campaigns, publish jobs and attempts, automations, channels, and workflow funnels. Metrics describe internal tooling — not ad ROI or organic reach.",
-    icon: BarChart3,
-    includedNow: [
-      "Preset ranges (last 7d / 30d / 90d) or explicit UTC calendar bounds with a maximum span clamp",
-      "Truthful disclaimers surfaced next to funnel approximations and attribution buckets",
-      "Dispatcher-safe read access aligned with Growth Center routing",
-      "Rolling last-30d pulse counters on Overview when foundation loads",
-    ],
-    laterPhaseWork: [
-      "Export and scheduled snapshots if product demands them",
-      "Deeper attribution once audited transition logs exist",
-      "Channel outcome metrics tied to provider insights where contracts allow",
-    ],
-  },
-  {
-    key: "settings",
-    href: "/marketing/settings",
-    label: "Settings",
-    eyebrow: "Marketing profile",
-    title: "Organization marketing profile persistence",
-    description:
-      "Capture identity, tone, publishing-adjacent CTA hints, and safety preferences as JSON-backed fragments validated on PATCH. Profiles load read-only projections without implicitly upserting rows.",
-    icon: Settings2,
-    includedNow: [
-      "Panels for Identity, Voice, Publishing preferences, Safety",
-      "GET renders canonical empty payloads until the first PATCH",
-      "Upsert-on-save respects organization ownership",
-      "No outbound channel configuration flows",
-    ],
-    laterPhaseWork: [
-      "Versioned approvals for profile changes",
-      "Template libraries per franchise group",
-      "Localization packs once multi-region campaigns matter",
-    ],
-  },
-];
-
-const fallbackSummaryCards: MarketingFoundationData["summaryCards"] = [
-  {
-    label: "Connected Channels",
-    value: "0",
-    helper:
-      "Google Business Profile and Facebook OAuth targets when connected. Instagram remains deferred until Growth Center V1.5.",
-  },
-  {
-    label: "Needs review",
-    value: "0",
-    helper: "Submit manual drafts whenever copy is ready for a second reviewer.",
-  },
-  {
-    label: "Calendar metadata slots",
-    value: "0",
-    helper: "Metadata-only placeholders for the next fourteen days.",
-  },
-  {
-    label: "Open opportunities",
-    value: "0",
-    helper: "CRM-backed suggestions from jobs and inspections (Phase 4).",
-  },
-  {
-    label: "Active campaigns",
-    value: "0",
-    helper: "Plans that reached active status after the first linked draft (Growth Center Phase 5).",
-  },
-];
-
-const laterGrowthRoadmap = [
-  "Instagram outbound publishing (Growth Center V1.5)",
-  "Scheduled or scanner-based automation triggers beyond opportunity V1",
-  "Growth Center commercial entitlements (Stripe plan ↔ capability matrix)",
-  "Analytics exports or rollups if operational scale demands them",
-];
-
-function isGrowthCenterProgramV1Complete(phase: MarketingFoundationData["phase"] | undefined): boolean {
-  return phase === "growth_center_v1_program_complete" || phase === "phase_5_campaign_builder";
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
 }
 
-function formatWorkflowBadge(raw: string) {
-  if (raw === "needs_review") {
-    return "Needs review";
-  }
-
-  return `${raw.slice(0, 1).toUpperCase()}${raw.slice(1)}`;
-}
-
-function SummaryCard({ label, value, helper }: MarketingFoundationData["summaryCards"][number]) {
+function SummaryCardLegacy({ label, value, helper }: MarketingFoundationData["summaryCards"][number]) {
   return (
     <article className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
       <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">{label}</p>
@@ -354,16 +62,497 @@ function SummaryCard({ label, value, helper }: MarketingFoundationData["summaryC
   );
 }
 
-export function MarketingFoundationWorkspace({
+function renderInteractivePanel(
+  activeRouteKey: MarketingRouteKey,
+  foundationData: MarketingFoundationData | null,
+  studioDraftQuery?: string | null,
+): ReactNode {
+  switch (activeRouteKey) {
+    case "settings":
+      return <MarketingProfileSettingsPanel />;
+    case "create":
+      return (
+        <MarketingContentStudio
+          studioDraftQuery={studioDraftQuery ?? undefined}
+          publishCapabilities={foundationData?.capabilities}
+        />
+      );
+    case "calendar":
+      return <MarketingCalendarPanel />;
+    case "channels":
+      return <MarketingChannelsPanel capabilities={foundationData?.capabilities} />;
+    case "opportunities":
+      return (
+        <MarketingOpportunitiesPanel
+          canMutateOpportunities={Boolean(foundationData?.capabilities?.can_refresh_opportunities)}
+        />
+      );
+    case "campaigns":
+      return (
+        <MarketingCampaignsPanel canMutateCampaigns={Boolean(foundationData?.capabilities?.can_mutate_campaigns)} />
+      );
+    case "automations":
+      return (
+        <MarketingAutomationsPanel
+          canMutateAutomations={Boolean(foundationData?.capabilities?.can_mutate_campaigns)}
+        />
+      );
+    case "analytics":
+      return <MarketingAnalyticsPanel />;
+    default:
+      return null;
+  }
+}
+
+function LegacyOverviewContent({ foundationData }: { foundationData: MarketingFoundationData }) {
+  return (
+    <div className="space-y-5">
+      <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
+        <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Scheduling + publishing stance</p>
+        <p className="mt-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{foundationData.publishing_disclaimer}</p>
+        <div className="mt-4 flex flex-wrap gap-3 text-xs text-[color:var(--sem-text-muted)]">
+          <span className="theme-control-surface-soft rounded-full border px-3 py-1">
+            Marketing profile:&nbsp;
+            <span className="font-semibold text-[color:var(--sem-text-primary)]">{foundationData.profile_saved ? "Saved" : "Not saved"}</span>
+          </span>
+          <span className="theme-control-surface-soft rounded-full border px-3 py-1">
+            Core fields hint:&nbsp;
+            <span className="font-semibold text-[color:var(--sem-text-primary)]">{foundationData.profile_hint_complete ? "Looks complete" : "Needs inputs"}</span>
+          </span>
+          <span className="theme-control-surface-soft rounded-full border px-3 py-1">
+            Workspace drafts:&nbsp;
+            <span className="font-semibold text-[color:var(--sem-text-primary)]">{(foundationData.recent_drafts ?? []).length} recent</span>
+          </span>
+        </div>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Link href="/marketing/settings" className="inline-flex rounded-full border border-transparent bg-[color:var(--sem-accent-primary)] px-4 py-2 text-xs font-semibold text-[color:var(--sem-text-inverse)]">Open Marketing Profile</Link>
+          <Link href="/marketing/create" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">Start manual draft</Link>
+          <Link href="/marketing/calendar" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">View calendar placeholders</Link>
+          <Link href="/marketing/opportunities" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">View opportunities</Link>
+          <Link href="/marketing/campaigns" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">View campaigns</Link>
+        </div>
+      </div>
+
+      {foundationData.analytics_overview_pulse ? (
+        <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
+          <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Analytics pulse (Growth Center internals)</p>
+          <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">{foundationData.analytics_overview_pulse.window_note}</p>
+          <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">Terminal publish jobs</dt>
+              <dd className="mt-2 text-2xl font-semibold tabular-nums text-[color:var(--sem-text-primary)]">{foundationData.analytics_overview_pulse.terminal_publish_jobs_last_30d}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">Opportunities → draft conversion (approx)</dt>
+              <dd className="mt-2 text-2xl font-semibold tabular-nums text-[color:var(--sem-text-primary)]">{foundationData.analytics_overview_pulse.opportunities_updated_converted_last_30d}</dd>
+            </div>
+          </dl>
+          <div className="mt-5">
+            <Link href="/marketing/analytics" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">Open Analytics</Link>
+          </div>
+        </div>
+      ) : null}
+
+      {foundationData.recommended_next_action ? (
+        <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-accent)]/35 bg-[color:var(--cmp-surface-card)] p-5">
+          <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Recommended next action</p>
+          <h3 className="mt-3 text-lg font-semibold text-[color:var(--sem-text-primary)]">{foundationData.recommended_next_action.headline}</h3>
+          <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{foundationData.recommended_next_action.subheadline}</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link href={foundationData.recommended_next_action.href ?? "/marketing/opportunities"} className="inline-flex rounded-full border border-transparent bg-[color:var(--sem-accent-primary)] px-4 py-2 text-xs font-semibold text-[color:var(--sem-text-inverse)]">Open opportunities</Link>
+          </div>
+        </div>
+      ) : null}
+
+      <RecentDraftsTable foundationData={foundationData} variant="legacy" />
+    </div>
+  );
+}
+
+function RecentDraftsTable({
+  foundationData,
+  variant,
+}: {
+  foundationData: MarketingFoundationData;
+  variant: "legacy" | "command";
+}) {
+  const rows = foundationData.recent_drafts ?? [];
+
+  if (variant === "command") {
+    return (
+      <section className="overflow-hidden rounded-[26px] border border-slate-200 bg-white">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Recent drafts</p>
+            <h3 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">Publishing desk</h3>
+          </div>
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">Foundation data</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-[0.22em] text-slate-500">
+              <tr>
+                <th className="px-5 py-4 font-semibold">Draft</th>
+                <th className="px-5 py-4 font-semibold">Workflow</th>
+                <th className="px-5 py-4 font-semibold">Updated</th>
+                <th className="px-5 py-4 text-right font-semibold">Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length ? (
+                rows.map((row) => (
+                  <tr key={row.id} className="border-b border-slate-100 last:border-b-0">
+                    <td className="px-5 py-4 font-semibold text-slate-950">
+                      <Link href={`/marketing/create?draft=${encodeURIComponent(row.id)}`} className="hover:underline">{row.title || "Untitled draft"}</Link>
+                    </td>
+                    <td className="px-5 py-4 text-slate-600">{formatWorkflowBadge(row.workflow_state)}</td>
+                    <td className="px-5 py-4 text-slate-500">{row.updated_at}</td>
+                    <td className="px-5 py-4 text-right">
+                      <Link href={`/marketing/create?draft=${encodeURIComponent(row.id)}`} className="font-semibold text-indigo-700 hover:underline">Edit</Link>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-500">No drafts yet. Use Content Studio when you&apos;re ready to capture platform-specific wording.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
+      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Recent draft activity</p>
+      <div className="mt-5 overflow-auto">
+        <table className="w-full min-w-[520px] text-left text-xs">
+          <thead className="text-[color:var(--sem-text-muted)]">
+            <tr className="border-b border-[color:var(--cmp-border-subtle)]">
+              <th className="py-2 font-medium">Draft</th>
+              <th className="py-2 font-medium">Workflow</th>
+              <th className="py-2 font-medium">Updated</th>
+              <th className="py-2 font-medium text-right">Open</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length ? (
+              rows.map((row) => (
+                <tr key={row.id} className="border-b border-[color:var(--cmp-border-subtle)] last:border-none">
+                  <td className="py-3 pr-3 align-top font-semibold text-[color:var(--sem-text-primary)]">
+                    <Link href={`/marketing/create?draft=${encodeURIComponent(row.id)}`} className="hover:underline">{row.title || "Untitled draft"}</Link>
+                  </td>
+                  <td className="py-3 pr-3 align-top text-[color:var(--sem-text-secondary)]">{formatWorkflowBadge(row.workflow_state)}</td>
+                  <td className="py-3 pr-3 align-top text-[color:var(--sem-text-muted)]">{row.updated_at}</td>
+                  <td className="py-3 text-right align-top">
+                    <Link href={`/marketing/create?draft=${encodeURIComponent(row.id)}`} className="font-semibold text-[color:var(--sem-accent-primary)]">Edit</Link>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-sm text-[color:var(--sem-text-muted)]">No drafts yet. Use Content Studio when you&apos;re ready to capture platform-specific wording.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function GrowthIntelligencePanel({ foundationData }: { foundationData: MarketingFoundationData | null }) {
+  const pulse = foundationData?.analytics_overview_pulse;
+  const boundaries = foundationData?.protectedBoundaries?.length
+    ? foundationData.protectedBoundaries
+    : [
+        "Growth Center mutations stay tenant scoped",
+        "Publishing remains explicit and user-approved",
+        "Analytics describe internal tooling — not ad ROI",
+      ];
+
+  return (
+    <section className="rounded-[26px] border border-violet-500/20 bg-violet-950/50 p-5 text-white shadow-[0_22px_60px_rgba(109,40,217,0.14)]">
+      <div className="flex items-start gap-4">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-300/25 bg-violet-300/10 text-violet-100">
+          <Sparkles className="h-6 w-6" />
+        </span>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-violet-100/70">WizField Growth Intelligence</p>
+          <h3 className="mt-2 text-xl font-semibold tracking-tight">Foundation pulse</h3>
+          <p className="mt-3 text-sm leading-6 text-violet-100/75">
+            Growth intelligence renders from real foundation and analytics signals only. Publishing remains explicit and user-approved.
+          </p>
+        </div>
+      </div>
+
+      {pulse ? (
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-violet-300/15 bg-black/20 p-3">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-violet-100/50">Terminal publish jobs</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums text-violet-50">{pulse.terminal_publish_jobs_last_30d}</p>
+            <p className="mt-2 text-xs text-violet-100/60">{pulse.window_note}</p>
+          </div>
+          <div className="rounded-2xl border border-violet-300/15 bg-black/20 p-3">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-violet-100/50">Opportunities converted (approx)</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums text-violet-50">{pulse.opportunities_updated_converted_last_30d}</p>
+            <p className="mt-2 text-xs text-violet-100/60">Use Analytics for detail.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {foundationData?.publishing_disclaimer ? (
+        <div className="mt-5 rounded-2xl border border-violet-300/15 bg-black/20 p-3">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-violet-100/50">Publishing stance</p>
+          <p className="mt-2 text-sm leading-6 text-violet-100/75">{foundationData.publishing_disclaimer}</p>
+        </div>
+      ) : null}
+
+      <ul className="mt-5 space-y-2 text-sm leading-6 text-violet-100/75">
+        {boundaries.slice(0, 4).map((item) => (
+          <li key={item} className="rounded-xl border border-violet-300/10 bg-black/15 px-3 py-2">{item}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function CommandOverviewContent({ foundationData }: { foundationData: MarketingFoundationData }) {
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="min-w-0 space-y-5">
+        {foundationData.recommended_next_action ? (
+          <div className="rounded-[26px] border border-emerald-200 bg-emerald-50 p-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-4">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-200 bg-white text-emerald-700">
+                  <Rocket className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700/70">Recommended action</p>
+                  <h3 className="mt-1 text-xl font-semibold tracking-tight text-emerald-950">{foundationData.recommended_next_action.headline}</h3>
+                  <p className="mt-2 text-sm leading-6 text-emerald-900/70">{foundationData.recommended_next_action.subheadline}</p>
+                </div>
+              </div>
+              <Link href={foundationData.recommended_next_action.href ?? "/marketing/opportunities"} className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-950 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-900">
+                Open opportunities
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        <section className="rounded-[26px] border border-slate-200 bg-slate-50 p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Start here</p>
+          <h3 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">Your first growth workflow</h3>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {START_HERE_STEPS.map((item) => (
+              <Link key={item.step} href={item.href} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-indigo-200 hover:shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Step {item.step}</p>
+                <p className="mt-2 text-sm font-semibold text-slate-950">{item.title}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{item.body}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <RecentDraftsTable foundationData={foundationData} variant="command" />
+
+        <section className="rounded-[26px] border border-slate-200 bg-white p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Profile readiness</p>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
+              Marketing profile: <span className="font-semibold text-slate-950">{foundationData.profile_saved ? "Saved" : "Not saved"}</span>
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
+              Core fields: <span className="font-semibold text-slate-950">{foundationData.profile_hint_complete ? "Looks complete" : "Needs inputs"}</span>
+            </span>
+          </div>
+        </section>
+      </div>
+
+      <aside className="space-y-5">
+        <GrowthIntelligencePanel foundationData={foundationData} />
+        <section className="rounded-[26px] border border-slate-200 bg-slate-50 p-5">
+          <ShieldCheck className="h-7 w-7 text-slate-700" />
+          <h4 className="mt-4 text-xl font-semibold tracking-tight text-slate-950">Protected boundaries</h4>
+          <p className="mt-3 text-sm leading-6 text-slate-600">Instagram remains deferred, automations suggest or create drafts only, and analytics show internal aggregates rather than ad ROI.</p>
+        </section>
+      </aside>
+    </div>
+  );
+}
+
+function MarketingCommandNav({ activeRouteKey }: { activeRouteKey: MarketingRouteKey }) {
+  return (
+    <nav className="overflow-x-auto rounded-[26px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-3 shadow-[0_20px_60px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)] backdrop-blur-xl">
+      <div className="flex min-w-max gap-2 pb-1">
+        {MARKETING_ROUTES.map((route) => {
+          const active = route.key === activeRouteKey;
+          const Icon = route.icon;
+
+          return (
+            <Link
+              key={route.key}
+              href={route.href}
+              className={cx(
+                "relative flex min-w-fit items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-semibold transition",
+                active
+                  ? "border-[color:var(--cmp-border-accent)] bg-white text-slate-950 shadow-[0_18px_50px_rgba(0,0,0,0.22)]"
+                  : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-secondary)] hover:bg-[color:var(--cmp-hover-surface)] hover:text-[color:var(--sem-text-primary)]",
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {route.label}
+              {active ? <span className="absolute inset-x-5 -bottom-[11px] h-0.5 rounded-full bg-[color:var(--sem-accent-primary)]" /> : null}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function GrowthCommandCenterWorkspace({
   activeRouteKey,
   foundationData,
   loadError,
   studioDraftQuery,
 }: MarketingFoundationWorkspaceProps) {
-  const route = routeDefinitions.find((definition) => definition.key === activeRouteKey) ?? routeDefinitions[0];
-  const Icon = route.icon;
-  const summaryCards =
-    foundationData?.summaryCards && foundationData.summaryCards.length ? foundationData.summaryCards : fallbackSummaryCards;
+  const route = getMarketingRoute(activeRouteKey);
+  const summaryCards = resolveSummaryCards(foundationData);
+  const organizationLabel =
+    foundationData?.organization.name
+    ?? foundationData?.organization.slug
+    ?? foundationData?.organization.id
+    ?? "Active organization";
+  const compactSubRoute = activeRouteKey !== "overview";
+  const phaseBadge = resolvePhaseBadge(foundationData?.phase);
+  const capabilities = foundationData?.capabilities;
+  const mutationGated = !capabilities?.can_mutate_campaigns && !capabilities?.can_refresh_opportunities && !capabilities?.can_manage_channels;
+
+  return (
+    <BoardShell gridOpacity="subtle">
+      <div className="mx-auto max-w-[1640px] px-5 py-6 lg:px-8">
+        {!compactSubRoute ? (
+          <header className="rounded-[34px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_30px_90px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)] backdrop-blur-xl">
+            <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-accent-primary)]">
+                    <Rocket className="h-5 w-5" />
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {phaseBadge}
+                  </span>
+                  <span className="rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-3 py-1 text-xs font-semibold text-[color:var(--sem-text-secondary)]">{organizationLabel}</span>
+                </div>
+                <h1 className="mt-5 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-display-headline)] md:text-5xl">Growth Command Center</h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+                  Coordinate drafts, opportunities, channels, campaigns, automation rules, and internal growth analytics without changing publishing semantics.
+                </p>
+                {loadError ? (
+                  <div className="theme-alert-error mt-4 rounded-[20px] border px-4 py-3 text-sm">{loadError}</div>
+                ) : null}
+              </div>
+              <div className="rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-4">
+                <div className="flex items-center gap-4">
+                  <Globe2 className="h-8 w-8 text-[color:var(--sem-accent-primary)]" />
+                  <div>
+                    <p className="font-semibold text-[color:var(--sem-display-headline)]">Authenticated Growth Center</p>
+                    <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">Org-scoped · {mutationGated ? "read-focused access" : "capability gated"}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </header>
+        ) : null}
+
+        <section className={cx("mt-5 grid gap-3", compactSubRoute ? "md:grid-cols-2 xl:grid-cols-5" : "md:grid-cols-2 xl:grid-cols-5")}>
+          {summaryCards.map((card) => (
+            compactSubRoute ? (
+              <article key={card.label} className="rounded-[24px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-3 shadow-[0_20px_60px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)] backdrop-blur-xl">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-accent-primary)]">
+                  {(() => {
+                    const Icon = resolveSummaryCardIcon(card.label);
+                    return <Icon className="h-4 w-4" />;
+                  })()}
+                </span>
+                <p className="mt-3 text-[10px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">{card.label}</p>
+                <p className="mt-1 text-xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">{card.value}</p>
+              </article>
+            ) : (
+              <MetricTile
+                key={card.label}
+                icon={resolveSummaryCardIcon(card.label)}
+                label={card.label}
+                value={card.value}
+                helper={card.helper}
+              />
+            )
+          ))}
+        </section>
+
+        <div className="mt-5">
+          <MarketingCommandNav activeRouteKey={activeRouteKey} />
+        </div>
+
+        {activeRouteKey === "overview" ? (
+          <section className="mt-5 overflow-hidden rounded-[34px] border border-slate-200 bg-slate-100 p-5 text-slate-950 shadow-[0_30px_90px_rgba(0,0,0,0.18)]">
+            <div className="mb-5 flex flex-col gap-3 border-b border-slate-200 pb-5 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Active workspace</p>
+                <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{route.label}</h2>
+                <p className="mt-2 text-sm text-slate-600">{route.navHelper}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{mutationGated ? "Read-focused" : "Capability gated"}</span>
+              </div>
+            </div>
+
+            {foundationData ? <CommandOverviewContent foundationData={foundationData} /> : (
+              <p className="text-sm text-slate-600">Foundation data is unavailable. Refresh after checking your session and organization context.</p>
+            )}
+          </section>
+        ) : (
+          <section className="mt-5 overflow-hidden rounded-[34px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 text-[color:var(--sem-text-primary)] shadow-[0_30px_90px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)] backdrop-blur-xl">
+            <div className="mb-5 flex flex-col gap-4 border-b border-[color:var(--cmp-border-subtle)] pb-5 md:flex-row md:items-start md:justify-between">
+              <div className="flex items-start gap-4">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-accent-primary)]">
+                  <route.icon className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{route.eyebrow}</p>
+                  <h2 className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">{route.title}</h2>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-[color:var(--sem-text-secondary)]">{route.description}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-3 py-1 text-xs font-semibold text-[color:var(--sem-text-secondary)]">{route.label}</span>
+                <span className="rounded-full border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] px-3 py-1 text-xs font-semibold text-[color:var(--sem-accent-primary)]">{mutationGated ? "Read-focused" : "Capability gated"}</span>
+              </div>
+            </div>
+
+            <div className="min-w-0">{renderInteractivePanel(activeRouteKey, foundationData, studioDraftQuery)}</div>
+          </section>
+        )}
+      </div>
+    </BoardShell>
+  );
+}
+
+function LegacyMarketingFoundationWorkspace({
+  activeRouteKey,
+  foundationData,
+  loadError,
+  studioDraftQuery,
+}: MarketingFoundationWorkspaceProps) {
+  const route = getMarketingRoute(activeRouteKey);
+  const Icon = getLegacyRouteIcon(activeRouteKey, route.icon);
+  const summaryCards = resolveSummaryCards(foundationData);
   const organizationLabel =
     foundationData?.organization.name
     ?? foundationData?.organization.slug
@@ -383,18 +572,8 @@ export function MarketingFoundationWorkspace({
   const suppressEducationalRails = interactiveRoutes.includes(activeRouteKey);
   const showPrimaryRail = activeRouteKey === "overview" || suppressEducationalRails;
   const compactSubRoute = activeRouteKey !== "overview";
-
   const programV1Complete = isGrowthCenterProgramV1Complete(foundationData?.phase);
-
-  const phaseLabel = programV1Complete
-    ? "Growth Center · Program V1 (Phases 1–7)"
-    : foundationData?.phase === "phase_4_crm_intelligence"
-      ? "Phase roll-out · Growth Intelligence Layer"
-      : foundationData?.phase === "phase_3_publishing_integrations"
-        ? "Phase roll-out · Publishing integrations"
-        : foundationData?.phase === "phase_2_content_studio"
-          ? "Phase roll-out · Content Studio"
-          : "Growth Center";
+  const phaseLabel = resolvePhaseLabel(foundationData?.phase);
   const heroEyebrow = programV1Complete
     ? "Growth Center · Program complete"
     : foundationData?.phase === "phase_4_crm_intelligence"
@@ -404,274 +583,35 @@ export function MarketingFoundationWorkspace({
         : foundationData?.phase === "phase_2_content_studio"
           ? "Content Studio online"
           : "Growth Center";
-  const heroBody = programV1Complete
-    ? "The full Growth Center stack is live: Marketing Profile and Content Studio, metadata calendar, Google and Facebook OAuth publishing with explicit UTC jobs, CRM opportunities, Campaign Builder, V1 automations (draft creation or suggestions only — never auto-publish without a future product decision), and honest internal analytics. Dispatchers read broadly; publishing, opportunity refresh, dismiss/archive/convert, campaigns, and automations mutations stay with owners, admins, and office admins. Draft scheduling metadata still never posts by itself."
-    : foundationData?.phase === "phase_4_crm_intelligence"
-      ? "CRM Intelligence turns recent completed jobs and inspection photo-type patterns into Growth Center opportunities. Convert to Draft hands off into Content Studio, campaigns, automations, and publishing when your role allows."
-      : foundationData?.phase === "phase_3_publishing_integrations"
-        ? "OAuth-backed Google Business Profile and Facebook Page targets feed explicit publish jobs. Draft calendar metadata never posts by itself."
-        : foundationData?.phase === "phase_2_content_studio"
-          ? "Capture office-side marketing posture, assemble multi-variant drafts manually, shepherd explicit review states, and book metadata-only placeholders."
-          : "Keep tenant-safe scaffolding online while phased capabilities roll forward.";
+  const heroBody = resolveHeroBody(foundationData?.phase);
 
   const renderPrimaryRail = () => {
-    switch (activeRouteKey) {
-      case "overview": {
-        return (
-          <>
-            {foundationData ? (
-              <div className="space-y-5">
-                <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
-                  <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">
-                    Scheduling + publishing stance
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                    {foundationData.publishing_disclaimer}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-3 text-xs text-[color:var(--sem-text-muted)]">
-                    <span className="theme-control-surface-soft rounded-full border px-3 py-1">
-                      Marketing profile:&nbsp;
-                      <span className="font-semibold text-[color:var(--sem-text-primary)]">
-                        {foundationData.profile_saved ? "Saved" : "Not saved"}
-                      </span>
-                    </span>
-                    <span className="theme-control-surface-soft rounded-full border px-3 py-1">
-                      Core fields hint:&nbsp;
-                      <span className="font-semibold text-[color:var(--sem-text-primary)]">
-                        {foundationData.profile_hint_complete ? "Looks complete" : "Needs inputs"}
-                      </span>
-                    </span>
-                    <span className="theme-control-surface-soft rounded-full border px-3 py-1">
-                      Workspace drafts:&nbsp;
-                      <span className="font-semibold text-[color:var(--sem-text-primary)]">
-                        {(foundationData.recent_drafts ?? []).length} recent
-                      </span>
-                    </span>
-                  </div>
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <Link
-                      href="/marketing/settings"
-                      className="inline-flex rounded-full border border-transparent bg-[color:var(--sem-accent-primary)] px-4 py-2 text-xs font-semibold text-[color:var(--sem-text-inverse)]"
-                    >
-                      Open Marketing Profile
-                    </Link>
-                    <Link
-                      href="/marketing/create"
-                      className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold"
-                    >
-                      Start manual draft
-                    </Link>
-                    <Link href="/marketing/calendar" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">
-                      View calendar placeholders
-                    </Link>
-                    <Link href="/marketing/opportunities" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">
-                      View opportunities
-                    </Link>
-                    <Link href="/marketing/campaigns" className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold">
-                      View campaigns
-                    </Link>
-                  </div>
-                </div>
-
-                {foundationData.analytics_overview_pulse ? (
-                  <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
-                    <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
-                      Analytics pulse (Growth Center internals)
-                    </p>
-                    <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">
-                      {foundationData.analytics_overview_pulse.window_note}
-                    </p>
-                    <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <dt className="text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
-                          Terminal publish jobs
-                        </dt>
-                        <dd className="mt-2 text-2xl font-semibold tabular-nums text-[color:var(--sem-text-primary)]">
-                          {foundationData.analytics_overview_pulse.terminal_publish_jobs_last_30d}
-                        </dd>
-                        <dd className="mt-2 text-xs text-[color:var(--sem-text-secondary)]">
-                          Jobs created in-window that reached succeeded, partial, failed, or canceled.
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
-                          Opportunities → draft conversion (approx)
-                        </dt>
-                        <dd className="mt-2 text-2xl font-semibold tabular-nums text-[color:var(--sem-text-primary)]">
-                          {foundationData.analytics_overview_pulse.opportunities_updated_converted_last_30d}
-                        </dd>
-                        <dd className="mt-2 text-xs text-[color:var(--sem-text-secondary)]">
-                          Rows marked converted within the window (`updated_at` semantics). Use Analytics for detail.
-                        </dd>
-                      </div>
-                    </dl>
-                    <div className="mt-5">
-                      <Link
-                        href="/marketing/analytics"
-                        className="theme-control-surface-soft inline-flex rounded-full border px-4 py-2 text-xs font-semibold"
-                      >
-                        Open Analytics
-                      </Link>
-                    </div>
-                  </div>
-                ) : null}
-
-                {foundationData.recommended_next_action ? (
-                  <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-accent)]/35 bg-[color:var(--cmp-surface-card)] p-5">
-                    <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
-                      Recommended next action
-                    </p>
-                    <h3 className="mt-3 text-lg font-semibold text-[color:var(--sem-text-primary)]">
-                      {foundationData.recommended_next_action.headline}
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                      {foundationData.recommended_next_action.subheadline}
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <Link
-                        href={foundationData.recommended_next_action.href ?? "/marketing/opportunities"}
-                        className="inline-flex rounded-full border border-transparent bg-[color:var(--sem-accent-primary)] px-4 py-2 text-xs font-semibold text-[color:var(--sem-text-inverse)]"
-                      >
-                        Open opportunities
-                      </Link>
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
-                        Recent draft activity
-                      </p>
-                      <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
-                        Every row opens the authenticated studio composer for manual edits only.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-5 overflow-auto">
-                    <table className="w-full min-w-[520px] text-left text-xs">
-                      <thead className="text-[color:var(--sem-text-muted)]">
-                        <tr className="border-b border-[color:var(--cmp-border-subtle)]">
-                          <th className="py-2 font-medium">Draft</th>
-                          <th className="py-2 font-medium">Workflow</th>
-                          <th className="py-2 font-medium">Updated</th>
-                          <th className="py-2 font-medium text-right">Open</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(foundationData.recent_drafts ?? []).length ? (
-                          foundationData.recent_drafts!.map((row) => (
-                            <tr key={row.id} className="border-b border-[color:var(--cmp-border-subtle)] last:border-none">
-                              <td className="py-3 pr-3 align-top font-semibold text-[color:var(--sem-text-primary)]">
-                                <Link href={`/marketing/create?draft=${encodeURIComponent(row.id)}`} className="hover:underline">
-                                  {row.title || "Untitled draft"}
-                                </Link>
-                              </td>
-                              <td className="py-3 pr-3 align-top text-[color:var(--sem-text-secondary)]">{formatWorkflowBadge(row.workflow_state)}</td>
-                              <td className="py-3 pr-3 align-top text-[color:var(--sem-text-muted)]">{row.updated_at}</td>
-                              <td className="py-3 text-right align-top">
-                                <Link href={`/marketing/create?draft=${encodeURIComponent(row.id)}`} className="font-semibold text-[color:var(--sem-accent-primary)]">
-                                  Edit
-                                </Link>
-                              </td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={4} className="py-6 text-center text-sm text-[color:var(--sem-text-muted)]">
-                              No drafts yet. Use Content Studio when you&apos;re ready to capture platform-specific wording.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </>
-        );
-      }
-
-      case "settings":
-        return <MarketingProfileSettingsPanel />;
-
-      case "create":
-        return (
-          <MarketingContentStudio
-            studioDraftQuery={studioDraftQuery ?? undefined}
-            publishCapabilities={foundationData?.capabilities}
-          />
-        );
-
-      case "calendar":
-        return <MarketingCalendarPanel />;
-
-      case "channels":
-        return <MarketingChannelsPanel capabilities={foundationData?.capabilities} />;
-
-      case "opportunities":
-        return (
-          <MarketingOpportunitiesPanel
-            canMutateOpportunities={Boolean(foundationData?.capabilities?.can_refresh_opportunities)}
-          />
-        );
-
-      case "campaigns":
-        return (
-          <MarketingCampaignsPanel canMutateCampaigns={Boolean(foundationData?.capabilities?.can_mutate_campaigns)} />
-        );
-
-      case "automations":
-        return (
-          <MarketingAutomationsPanel
-            canMutateAutomations={Boolean(foundationData?.capabilities?.can_mutate_campaigns)}
-          />
-        );
-
-      case "analytics":
-        return <MarketingAnalyticsPanel />;
-
-      default:
-        return null;
+    if (activeRouteKey === "overview") {
+      return foundationData ? <LegacyOverviewContent foundationData={foundationData} /> : null;
     }
+
+    return renderInteractivePanel(activeRouteKey, foundationData, studioDraftQuery);
   };
 
   return (
     <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
       <div className="mx-auto max-w-7xl space-y-6">
         {!compactSubRoute ? (
-        <section className="theme-surface-modal overflow-hidden rounded-[34px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-7 sm:p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-4xl">
-              <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">
-                {heroEyebrow}
-              </p>
-              <p className="mt-4 text-[10px] uppercase tracking-[0.4em] text-[color:var(--sem-text-muted)]">{phaseLabel}</p>
-              <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
-                Growth Center
-              </h1>
-              <p className="mt-4 text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-                {heroBody}
-              </p>
+          <section className="theme-surface-modal overflow-hidden rounded-[34px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-7 sm:p-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-4xl">
+                <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">{heroEyebrow}</p>
+                <p className="mt-4 text-[10px] uppercase tracking-[0.4em] text-[color:var(--sem-text-muted)]">{phaseLabel}</p>
+                <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">Growth Center</h1>
+                <p className="mt-4 text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">{heroBody}</p>
+              </div>
+              <div className="theme-control-surface-soft rounded-[24px] border px-5 py-4 text-sm">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Active organization</p>
+                <p className="mt-2 text-base font-semibold text-[color:var(--sem-text-primary)]">{organizationLabel}</p>
+              </div>
             </div>
-
-            <div className="theme-control-surface-soft rounded-[24px] border px-5 py-4 text-sm">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Active organization</p>
-              <p className="mt-2 text-base font-semibold text-[color:var(--sem-text-primary)]">{organizationLabel}</p>
-              <p className="mt-2 text-xs leading-5 text-[color:var(--sem-text-secondary)]">
-                Every route and persisted record honors server-enforced organization context.
-              </p>
-            </div>
-          </div>
-
-          {loadError ? (
-            <div className="theme-alert-error mt-6 rounded-[20px] border px-4 py-3 text-sm">
-              {loadError}
-            </div>
-          ) : null}
-        </section>
+            {loadError ? <div className="theme-alert-error mt-6 rounded-[20px] border px-4 py-3 text-sm">{loadError}</div> : null}
+          </section>
         ) : (
           <section className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-5 py-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -685,37 +625,29 @@ export function MarketingFoundationWorkspace({
         )}
 
         {!compactSubRoute ? (
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          {summaryCards.map((card) => (
-            <SummaryCard key={card.label} {...card} />
-          ))}
-        </section>
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            {summaryCards.map((card) => (
+              <SummaryCardLegacy key={card.label} {...card} />
+            ))}
+          </section>
         ) : null}
 
         <section className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Route family</p>
-              <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Growth Center navigation</h2>
-            </div>
-            <span className="theme-badge rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.18em]">
-              9 routes
-            </span>
-          </div>
-
           <div className="mt-5 flex flex-wrap gap-2">
-            {routeDefinitions.map((definition) => {
+            {MARKETING_ROUTES.map((definition) => {
               const active = definition.key === activeRouteKey;
+              const NavIcon = getLegacyRouteIcon(definition.key, definition.icon);
+
               return (
                 <Link
                   key={definition.key}
                   href={definition.href}
-                  className={[
+                  className={cx(
                     active ? "theme-selected-card" : "theme-control-surface-soft",
                     "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
-                  ].join(" ")}
+                  )}
                 >
-                  <definition.icon className="h-3.5 w-3.5" />
+                  <NavIcon className="h-3.5 w-3.5" />
                   <span>{definition.label}</span>
                 </Link>
               );
@@ -744,20 +676,15 @@ export function MarketingFoundationWorkspace({
                   <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Included now</p>
                   <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
                     {route.includedNow.map((item) => (
-                      <li key={item} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
-                        {item}
-                      </li>
+                      <li key={item} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">{item}</li>
                     ))}
                   </ul>
                 </div>
-
                 <div className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
                   <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Later approved work</p>
                   <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
                     {route.laterPhaseWork.map((item) => (
-                      <li key={item} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
-                        {item}
-                      </li>
+                      <li key={item} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">{item}</li>
                     ))}
                   </ul>
                 </div>
@@ -769,14 +696,11 @@ export function MarketingFoundationWorkspace({
             <article className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
               <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Approved future Growth Center work</p>
               <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                {laterGrowthRoadmap.map((phase) => (
-                  <li key={phase} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
-                    {phase}
-                  </li>
+                {LATER_GROWTH_ROADMAP.map((phase) => (
+                  <li key={phase} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">{phase}</li>
                 ))}
               </ul>
             </article>
-
             <article className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
               <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Protected boundaries</p>
               <ul className="mt-4 space-y-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
@@ -785,9 +709,7 @@ export function MarketingFoundationWorkspace({
                   "Session actor supplies organization identifiers",
                   "No delegated publish jobs in Phase 2",
                 ]).map((item) => (
-                  <li key={item} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
-                    {item}
-                  </li>
+                  <li key={item} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">{item}</li>
                 ))}
               </ul>
             </article>
@@ -796,4 +718,12 @@ export function MarketingFoundationWorkspace({
       </div>
     </main>
   );
+}
+
+export function MarketingFoundationWorkspace(props: MarketingFoundationWorkspaceProps) {
+  if (SHOW_LEGACY_MARKETING) {
+    return <LegacyMarketingFoundationWorkspace {...props} />;
+  }
+
+  return <GrowthCommandCenterWorkspace {...props} />;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { Save } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { MarketingProfilePayload } from "@/lib/marketing/client-marketing";
@@ -55,8 +56,13 @@ function sliceFrom(profile: MarketingProfilePayload | null): FormSlices {
   };
 }
 
-const input =
-  "mt-2 w-full rounded-[16px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-2 text-sm outline-none ring-0 placeholder:text-[color:var(--sem-text-muted)] focus:border-[color:var(--cmp-border-accent)]";
+const inputClassName =
+  "theme-control-surface mt-2 w-full rounded-[16px] border px-3 py-2.5 text-sm text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)] focus-visible:ring-2 focus-visible:ring-[color:var(--cmp-focus-ring)]";
+
+const fieldsetClassName =
+  "rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-5 py-4";
+
+const legendClassName = "px-2 text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]";
 
 export function MarketingProfileSettingsPanel() {
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -121,18 +127,16 @@ export function MarketingProfileSettingsPanel() {
         <div className="theme-alert-error rounded-[20px] border px-4 py-3 text-sm">{loadError}</div>
       ) : null}
 
-      <p className="text-xs leading-5 text-[color:var(--sem-text-muted)]">{statusLine}</p>
+      <p className="rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-3 text-xs leading-5 text-[color:var(--sem-text-muted)]">{statusLine}</p>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <fieldset className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-5 py-4">
-          <legend className="px-2 text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">
-            Identity
-          </legend>
+        <fieldset className={fieldsetClassName}>
+          <legend className={legendClassName}>Identity</legend>
           <div className="mt-4 space-y-4">
             <label className="block text-sm text-[color:var(--sem-text-secondary)]">
               <span className="font-medium text-[color:var(--sem-text-primary)]">Display name</span>
               <input
-                className={input}
+                className={inputClassName}
                 value={form.identity.display_name}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -145,7 +149,7 @@ export function MarketingProfileSettingsPanel() {
             <label className="block text-sm text-[color:var(--sem-text-secondary)]">
               <span className="font-medium text-[color:var(--sem-text-primary)]">Tagline</span>
               <input
-                className={input}
+                className={inputClassName}
                 value={form.identity.tagline}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -159,7 +163,7 @@ export function MarketingProfileSettingsPanel() {
               <span className="font-medium text-[color:var(--sem-text-primary)]">Service area notes</span>
               <textarea
                 rows={3}
-                className={[input, "min-h-[88px]"].join(" ")}
+                className={[inputClassName, "min-h-[88px]"].join(" ")}
                 value={form.identity.service_area_notes}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -172,16 +176,14 @@ export function MarketingProfileSettingsPanel() {
           </div>
         </fieldset>
 
-        <fieldset className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-5 py-4">
-          <legend className="px-2 text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">
-            Brand voice
-          </legend>
+        <fieldset className={fieldsetClassName}>
+          <legend className={legendClassName}>Brand voice</legend>
           <div className="mt-4 space-y-4">
             <label className="block text-sm text-[color:var(--sem-text-secondary)]">
               <span className="font-medium text-[color:var(--sem-text-primary)]">Tone keywords</span>
               <textarea
                 rows={2}
-                className={[input, "min-h-[72px]"].join(" ")}
+                className={[inputClassName, "min-h-[72px]"].join(" ")}
                 value={form.brand_voice.tone_keywords}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -194,7 +196,7 @@ export function MarketingProfileSettingsPanel() {
             <label className="block text-sm text-[color:var(--sem-text-secondary)]">
               <span className="font-medium text-[color:var(--sem-text-primary)]">Formality</span>
               <input
-                className={input}
+                className={inputClassName}
                 value={form.brand_voice.formality}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -208,7 +210,7 @@ export function MarketingProfileSettingsPanel() {
               <span className="font-medium text-[color:var(--sem-text-primary)]">Persona notes</span>
               <textarea
                 rows={3}
-                className={[input, "min-h-[88px]"].join(" ")}
+                className={[inputClassName, "min-h-[88px]"].join(" ")}
                 value={form.brand_voice.persona_notes}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -221,19 +223,17 @@ export function MarketingProfileSettingsPanel() {
           </div>
         </fieldset>
 
-        <fieldset className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-5 py-4">
-          <legend className="px-2 text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">
-            Default CTAs
-          </legend>
+        <fieldset className={fieldsetClassName}>
+          <legend className={legendClassName}>Default CTAs</legend>
           <p className="mt-4 text-xs leading-5 text-[color:var(--sem-text-muted)]">
-            Stored as publishing-adjacent preferences only. Phase 2 does not post to channels.
+            Stored as publishing-adjacent preferences only. Outbound posting always requires an explicit publish job.
           </p>
           <div className="mt-4 space-y-4">
             <label className="block text-sm text-[color:var(--sem-text-secondary)]">
               <span className="font-medium text-[color:var(--sem-text-primary)]">Primary CTA pattern</span>
               <textarea
                 rows={2}
-                className={[input, "min-h-[72px]"].join(" ")}
+                className={[inputClassName, "min-h-[72px]"].join(" ")}
                 value={form.publishing_preferences.default_cta_primary}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -250,7 +250,7 @@ export function MarketingProfileSettingsPanel() {
               <span className="font-medium text-[color:var(--sem-text-primary)]">Secondary CTA pattern</span>
               <textarea
                 rows={2}
-                className={[input, "min-h-[72px]"].join(" ")}
+                className={[inputClassName, "min-h-[72px]"].join(" ")}
                 value={form.publishing_preferences.default_cta_secondary}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -267,7 +267,7 @@ export function MarketingProfileSettingsPanel() {
               <span className="font-medium text-[color:var(--sem-text-primary)]">Link policy notes</span>
               <textarea
                 rows={2}
-                className={[input, "min-h-[72px]"].join(" ")}
+                className={[inputClassName, "min-h-[72px]"].join(" ")}
                 value={form.publishing_preferences.link_policy_notes}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -283,16 +283,14 @@ export function MarketingProfileSettingsPanel() {
           </div>
         </fieldset>
 
-        <fieldset className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-5 py-4">
-          <legend className="px-2 text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">
-            Safety
-          </legend>
+        <fieldset className={fieldsetClassName}>
+          <legend className={legendClassName}>Safety</legend>
           <div className="mt-4 space-y-4">
             <label className="block text-sm text-[color:var(--sem-text-secondary)]">
               <span className="font-medium text-[color:var(--sem-text-primary)]">Restricted terms list</span>
               <textarea
                 rows={3}
-                className={[input, "min-h-[88px]"].join(" ")}
+                className={[inputClassName, "min-h-[88px]"].join(" ")}
                 value={form.safety_preferences.restricted_terms_text}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -308,7 +306,7 @@ export function MarketingProfileSettingsPanel() {
             <label className="block text-sm text-[color:var(--sem-text-secondary)]">
               <span className="font-medium text-[color:var(--sem-text-primary)]">Disclaimer posture</span>
               <input
-                className={input}
+                className={inputClassName}
                 value={form.safety_preferences.disclaimer_mode}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -325,7 +323,7 @@ export function MarketingProfileSettingsPanel() {
               <span className="font-medium text-[color:var(--sem-text-primary)]">Extra guidelines</span>
               <textarea
                 rows={3}
-                className={[input, "min-h-[88px]"].join(" ")}
+                className={[inputClassName, "min-h-[88px]"].join(" ")}
                 value={form.safety_preferences.extra_guidelines}
                 onChange={(evt) =>
                   setForm((prior) => ({
@@ -343,12 +341,12 @@ export function MarketingProfileSettingsPanel() {
         <div className="theme-alert-error rounded-[20px] border px-4 py-3 text-sm">{saveError}</div>
       ) : null}
 
-      <div className="flex justify-end gap-3">
+      <div className="sticky bottom-0 flex flex-wrap justify-end gap-3 rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
         <button
           type="button"
           disabled={Boolean(loadError) || saving}
           onClick={() => void loadProfile()}
-          className="theme-control-surface-soft rounded-[18px] border px-5 py-2 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)]"
+          className="theme-control-surface-soft rounded-[18px] border px-5 py-2.5 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)]"
         >
           Reset
         </button>
@@ -356,8 +354,9 @@ export function MarketingProfileSettingsPanel() {
           type="button"
           disabled={Boolean(loadError) || saving}
           onClick={() => void handleSave()}
-          className="rounded-[18px] border border-transparent bg-[color:var(--sem-accent-primary)] px-5 py-2 text-sm font-semibold text-[color:var(--sem-text-inverse)] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-[18px] border border-transparent bg-[color:var(--sem-accent-primary)] px-5 py-2.5 text-sm font-semibold text-[color:var(--sem-text-inverse)] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         >
+          <Save className="h-4 w-4" />
           {saving ? "Saving…" : "Save profile"}
         </button>
       </div>
