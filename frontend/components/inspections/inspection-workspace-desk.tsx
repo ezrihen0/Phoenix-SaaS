@@ -115,15 +115,16 @@ export function InspectionWorkspaceDesk(props: InspectionWorkspaceDeskProps) {
       />
 
       <div className={inspectionOpsZoneClass()}>
-        {props.error ? <p className="theme-alert-error rounded-[20px] border px-4 py-3 text-sm">{props.error}</p> : null}
+        <div className="mx-auto w-full max-w-[1320px] space-y-5">
+          {props.error ? <p className="theme-alert-error rounded-[20px] border px-4 py-3 text-sm">{props.error}</p> : null}
 
-        {!props.canManage ? (
-          <p className="theme-alert-warning rounded-[20px] border px-4 py-3 text-sm">
-            Read-only view{props.sessionRole ? ` (${props.sessionRole})` : ""}. Changes require inspections.admin permission.
-          </p>
-        ) : null}
+          {!props.canManage ? (
+            <p className="theme-alert-warning rounded-[20px] border px-4 py-3 text-sm">
+              Read-only view{props.sessionRole ? ` (${props.sessionRole})` : ""}. Changes require inspections.admin permission.
+            </p>
+          ) : null}
 
-        <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)_390px]">
+          <div className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)_360px] xl:items-start xl:justify-center">
           <InspectionSectionRail
             sections={props.workspace.sections}
             activeSectionKey={props.activeSectionKey}
@@ -197,6 +198,7 @@ export function InspectionWorkspaceDesk(props: InspectionWorkspaceDeskProps) {
             onDownloadPdf={props.onDownloadPdf}
             onRequiredFieldBlur={props.onRequiredFieldBlur}
           />
+          </div>
         </div>
       </div>
     </InspectionCommandShell>

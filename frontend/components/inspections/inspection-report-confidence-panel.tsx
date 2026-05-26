@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AlertTriangle,
   CheckCircle2,
   FileCheck2,
   FileText,
@@ -80,15 +79,11 @@ export function InspectionReportConfidencePanel({
   const locked = Boolean(workspace.inspectionMeta.locked_at);
   const generated = Boolean(workspace.inspectionMeta.generated_pdf_at || workspace.inspectionMeta.generated_pdf_url);
   const workflow = workspace.inspectionMeta.workflow_type;
-  const gateBlocked = !liveClientScoreOrCompliance.can_generate;
-  const confidencePanelClass = gateBlocked
-    ? `${inspectionPanelClass()} ring-2 ring-[color:var(--cmp-status-warning-border)]`
-    : inspectionPanelClass();
 
   return (
     <aside className="space-y-4 overflow-auto">
-      <section className={confidencePanelClass}>
-        <div className={`${inspectionPanelHeaderClass()} ${gateBlocked ? "theme-alert-warning border-b" : ""}`}>
+      <section className={inspectionPanelClass()}>
+        <div className={inspectionPanelHeaderClass()}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-accent-primary)]">
@@ -137,16 +132,7 @@ export function InspectionReportConfidencePanel({
             <div className="theme-alert-success rounded-2xl border p-4">
               <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /><p className="text-sm font-semibold">Ready to generate PDF</p></div>
             </div>
-          ) : (
-            <div className="theme-alert-warning rounded-2xl border p-4">
-              <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" /><p className="text-sm font-semibold">Generate blocked by real gate</p></div>
-              {liveClientScoreOrCompliance.gate_errors.length ? (
-                <ul className="mt-3 space-y-2 text-xs leading-5">
-                  {liveClientScoreOrCompliance.gate_errors.map((gateError) => <li key={gateError}>• {gateError}</li>)}
-                </ul>
-              ) : null}
-            </div>
-          )}
+          ) : null}
 
           {workflow === "gas_simplified" ? (
             <div className="theme-control-surface space-y-2 rounded-2xl p-4">

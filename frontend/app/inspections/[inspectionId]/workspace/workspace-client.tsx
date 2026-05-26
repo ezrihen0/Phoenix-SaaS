@@ -747,7 +747,7 @@ export default function InspectionWorkspaceClient({ inspectionId, permissions, s
   const generateRemainingCount = liveClientScoreOrCompliance.gate_errors.length;
   const generateDisabledTooltip = generateDisabled
     ? generateRemainingCount > 0
-      ? `${generateRemainingCount} item${generateRemainingCount === 1 ? "" : "s"} remaining`
+      ? liveClientScoreOrCompliance.gate_errors.join("\n")
       : workspace?.inspectionMeta.is_internal_draft
         ? "Internal drafts must be converted before generating."
         : "Generate report is not available yet."
