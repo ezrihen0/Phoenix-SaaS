@@ -1,7 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
-
 export function formatSectionLabel(sectionKey: string) {
   const sectionLabels: Record<string, string> = {
     appliance_condition: "Fireplace / Interior",
@@ -34,9 +32,9 @@ export function reportTypeLabel(reportType: string) {
 }
 
 export function workflowTypeLabel(workflowType: string) {
-  if (workflowType === "compliance_wett") return "WETT Site Basic / Compliance";
-  if (workflowType === "gas_simplified") return "Gas Simplified";
-  if (workflowType === "safety_standard") return "Standard Safety";
+  if (workflowType === "compliance_wett") return "WETT Site Basic";
+  if (workflowType === "gas_simplified") return "Gas Workflow";
+  if (workflowType === "safety_standard") return "Safety Standard";
   return workflowType.replaceAll("_", " ");
 }
 
@@ -69,6 +67,39 @@ export function jurisdictionLabel(provinceCode?: string | null, countryCode?: st
   return "No jurisdiction";
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  pass: "Pass",
+  warning: "Warning",
+  fail: "Fail",
+  generated: "Generated",
+  sent: "Marked sent",
+  locked: "Locked",
+  draft: "Draft",
+  satisfactory: "Satisfactory",
+  unsatisfactory: "Unsatisfactory",
+  na: "N/A",
+  compliance_wett: "WETT Site Basic",
+  gas_simplified: "Gas Workflow",
+  safety_standard: "Safety Standard",
+};
+
+export function inspectionStatusLabel(raw: string | null | undefined) {
+  const normalized = String(raw || "").trim().toLowerCase();
+  if (!normalized) {
+    return "Draft";
+  }
+  if (STATUS_LABELS[normalized]) {
+    return STATUS_LABELS[normalized];
+  }
+  if (normalized.includes("compliance_wett") || normalized === "wett") {
+    return "WETT Site Basic";
+  }
+  return normalized
+    .split("_")
+    .map((segment) => `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`)
+    .join(" ");
+}
+
 type StatusPillProps = {
   status: string | null | undefined;
   className?: string;
@@ -76,46 +107,18 @@ type StatusPillProps = {
 
 export function StatusPill({ status, className = "" }: StatusPillProps) {
   const normalized = String(status || "").toLowerCase();
-  let tone = "border-amber-200 bg-amber-50 text-amber-800";
+  let tone = "border-[color:var(--cmp-status-warning-border)] bg-[color:var(--cmp-status-warning-bg)] text-[color:var(--cmp-status-warning-text)]";
 
-  if (normalized.includes("pass") || normalized.includes("generated") || normalized.includes("sent") || normalized.includes("complete") || normalized.includes("ready")) {
-    tone = "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (normalized.includes("pass") || normalized.includes("generated") || normalized.includes("sent") || normalized.includes("complete") || normalized.includes("ready") || normalized.includes("satisfactory")) {
+    tone = "border-[color:var(--cmp-status-success-border)] bg-[color:var(--cmp-status-success-bg)] text-[color:var(--cmp-status-success-text)]";
   } else if (normalized.includes("fail") || normalized.includes("blocked") || normalized.includes("unsatisfactory")) {
-    tone = "border-rose-200 bg-rose-50 text-rose-700";
+    tone = "border-[color:var(--cmp-status-error-border)] bg-[color:var(--cmp-status-error-bg)] text-[color:var(--cmp-status-error-text)]";
   }
 
   return (
     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${tone} ${className}`}>
-      {status || "draft"}
+      {inspectionStatusLabel(status)}
     </span>
-  );
-}
-
-export function MetricCard({
-  label,
-  value,
-  note,
-  tone = "zinc",
-}: {
-  label: string;
-  value: ReactNode;
-  note: string;
-  tone?: "zinc" | "rose" | "amber" | "emerald";
-}) {
-  const toneClass = tone === "rose"
-    ? "text-rose-600"
-    : tone === "amber"
-      ? "text-amber-600"
-      : tone === "emerald"
-        ? "text-emerald-600"
-        : "text-zinc-950";
-
-  return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-400">{label}</p>
-      <p className={`mt-2 font-mono text-2xl font-bold ${toneClass}`}>{value}</p>
-      <p className="mt-2 text-xs leading-5 text-zinc-500">{note}</p>
-    </div>
   );
 }
 

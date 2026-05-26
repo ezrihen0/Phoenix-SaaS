@@ -50,34 +50,31 @@ const REPORT_TYPE_OPTIONS: Array<{ id: InspectionType; label: string; helper: st
   { id: "gas", label: "Gas", helper: "Gas fireplace simplified workflow" },
 ];
 
+const fieldLabelClass = "text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]";
+
 export function InspectionCreateModal(props: InspectionCreateModalProps) {
   if (!props.open) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4">
-      <section className="max-h-[90vh] w-full max-w-[760px] overflow-y-auto rounded-[22px] border border-zinc-200 bg-white p-5 shadow-2xl">
-        <div className="flex items-center justify-between gap-3">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <section className="theme-surface-modal max-h-[90vh] w-full max-w-[760px] overflow-y-auto rounded-[28px] border border-[color:var(--cmp-border-subtle)] p-6 shadow-[0_36px_120px_rgba(0,0,0,0.45)]">
+        <div className="flex items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] pb-4">
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-400">New inspection</p>
-            <h2 className="text-lg font-semibold text-zinc-950">Create inspection record</h2>
+            <p className={fieldLabelClass}>New inspection</p>
+            <h2 className="text-lg font-semibold text-[color:var(--sem-text-primary)]">Create inspection record</h2>
           </div>
-          <button
-            type="button"
-            className="rounded-xl border border-zinc-200 px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-50"
-            onClick={props.onClose}
-            disabled={props.createBusy}
-          >
+          <button type="button" className="theme-btn-ghost rounded-xl px-3 py-1 text-xs" onClick={props.onClose} disabled={props.createBusy}>
             Close
           </button>
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="space-y-2 md:col-span-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Source</span>
+            <span className={fieldLabelClass}>Source</span>
             <select
-              className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none focus:border-zinc-400"
+              className="theme-input-control h-10 w-full rounded-xl px-3 text-sm"
               value={props.createSource}
               onChange={(event) => props.onCreateSourceChange(event.target.value as InspectionSource)}
               disabled={props.createBusy || !props.canManage}
@@ -90,7 +87,7 @@ export function InspectionCreateModal(props: InspectionCreateModalProps) {
           </label>
 
           <div className="space-y-2 md:col-span-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Report type</span>
+            <span className={fieldLabelClass}>Report type</span>
             <div className="grid gap-2 sm:grid-cols-3">
               {REPORT_TYPE_OPTIONS.map((option) => {
                 const active = props.inspectionType === option.id;
@@ -100,10 +97,10 @@ export function InspectionCreateModal(props: InspectionCreateModalProps) {
                     type="button"
                     disabled={props.createBusy || !props.canManage}
                     onClick={() => props.onInspectionTypeChange(option.id)}
-                    className={`rounded-xl border p-3 text-left transition ${active ? "border-zinc-900 bg-zinc-950 text-white" : "border-zinc-200 bg-zinc-50 text-zinc-700 hover:border-zinc-300"}`}
+                    className={`rounded-xl border p-3 text-left transition ${active ? "theme-selected-card" : "theme-control-surface hover:border-[color:var(--cmp-border-accent)]"}`}
                   >
                     <p className="text-sm font-semibold">{option.label}</p>
-                    <p className={`mt-1 text-[11px] leading-5 ${active ? "text-zinc-300" : "text-zinc-500"}`}>{option.helper}</p>
+                    <p className="mt-1 text-[11px] leading-5 text-[color:var(--sem-text-secondary)]">{option.helper}</p>
                   </button>
                 );
               })}
@@ -111,7 +108,7 @@ export function InspectionCreateModal(props: InspectionCreateModalProps) {
           </div>
 
           <div className="md:col-span-2">
-            <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs leading-5 text-zinc-600">
+            <p className="theme-control-surface rounded-xl px-3 py-2 text-xs leading-5 text-[color:var(--sem-text-secondary)]">
               {props.createSource === "internal_draft"
                 ? "Internal Draft / Not Sendable. Generate and mark-sent stay blocked until conversion."
                 : "Search and select by public references. Internal UUIDs stay hidden."}
@@ -121,24 +118,24 @@ export function InspectionCreateModal(props: InspectionCreateModalProps) {
           {props.createSource === "new_customer" ? (
             <>
               <label className="space-y-2">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">First Name</span>
-                <input className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm" value={props.newFirstName} onChange={(e) => props.onNewFirstNameChange(e.target.value)} disabled={props.createBusy} />
+                <span className={fieldLabelClass}>First Name</span>
+                <input className="theme-input-control h-10 w-full rounded-xl px-3 text-sm" value={props.newFirstName} onChange={(e) => props.onNewFirstNameChange(e.target.value)} disabled={props.createBusy} />
               </label>
               <label className="space-y-2">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Last Name</span>
-                <input className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm" value={props.newLastName} onChange={(e) => props.onNewLastNameChange(e.target.value)} disabled={props.createBusy} />
+                <span className={fieldLabelClass}>Last Name</span>
+                <input className="theme-input-control h-10 w-full rounded-xl px-3 text-sm" value={props.newLastName} onChange={(e) => props.onNewLastNameChange(e.target.value)} disabled={props.createBusy} />
               </label>
               <label className="space-y-2">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Phone</span>
-                <input className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm" value={props.newPhone} onChange={(e) => props.onNewPhoneChange(e.target.value)} disabled={props.createBusy} />
+                <span className={fieldLabelClass}>Phone</span>
+                <input className="theme-input-control h-10 w-full rounded-xl px-3 text-sm" value={props.newPhone} onChange={(e) => props.onNewPhoneChange(e.target.value)} disabled={props.createBusy} />
               </label>
               <label className="space-y-2">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Email</span>
-                <input className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm" value={props.newEmail} onChange={(e) => props.onNewEmailChange(e.target.value)} disabled={props.createBusy} />
+                <span className={fieldLabelClass}>Email</span>
+                <input className="theme-input-control h-10 w-full rounded-xl px-3 text-sm" value={props.newEmail} onChange={(e) => props.onNewEmailChange(e.target.value)} disabled={props.createBusy} />
               </label>
               <label className="space-y-2 md:col-span-2">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Property Address</span>
-                <input className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm" value={props.newPropertyAddress} onChange={(e) => props.onNewPropertyAddressChange(e.target.value)} disabled={props.createBusy} />
+                <span className={fieldLabelClass}>Property Address</span>
+                <input className="theme-input-control h-10 w-full rounded-xl px-3 text-sm" value={props.newPropertyAddress} onChange={(e) => props.onNewPropertyAddressChange(e.target.value)} disabled={props.createBusy} />
               </label>
             </>
           ) : null}
@@ -146,17 +143,17 @@ export function InspectionCreateModal(props: InspectionCreateModalProps) {
           {props.createSource === "existing_customer" ? (
             <>
               <label className="space-y-2 md:col-span-2">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Customer Search</span>
+                <span className={fieldLabelClass}>Customer Search</span>
                 <input
-                  className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                  className="theme-input-control h-10 w-full rounded-xl px-3 text-sm"
                   placeholder="Min 2 chars: name, phone, email"
                   value={props.customerQuery}
                   onChange={(e) => props.onCustomerQueryChange(e.target.value)}
                   disabled={props.createBusy}
                 />
-                {props.customerSearchBusy ? <p className="text-xs text-zinc-500">Searching customers...</p> : null}
+                {props.customerSearchBusy ? <p className="text-xs text-[color:var(--sem-text-secondary)]">Searching customers...</p> : null}
                 {props.selectedCustomer ? (
-                  <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800">
+                  <p className="theme-alert-success rounded-xl px-2 py-1 text-xs">
                     Selected: {props.selectedCustomer.full_name} · {props.selectedCustomer.phone}
                   </p>
                 ) : null}
@@ -165,7 +162,7 @@ export function InspectionCreateModal(props: InspectionCreateModalProps) {
                     <button
                       key={customer.id}
                       type="button"
-                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-left text-xs hover:bg-zinc-100"
+                      className="theme-control-surface w-full rounded-xl px-3 py-2 text-left text-xs hover:border-[color:var(--cmp-border-accent)]"
                       onClick={() => props.onSelectCustomer(customer)}
                     >
                       {customer.full_name} · {customer.phone}{customer.email ? ` · ${customer.email}` : ""}
@@ -174,25 +171,25 @@ export function InspectionCreateModal(props: InspectionCreateModalProps) {
                 </div>
               </label>
               <label className="space-y-2 md:col-span-2">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Property Address (Optional Override)</span>
-                <input className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm" value={props.propertyAddress} onChange={(e) => props.onPropertyAddressChange(e.target.value)} disabled={props.createBusy} />
+                <span className={fieldLabelClass}>Property Address (Optional Override)</span>
+                <input className="theme-input-control h-10 w-full rounded-xl px-3 text-sm" value={props.propertyAddress} onChange={(e) => props.onPropertyAddressChange(e.target.value)} disabled={props.createBusy} />
               </label>
             </>
           ) : null}
 
           {props.createSource === "existing_job" ? (
             <label className="space-y-2 md:col-span-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Job Search</span>
+              <span className={fieldLabelClass}>Job Search</span>
               <input
-                className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                className="theme-input-control h-10 w-full rounded-xl px-3 text-sm"
                 placeholder="Min 2 chars: job code, customer, phone, address"
                 value={props.jobQuery}
                 onChange={(e) => props.onJobQueryChange(e.target.value)}
                 disabled={props.createBusy}
               />
-              {props.jobSearchBusy ? <p className="text-xs text-zinc-500">Searching jobs...</p> : null}
+              {props.jobSearchBusy ? <p className="text-xs text-[color:var(--sem-text-secondary)]">Searching jobs...</p> : null}
               {props.selectedJob ? (
-                <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800">
+                <p className="theme-alert-success rounded-xl px-2 py-1 text-xs">
                   Selected Job Number: {props.selectedJob.job_code} · Invoice: {props.selectedJob.invoice_number}
                 </p>
               ) : null}
@@ -201,7 +198,7 @@ export function InspectionCreateModal(props: InspectionCreateModalProps) {
                   <button
                     key={job.id}
                     type="button"
-                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-left text-xs hover:bg-zinc-100"
+                    className="theme-control-surface w-full rounded-xl px-3 py-2 text-left text-xs hover:border-[color:var(--cmp-border-accent)]"
                     onClick={() => props.onSelectJob(job)}
                   >
                     Job {job.job_code} · {job.customer_name} · {job.customer_phone}
@@ -216,19 +213,19 @@ export function InspectionCreateModal(props: InspectionCreateModalProps) {
           ) : null}
 
           {props.createSource === "internal_draft" ? (
-            <p className="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <p className="theme-alert-warning md:col-span-2 rounded-xl border px-3 py-2 text-xs">
               Internal Draft / Not Sendable. Workspace and preview are available, but Generate/Mark sent stay blocked until conversion.
             </p>
           ) : null}
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" className="rounded-xl border border-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50" onClick={props.onClose} disabled={props.createBusy}>
+          <button type="button" className="theme-btn-secondary rounded-xl px-4 py-2 text-sm" onClick={props.onClose} disabled={props.createBusy}>
             Cancel
           </button>
           <button
             type="button"
-            className="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+            className="theme-btn-primary rounded-2xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
             onClick={props.onCreate}
             disabled={props.createBusy || !props.canManage}
           >
