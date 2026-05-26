@@ -422,7 +422,9 @@ function OwnerExecutiveDesk({
                 <p className={`mt-1 text-sm ${executiveBodyClass}`}>{t("officeDescription")}</p>
               </div>
             </div>
-            <ExecutiveBadge tone="blue">{t("liveDashboardSnapshot")}</ExecutiveBadge>
+            {officeDashboard ? (
+              <ExecutiveBadge tone="blue">{t("liveDashboardSnapshot")}</ExecutiveBadge>
+            ) : null}
           </div>
         </header>
 
@@ -496,26 +498,30 @@ function OwnerExecutiveDesk({
 
             <div className="mt-6 grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
               <div className="space-y-6">
-                <ControlListPanel
-                  title={t("panels.revenuePressure.title")}
-                  subtitle={t("panels.revenuePressure.subtitle")}
-                  items={officeDashboard.controls.unpaidInvoices}
-                  tone="red"
-                  icon={Receipt}
-                  fallbackHref="/invoices"
-                  emptyLabel={t("panels.revenuePressure.empty")}
-                  openLabel={t("panels.open")}
-                />
-                <ControlListPanel
-                  title={t("panels.salesDesk.title")}
-                  subtitle={t("panels.salesDesk.subtitle")}
-                  items={officeDashboard.controls.quotesWaitingApproval}
-                  tone="amber"
-                  icon={FileText}
-                  fallbackHref="/estimates"
-                  emptyLabel={t("panels.salesDesk.empty")}
-                  openLabel={t("panels.open")}
-                />
+                {canAccessShellHref("/invoices", role) ? (
+                  <ControlListPanel
+                    title={t("panels.revenuePressure.title")}
+                    subtitle={t("panels.revenuePressure.subtitle")}
+                    items={officeDashboard.controls.unpaidInvoices}
+                    tone="red"
+                    icon={Receipt}
+                    fallbackHref="/invoices"
+                    emptyLabel={t("panels.revenuePressure.empty")}
+                    openLabel={t("panels.open")}
+                  />
+                ) : null}
+                {canAccessShellHref("/estimates", role) ? (
+                  <ControlListPanel
+                    title={t("panels.salesDesk.title")}
+                    subtitle={t("panels.salesDesk.subtitle")}
+                    items={officeDashboard.controls.quotesWaitingApproval}
+                    tone="amber"
+                    icon={FileText}
+                    fallbackHref="/estimates"
+                    emptyLabel={t("panels.salesDesk.empty")}
+                    openLabel={t("panels.open")}
+                  />
+                ) : null}
               </div>
               <div className="space-y-6">
                 <HomeIntelligenceStrip brief={brainHomeBrief} variant="executive" />

@@ -784,7 +784,8 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
   const session = await requireServerPermission("/calls", "calls.view");
 
   const resolvedSearchParams = await searchParams;
-  const canManageCrmFromCalls = session.profile?.role === "office_admin";
+  const callsRole = session.profile?.role;
+  const canManageCrmFromCalls = callsRole === "owner" || callsRole === "office_admin";
   const q = (firstValue(resolvedSearchParams.q) ?? "").trim();
   const callStatus = (firstValue(resolvedSearchParams.callStatus) ?? "").trim();
   const selectedCallId = (firstValue(resolvedSearchParams.call) ?? "").trim();

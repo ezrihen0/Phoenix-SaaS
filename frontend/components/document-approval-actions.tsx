@@ -109,7 +109,7 @@ export default function DocumentApprovalActions({
   const isBusy = isSubmitting || isPending;
 
   return (
-    <section className="theme-surface-card mt-6 rounded-[28px] border border-[color:var(--cmp-border-subtle)] p-5 print:hidden">
+    <section id="document-approval-controls" className="theme-surface-card mt-6 rounded-[28px] border border-[color:var(--cmp-border-subtle)] p-5 print:hidden">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Approval & Signature</p>

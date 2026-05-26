@@ -377,6 +377,12 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
 
   const activeSection = visibleSections.find((section) => section.id === selectedTopic) ?? null;
   const activeLabels = activeSection ? resolveSectionLabels(activeSection, t) : null;
+  const lockedDeepLinkSection = selectedTopic && !ownerMode
+    ? SETTINGS_SECTIONS.find((section) => section.id === selectedTopic && section.ownerOnlyNav) ?? null
+    : null;
+  const lockedDeepLinkLabels = lockedDeepLinkSection
+    ? resolveSectionLabels(lockedDeepLinkSection, t)
+    : null;
 
   const metrics = useMemo(
     () => resolveSettingsMetrics({
@@ -514,6 +520,25 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
                   </div>
                 </div>
                 {selectedTopic ? renderSettingsPanel(selectedTopic, panelContext) : null}
+              </>
+            ) : lockedDeepLinkSection && lockedDeepLinkLabels ? (
+              <>
+                <div className="mb-5 flex flex-col gap-3 border-b border-[color:var(--cmp-border-subtle)] pb-5 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--sem-text-muted)]">{t("currentWorkspace")}</p>
+                    <h2 className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">{lockedDeepLinkLabels.label}</h2>
+                    <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">{lockedDeepLinkLabels.helper}</p>
+                  </div>
+                  <span className="rounded-full border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] px-3 py-1 text-xs font-semibold capitalize text-[color:var(--sem-accent-primary)]">
+                    {t("roleBadge", { role: formatRoleLabel(role) })}
+                  </span>
+                </div>
+                <SettingsLockedState
+                  icon={CreditCard}
+                  eyebrow={lockedDeepLinkLabels.label}
+                  title={t("billing.ownerOnlyTitle")}
+                  body={t("billing.ownerOnlyBody", { role: formatRoleLabel(role) })}
+                />
               </>
             ) : (
               <section className="rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-6 text-sm leading-6 text-[color:var(--sem-text-secondary)]">

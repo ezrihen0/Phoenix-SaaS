@@ -481,7 +481,7 @@ function AiFollowUpAssistantPanel({
 }
 
 export default async function EstimatesPage({ searchParams }: EstimatesPageContext) {
-  await requireServerRoles("/estimates", ["owner", "office_admin", "technician"]);
+  await requireServerRoles("/estimates", ["owner", "admin", "office_admin", "technician"]);
   const locale = await getLocale();
   const t = await getTranslations("estimatesPage");
 

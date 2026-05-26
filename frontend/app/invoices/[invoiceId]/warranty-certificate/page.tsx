@@ -89,6 +89,7 @@ export default async function WarrantyCertificatePage({
 
   await requireServerRoles(`/invoices/${invoiceId}/warranty-certificate`, [
     "owner",
+    "admin",
     "office_admin",
     "dispatcher",
     "technician",

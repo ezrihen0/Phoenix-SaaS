@@ -62,7 +62,7 @@ function formatPersistedStatus(status: EstimateStatus) {
 }
 
 export default async function EstimateDetailPage({ params }: EstimateDetailPageProps) {
-  await requireServerRoles("/estimates", ["owner", "office_admin", "technician"]);
+  await requireServerRoles("/estimates", ["owner", "admin", "office_admin", "technician"]);
   const { estimateId } = await params;
 
   let estimate: EstimateDetailRecord | null = null;

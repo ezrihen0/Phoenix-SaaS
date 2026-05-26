@@ -267,6 +267,7 @@ export default async function InvoiceDetailPage({
 
   const session = await requireServerRoles(`/invoices/${invoiceId}`, [
     "owner",
+    "admin",
     "office_admin",
     "dispatcher",
     "technician",

@@ -404,6 +404,7 @@ const messages = {
     actions: "Actions",
     previewPdf: "Preview",
     requestSignature: "Request Signature",
+    openApprovalSignature: "Approval & signature",
     sendingSms: "Sending SMS...",
     loading: "Loading...",
   },
@@ -552,6 +553,8 @@ const messages = {
       title: "Subscription and business limits",
       helper: "Plan, subscription, limits, and Stripe checkout for the shared billing account.",
       loadError: "Billing summary could not be loaded.",
+      ownerOnlyTitle: "Billing is owner-only",
+      ownerOnlyBody: "Your current role is {role}. Subscription and billing controls appear here after this account is promoted to owner.",
     },
     languages: {
       label: "Languages",

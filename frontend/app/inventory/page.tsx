@@ -10,7 +10,13 @@ import type {
 } from "@/lib/crm/inventory-model";
 
 export default async function InventoryPage() {
-  const session = await requireServerRoles("/inventory", ["owner", "office_admin", "dispatcher", "technician"]);
+  const session = await requireServerRoles("/inventory", [
+    "owner",
+    "admin",
+    "office_admin",
+    "dispatcher",
+    "technician",
+  ]);
   const role = session.profile?.role ?? null;
 
   let itemsResult: InventoryListResult = { items: [], totalCount: 0 };

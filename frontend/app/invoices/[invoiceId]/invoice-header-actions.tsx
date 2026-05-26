@@ -447,11 +447,14 @@ export default function InvoiceHeaderActions({
                 role="menuitem"
                 onClick={() => {
                   setIsActionsOpen(false);
-                  void refreshInvoiceForCompose();
+                  document.getElementById("document-approval-controls")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
                 }}
                 className="flex w-full items-center rounded-[12px] px-3 py-2 text-left text-sm text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-surface-soft)] hover:text-[color:var(--sem-text-primary)]"
               >
-                {t("requestSignature")}
+                {t("openApprovalSignature")}
               </button>
             </div>
           ) : null}

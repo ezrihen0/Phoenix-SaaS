@@ -28,6 +28,7 @@ const ROLES_MARKETING_AND_LEGACY_AUTOMATIONS: ReadonlySet<ShellNavRole> = new Se
 
 const ROLES_INVOICES: ReadonlySet<ShellNavRole> = new Set([
   "owner",
+  "admin",
   "office_admin",
   "dispatcher",
   "technician",
@@ -35,12 +36,18 @@ const ROLES_INVOICES: ReadonlySet<ShellNavRole> = new Set([
 
 const ROLES_INVENTORY: ReadonlySet<ShellNavRole> = new Set([
   "owner",
+  "admin",
   "office_admin",
   "dispatcher",
   "technician",
 ]);
 
-const ROLES_ESTIMATES: ReadonlySet<ShellNavRole> = new Set(["owner", "office_admin", "technician"]);
+const ROLES_ESTIMATES: ReadonlySet<ShellNavRole> = new Set([
+  "owner",
+  "admin",
+  "office_admin",
+  "technician",
+]);
 
 /** Matches `requireOfficeCrmRoute`: technician is redirected away from office CRM list routes */
 export function isOfficeCrmNavRole(role: ShellNavRole | null): boolean {

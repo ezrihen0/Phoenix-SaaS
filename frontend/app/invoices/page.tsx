@@ -485,7 +485,14 @@ function PaymentAssistantPanel({
 }
 
 export default async function InvoicesPage({ searchParams }: InvoicesPageContext) {
-  await requireServerRoles("/invoices", ["owner", "office_admin", "dispatcher", "technician"]);
+  const session = await requireServerRoles("/invoices", [
+    "owner",
+    "admin",
+    "office_admin",
+    "dispatcher",
+    "technician",
+  ]);
+  const canCreateInvoice = ["owner", "office_admin", "technician"].includes(session.profile?.role ?? "");
   const locale = await getLocale();
   const t = await getTranslations("invoicesPage");
 
@@ -859,10 +866,12 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
                 <Sparkles className="h-4 w-4" />
                 {t("paymentAssistant")}
               </Link>
-              <Link href="/invoices/new" className="theme-btn-primary flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold">
-                <Plus className="h-4 w-4" />
-                {t("newInvoice")}
-              </Link>
+              {canCreateInvoice ? (
+                <Link href="/invoices/new" className="theme-btn-primary flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold">
+                  <Plus className="h-4 w-4" />
+                  {t("newInvoice")}
+                </Link>
+              ) : null}
             </div>
           </div>
         </header>
