@@ -10,6 +10,27 @@ import {
   type ThemeId,
 } from "@/components/theme-runtime";
 
+const THEME_DISPLAY: Record<
+  ThemeId,
+  { label: string; description: string; swatches: string[] }
+> = {
+  "ash-rose": {
+    label: "Hardware / Cyber",
+    description: "Deep navy canvas with cyan and violet neon accents for the command floor.",
+    swatches: ["#0B0F19", "#10172A", "#00F0FF", "#7000FF"],
+  },
+  "brown-cream": {
+    label: "Hardware / Obsidian",
+    description: "Obsidian hardware shell with mint primary and indigo secondary highlights.",
+    swatches: ["#05070C", "#0D121E", "#00F5A0", "#4D00FF"],
+  },
+  "fire-ember": {
+    label: "Software Focus",
+    description: "Light workspace mode with indigo and cyan accents for extended desk work.",
+    swatches: ["#F8FAFC", "#FFFFFF", "#6366F1", "#06B6D4"],
+  },
+};
+
 export function ThemeAppearanceSelector() {
   const [selectedTheme, setSelectedTheme] = useState<ThemeId>(DEFAULT_THEME);
 
@@ -35,6 +56,7 @@ export function ThemeAppearanceSelector() {
         <div className="grid gap-3">
           {THEME_OPTIONS.map((option) => {
             const selected = selectedTheme === option.id;
+            const display = THEME_DISPLAY[option.id];
 
             return (
               <label
@@ -55,18 +77,18 @@ export function ThemeAppearanceSelector() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{option.label}</p>
+                      <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{display.label}</p>
                       {selected ? (
                         <span className="theme-badge inline-flex rounded-full px-2 py-1 text-[10px] uppercase tracking-[0.18em]">
                           Active
                         </span>
                       ) : null}
                     </div>
-                    <p className="text-sm text-[color:var(--sem-text-secondary)]">{option.description}</p>
+                    <p className="text-sm text-[color:var(--sem-text-secondary)]">{display.description}</p>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {option.swatches.map((swatch) => (
+                    {display.swatches.map((swatch) => (
                       <span
                         key={swatch}
                         aria-hidden="true"

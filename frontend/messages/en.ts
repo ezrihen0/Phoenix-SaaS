@@ -76,13 +76,13 @@ const messages = {
     empty: "Nothing to show yet.",
   },
   home: {
-    title: "Operations home",
+    title: "Operations Home",
     subtitle: "Home",
     officeDescription:
-      "Tiles summarize today's intake, workload, and billing health whenever the dashboard responds. Jump to operations is always available for one-click entry into the modules that matter now.",
+      "Live business pressure from this workspace. No noise. Only the next move.",
     technicianDescription:
       "Your field queue and job progress live below. Open any job card for full detail, field notes, and status - your shortcuts stay on this board between visits.",
-    liveDashboardSnapshot: "Live dashboard snapshot",
+    liveDashboardSnapshot: "Live snapshot",
     technicianBoard: "Technician board",
     loadError: "Office dashboard data is unavailable right now.",
     todayFocus: "Today Focus",
@@ -92,9 +92,56 @@ const messages = {
     quickLinksDescription: "Open the module behind each snapshot metric without hunting the sidebar.",
     firstSessionTip: "First session tip: Start in Leads to capture your first lead, then continue to Jobs, Estimate, and Invoice.",
     tapToExpand: "Tap to expand",
-    commandFloorEyebrow: "Owner command floor",
-    intelligenceEyebrow: "Intelligence briefing",
-    intelligenceUnavailable: "Live briefing is temporarily unavailable. Your KPI tiles and command zones below remain active.",
+    commandFloorEyebrow: "Owner Command Floor",
+    intelligenceEyebrow: "Executive Brief",
+    intelligenceMeta: "Next moves · deterministic rules · {mode}",
+    intelligenceUnavailable: "Executive brief is temporarily unavailable. KPI tape and control panels below remain active.",
+    explainAction: "Why we show this",
+    businessTape: {
+      title: "Business Tape",
+      source: "Derived from dashboard",
+    },
+    pressureIndex: {
+      title: "Business depth",
+      subtitle: "Pressure Index",
+    },
+    panels: {
+      open: "Open",
+      revenuePressure: {
+        title: "Revenue pressure",
+        subtitle: "Collections desk",
+        empty: "No unpaid invoices are in the queue.",
+      },
+      salesDesk: {
+        title: "Quote approval pressure",
+        subtitle: "Sales desk",
+        empty: "No quotes are waiting approval.",
+      },
+      jobBoard: {
+        title: "Today's job board",
+        subtitle: "Operations desk",
+        empty: "No jobs are scheduled today.",
+      },
+      commsQueue: {
+        title: "Follow-up queue",
+        subtitle: "Comms desk",
+        empty: "No follow-ups are waiting for office action.",
+      },
+    },
+    desks: {
+      revenue: {
+        title: "Revenue Desk",
+        subtitle: "Invoices, estimates, and cash recovery",
+      },
+      operations: {
+        title: "Operations Desk",
+        subtitle: "Jobs, schedule, and field movement",
+      },
+      comms: {
+        title: "Comms Desk",
+        subtitle: "Calls, SMS, and customer follow-up",
+      },
+    },
     zones: {
       revenue: "Revenue",
       operations: "Operations",
@@ -103,23 +150,23 @@ const messages = {
     summary: {
       newLeads: {
         label: "New Leads",
-        helper: "Fresh leads captured today.",
+        helper: "Fresh pipeline entries.",
       },
       contactedLeads: {
         label: "Contacted Leads",
-        helper: "Leads actively followed up.",
+        helper: "Pipeline already touched.",
       },
       scheduledToday: {
         label: "Scheduled Today",
-        helper: "Jobs currently scheduled for today.",
+        helper: "Jobs on today's board.",
       },
       activeJobs: {
         label: "Active Jobs",
-        helper: "Open operational workload in progress.",
+        helper: "Open work in motion.",
       },
       unpaidInvoices: {
         label: "Unpaid Invoices",
-        helper: "Invoices still pending payment.",
+        helper: "Cash requiring action.",
       },
     },
     tech: {

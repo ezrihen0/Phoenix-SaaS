@@ -4,23 +4,23 @@
 :root[data-theme="brown-cream"] {
   color-scheme: dark;
 
-  /* Layer 1: Theme mode */
+  /* Layer 1: Theme mode — Hardware / Obsidian */
   --theme-name: brown-cream;
-  --theme-tone-1: #1A120B;
-  --theme-tone-2: #3C2A21;
-  --theme-tone-3: #D5CEA3;
-  --theme-tone-4: #E5E5CB;
+  --theme-tone-1: #05070C;
+  --theme-tone-2: #0D121E;
+  --theme-tone-3: #00F5A0;
+  --theme-tone-4: #FFFFFF;
   --background: var(--theme-tone-1);
-  --foreground: color-mix(in srgb, white 84%, var(--theme-tone-4) 16%);
+  --foreground: #FFFFFF;
 
   /* Layer 2: Foundations */
   --flat-canvas: var(--theme-tone-1);
   --flat-panel: color-mix(in srgb, var(--theme-tone-2) 78%, black 22%);
   --flat-border: color-mix(in srgb, white 8%, var(--theme-tone-4) 18%);
-  --flat-emerald: #50c878;
+  --flat-emerald: #00F5A0;
   --flat-gold: var(--theme-tone-3);
-  --flat-blue: color-mix(in srgb, #6aa8ff 56%, var(--theme-tone-4) 44%);
-  --flat-coral: color-mix(in srgb, #f87171 62%, var(--theme-tone-4) 38%);
+  --flat-blue: #4D00FF;
+  --flat-coral: #f87171;
 
   --fdn-color-neutral-980: color-mix(in srgb, var(--theme-tone-1) 92%, black 8%);
   --fdn-color-neutral-950: var(--theme-tone-1);
@@ -36,8 +36,8 @@
   --fdn-color-emerald-500: #50c878;
   --fdn-color-gold-500: var(--theme-tone-3);
   --fdn-color-gold-400: color-mix(in srgb, var(--theme-tone-4) 68%, var(--theme-tone-3) 32%);
-  --fdn-color-blue-500: color-mix(in srgb, #6aa8ff 56%, var(--theme-tone-4) 44%);
-  --fdn-color-amber-500: color-mix(in srgb, var(--theme-tone-3) 78%, #ffbd59 22%);
+  --fdn-color-blue-500: #4D00FF;
+  --fdn-color-amber-500: color-mix(in srgb, var(--theme-tone-3) 72%, #fbbf24 28%);
   --fdn-color-red-500: #ef4444;
 
   --fdn-alpha-white-02: rgba(255, 255, 255, 0.02);
@@ -75,9 +75,10 @@
 
   /* Trading-floor board tokens (Layer 3 extension) */
   --sem-display-headline: var(--sem-text-primary);
-  --sem-board-glass: color-mix(in srgb, var(--sem-surface-panel) 88%, transparent);
-  --sem-board-grid: color-mix(in srgb, white 5%, transparent);
-  --sem-board-border: var(--sem-border-subtle);
+  --sem-board-glass: color-mix(in srgb, var(--sem-surface-panel) 72%, transparent);
+  --sem-board-grid: color-mix(in srgb, var(--theme-tone-3) 10%, transparent);
+  --sem-board-border: color-mix(in srgb, var(--theme-tone-3) 22%, var(--sem-border-subtle));
+  --sem-board-glow: color-mix(in srgb, var(--theme-tone-3) 14%, transparent);
 
   --sem-border-subtle: var(--fdn-alpha-white-08);
   --sem-border-strong: var(--fdn-alpha-white-14);
@@ -205,19 +206,105 @@
 }
 
 :root[data-theme="fire-ember"] {
+  color-scheme: light;
+
+  /* Layer 1: Theme mode — Software Focus */
   --theme-name: fire-ember;
-  --theme-tone-1: #280905;
-  --theme-tone-2: #740A03;
-  --theme-tone-3: #C3110C;
-  --theme-tone-4: #E6501B;
+  --theme-tone-1: #F8FAFC;
+  --theme-tone-2: #FFFFFF;
+  --theme-tone-3: #6366F1;
+  --theme-tone-4: #64748B;
+  --background: var(--theme-tone-1);
+  --foreground: #334155;
+
+  --flat-canvas: #F8FAFC;
+  --flat-panel: #FFFFFF;
+  --flat-border: color-mix(in srgb, #64748B 22%, transparent);
+  --flat-emerald: #10b981;
+  --flat-gold: #6366F1;
+  --flat-blue: #06B6D4;
+  --flat-coral: #f87171;
+
+  --fdn-color-neutral-980: #EEF2F7;
+  --fdn-color-neutral-950: #F8FAFC;
+  --fdn-color-neutral-920: #F1F5F9;
+  --fdn-color-neutral-900: #E2E8F0;
+  --fdn-color-neutral-850: #FFFFFF;
+
+  --fdn-surface-neutral-canvas: #F8FAFC;
+  --fdn-surface-neutral-panel: #FFFFFF;
+  --fdn-surface-neutral-card: #FFFFFF;
+  --fdn-surface-neutral-raised: #F1F5F9;
+
+  --fdn-text-primary: #0F172A;
+  --fdn-text-secondary: #64748B;
+  --fdn-text-muted: #94A3B8;
+  --fdn-text-inverse: #FFFFFF;
+
+  --fdn-color-gold-500: #6366F1;
+  --fdn-color-gold-400: #818CF8;
+  --fdn-color-blue-500: #06B6D4;
+  --fdn-color-amber-500: #f59e0b;
+
+  --fdn-alpha-white-08: rgba(15, 23, 42, 0.08);
+  --fdn-alpha-white-14: rgba(15, 23, 42, 0.14);
+  --fdn-alpha-white-12: rgba(15, 23, 42, 0.12);
+  --fdn-alpha-white-18: rgba(15, 23, 42, 0.18);
+
+  --sem-surface-modal: #FFFFFF;
+  --sem-surface-soft: #F8FAFC;
+  --sem-surface-overlay: rgba(15, 23, 42, 0.45);
+
+  --sem-text-accent: #6366F1;
+  --sem-display-headline: #0F172A;
+  --sem-board-glass: color-mix(in srgb, #FFFFFF 88%, transparent);
+  --sem-board-grid: color-mix(in srgb, #6366F1 8%, transparent);
+  --sem-board-border: color-mix(in srgb, #6366F1 18%, rgba(15, 23, 42, 0.08));
+  --sem-board-glow: color-mix(in srgb, #6366F1 10%, transparent);
+
+  --sem-border-accent: color-mix(in srgb, #6366F1 38%, transparent);
+  --sem-focus-ring: color-mix(in srgb, #6366F1 32%, transparent);
+
+  --sem-accent-primary: #6366F1;
+  --sem-action-primary: #6366F1;
+  --sem-action-secondary: #06B6D4;
 }
 
 :root[data-theme="ash-rose"] {
+  color-scheme: dark;
+
+  /* Layer 1: Theme mode — Hardware / Cyber */
   --theme-name: ash-rose;
-  --theme-tone-1: #452829;
-  --theme-tone-2: #57595B;
-  --theme-tone-3: #E8D1C5;
-  --theme-tone-4: #F3E8DF;
+  --theme-tone-1: #0B0F19;
+  --theme-tone-2: #10172A;
+  --theme-tone-3: #00F0FF;
+  --theme-tone-4: #E2E8F0;
+  --background: var(--theme-tone-1);
+  --foreground: #E2E8F0;
+
+  --flat-emerald: #00F0FF;
+  --flat-gold: #00F0FF;
+  --flat-blue: #7000FF;
+  --flat-coral: #f87171;
+
+  --fdn-color-gold-500: #00F0FF;
+  --fdn-color-gold-400: #67F7FF;
+  --fdn-color-blue-500: #7000FF;
+  --fdn-color-amber-500: color-mix(in srgb, #00F0FF 68%, #fbbf24 32%);
+
+  --sem-text-accent: #67F7FF;
+  --sem-display-headline: #F8FAFC;
+  --sem-board-glass: color-mix(in srgb, #10172A 76%, transparent);
+  --sem-board-grid: color-mix(in srgb, #00F0FF 12%, transparent);
+  --sem-board-border: color-mix(in srgb, #00F0FF 28%, rgba(255, 255, 255, 0.08));
+  --sem-board-glow: color-mix(in srgb, #7000FF 18%, transparent);
+
+  --sem-border-accent: color-mix(in srgb, #00F0FF 48%, transparent);
+  --sem-focus-ring: color-mix(in srgb, #00F0FF 36%, transparent);
+
+  --sem-accent-primary: #00F0FF;
+  --sem-action-primary: #00F0FF;
+  --sem-action-secondary: #7000FF;
 }
 
 @theme inline {
@@ -238,8 +325,8 @@ body {
 
 body {
   background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--sem-accent-primary) 14%, transparent), transparent 26%),
-    radial-gradient(circle at top right, color-mix(in srgb, var(--sem-action-secondary) 12%, transparent), transparent 22%),
+    radial-gradient(circle at 12% -4%, color-mix(in srgb, var(--sem-accent-primary) 16%, transparent), transparent 32%),
+    radial-gradient(circle at 88% 0%, color-mix(in srgb, var(--sem-action-secondary) 14%, transparent), transparent 28%),
     linear-gradient(180deg, var(--fdn-color-neutral-980) 0%, var(--fdn-color-neutral-950) 100%);
   color: var(--text-primary);
   font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
@@ -447,16 +534,16 @@ body {
 
 .theme-overlay-atmosphere {
   background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--sem-accent-primary) 14%, transparent), transparent 24%),
-    radial-gradient(circle at bottom right, color-mix(in srgb, var(--sem-action-secondary) 16%, transparent), transparent 28%),
-    linear-gradient(180deg, color-mix(in srgb, white 3%, transparent), transparent 32%);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--sem-accent-primary) 18%, transparent), transparent 26%),
+    radial-gradient(circle at bottom right, color-mix(in srgb, var(--sem-action-secondary) 20%, transparent), transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--sem-board-glow) 40%, transparent), transparent 36%);
 }
 
 .theme-overlay-grid {
   background-image:
-    linear-gradient(to right, color-mix(in srgb, white 5%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, white 5%, transparent) 1px, transparent 1px);
-  background-size: 36px 36px;
+    linear-gradient(to right, var(--sem-board-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--sem-board-grid) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
 .theme-icon {
