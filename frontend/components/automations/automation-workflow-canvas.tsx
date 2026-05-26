@@ -10,7 +10,6 @@ import {
   HelpCircle,
   LoaderCircle,
   Maximize2,
-  MessageSquareText,
   Minimize2,
   Plus,
   RefreshCw,
@@ -121,6 +120,19 @@ function accentClass(accent: CanvasNode["accent"]) {
     zinc: "border-zinc-500/40 text-zinc-300 shadow-zinc-950/20",
     cyan: "border-cyan-500/40 text-cyan-300 shadow-cyan-950/20",
   }[accent];
+}
+
+function nodeBadgeClass(nodeId: NodeId) {
+  return {
+    trigger: "border-violet-500/40 bg-violet-500/10 text-violet-300",
+    condition: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+    delay: "border-zinc-500/40 bg-zinc-500/10 text-zinc-300",
+    action: "border-cyan-500/40 bg-cyan-500/10 text-cyan-300",
+  }[nodeId];
+}
+
+function stopCanvasPointer(event: ReactPointerEvent<HTMLElement>) {
+  event.stopPropagation();
 }
 
 function NodeIcon({ type }: { type: NodeId }) {
@@ -454,6 +466,14 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
     const target = event.target as HTMLElement;
 
     if (target.closest("[data-automation-node]")) {
+      return;
+    }
+
+    if (target.closest("[data-automation-inspector]")) {
+      return;
+    }
+
+    if (target.closest("[data-automation-token-rail]")) {
       return;
     }
 
@@ -916,212 +936,224 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
                 })}
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="relative z-20 border-t border-white/10 bg-zinc-950/90 p-4 backdrop-blur-md">
-          <div className="mx-auto grid max-w-[96rem] gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-            <form onSubmit={handleSaveRule} className="rounded-2xl border border-white/10 bg-zinc-900/90 p-4 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                <div className="flex items-center gap-2">
-                  <Workflow className="h-3.5 w-3.5 text-zinc-400" />
-                  <span className="text-xs font-semibold text-zinc-200">Selected node configuration</span>
+            <div className="pointer-events-none absolute right-4 top-28 z-30 flex w-[min(400px,calc(100%-2rem))] max-h-[calc(100%-8rem)] flex-col gap-3 overflow-y-auto pb-4">
+              <form
+                onSubmit={handleSaveRule}
+                data-automation-inspector
+                onPointerDown={stopCanvasPointer}
+                className="pointer-events-auto rounded-2xl border border-white/10 bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-md"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Workflow className="h-3.5 w-3.5 text-zinc-400" />
+                    <span className="text-xs font-semibold text-zinc-200">Node Inspector</span>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${nodeBadgeClass(activeNode)}`}>
+                    <NodeIcon type={activeNode} />
+                    {activeNode}
+                  </span>
                 </div>
-                <span className="font-[family:var(--font-geist-mono)] text-[10px] text-zinc-500">{activeNode}</span>
-              </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Workflow name</label>
-                  <input
-                    type="text"
-                    value={builder.name}
-                    onChange={(event) => setBuilder((current) => ({ ...current, name: event.target.value }))}
-                    readOnly={inspectorReadOnly}
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-zinc-500 disabled:opacity-70"
+                <div className="mt-3 space-y-3">
+                  {activeNode === "trigger" ? (
+                    <>
+                      <div>
+                        <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Workflow name</label>
+                        <input
+                          type="text"
+                          value={builder.name}
+                          onChange={(event) => setBuilder((current) => ({ ...current, name: event.target.value }))}
+                          readOnly={inspectorReadOnly}
+                          className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 outline-none focus:border-zinc-500 disabled:opacity-70"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Trigger</label>
+                        {inspectorReadOnly ? (
+                          <input readOnly value={builder.triggerKey} className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-[family:var(--font-geist-mono)] text-xs text-zinc-200" />
+                        ) : (
+                          <div className="mt-1">
+                            <AutomationSentenceSegment
+                              variant="dark"
+                              label="Trigger"
+                              value={builder.triggerKey}
+                              options={registry.triggers.map((option) => ({ key: option.key, label: option.label }))}
+                              onChange={(nextValue) => {
+                                const nextTrigger = registry.triggers.find((option) => option.key === nextValue) ?? selectedTrigger;
+                                const nextFields = registry.conditionFieldsByEntity[nextTrigger.entityType] ?? [];
+                                const nextAllowedActions = registry.allowedActionsByTriggerFamily[nextTrigger.family] ?? [];
+                                setBuilder((current) => ({
+                                  ...current,
+                                  triggerKey: nextTrigger.key,
+                                  conditionField: nextFields[0] ?? current.conditionField,
+                                  actionKey: nextAllowedActions[0] ?? current.actionKey,
+                                }));
+                              }}
+                            />
+                          </div>
+                        )}
+                        <p className="mt-1.5 font-[family:var(--font-geist-mono)] text-[10px] text-zinc-500">{builder.triggerKey}</p>
+                      </div>
+                    </>
+                  ) : null}
+
+                  {activeNode === "condition" ? (
+                    <>
+                      <div>
+                        <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Condition</label>
+                        {inspectorReadOnly ? (
+                          <input readOnly value={conditionKeyDisplay} className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-[family:var(--font-geist-mono)] text-xs text-zinc-200" />
+                        ) : (
+                          <div className="mt-1">
+                            <AutomationSentenceSegment
+                              variant="dark"
+                              label="Condition"
+                              value={builder.conditionField}
+                              options={conditionList.map((option) => ({ key: option.field, label: option.label }))}
+                              onChange={(value) => setBuilder((current) => ({ ...current, conditionField: value }))}
+                            />
+                          </div>
+                        )}
+                        <p className="mt-1.5 font-[family:var(--font-geist-mono)] text-[10px] text-zinc-500">{conditionKeyDisplay}</p>
+                      </div>
+                      <p className="rounded-lg border border-white/5 bg-black/30 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-400">{conditionDisplay}</p>
+                    </>
+                  ) : null}
+
+                  {activeNode === "delay" ? (
+                    <>
+                      <div>
+                        <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Delay / timing</label>
+                        {inspectorReadOnly ? (
+                          <input readOnly value={delayKeyDisplay} className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-[family:var(--font-geist-mono)] text-xs text-zinc-200" />
+                        ) : (
+                          <div className="mt-1">
+                            <AutomationSentenceSegment
+                              variant="dark"
+                              label="Timing"
+                              value={builder.timingMode}
+                              options={timingOptions}
+                              onChange={(value) => setBuilder((current) => ({ ...current, timingMode: value }))}
+                            />
+                          </div>
+                        )}
+                        <p className="mt-1.5 font-[family:var(--font-geist-mono)] text-[10px] text-zinc-500">{delayKeyDisplay}</p>
+                      </div>
+                      <p className="rounded-lg border border-white/5 bg-black/30 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-400">{delayLabel}</p>
+                    </>
+                  ) : null}
+
+                  {activeNode === "action" ? (
+                    <>
+                      <div>
+                        <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Action</label>
+                        {inspectorReadOnly ? (
+                          <input readOnly value={builder.actionKey} className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-[family:var(--font-geist-mono)] text-xs text-zinc-200" />
+                        ) : (
+                          <div className="mt-1">
+                            <AutomationSentenceSegment
+                              variant="dark"
+                              label="Action"
+                              value={builder.actionKey}
+                              options={actionOptions.map((option) => ({ key: option.key, label: option.label }))}
+                              onChange={(value) => setBuilder((current) => ({ ...current, actionKey: value }))}
+                            />
+                          </div>
+                        )}
+                        <p className="mt-1.5 font-[family:var(--font-geist-mono)] text-[10px] text-zinc-500">{builder.actionKey}</p>
+                      </div>
+
+                      {selectedAction.requiresApprovedTemplate ? (
+                        <>
+                          <div>
+                            <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Approved template key</label>
+                            <input
+                              type="text"
+                              value={builder.templateKey}
+                              onChange={(event) => setBuilder((current) => ({ ...current, templateKey: event.target.value }))}
+                              readOnly={inspectorReadOnly}
+                              className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-[family:var(--font-geist-mono)] text-xs text-zinc-200 outline-none focus:border-emerald-500/60"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Message template body</label>
+                            <textarea
+                              value={builder.templateBody}
+                              onChange={(event) => setBuilder((current) => ({ ...current, templateBody: event.target.value }))}
+                              readOnly={inspectorReadOnly}
+                              rows={3}
+                              className="mt-1 w-full resize-none rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs leading-relaxed text-zinc-200 outline-none focus:border-emerald-500/60"
+                            />
+                          </div>
+                        </>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+
+                <div className="mt-3 rounded-lg border border-white/5 bg-black/30 px-2.5 py-2">
+                  <div className="font-[family:var(--font-geist-mono)] text-[10px] text-zinc-400">{activeNodeData?.code}</div>
+                  <div className="mt-0.5 text-[10px] text-zinc-500">{activeNodeData?.helper}</div>
+                </div>
+
+                <div className="mt-3 flex items-start gap-2 rounded-xl border border-white/5 bg-white/[0.02] p-2.5 text-[11px] text-zinc-500">
+                  <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-600" />
+                  <span>
+                    {composeMode && canManage
+                      ? "Create mode uses the existing POST /api/automations/rules payload. Saved rules become active after server validation."
+                      : "Inspect mode hydrates from the selected saved rule. Rule updates via PUT are not wired in this slice."}
+                  </span>
+                </div>
+
+                {saveMessage ? (
+                  <p className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">{saveMessage}</p>
+                ) : null}
+
+                {saveError ? (
+                  <p className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">{saveError}</p>
+                ) : null}
+
+                {canManage && composeMode ? (
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    Save active rule
+                  </button>
+                ) : null}
+
+                {!canManage ? (
+                  <p className="mt-4 text-xs text-zinc-500">
+                    Read-only workspace{sessionRole ? ` (${sessionRole})` : ""}. Rule changes require automations.manage permission.
+                  </p>
+                ) : null}
+              </form>
+
+              {activeNode === "action" && selectedAction.requiresApprovedTemplate ? (
+                <div
+                  data-automation-token-rail
+                  onPointerDown={stopCanvasPointer}
+                  className="pointer-events-auto"
+                >
+                  <TokenSidebar
+                    variant="dark"
+                    tokens={tokens}
+                    onInsert={(token) => {
+                      if (inspectorReadOnly) {
+                        return;
+                      }
+
+                      setBuilder((current) => ({
+                        ...current,
+                        templateBody: `${current.templateBody}${current.templateBody.endsWith(" ") ? "" : " "}${token}`,
+                      }));
+                    }}
                   />
                 </div>
-
-                <div>
-                  <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Trigger</label>
-                  {inspectorReadOnly ? (
-                    <input readOnly value={builder.triggerKey} className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-[family:var(--font-geist-mono)] text-xs text-zinc-200" />
-                  ) : (
-                    <div className="mt-1" onFocus={() => setActiveNode("trigger")}>
-                      <AutomationSentenceSegment
-                        variant="dark"
-                        label="Trigger"
-                        value={builder.triggerKey}
-                        options={registry.triggers.map((option) => ({ key: option.key, label: option.label }))}
-                        onChange={(nextValue) => {
-                          const nextTrigger = registry.triggers.find((option) => option.key === nextValue) ?? selectedTrigger;
-                          const nextFields = registry.conditionFieldsByEntity[nextTrigger.entityType] ?? [];
-                          const nextAllowedActions = registry.allowedActionsByTriggerFamily[nextTrigger.family] ?? [];
-                          setBuilder((current) => ({
-                            ...current,
-                            triggerKey: nextTrigger.key,
-                            conditionField: nextFields[0] ?? current.conditionField,
-                            actionKey: nextAllowedActions[0] ?? current.actionKey,
-                          }));
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Condition</label>
-                  {inspectorReadOnly ? (
-                    <input readOnly value={conditionKeyDisplay} className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-[family:var(--font-geist-mono)] text-xs text-zinc-200" />
-                  ) : (
-                    <div className="mt-1" onFocus={() => setActiveNode("condition")}>
-                      <AutomationSentenceSegment
-                        variant="dark"
-                        label="Condition"
-                        value={builder.conditionField}
-                        options={conditionList.map((option) => ({ key: option.field, label: option.label }))}
-                        onChange={(value) => setBuilder((current) => ({ ...current, conditionField: value }))}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Delay / timing</label>
-                  {inspectorReadOnly ? (
-                    <input readOnly value={delayKeyDisplay} className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-[family:var(--font-geist-mono)] text-xs text-zinc-200" />
-                  ) : (
-                    <div className="mt-1" onFocus={() => setActiveNode("delay")}>
-                      <AutomationSentenceSegment
-                        variant="dark"
-                        label="Timing"
-                        value={builder.timingMode}
-                        options={timingOptions}
-                        onChange={(value) => setBuilder((current) => ({ ...current, timingMode: value }))}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Action</label>
-                  {inspectorReadOnly ? (
-                    <input readOnly value={builder.actionKey} className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-[family:var(--font-geist-mono)] text-xs text-zinc-200" />
-                  ) : (
-                    <div className="mt-1" onFocus={() => setActiveNode("action")}>
-                      <AutomationSentenceSegment
-                        variant="dark"
-                        label="Action"
-                        value={builder.actionKey}
-                        options={actionOptions.map((option) => ({ key: option.key, label: option.label }))}
-                        onChange={(value) => setBuilder((current) => ({ ...current, actionKey: value }))}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {selectedAction.requiresApprovedTemplate ? (
-                  <>
-                    <div className="col-span-2">
-                      <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Approved template key</label>
-                      <input
-                        type="text"
-                        value={builder.templateKey}
-                        onChange={(event) => setBuilder((current) => ({ ...current, templateKey: event.target.value }))}
-                        readOnly={inspectorReadOnly}
-                        className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-[family:var(--font-geist-mono)] text-xs text-zinc-200 outline-none focus:border-emerald-500/60"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-wider text-zinc-500">Message template body</label>
-                      <textarea
-                        value={builder.templateBody}
-                        onChange={(event) => setBuilder((current) => ({ ...current, templateBody: event.target.value }))}
-                        readOnly={inspectorReadOnly}
-                        rows={3}
-                        className="mt-1 w-full resize-none rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs leading-relaxed text-zinc-200 outline-none focus:border-emerald-500/60"
-                      />
-                    </div>
-                  </>
-                ) : null}
-              </div>
-
-              <div className="mt-3 flex items-start gap-2 rounded-xl border border-white/5 bg-white/[0.02] p-2.5 text-[11px] text-zinc-500">
-                <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-600" />
-                <span>
-                  {composeMode && canManage
-                    ? "Create mode uses the existing POST /api/automations/rules payload. Saved rules become active after server validation."
-                    : "Inspect mode hydrates from the selected saved rule. Rule updates via PUT are not wired in this slice."}
-                </span>
-              </div>
-
-              {saveMessage ? (
-                <p className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">{saveMessage}</p>
               ) : null}
-
-              {saveError ? (
-                <p className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">{saveError}</p>
-              ) : null}
-
-              {canManage && composeMode ? (
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Save active rule
-                </button>
-              ) : null}
-
-              {!canManage ? (
-                <p className="mt-4 text-xs text-zinc-500">
-                  Read-only workspace{sessionRole ? ` (${sessionRole})` : ""}. Rule changes require automations.manage permission.
-                </p>
-              ) : null}
-            </form>
-
-            <div className="space-y-4">
-              {selectedAction.requiresApprovedTemplate ? (
-                <TokenSidebar
-                  variant="dark"
-                  tokens={tokens}
-                  onInsert={(token) => {
-                    if (inspectorReadOnly) {
-                      return;
-                    }
-
-                    setBuilder((current) => ({
-                      ...current,
-                      templateBody: `${current.templateBody}${current.templateBody.endsWith(" ") ? "" : " "}${token}`,
-                    }));
-                  }}
-                />
-              ) : null}
-
-              <div className="rounded-2xl border border-white/10 bg-zinc-900/90 p-4 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                  <div className="flex items-center gap-2">
-                    <MessageSquareText className="h-3.5 w-3.5 text-cyan-400" />
-                    <span className="text-xs font-semibold text-zinc-200">Template preview</span>
-                  </div>
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-                </div>
-                <div className="mt-4 rounded-xl border border-cyan-400/10 bg-cyan-400/[0.03] p-3">
-                  <p className="text-sm leading-relaxed text-zinc-200">
-                    {builder.templateBody || "No customer-facing template body configured for this action."}
-                  </p>
-                </div>
-                <div className="mt-3 rounded-xl border border-white/5 bg-black/30 p-3">
-                  <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Active node</div>
-                  <div className="font-[family:var(--font-geist-mono)] text-xs text-zinc-300">{activeNodeData?.code}</div>
-                  <div className="mt-1 text-[11px] text-zinc-500">{activeNodeData?.helper}</div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-zinc-900/90 p-4 text-xs leading-6 text-zinc-500">
-                Execution history is not shown until CRM automation run APIs are exposed. Customer-facing SMS uses approved templates and server-side validation — no autonomous sends from this canvas.
-              </div>
             </div>
           </div>
         </div>
