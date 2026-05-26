@@ -128,55 +128,93 @@ export function MarketingCalendarPanel() {
         </div>
       </div>
 
-      <div className="theme-surface-card overflow-hidden rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]">
-        <div className="grid grid-cols-7 border-b border-[color:var(--cmp-border-subtle)] text-center text-[11px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
-            <span key={label} className="border-r border-[color:var(--cmp-border-subtle)] py-3 last:border-r-0">
-              {label}
-            </span>
-          ))}
-        </div>
+      <div className="theme-surface-card hidden overflow-hidden rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] lg:block">
+        <div className="overflow-x-auto">
+          <div className="min-w-[720px]">
+            <div className="grid grid-cols-7 border-b border-[color:var(--cmp-border-subtle)] text-center text-[11px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
+                <span key={label} className="border-r border-[color:var(--cmp-border-subtle)] py-3 last:border-r-0">
+                  {label}
+                </span>
+              ))}
+            </div>
 
-        <div className="grid grid-cols-7">
-          {gridDates.map((dayKey, index) => {
-            const stableKey =
-              typeof dayKey === "string"
-                ? `cal-${cursor.getUTCFullYear()}-${cursor.getUTCMonth()}-${dayKey}`
-                : `pad-${cursor.getUTCFullYear()}-${cursor.getUTCMonth()}-${index}`;
+            <div className="grid grid-cols-7">
+              {gridDates.map((dayKey, index) => {
+                const stableKey =
+                  typeof dayKey === "string"
+                    ? `cal-${cursor.getUTCFullYear()}-${cursor.getUTCMonth()}-${dayKey}`
+                    : `pad-${cursor.getUTCFullYear()}-${cursor.getUTCMonth()}-${index}`;
+
+                return (
+                  <div
+                    key={stableKey}
+                    className="min-h-[110px] border-b border-r border-[color:var(--cmp-border-subtle)] p-2 last:border-r-0"
+                  >
+                    {dayKey ? (
+                      <>
+                        <p className="text-[11px] font-semibold text-[color:var(--sem-text-muted)]">{dayKey.slice(8)}</p>
+                        <div className="mt-2 space-y-2">
+                          {(draftsByDay.get(dayKey) ?? []).slice(0, 3).map((draft) => (
+                            <Link
+                              key={draft.id}
+                              href={`/marketing/create?draft=${encodeURIComponent(draft.id)}`}
+                              className="block rounded-[12px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-2 py-1 text-[11px] leading-4 hover:border-[color:var(--cmp-border-accent)]"
+                            >
+                              <span className="block font-semibold text-[color:var(--sem-text-primary)] truncate">{draft.title}</span>
+                              <span className="text-[color:var(--sem-text-muted)]">{formatWorkflowState(draft.workflow_state)}</span>
+                            </Link>
+                          ))}
+                          {(draftsByDay.get(dayKey)?.length ?? 0) > 3 ? (
+                            <p className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">
+                              + {(draftsByDay.get(dayKey)?.length ?? 0) - 3} more
+                            </p>
+                          ) : null}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="h-full opacity-40" aria-hidden />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3 lg:hidden">
+        <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Day list (UTC)</p>
+        {gridDates
+          .filter((dayKey): dayKey is string => Boolean(dayKey))
+          .map((dayKey) => {
+            const drafts = draftsByDay.get(dayKey) ?? [];
 
             return (
-              <div
-                key={stableKey}
-                className="min-h-[110px] border-b border-r border-[color:var(--cmp-border-subtle)] p-2 last:border-r-0"
+              <section
+                key={`mobile-${dayKey}`}
+                className="rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-4"
               >
-                {dayKey ? (
-                  <>
-                    <p className="text-[11px] font-semibold text-[color:var(--sem-text-muted)]">{dayKey.slice(8)}</p>
-                    <div className="mt-2 space-y-2">
-                      {(draftsByDay.get(dayKey) ?? []).slice(0, 3).map((draft) => (
-                        <Link
-                          key={draft.id}
-                          href={`/marketing/create?draft=${encodeURIComponent(draft.id)}`}
-                          className="block rounded-[12px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-2 py-1 text-[11px] leading-4 hover:border-[color:var(--cmp-border-accent)]"
-                        >
-                          <span className="block font-semibold text-[color:var(--sem-text-primary)] truncate">{draft.title}</span>
-                          <span className="text-[color:var(--sem-text-muted)]">{formatWorkflowState(draft.workflow_state)}</span>
-                        </Link>
-                      ))}
-                      {(draftsByDay.get(dayKey)?.length ?? 0) > 3 ? (
-                        <p className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">
-                          + {(draftsByDay.get(dayKey)?.length ?? 0) - 3} more
-                        </p>
-                      ) : null}
-                    </div>
-                  </>
+                <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{dayKey}</p>
+                {drafts.length ? (
+                  <div className="mt-3 space-y-2">
+                    {drafts.map((draft) => (
+                      <Link
+                        key={draft.id}
+                        href={`/marketing/create?draft=${encodeURIComponent(draft.id)}`}
+                        className="block rounded-[12px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-2 text-sm hover:border-[color:var(--cmp-border-accent)]"
+                      >
+                        <span className="block font-semibold text-[color:var(--sem-text-primary)]">{draft.title}</span>
+                        <span className="text-xs text-[color:var(--sem-text-muted)]">{formatWorkflowState(draft.workflow_state)}</span>
+                      </Link>
+                    ))}
+                  </div>
                 ) : (
-                  <div className="h-full opacity-40" aria-hidden />
+                  <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">No scheduled drafts.</p>
                 )}
-              </div>
+              </section>
             );
           })}
-        </div>
       </div>
 
       <p className="text-xs text-[color:var(--sem-text-muted)]">

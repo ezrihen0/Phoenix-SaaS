@@ -108,7 +108,6 @@ function CenteredLoginForm() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSendingRecovery, setIsSendingRecovery] = useState(false);
 
   const contextMessage = getReasonMessage(reason) ?? getStatusMessage(nextPath);
 
@@ -162,23 +161,9 @@ function CenteredLoginForm() {
 
   async function handlePasswordRecovery() {
     setErrorMessage(null);
-    setStatusMessage(null);
-
-    setIsSendingRecovery(true);
-
-    try {
-      setStatusMessage(
-        "Sign in, then open Reset Password to set a new password. If you are locked out, contact an administrator.",
-      );
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to send a password reset link right now.",
-      );
-    } finally {
-      setIsSendingRecovery(false);
-    }
+    setStatusMessage(
+      "After you sign in, open Reset Password to set a new password. If you are locked out, contact an administrator.",
+    );
   }
 
   return (
@@ -260,12 +245,11 @@ function CenteredLoginForm() {
               <button
                 type="button"
                 onClick={() => {
-                  void handlePasswordRecovery();
+                  handlePasswordRecovery();
                 }}
-                disabled={isSendingRecovery}
-                className="text-sm font-semibold text-slate-700 transition hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                className="text-sm font-semibold text-slate-700 transition hover:text-slate-950"
               >
-                {isSendingRecovery ? "Sending reset link..." : "Reset password"}
+                Password help
               </button>
             </div>
 
@@ -332,7 +316,6 @@ function LegacyLoginForm() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSendingRecovery, setIsSendingRecovery] = useState(false);
 
   function getLegacyStatusMessage(next: string | null) {
     if (next === "/pricing") {
@@ -392,23 +375,9 @@ function LegacyLoginForm() {
 
   async function handlePasswordRecovery() {
     setErrorMessage(null);
-    setStatusMessage(null);
-
-    setIsSendingRecovery(true);
-
-    try {
-      setStatusMessage(
-        "Sign in, then open Reset Password to set a new password. If you are locked out, contact an administrator.",
-      );
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to send a password reset link right now.",
-      );
-    } finally {
-      setIsSendingRecovery(false);
-    }
+    setStatusMessage(
+      "After you sign in, open Reset Password to set a new password. If you are locked out, contact an administrator.",
+    );
   }
 
   return (
@@ -539,12 +508,11 @@ function LegacyLoginForm() {
           <button
             type="button"
             onClick={() => {
-              void handlePasswordRecovery();
+              handlePasswordRecovery();
             }}
-            disabled={isSendingRecovery}
-            className="mt-4 text-sm text-white/54 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-4 text-sm text-white/54 transition hover:text-white"
           >
-            {isSendingRecovery ? "Sending reset link..." : "Reset password"}
+            Password help
           </button>
 
           <div className="mt-8 border-t border-white/10 pt-6 text-xs leading-5 text-white/45">

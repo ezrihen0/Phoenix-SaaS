@@ -1105,30 +1105,20 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                 <div className="mt-6 grid gap-6 xl:grid-cols-3">
                   <section className={`${callsPanelClass} p-5`}>
                     <p className={callsEyebrowClass}>Operator load</p>
-                    <h3 className="mt-2 text-xl font-semibold text-[color:var(--sem-display-headline)]">Desk capacity</h3>
+                    <h3 className="mt-2 text-xl font-semibold text-[color:var(--sem-display-headline)]">Callback assignees</h3>
                     <div className="mt-4 space-y-3">
                       {callbackTaskAssignees.length > 0 ? (
-                        callbackTaskAssignees.slice(0, 4).map((assignee, index) => {
-                          const load = Math.min(95, 28 + callbacksInMotionCount * 9 + index * 11);
-
-                          return (
-                            <div key={assignee.id} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2">
-                                  <UserRound className="h-4 w-4 text-[color:var(--sem-accent-primary)]" />
-                                  <div>
-                                    <p className="text-sm font-medium text-[color:var(--sem-text-primary)]">{assignee.fullName}</p>
-                                    <p className="text-xs text-[color:var(--sem-text-muted)]">Callback assignee</p>
-                                  </div>
-                                </div>
-                                <p className={`text-sm font-semibold ${callsLedgerNumericClass} text-[color:var(--sem-text-secondary)]`}>{String(load)}%</p>
-                              </div>
-                              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[color:var(--cmp-surface-soft)]">
-                                <div className="h-full rounded-full bg-[color:var(--sem-accent-primary)]" style={{ width: load + "%" }} />
+                        callbackTaskAssignees.slice(0, 4).map((assignee) => (
+                          <div key={assignee.id} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                            <div className="flex items-center gap-2">
+                              <UserRound className="h-4 w-4 text-[color:var(--sem-accent-primary)]" />
+                              <div>
+                                <p className="text-sm font-medium text-[color:var(--sem-text-primary)]">{assignee.fullName}</p>
+                                <p className="text-xs text-[color:var(--sem-text-muted)]">Available for callback ownership</p>
                               </div>
                             </div>
-                          );
-                        })
+                          </div>
+                        ))
                       ) : (
                         <p className="text-sm text-[color:var(--sem-text-muted)]">No assignees loaded — callback ownership still available per call.</p>
                       )}

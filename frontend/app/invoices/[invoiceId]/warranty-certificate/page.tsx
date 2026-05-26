@@ -8,6 +8,7 @@ import { requireServerRoles } from "@/lib/auth/server-session";
 import {
   type PersistedInvoiceLineItem,
 } from "@/lib/crm/invoice-line-model";
+import { canViewWarrantyCertificate } from "@/lib/crm/warranty-eligibility";
 import type { JobStatus } from "@/lib/crm/statuses";
 import WarrantyCertificateActions from "./warranty-certificate-actions";
 
@@ -78,10 +79,6 @@ const defaultCompanySettings: InvoiceCompanySettings = {
   companyEmail: null,
   phone: null,
 };
-
-function canViewWarrantyCertificate(invoice: InvoiceDetailRecord) {
-  return Boolean(invoice.paid_at) || invoice.balance_cents <= 0;
-}
 
 export default async function WarrantyCertificatePage({
   params,

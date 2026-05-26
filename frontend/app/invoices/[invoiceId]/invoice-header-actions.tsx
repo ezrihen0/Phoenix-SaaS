@@ -142,9 +142,6 @@ export default function InvoiceHeaderActions({
   const [toField, setToField] = useState(initialInvoice.customer?.email?.trim() ?? "");
   const [subjectField, setSubjectField] = useState(buildDefaultSubject(initialInvoice, businessName));
   const [bodyField, setBodyField] = useState(buildDefaultBody(initialInvoice, businessName));
-  const [creditCardEnabled, setCreditCardEnabled] = useState(true);
-  const [requestSignature, setRequestSignature] = useState(Boolean(initialInvoice.signature_requested));
-
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -492,7 +489,7 @@ export default function InvoiceHeaderActions({
               <div>
                 <h2 id="send-invoice-modal-title" className="text-2xl font-semibold text-[color:var(--text-primary)]">Send Invoice</h2>
                 <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
-                  Review email recipients, message, and delivery options before sending.
+                  Review email recipients and message before sending. Pay Now and e-signature links are not included in this email yet.
                 </p>
               </div>
               <button
@@ -547,28 +544,6 @@ export default function InvoiceHeaderActions({
                   className="theme-input-control w-full rounded-[14px] px-4 py-3 text-sm placeholder:text-[color:var(--text-secondary)]"
                 />
               </label>
-
-              <div className="grid gap-2 rounded-[16px] border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)] p-4 text-sm text-[color:var(--text-primary)]">
-                <label className="inline-flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={creditCardEnabled}
-                    onChange={(event) => setCreditCardEnabled(event.target.checked)}
-                    className="h-4 w-4 cursor-pointer rounded border-[color:var(--input-border)] bg-transparent accent-[color:var(--text-accent)] transition hover:border-[color:var(--border-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--input-focus-ring)]"
-                  />
-                  Credit Card (include Pay Now link)
-                </label>
-
-                <label className="inline-flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={requestSignature}
-                    onChange={(event) => setRequestSignature(event.target.checked)}
-                    className="h-4 w-4 cursor-pointer rounded border-[color:var(--input-border)] bg-transparent accent-[color:var(--text-accent)] transition hover:border-[color:var(--border-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--input-focus-ring)]"
-                  />
-                  Request Signature (include e-signature link)
-                </label>
-              </div>
             </div>
 
             <div className="mt-6 flex flex-wrap justify-end gap-3">

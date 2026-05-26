@@ -16,7 +16,6 @@ import {
   Search,
   Send,
   Sparkles,
-  StickyNote,
   Trash2,
 } from "lucide-react";
 
@@ -346,7 +345,6 @@ type DeskThreadPanelProps = {
 };
 
 function DeskThreadPanel(props: DeskThreadPanelProps) {
-  const isNoteMode = props.composerSurfaceMode === "note" && !props.composeMode;
   const threadTitle = props.composeMode
     ? props.composeMode === "text"
       ? "New SMS"
@@ -517,58 +515,20 @@ function DeskThreadPanel(props: DeskThreadPanelProps) {
       <div className="shrink-0 border-t border-[color:var(--cmp-border-subtle)] p-4">
         {!props.composeMode ? (
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-1">
-              <button
-                type="button"
-                onClick={() => props.setComposerSurfaceMode("customer")}
-                className={[
-                  "rounded-full px-3 py-1.5 text-xs font-semibold",
-                  !isNoteMode ? "bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-primary)]" : "text-[color:var(--sem-text-muted)]",
-                ].join(" ")}
-              >
-                Reply to customer
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setComposerSurfaceMode("note")}
-                className={[
-                  "rounded-full px-3 py-1.5 text-xs font-semibold",
-                  isNoteMode ? "bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-primary)]" : "text-[color:var(--sem-text-muted)]",
-                ].join(" ")}
-              >
-                Internal note
-              </button>
-            </div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">Reply to customer</p>
             <button
               type="button"
               onClick={props.openTemplateBank}
               className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[color:var(--cmp-border-subtle)] px-3 py-1.5 text-xs text-[color:var(--sem-text-secondary)]"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              AI draft · review
+              SMS templates
             </button>
           </div>
         ) : null}
 
-        <div className={[
-          "rounded-2xl border p-3",
-          isNoteMode ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)]" : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]",
-        ].join(" ")}>
-          {isNoteMode ? (
-            <>
-              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">
-                <StickyNote className="h-3.5 w-3.5" />
-                Internal note
-              </div>
-              <textarea
-                rows={3}
-                disabled
-                className="theme-input-control min-h-[72px] w-full rounded-[14px] px-3 py-2 text-sm opacity-80"
-                placeholder="Internal notes are not stored in SMS yet — use customer profile or job notes."
-              />
-              <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">Assistive workflow only. Notes do not send to the customer.</p>
-            </>
-          ) : props.composeMode === "text" ? (
+        <div className="rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+          {props.composeMode === "text" ? (
             <div className="flex items-end gap-2">
               <textarea
                 value={props.composeTextBody}
@@ -589,7 +549,10 @@ function DeskThreadPanel(props: DeskThreadPanelProps) {
               </button>
             </div>
           ) : props.composeMode === "email" ? (
-            <p className="text-sm text-[color:var(--sem-text-secondary)]">Email compose remains preview-only in this workspace.</p>
+            <div className="rounded-[14px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-3 py-4 text-sm text-[color:var(--sem-text-secondary)]">
+              <p className="font-semibold text-[color:var(--sem-text-primary)]">Email — coming soon</p>
+              <p className="mt-2 text-xs leading-5">This desk supports SMS only today. Use customer profile email fields for reference.</p>
+            </div>
           ) : (
             <div className="space-y-3">
               <textarea
@@ -1652,15 +1615,15 @@ export default function MessagingDashboard({
                   </div>
                 </div>
                 <div className="rounded-xl border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Linked operations</p>
-                  <p className="mt-2 text-xs leading-5 text-[color:var(--sem-text-secondary)]">Jobs, invoices, and tasks will surface here when linked to messaging.</p>
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Linked operations · coming soon</p>
+                  <p className="mt-2 text-xs leading-5 text-[color:var(--sem-text-secondary)]">Jobs, invoices, and tasks will appear here in a future release.</p>
                 </div>
                 <div className="rounded-xl border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
                   <div className="flex items-start gap-2">
                     <Bot className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
                     <div>
-                      <p className="text-xs font-medium text-[color:var(--sem-text-primary)]">AI assist · review required</p>
-                      <p className="mt-1 text-[11px] leading-5 text-[color:var(--sem-text-muted)]">Suggested replies and summaries assist operators. Nothing sends without human approval.</p>
+                      <p className="text-xs font-medium text-[color:var(--sem-text-primary)]">SMS template bank</p>
+                      <p className="mt-1 text-[11px] leading-5 text-[color:var(--sem-text-muted)]">Insert saved reply snippets. Nothing sends without operator review.</p>
                       <button
                         type="button"
                         onClick={openTemplateBank}

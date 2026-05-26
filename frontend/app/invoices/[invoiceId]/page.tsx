@@ -25,6 +25,7 @@ import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerRoles } from "@/lib/auth/server-session";
 import { formatLocalizedCurrency } from "@/lib/i18n/formatters";
 import { type PersistedInvoiceLineItem } from "@/lib/crm/invoice-line-model";
+import { canViewWarrantyCertificate } from "@/lib/crm/warranty-eligibility";
 import type { JobStatus } from "@/lib/crm/statuses";
 
 const SHOW_LEGACY_INVOICE_DETAIL = false;
@@ -156,10 +157,6 @@ function formatPaymentMethod(method: InvoicePaymentRecord["method"]) {
   }
 
   return method.charAt(0).toUpperCase() + method.slice(1);
-}
-
-function canViewWarrantyCertificate(invoice: InvoiceDetailRecord) {
-  return Boolean(invoice.paid_at) || invoice.balance_cents <= 0;
 }
 
 function percentPaid(totalCents: number, amountPaidCents: number) {

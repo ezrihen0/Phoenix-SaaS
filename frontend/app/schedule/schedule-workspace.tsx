@@ -389,7 +389,7 @@ function buildDispatchRisks(
     risks.push({
       id: `unassigned-${highestUnassigned.id}`,
       title: t("riskUnassignedHighValue"),
-      detail: `${customer?.full_name ?? highestUnassigned.title} Â· ${formatCurrency(getJobValueCents(highestUnassigned))}`,
+      detail: `${customer?.full_name ?? highestUnassigned.title} · ${formatCurrency(getJobValueCents(highestUnassigned))}`,
       tone: "danger",
     });
   }
@@ -412,7 +412,7 @@ function buildDispatchRisks(
     risks.push({
       id: `window-${bestWindow.id}`,
       title: t("riskOpenWindow"),
-      detail: `${bestWindow.technicianName} Â· ${bestWindow.timeLabel} Â· ${formatCurrency(bestWindow.profitPotentialCents)}`,
+      detail: `${bestWindow.technicianName} · ${bestWindow.timeLabel} · ${formatCurrency(bestWindow.profitPotentialCents)}`,
       tone: "success",
     });
   }
@@ -421,7 +421,7 @@ function buildDispatchRisks(
     risks.push({
       id: `approval-${job.id}`,
       title: t("riskApprovalHold"),
-      detail: `${job.title} Â· ${getJobStatusLabel(job.status, locale)}`,
+      detail: `${job.title} · ${getJobStatusLabel(job.status, locale)}`,
       tone: "warning",
     });
   }
@@ -1058,7 +1058,7 @@ export default function ScheduleWorkspace({
                 <p className="font-[family:var(--font-geist-mono)] text-2xl font-semibold text-[color:var(--sem-display-headline)]">
                   {day.getDate()}
                 </p>
-                <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">{jobCount} {t("jobsShort")} Â· {load}%</p>
+                <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">{jobCount} {t("jobsShort")} · {load}%</p>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[color:var(--cmp-surface-soft)]">
                   <div className={`h-full rounded-full ${tone === "danger" ? "bg-[color:var(--sem-state-error)]" : tone === "warning" ? "bg-[color:var(--sem-state-warning)]" : tone === "primary" ? "bg-[color:var(--sem-accent-primary)]" : "bg-[color:var(--sem-state-success)]"}`} style={{ width: `${load}%` }} />
                 </div>
@@ -1109,7 +1109,7 @@ export default function ScheduleWorkspace({
                       <div className="min-w-0">
                         <p className="truncate font-medium text-[color:var(--sem-text-primary)]">{job.title}</p>
                         <p className="truncate text-xs text-[color:var(--sem-text-muted)]">
-                          {customer?.full_name ?? t("customerPending")} Â· {job.service_city} Â· {technician?.display_name ?? t("unassigned")}
+                          {customer?.full_name ?? t("customerPending")} · {job.service_city} · {technician?.display_name ?? t("unassigned")}
                         </p>
                       </div>
                       <div className="text-right">
@@ -1279,7 +1279,7 @@ export default function ScheduleWorkspace({
                     <span className="text-xs font-semibold text-[color:var(--sem-accent-primary)]">{formatCurrency(window.profitPotentialCents)}</span>
                   </div>
                   <p className="mt-2 text-sm text-[color:var(--sem-text-primary)]">{window.area}</p>
-                  <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{window.technicianName} Â· {window.useLabel}</p>
+                  <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{window.technicianName} · {window.useLabel}</p>
                 </div>
               )) : (
                 <p className="text-sm text-[color:var(--sem-text-secondary)]">{t("noOpenWindows")}</p>
@@ -1308,7 +1308,7 @@ export default function ScheduleWorkspace({
         {!SHOW_LEGACY_WEEK_GRID ? (
           <div className="hidden" aria-hidden="true" data-schedule-legacy-week-grid="true">
             {visibleDays.map((day) => (
-              <div key={day.toISOString()}>{formatDayHeading(day, locale)} Â· {countJobsByDay(day)} Â· {groupJobsByDay(day).length}</div>
+              <div key={day.toISOString()}>{formatDayHeading(day, locale)} · {countJobsByDay(day)} · {groupJobsByDay(day).length}</div>
             ))}
           </div>
         ) : null}

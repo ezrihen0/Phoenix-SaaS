@@ -39,7 +39,8 @@ function isOfficeRole(role: SessionRole | null) {
     || role === "admin"
     || role === "office_admin"
     || role === "dispatcher"
-    || role === "viewer";
+    || role === "viewer"
+    || role === "csr";
 }
 
 const executivePanelClass =

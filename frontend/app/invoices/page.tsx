@@ -30,6 +30,7 @@ import {
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerRoles } from "@/lib/auth/server-session";
 import { formatLocalizedCurrency } from "@/lib/i18n/formatters";
+import { canViewWarrantyCertificate } from "@/lib/crm/warranty-eligibility";
 
 const SHOW_LEGACY_INVOICES_INDEX = false;
 
@@ -187,9 +188,6 @@ function isUnpaidOpen(invoice: InvoiceListItem) {
   return invoice.balance_cents > 0 && invoice.lifecycle_status === "sent";
 }
 
-function canViewWarrantyCertificate(invoice: InvoiceListItem) {
-  return invoice.balance_cents <= 0;
-}
 
 function getInvoicePaymentAiReadyState(insights: InvoicePaymentInsight[] = []): InvoicePaymentAiReadyState {
   if (insights.length > 0) {
