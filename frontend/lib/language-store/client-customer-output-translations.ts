@@ -124,3 +124,9 @@ export async function listDocumentCustomerOutputTranslations(
     `/api/language-store/customer-output-translations/document?${query.toString()}`,
   );
 }
+
+export async function getCustomerOutputTranslationUsage() {
+  return customerOutputTranslationFetch<CustomerOutputTranslationUsageSummary>(
+    "/api/language-store/customer-output-translations/usage",
+  );
+}
