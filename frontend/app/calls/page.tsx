@@ -1,6 +1,21 @@
 import Link from "next/link";
-import { ArrowRight, PhoneCall } from "lucide-react";
+import {
+  ArrowRight,
+  Bot,
+  Clock3,
+  Headphones,
+  MessageSquare,
+  Mic2,
+  PhoneCall,
+  PhoneIncoming,
+  PhoneMissed,
+  ShieldCheck,
+  UserRound,
+  Voicemail,
+} from "lucide-react";
 
+import { BoardShell } from "@/components/board/board-shell";
+import { MetricTile } from "@/components/board/metric-tile";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerPermission } from "@/lib/auth/server-session";
 import { formatCallSourceLabel, formatVoicemailStatusLabel } from "@/lib/crm/display";
@@ -86,8 +101,16 @@ type CallsPageContext = {
     limit?: SearchParam;
     page?: SearchParam;
     pageSize?: SearchParam;
+    call?: SearchParam;
   }>;
 };
+
+/** Toggle legacy ledger / hybrid / grid views for fallback and QA. */
+const SHOW_LEGACY_CALLS_VIEWS = false;
+
+const callsPanelClass =
+  "theme-surface-card rounded-[28px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] shadow-[0_18px_40px_color-mix(in_srgb,var(--sem-board-glow)_72%,transparent)] backdrop-blur-md";
+const callsEyebrowClass = "text-[10px] uppercase tracking-[0.34em] text-[color:var(--sem-text-muted)]";
 
 const CALL_STATUS_OPTIONS = [
   { value: "", label: "All statuses" },
@@ -487,6 +510,276 @@ const callsLedgerHeaderCellClass = "border-r border-[color:var(--border-subtle)]
 const callsLedgerNumericClass = "font-[family:var(--font-geist-mono)] tabular-nums tracking-tight";
 const callsLedgerBodyCellClass = "border-r border-[color:var(--border-subtle)] px-3 py-3 align-top last:border-r-0";
 
+const RECOVERY_QUEUE_TIER_LABELS = [
+  "Missed / hot",
+  "Voicemail with intent",
+  "Matched customer",
+  "Unknown caller",
+  "Answered / completed",
+] as const;
+
+function hasVoicemailIntent(call: RecentCallListItem) {
+  return Boolean(call.aiSummary || call.voicemailTranscription || call.selectedServiceType);
+}
+
+function getRecoveryQueuePriority(call: RecentCallListItem) {
+  if (needsImmediateRecovery(call)) {
+    return 0;
+  }
+
+  if (hasVoicemailContext(call) && hasVoicemailIntent(call)) {
+    return 1;
+  }
+
+  if (call.matchedClientId || call.matchedLeadId) {
+    return 2;
+  }
+
+  if (isUnmatchedCall(call)) {
+    return 3;
+  }
+
+  return 4;
+}
+
+function sortRecoveryQueue(calls: RecentCallListItem[]) {
+  return [...calls].sort((left, right) => {
+    const priorityDelta = getRecoveryQueuePriority(left) - getRecoveryQueuePriority(right);
+
+    if (priorityDelta !== 0) {
+      return priorityDelta;
+    }
+
+    return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+  });
+}
+
+function isAiReviewCandidate(call: RecentCallListItem) {
+  return Boolean(
+    call.aiSummary
+    || call.missedCallSms
+    || (call.voicemailTranscription && !hasResolvedCallbackTask(call))
+    || hasNegativeSentiment(call),
+  );
+}
+
+function getCallAgeLabel(call: RecentCallListItem) {
+  const parsed = new Date(call.createdAt).getTime();
+
+  if (!Number.isFinite(parsed)) {
+    return "—";
+  }
+
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - parsed) / 60_000));
+
+  if (diffMinutes < 1) {
+    return "now";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m`;
+  }
+
+  const hours = Math.floor(diffMinutes / 60);
+
+  if (hours < 24) {
+    return `${hours}h`;
+  }
+
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function getCallIntentLabel(call: RecentCallListItem) {
+  return call.aiSummary
+    ?? call.selectedServiceType
+    ?? call.voicemailTranscription
+    ?? formatCallSourceLabel(call.source);
+}
+
+function buildRecoveryScript(call: RecentCallListItem) {
+  const name = getCallDisplayName(call);
+  const intent = getCallIntentLabel(call);
+
+  if (needsImmediateRecovery(call)) {
+    return `Hi ${name.split(" ")[0]}, this is your service team. We missed your call about ${intent.toLowerCase()}. I can help get that scheduled — was this urgent or are you looking for something this week?`;
+  }
+
+  if (hasVoicemailContext(call)) {
+    return `Hi ${name.split(" ")[0]}, thanks for the voicemail about ${intent.toLowerCase()}. I reviewed the message and wanted to follow up personally.`;
+  }
+
+  return `Hi ${name.split(" ")[0]}, following up on your recent call about ${intent.toLowerCase()}.`;
+}
+
+function countRecoveryLane(calls: RecentCallListItem[], matcher: (call: RecentCallListItem) => boolean) {
+  return calls.filter(matcher).length;
+}
+
+type SelectedCallFocusPanelProps = {
+  selectedCall: RecentCallListItem;
+  canManageCrmFromCalls: boolean;
+  callbackTaskAssignees: CallbackTaskAssigneeOption[];
+  hasMessagingSendPermission: boolean;
+};
+
+function SelectedCallFocusPanel({
+  selectedCall,
+  canManageCrmFromCalls,
+  callbackTaskAssignees,
+  hasMessagingSendPermission,
+}: SelectedCallFocusPanelProps) {
+  const formattedCreatedAt = formatDateTime(selectedCall.createdAt);
+  const operationalState = getOperationalState(selectedCall);
+  const pressureSignal = getPressureSignal(selectedCall);
+  const resolvedCallbackTask = hasResolvedCallbackTask(selectedCall);
+  const recoveryInMotion = hasCallbackRecoveryInMotion(selectedCall);
+  const showCallbackTaskControl = shouldShowCallbackTaskControl(selectedCall);
+  const showQueueCallbackControl = shouldShowQueueCallbackControl(selectedCall);
+  const inboundMappingState = getInboundMappingState(selectedCall);
+  const inboundNumberLabel = getInboundNumberLabel(selectedCall);
+  const inboundMarketLabel = getInboundMarketLabel(selectedCall);
+  const voiceHybridHint = telnyxVoiceIntakeHybridHint(selectedCall);
+
+  return (
+    <section className={`${callsPanelClass} p-5`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className={callsEyebrowClass}>Selected call</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">{getCallDisplayName(selectedCall)}</h2>
+          <p className={`mt-1 text-sm text-[color:var(--sem-text-secondary)] ${callsLedgerNumericClass}`}>{selectedCall.fromNumber ?? "Unknown"} · {formattedCreatedAt}</p>
+        </div>
+        <span className={operationalState.badgeClass}>{operationalState.label}</span>
+      </div>
+
+      <div className="mt-5 space-y-4 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Call intent</p>
+          <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-primary)]">{getCallIntentLabel(selectedCall)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Callback urgency</p>
+          <p className="mt-2 text-sm font-medium text-[color:var(--sem-text-primary)]">{pressureSignal.label}</p>
+          <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">{pressureSignal.detail} · {getCallAgeLabel(selectedCall)} elapsed</p>
+          <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">{operationalState.nextAction}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Opportunity</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {selectedCall.matchedClientId ? <span className="theme-status-success inline-flex rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em]">Client match</span> : null}
+            {selectedCall.matchedLeadId ? <span className="theme-status-warning inline-flex rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em]">Lead match</span> : null}
+            {isUnmatchedCall(selectedCall) ? <span className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">Unmatched</span> : null}
+            {inboundMarketLabel ? <span className="text-xs text-[color:var(--sem-text-secondary)]">{inboundMarketLabel}</span> : null}
+          </div>
+          <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">{inboundNumberLabel} · {formatCallSourceLabel(selectedCall.source)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">AI recommendation</p>
+          <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+            {selectedCall.aiSummary ?? selectedCall.voicemailTranscription ?? "No AI summary yet — operator review still required."}
+          </p>
+          {selectedCall.aiSentiment ? (
+            <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">Sentiment: {selectedCall.aiSentiment}</p>
+          ) : null}
+          {voiceHybridHint ? <p className="mt-2 text-xs text-[color:var(--sem-text-secondary)]">{voiceHybridHint}</p> : null}
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
+        <p className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Recovery script</p>
+        <p className="mt-3 text-sm leading-7 text-[color:var(--sem-text-secondary)]">{buildRecoveryScript(selectedCall)}</p>
+      </div>
+
+      <div className="mt-5 border-t border-[color:var(--cmp-border-subtle)] pt-5">
+        <p className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Operator actions</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {showQueueCallbackControl ? (
+            <QueueCallbackRequestControl
+              recentCallId={selectedCall.id}
+              queueStatus={selectedCall.queueStatus}
+              queueCallbackRequested={selectedCall.queueCallbackRequested}
+              callbackTasks={selectedCall.callbackTasks}
+            />
+          ) : null}
+          <CallRowActions
+            canManageCrm={canManageCrmFromCalls}
+            callId={selectedCall.id}
+            matchedClientId={selectedCall.matchedClientId}
+            matchedLeadId={selectedCall.matchedLeadId}
+            fromNumber={selectedCall.fromNumber}
+            source={selectedCall.source}
+            createdAt={formattedCreatedAt}
+            campaignName={selectedCall.campaignName}
+          />
+        </div>
+        {showCallbackTaskControl ? (
+          <div className="mt-3">
+            <CallbackTaskControl
+              recentCallId={selectedCall.id}
+              callbackTasks={selectedCall.callbackTasks}
+              assignees={callbackTaskAssignees}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-5 space-y-4">
+        <div className="rounded-[22px] border border-dashed border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">AI workbench</p>
+            <span className="inline-flex rounded-full border border-dashed border-[color:var(--cmp-border-accent)] px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-[color:var(--sem-text-secondary)]">
+              Review required
+            </span>
+          </div>
+          <p className="mt-3 text-xs leading-5 text-[color:var(--sem-text-muted)]">
+            AI assists operators. Nothing sends until a human reviews and approves.
+          </p>
+          <div className="mt-4 space-y-3">
+            <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-3">
+              <div className="flex items-start gap-3">
+                <MessageSquare className="mt-0.5 h-4 w-4 text-[color:var(--sem-text-muted)]" />
+                <div>
+                  <p className="text-sm font-medium text-[color:var(--sem-text-primary)]">SMS draft review</p>
+                  <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">Edit and approve before send.</p>
+                </div>
+              </div>
+              <div className="mt-3">
+                <CallsCopilotSmsDraft recentCallId={selectedCall.id} hasMessagingSendPermission={hasMessagingSendPermission} />
+              </div>
+            </div>
+            <div className="rounded-[18px] border border-dashed border-[color:var(--cmp-border-subtle)] p-3 opacity-80">
+              <div className="flex items-start gap-3">
+                <Mic2 className="mt-0.5 h-4 w-4 text-[color:var(--sem-text-muted)]" />
+                <div>
+                  <p className="text-sm font-medium text-[color:var(--sem-text-primary)]">Voice intake</p>
+                  <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">Future Telnyx assistant lane — operator supervises, no autonomous action.</p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-3">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-4 w-4 text-[color:var(--sem-text-muted)]" />
+                <div>
+                  <p className="text-sm font-medium text-[color:var(--sem-text-primary)]">Outcome tracking</p>
+                  <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">
+                    {resolvedCallbackTask
+                      ? "Callback resolved."
+                      : recoveryInMotion && selectedCall.queueCallbackRequested
+                        ? "Callback queued — awaiting completion."
+                        : operationalState.nextAction}
+                  </p>
+                  <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">
+                    Mapping: {inboundMappingState.label}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default async function CallsPage({ searchParams }: CallsPageContext) {
   const session = await requireServerPermission("/calls", "calls.view");
 
@@ -494,6 +787,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
   const canManageCrmFromCalls = session.profile?.role === "office_admin";
   const q = (firstValue(resolvedSearchParams.q) ?? "").trim();
   const callStatus = (firstValue(resolvedSearchParams.callStatus) ?? "").trim();
+  const selectedCallId = (firstValue(resolvedSearchParams.call) ?? "").trim();
   const requestedLimit = Number(firstValue(resolvedSearchParams.limit) ?? "100");
   const limit = CALL_LIMIT_OPTIONS.includes(requestedLimit as (typeof CALL_LIMIT_OPTIONS)[number])
     ? requestedLimit
@@ -534,11 +828,15 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pagedCalls = calls.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const sortedPagedCalls = sortRecoveryQueue(pagedCalls);
+  const selectedCall = sortedPagedCalls.find((call) => call.id === selectedCallId) ?? sortedPagedCalls[0] ?? null;
+  const aiReviewCount = calls.filter(isAiReviewCandidate).length;
   const paginationBase = {
     q: q || null,
     callStatus: callStatus || null,
     limit: String(limit),
     pageSize: String(pageSize),
+    call: selectedCall?.id ?? null,
   };
   const previousPageHref = buildCallsQueryString({ ...paginationBase, page: String(Math.max(1, currentPage - 1)) });
   const nextPageHref = buildCallsQueryString({ ...paginationBase, page: String(Math.min(totalPages, currentPage + 1)) });
@@ -557,138 +855,111 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
   const matchedBookShare = getBookShare(matchedOpportunityCount, totalCount);
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-12 lg:px-10">
-      <section className="theme-surface-modal rounded-[32px] border border-[color:rgba(212,175,55,0.2)] bg-[linear-gradient(170deg,rgba(8,8,8,0.96),rgba(19,19,19,0.9))] p-6 shadow-[0_36px_120px_rgba(0,0,0,0.4)]">
-        <div className="overflow-hidden rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)]">
-          <div className="flex items-center gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-2">
-            <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-primary)]">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[color:var(--sem-accent-primary)] opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-[color:var(--sem-accent-primary)]" />
+    <BoardShell gridOpacity="subtle">
+      <main className="mx-auto max-w-[1760px] px-5 py-6 lg:px-8">
+        <header className={`${callsPanelClass} px-6 py-5`}>
+          <div className="flex flex-wrap items-start justify-between gap-5">
+            <div>
+              <p className={callsEyebrowClass}>Call Center · Revenue Recovery</p>
+              <h1 className="mt-2 flex items-center gap-3 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-display-headline)] sm:text-5xl">
+                <PhoneCall className="h-8 w-8 text-[color:var(--sem-accent-primary)]" />
+                Recovery Command Desk
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+                Missed revenue first, voicemail review, matched opportunities, and operator-approved AI drafts — without losing the action stack.
+              </p>
+              <p className={`mt-3 text-xs uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)] ${callsLedgerNumericClass}`}>
+                {urgentRecoveryCount} hot · {callbacksInMotionCount} in motion · {voicemailReviewCount} voicemail · {totalCount} loaded
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-4 py-2 text-sm text-[color:var(--sem-text-secondary)]">
+                <Headphones className="h-4 w-4" />
+                Operator desk
               </span>
-              Live ticker
-            </span>
-            <span className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">
-              {latestSignalAge ? `Feed refreshed · last signal ${latestSignalAge}` : "Scanning call flow"}
-            </span>
-          </div>
-          <div className="overflow-x-auto px-4 py-3">
-            <div className="flex min-w-max items-center gap-6 text-xs uppercase tracking-[0.18em] text-[color:var(--text-secondary)]">
-              {liveTickerItems.map((item) => (
-                <span key={item} className="whitespace-nowrap">
-                  <span className="mr-2 text-[color:var(--text-muted)]">▸</span>
-                  {item}
-                </span>
-              ))}
+              <Link
+                href="/home"
+                className="inline-flex items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-4 py-2 text-sm text-[color:var(--sem-text-secondary)] hover:text-[color:var(--sem-text-primary)]"
+              >
+                Back to home
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
           </div>
-        </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.3em] text-[color:var(--flat-gold)]">Live Call Flow</p>
-            <h1 className="mt-3 flex items-center gap-3 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--text-primary)]">
-              <PhoneCall className="h-8 w-8 text-[color:var(--flat-gold)]" />
-              Calls Trading Desk
-            </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-[color:var(--text-secondary)]">
-              Scan inbound pressure, watch recovery positions, and execute the next move on every caller without losing desk context.
-            </p>
-            <p className={`mt-3 text-xs uppercase tracking-[0.22em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>
-              {urgentRecoveryCount} watchlist · {callbacksInMotionCount} recovery in motion · {negativeSentimentCount} negative signals · {totalCount} positions loaded
-            </p>
+          <div className="mt-5 overflow-hidden rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-2.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-[color:var(--sem-text-secondary)]">Recovery tape</p>
+              <p className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">
+                {latestSignalAge ? `Last signal ${latestSignalAge}` : "Awaiting feed"}
+              </p>
+            </div>
+            <div className="overflow-x-auto px-4 py-3">
+              <div className="flex min-w-max items-center gap-4 text-xs text-[color:var(--sem-text-secondary)]">
+                {liveTickerItems.map((item, index) => (
+                  <span key={item} className="inline-flex items-center gap-4 whitespace-nowrap">
+                    {index > 0 ? <span aria-hidden="true" className="text-[color:var(--sem-text-muted)]">|</span> : null}
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
+        </header>
 
-          <Link
-            href="/home"
-            className="theme-btn-secondary inline-flex items-center gap-2 rounded-[18px] px-4 py-3 text-sm transition"
-          >
-            Back to home
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <article className="rounded-[24px] border border-[color:rgba(248,113,113,0.24)] bg-[color:rgba(120,18,18,0.08)] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:#fecaca]">Recovery Watchlist</p>
-              <span className={`text-[10px] uppercase tracking-[0.18em] text-[color:#fecaca] ${callsLedgerNumericClass}`}>
-                {getMovementHint(urgentRecoveryCount, "Pressure")}
-              </span>
-            </div>
-            <p className={`mt-3 text-4xl font-semibold text-[color:var(--text-primary)] ${callsLedgerNumericClass}`}>{urgentRecoveryCount}</p>
-            <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-[color:#fecaca]">
-              {urgentBookShare ?? "No open pressure"}
-            </p>
-            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Missed callers with no callback in motion.</p>
-          </article>
-          <article className="rounded-[24px] border border-[color:rgba(212,175,55,0.18)] bg-[color:rgba(212,175,55,0.04)] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">Recovery In Motion</p>
-              <span className={`text-[10px] uppercase tracking-[0.18em] text-[color:var(--flat-gold)] ${callsLedgerNumericClass}`}>
-                {getMovementHint(callbacksInMotionCount, "Active")}
-              </span>
-            </div>
-            <p className={`mt-3 text-4xl font-semibold text-[color:var(--text-primary)] ${callsLedgerNumericClass}`}>{callbacksInMotionCount}</p>
-            <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-[color:var(--flat-gold)]">
-              {motionBookShare ?? "Queue idle"}
-            </p>
-            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Queued or assigned callback positions.</p>
-          </article>
-          <article className="rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--text-muted)]">Signal Backlog</p>
-              <span className={`text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>
-                {getMovementHint(voicemailReviewCount + missedCallSmsCount, "Review")}
-              </span>
-            </div>
-            <p className={`mt-3 text-4xl font-semibold text-[color:var(--text-primary)] ${callsLedgerNumericClass}`}>{voicemailReviewCount}</p>
-            <p className={`mt-1 text-[11px] uppercase tracking-[0.16em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>
-              +{missedCallSmsCount} SMS touchpoints
-            </p>
-            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Voicemail-rich calls awaiting desk review.</p>
-          </article>
-          <article className="rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--text-muted)]">Matched Flow</p>
-              <span className={`text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>
-                {unmatchedCallerCount > 0 ? `▼ ${unmatchedCallerCount} gap` : "Aligned"}
-              </span>
-            </div>
-            <p className={`mt-3 text-4xl font-semibold text-[color:var(--text-primary)] ${callsLedgerNumericClass}`}>{matchedOpportunityCount}</p>
-            <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
-              {matchedBookShare ?? "No matches"} · {unmatchedCallerCount} unmatched
-            </p>
-            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Client and lead matches ready for next move.</p>
-          </article>
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricTile
+            icon={PhoneMissed}
+            label="Missed / hot"
+            value={urgentRecoveryCount}
+            helper={urgentBookShare ?? "No open missed pressure"}
+          />
+          <MetricTile
+            icon={Clock3}
+            label="Recovery in motion"
+            value={callbacksInMotionCount}
+            helper={motionBookShare ?? "Callback queue idle"}
+          />
+          <MetricTile
+            icon={Voicemail}
+            label="Voicemail review"
+            value={voicemailReviewCount}
+            helper={`${missedCallSmsCount} SMS touchpoints`}
+          />
+          <MetricTile
+            icon={Bot}
+            label="AI review queue"
+            value={aiReviewCount}
+            helper="Operator approval required"
+          />
         </div>
 
         {!canManageCrmFromCalls ? (
-          <div className="mt-6 rounded-[24px] border border-[color:rgba(56,189,248,0.2)] bg-[color:rgba(12,74,110,0.14)] px-4 py-3 text-sm text-[color:#dbeafe]">
+          <div className="theme-alert-info mt-5 rounded-[22px] border px-4 py-3 text-sm">
             CRM follow-up actions stay read-only for your role on this screen. Queue callbacks and SMS remain available, while customer, lead, and job actions require office admin access.
           </div>
         ) : null}
 
-        <form className="mt-6 rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)] p-4" method="GET">
+        <form className={`${callsPanelClass} mt-5 p-4`} method="GET">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--text-muted)]">Position Filter</p>
-              <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Narrow the working ledger before executing next moves.</p>
+              <p className={callsEyebrowClass}>Queue filter</p>
+              <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">Narrow the recovery queue before selecting the next caller.</p>
             </div>
-            <p className={`text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>{calls.length} positions in view</p>
+            <p className={`text-xs uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)] ${callsLedgerNumericClass}`}>{calls.length} in view</p>
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.62fr)_auto]">
             <label className="space-y-2">
-              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Caller scan</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">Caller scan</span>
               <input
                 name="q"
                 defaultValue={q}
                 placeholder="Caller, destination, or matched client"
-                className="theme-input-control w-full rounded-[18px] px-4 py-3 text-sm outline-none placeholder:text-[color:var(--text-muted)]"
+                className="theme-input-control w-full rounded-[18px] px-4 py-3 text-sm outline-none placeholder:text-[color:var(--sem-text-muted)]"
               />
             </label>
             <label className="space-y-2">
-              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">State filter</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">State filter</span>
               <select
                 name="callStatus"
                 defaultValue={callStatus}
@@ -700,7 +971,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
               </select>
             </label>
             <label className="space-y-2">
-              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Page depth</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">Page depth</span>
               <select
                 name="pageSize"
                 defaultValue={String(pageSize)}
@@ -733,6 +1004,177 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
           </div>
         ) : (
           <>
+            {!SHOW_LEGACY_CALLS_VIEWS ? (
+              <>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    { icon: PhoneMissed, label: "Missed / hot", count: countRecoveryLane(calls, needsImmediateRecovery) },
+                    { icon: Voicemail, label: "Voicemail lane", count: countRecoveryLane(calls, (call) => hasVoicemailContext(call) && hasVoicemailIntent(call)) },
+                    { icon: PhoneIncoming, label: "Matched flow", count: matchedOpportunityCount },
+                    { icon: Bot, label: "AI review", count: aiReviewCount },
+                  ].map((lane) => {
+                    const LaneIcon = lane.icon;
+
+                    return (
+                      <div key={lane.label} className="rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <LaneIcon className="h-4 w-4 text-[color:var(--sem-accent-primary)]" />
+                            <p className="text-xs font-medium text-[color:var(--sem-text-primary)]">{lane.label}</p>
+                          </div>
+                          <p className={`text-lg font-semibold text-[color:var(--sem-display-headline)] ${callsLedgerNumericClass}`}>{lane.count}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+                  <section className={`${callsPanelClass} overflow-hidden`}>
+                    <div className="border-b border-[color:var(--cmp-border-subtle)] px-5 py-4">
+                      <p className={callsEyebrowClass}>Recovery queue</p>
+                      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">Prioritized caller scan</h2>
+                      <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">
+                        Missed hot → voicemail intent → matched → unknown → answered.
+                      </p>
+                    </div>
+                    <div className="space-y-2 p-3">
+                      {sortedPagedCalls.map((call, index) => {
+                        const priority = getRecoveryQueuePriority(call);
+                        const showTierHeader = index === 0 || getRecoveryQueuePriority(sortedPagedCalls[index - 1]!) !== priority;
+                        const callHref = buildCallsQueryString({ ...paginationBase, page: String(currentPage), call: call.id });
+                        const isSelected = selectedCall?.id === call.id;
+                        const operationalState = getOperationalState(call);
+                        const pressureSignal = getPressureSignal(call);
+                        const aiReview = isAiReviewCandidate(call);
+
+                        return (
+                          <div key={call.id}>
+                            {showTierHeader ? (
+                              <p className="px-2 pb-2 pt-3 text-[10px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">
+                                {RECOVERY_QUEUE_TIER_LABELS[priority]}
+                              </p>
+                            ) : null}
+                            <Link
+                              href={callHref}
+                              className={[
+                                "block rounded-[20px] border px-4 py-3 transition",
+                                isSelected
+                                  ? "border-[color:var(--sem-accent-primary)] bg-[color:var(--cmp-surface-soft)] ring-1 ring-[color:var(--sem-accent-primary)]"
+                                  : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] hover:border-[color:var(--cmp-border-accent)]",
+                                operationalState.surfaceClass,
+                              ].join(" ")}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-[color:var(--sem-text-primary)]">{getCallDisplayName(call)}</p>
+                                  <p className="mt-1 truncate text-xs text-[color:var(--sem-text-secondary)]">{getCallIntentLabel(call)}</p>
+                                </div>
+                                <span className={`shrink-0 text-[11px] ${callsLedgerNumericClass} text-[color:var(--sem-text-muted)]`}>{getCallAgeLabel(call)}</span>
+                              </div>
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <span className={operationalState.badgeClass}>{operationalState.label}</span>
+                                <span className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">{pressureSignal.label}</span>
+                                {hasVoicemailContext(call) ? <span className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">VM</span> : null}
+                                {call.matchedClientId || call.matchedLeadId ? <span className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">Matched</span> : null}
+                                {aiReview ? (
+                                  <span className="inline-flex rounded-full border border-dashed border-[color:var(--cmp-border-accent)] px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-[color:var(--sem-text-secondary)]">
+                                    Review required
+                                  </span>
+                                ) : null}
+                              </div>
+                            </Link>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  <aside className="xl:sticky xl:top-4 xl:max-h-[calc(100vh-1.5rem)] xl:self-start xl:overflow-y-auto">
+                    {selectedCall ? (
+                      <SelectedCallFocusPanel
+                        selectedCall={selectedCall}
+                        canManageCrmFromCalls={canManageCrmFromCalls}
+                        callbackTaskAssignees={callbackTaskAssignees}
+                        hasMessagingSendPermission={session.permissions.includes("messaging.send")}
+                      />
+                    ) : null}
+                  </aside>
+                </div>
+
+                <div className="mt-6 grid gap-6 xl:grid-cols-3">
+                  <section className={`${callsPanelClass} p-5`}>
+                    <p className={callsEyebrowClass}>Operator load</p>
+                    <h3 className="mt-2 text-xl font-semibold text-[color:var(--sem-display-headline)]">Desk capacity</h3>
+                    <div className="mt-4 space-y-3">
+                      {callbackTaskAssignees.length > 0 ? (
+                        callbackTaskAssignees.slice(0, 4).map((assignee, index) => {
+                          const load = Math.min(95, 28 + callbacksInMotionCount * 9 + index * 11);
+
+                          return (
+                            <div key={assignee.id} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                  <UserRound className="h-4 w-4 text-[color:var(--sem-accent-primary)]" />
+                                  <div>
+                                    <p className="text-sm font-medium text-[color:var(--sem-text-primary)]">{assignee.fullName}</p>
+                                    <p className="text-xs text-[color:var(--sem-text-muted)]">Callback assignee</p>
+                                  </div>
+                                </div>
+                                <p className={`text-sm font-semibold ${callsLedgerNumericClass} text-[color:var(--sem-text-secondary)]`}>{String(load)}%</p>
+                              </div>
+                              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[color:var(--cmp-surface-soft)]">
+                                <div className="h-full rounded-full bg-[color:var(--sem-accent-primary)]" style={{ width: load + "%" }} />
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-sm text-[color:var(--sem-text-muted)]">No assignees loaded — callback ownership still available per call.</p>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className={`${callsPanelClass} p-5 xl:col-span-1`}>
+                    <p className={callsEyebrowClass}>AI pipeline</p>
+                    <h3 className="mt-2 text-xl font-semibold text-[color:var(--sem-display-headline)]">Assist-only lane</h3>
+                    <div className="mt-4 space-y-3">
+                      {sortedPagedCalls.filter(isAiReviewCandidate).slice(0, 3).map((call) => (
+                        <Link
+                          key={`ai-${call.id}`}
+                          href={buildCallsQueryString({ ...paginationBase, page: String(currentPage), call: call.id })}
+                          className="block rounded-[18px] border border-dashed border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)] p-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-[color:var(--sem-text-primary)]">{getCallDisplayName(call)}</p>
+                              <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">{call.aiSummary ? "Summary ready" : call.missedCallSms ? "SMS draft pending review" : "Transcript pending review"}</p>
+                            </div>
+                            <span className="shrink-0 text-[10px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">Review</span>
+                          </div>
+                        </Link>
+                      ))}
+                      {sortedPagedCalls.filter(isAiReviewCandidate).length === 0 ? (
+                        <p className="text-sm text-[color:var(--sem-text-muted)]">No AI-assisted drafts awaiting review on this page.</p>
+                      ) : null}
+                    </div>
+                  </section>
+
+                  <section className={`${callsPanelClass} p-5`}>
+                    <p className={callsEyebrowClass}>Desk posture</p>
+                    <h3 className="mt-2 text-xl font-semibold text-[color:var(--sem-display-headline)]">Recovery health</h3>
+                    <div className="mt-4 space-y-3 text-sm text-[color:var(--sem-text-secondary)]">
+                      <p>{matchedBookShare ?? "No matched share"} · {unmatchedCallerCount} unmatched callers in feed.</p>
+                      <p>{negativeSentimentCount} negative AI reads · {missedCallSmsCount} automated SMS touchpoints logged.</p>
+                      <p className="text-xs text-[color:var(--sem-text-muted)]">Operators own every outbound action. AI surfaces drafts and summaries only.</p>
+                    </div>
+                  </section>
+                </div>
+              </>
+            ) : null}
+
+            {SHOW_LEGACY_CALLS_VIEWS ? (
+              <>
             <style
               dangerouslySetInnerHTML={{
                 __html: `
@@ -1226,11 +1668,13 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                 </div>
               </div>
             </div>
+              </>
+            ) : null}
           </>
         )}
 
         {totalCount > 0 ? (
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[color:var(--text-secondary)]">
+          <div className={`${callsPanelClass} mt-6 flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm text-[color:var(--sem-text-secondary)]`}>
             <p className={callsLedgerNumericClass}>
               Tape {String((currentPage - 1) * pageSize + 1).padStart(2, "0")}–{String(Math.min(currentPage * pageSize, totalCount)).padStart(2, "0")} of {String(totalCount).padStart(2, "0")} positions
             </p>
@@ -1255,7 +1699,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
             </div>
           </div>
         ) : null}
-      </section>
-    </main>
+      </main>
+    </BoardShell>
   );
 }
