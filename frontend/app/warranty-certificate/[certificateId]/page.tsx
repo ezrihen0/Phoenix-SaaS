@@ -66,9 +66,9 @@ export default async function WarrantyCertificateDetailPage({
   }
 
   return (
-    <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
-      <div className="mx-auto max-w-7xl px-6 py-10 lg:px-10 print:max-w-none print:px-0 print:py-0">
-        <section className="theme-surface-modal rounded-[36px] p-7 sm:p-8 print:rounded-none print:bg-transparent print:p-0 print:shadow-none">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(30,64,175,0.12),transparent_34%),linear-gradient(180deg,#f8fafc,#eef2f7)] text-slate-900 print:bg-white">
+      <div className="mx-auto max-w-[1280px] px-5 py-6 lg:px-8 print:max-w-none print:px-0 print:py-0">
+        <section className="print:rounded-none print:bg-transparent print:p-0 print:shadow-none">
           <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
             <Link
               href={certificate.related_invoice_id ? `/invoices/${certificate.related_invoice_id}` : "/invoices"}
@@ -93,6 +93,7 @@ export default async function WarrantyCertificateDetailPage({
               invoiceNumber={certificate.snapshot.invoiceNumber ?? "-"}
               issuedAt={certificate.warranty_start_date}
               paidAt={certificate.warranty_start_date}
+              warrantyEndDate={certificate.warranty_end_date}
               customerName={certificate.snapshot.customerName}
               customerCompanyName={certificate.snapshot.customerCompany}
               customerEmail={certificate.snapshot.customerEmail}
