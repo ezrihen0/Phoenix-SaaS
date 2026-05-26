@@ -1,7 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { InspectionWorkspaceDesk } from "@/components/inspections/inspection-workspace-desk";
+import { canManageInspections, formatSectionLabel } from "@/components/inspections/inspection-labels";
+import type { StructuredRecommendationDraft } from "@/components/inspections/inspection-checklist-row";
 import {
   assignInspectionPhoto,
   generateInspection,
@@ -14,33 +18,14 @@ import {
   unlockInspectionForCorrection,
   uploadInspectionPhotos,
 } from "@/lib/inspections/browser-api";
+import type { SessionRole } from "@/lib/auth/server-session";
 
-function formatSectionLabel(sectionKey: string) {
-  const sectionLabels: Record<string, string> = {
-    appliance_condition: "Fireplace / Interior",
-    venting: "Venting / Draft / Operation",
-    safety: "Safety Concerns",
-    fireplace_interior: "Fireplace / Interior",
-    chimney_exterior: "Chimney / Exterior",
-    venting_draft_operation: "Venting / Draft / Operation",
-    water_weather_protection: "Water / Weather Protection",
-    safety_concerns: "Safety Concerns",
-    recommendations: "Recommendations",
-  };
-  if (sectionLabels[sectionKey]) {
-    return sectionLabels[sectionKey];
-  }
-  return sectionKey
-    .split("_")
-    .map((segment) => `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`)
-    .join(" ");
-}
+export const SHOW_LEGACY_INSPECTIONS = false;
 
-type StructuredRecommendationDraft = {
-  issueObserved: string;
-  riskIfIgnored: string;
-  recommendedAction: string;
-  priorityLevel: "P1" | "P2" | "P3" | "P4";
+type InspectionWorkspaceClientProps = {
+  inspectionId: string;
+  permissions: string[];
+  sessionRole: SessionRole | null;
 };
 
 const priorityRanks: Record<StructuredRecommendationDraft["priorityLevel"], string> = {
@@ -177,7 +162,8 @@ function resolveStandardPenalty(item: InspectionWorkspacePayload["items"][number
   return 6;
 }
 
-export default function InspectionWorkspaceClient({ inspectionId }: { inspectionId: string }) {
+export default function InspectionWorkspaceClient({ inspectionId, permissions, sessionRole }: InspectionWorkspaceClientProps) {
+  const canManage = canManageInspections(permissions);
   const [workspace, setWorkspace] = useState<InspectionWorkspacePayload | null>(null);
   const [localItems, setLocalItems] = useState<InspectionWorkspacePayload["items"]>([]);
   const [pendingItemPatches, setPendingItemPatches] = useState<
@@ -191,7 +177,7 @@ export default function InspectionWorkspaceClient({ inspectionId }: { inspection
   const [gasLicenseHolderName, setGasLicenseHolderName] = useState("");
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
   const [recommendationDrafts, setRecommendationDrafts] = useState<Record<string, StructuredRecommendationDraft>>({});
-  const [activeSectionKey, setActiveSectionKey] = useState<string | null>(null);
+  const [activeSectionKey, setActiveSectionKey] = useState<string | "all" | null>("all");
   const isFlushingItemPatchesRef = useRef(false);
   const pendingItemPatchesRef = useRef(pendingItemPatches);
   const recommendationDraftsRef = useRef(recommendationDrafts);
@@ -479,14 +465,26 @@ export default function InspectionWorkspaceClient({ inspectionId }: { inspection
     return () => window.clearTimeout(timer);
   }, [inspectionId, pendingItemPatches]);
 
+  const filteredItems = useMemo(() => {
+    if (!activeSectionKey || activeSectionKey === "all") {
+      return localItems;
+    }
+    return localItems.filter((item) => item.section_key === activeSectionKey);
+  }, [activeSectionKey, localItems]);
+
   useEffect(() => {
     if (!groupedItems.length) {
       setActiveSectionKey(null);
       return;
     }
 
-    if (!activeSectionKey || !groupedItems.some(([section]) => section === activeSectionKey)) {
-      setActiveSectionKey(groupedItems[0][0]);
+    if (activeSectionKey === null) {
+      setActiveSectionKey("all");
+      return;
+    }
+
+    if (activeSectionKey !== "all" && !groupedItems.some(([section]) => section === activeSectionKey)) {
+      setActiveSectionKey("all");
     }
   }, [activeSectionKey, groupedItems]);
 
@@ -634,6 +632,109 @@ export default function InspectionWorkspaceClient({ inspectionId }: { inspection
     link.remove();
   }
 
+  async function handleGenerate() {
+    setSendFeedback(null);
+    setBusy("generate");
+    try {
+      await flushPendingItemPatches();
+      const data = await generateInspection(inspectionId);
+      applyWorkspace(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generate failed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleMarkSentAndLock() {
+    setSendFeedback(null);
+    setBusy("send");
+    try {
+      await flushPendingItemPatches();
+      const data = await sendInspection(inspectionId);
+      applyWorkspace(data);
+      setError(null);
+      const sentAt = data.inspectionMeta.sent_to_customer_at;
+      const lockedAt = data.inspectionMeta.locked_at;
+      if (sentAt && lockedAt) {
+        setSendFeedback({
+          type: "success",
+          message: "Report marked as sent and locked for editing.",
+        });
+      } else if (sentAt) {
+        setSendFeedback({
+          type: "success",
+          message: "Report marked as sent.",
+        });
+      } else {
+        setSendFeedback({
+          type: "success",
+          message: "Mark sent request completed.",
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Mark sent failed.";
+      setError(message);
+      setSendFeedback({
+        type: "error",
+        message,
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleUnlock() {
+    setBusy("unlock");
+    try {
+      const data = await unlockInspectionForCorrection(inspectionId);
+      applyWorkspace(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unlock failed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleSaveGasLicense() {
+    const data = await patchInspectionMeta(inspectionId, {
+      gas_license_number: gasLicenseNumber,
+      gas_license_holder_name: gasLicenseHolderName,
+    });
+    applyWorkspace(data);
+  }
+
+  async function handleRequiredFieldBlur(fieldId: string, value: string) {
+    const data = await patchRequiredField(inspectionId, fieldId, { field_value: value });
+    applyWorkspace(data);
+  }
+
+  function handleStatusChange(itemId: string, status: "satisfactory" | "unsatisfactory" | "na") {
+    setLocalItems((current) => current.map((entry) => (entry.id === itemId ? { ...entry, status } : entry)));
+    setPendingItemPatches((current) => ({
+      ...current,
+      [itemId]: {
+        ...current[itemId],
+        status,
+      },
+    }));
+  }
+
+  function handleRecommendationBlur(itemId: string, value: string | null) {
+    setLocalItems((current) =>
+      current.map((entry) => (entry.id === itemId ? { ...entry, recommendation_text: value } : entry))
+    );
+    setPendingItemPatches((current) => ({
+      ...current,
+      [itemId]: {
+        ...current[itemId],
+        recommendation_text: value,
+      },
+    }));
+  }
+
   const sendDisabled = Boolean(busy)
     || Boolean(workspace?.inspectionMeta.is_internal_draft)
     || !workspace?.inspectionMeta.generated_pdf_at
@@ -641,7 +742,8 @@ export default function InspectionWorkspaceClient({ inspectionId }: { inspection
 
   const generateDisabled = Boolean(busy)
     || Boolean(workspace?.inspectionMeta.is_internal_draft)
-    || !liveClientScoreOrCompliance.can_generate;
+    || !liveClientScoreOrCompliance.can_generate
+    || !canManage;
   const generateRemainingCount = liveClientScoreOrCompliance.gate_errors.length;
   const generateDisabledTooltip = generateDisabled
     ? generateRemainingCount > 0
@@ -650,7 +752,7 @@ export default function InspectionWorkspaceClient({ inspectionId }: { inspection
         ? "Internal drafts must be converted before generating."
         : "Generate report is not available yet."
     : undefined;
-  const photoButtonsDisabled = Boolean(busy) || Boolean(workspace?.inspectionMeta.locked_at);
+  const photoButtonsDisabled = Boolean(busy) || Boolean(workspace?.inspectionMeta.locked_at) || !canManage;
 
   const sendDisabledReason = workspace?.inspectionMeta.locked_at
     ? "Report already sent and locked."
@@ -661,15 +763,19 @@ export default function InspectionWorkspaceClient({ inspectionId }: { inspection
       : null;
 
   if (isDesktop === null) {
-    return <main className="p-6 text-sm text-[color:var(--text-secondary)]">Loading workspace...</main>;
+    return <main className="p-6 text-sm text-zinc-500">Loading workspace...</main>;
   }
 
   if (!isDesktop) {
-    return <main className="p-6 text-sm text-[color:var(--text-secondary)]">Desktop authoring required for MVP.</main>;
+    return <main className="p-6 text-sm text-zinc-500">Desktop authoring required for MVP.</main>;
   }
 
-  return (
-    <main className="relative h-[calc(100vh-92px)] px-2 pb-3 pt-4">
+  if (!workspace) {
+    return <main className="p-6 text-sm text-zinc-500">Loading workspace...</main>;
+  }
+
+  const fileInputs = (
+    <>
       <input
         ref={cameraInputRef}
         type="file"
@@ -690,8 +796,35 @@ export default function InspectionWorkspaceClient({ inspectionId }: { inspection
           void attachPhotoFilesToItem(event.target.files);
         }}
       />
-      {error ? <p className="theme-alert-error mb-2 rounded-[12px] border px-3 py-2 text-sm">{error}</p> : null}
-      <div className="grid h-full grid-cols-[260px_1fr_420px] gap-3">
+    </>
+  );
+
+  const previewModal = isPreviewExpanded ? (
+    <div className="fixed inset-0 z-[80] bg-black/70 p-4">
+      <div className="mx-auto flex h-full w-full max-w-[1200px] flex-col rounded-[16px] border border-zinc-200 bg-white p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Expanded Preview</p>
+          <button type="button" className="rounded-xl border border-zinc-200 px-3 py-1 text-xs" onClick={() => setIsPreviewExpanded(false)}>
+            Close
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto rounded border border-zinc-200 bg-zinc-50 p-2">
+          {generatedPdfUrl ? (
+            <iframe title="pdf-preview-expanded" src={generatedPdfUrl} className="h-full min-h-[640px] w-full rounded" />
+          ) : (
+            <p className="text-xs text-zinc-500">Generate report to preview PDF.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  if (SHOW_LEGACY_INSPECTIONS) {
+    return (
+      <main className="relative h-[calc(100vh-92px)] px-2 pb-3 pt-4">
+        {fileInputs}
+        {error ? <p className="theme-alert-error mb-2 rounded-[12px] border px-3 py-2 text-sm">{error}</p> : null}
+        <div className="grid h-full grid-cols-[260px_1fr_420px] gap-3">
         <aside className="theme-surface-card overflow-auto rounded-[18px] p-3">
           <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">Sections</p>
           <div className="mt-3 space-y-2">
@@ -1108,28 +1241,63 @@ export default function InspectionWorkspaceClient({ inspectionId }: { inspection
           </div>
         </aside>
       </div>
-      {isPreviewExpanded ? (
-        <div className="fixed inset-0 z-[80] bg-black/70 p-4">
-          <div className="mx-auto flex h-full w-full max-w-[1200px] flex-col rounded-[16px] border border-[color:var(--border-subtle)] bg-[color:var(--bg-primary)] p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">Expanded Preview</p>
-              <button
-                className="theme-btn-secondary rounded-[10px] px-3 py-1 text-xs"
-                onClick={() => setIsPreviewExpanded(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto rounded border border-[color:var(--border-subtle)] bg-[color:var(--bg-soft)] p-2">
-              {generatedPdfUrl ? (
-                <iframe title="pdf-preview-expanded" src={generatedPdfUrl} className="h-full min-h-[640px] w-full rounded" />
-              ) : (
-                <p className="text-xs text-[color:var(--text-secondary)]">Generate report to preview PDF.</p>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </main>
+      {previewModal}
+      </main>
+    );
+  }
+
+  return (
+    <>
+      {fileInputs}
+      {error ? <p className="mx-auto mb-2 max-w-[96rem] rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-900">{error}</p> : null}
+      <InspectionWorkspaceDesk
+        workspace={workspace}
+        localItems={localItems}
+        filteredItems={filteredItems}
+        activeSectionKey={activeSectionKey}
+        recommendationDrafts={recommendationDrafts}
+        liveClientScoreOrCompliance={liveClientScoreOrCompliance}
+        missingWettFieldsCount={missingWettFieldsCount}
+        gasLicenseNumber={gasLicenseNumber}
+        gasLicenseHolderName={gasLicenseHolderName}
+        gasLicenseMissing={gasLicenseMissing}
+        generateDisabled={generateDisabled}
+        generateDisabledTooltip={generateDisabledTooltip}
+        sendDisabled={sendDisabled}
+        sendDisabledReason={sendDisabledReason}
+        sendFeedback={sendFeedback}
+        busy={busy}
+        generatedPdfUrl={generatedPdfUrl}
+        canManage={canManage}
+        sessionRole={sessionRole}
+        onSelectSection={setActiveSectionKey}
+        onStatusChange={handleStatusChange}
+        onOpenPhotoPicker={openItemPhotoPicker}
+        onUpdateRecommendationDraft={updateStructuredRecommendationDraft}
+        onCommitRecommendationDraft={commitStructuredRecommendationDraft}
+        onRecommendationBlur={handleRecommendationBlur}
+        onGasLicenseNumberChange={setGasLicenseNumber}
+        onGasLicenseHolderNameChange={setGasLicenseHolderName}
+        onSaveGasLicense={() => {
+          void handleSaveGasLicense();
+        }}
+        onGenerate={() => {
+          void handleGenerate();
+        }}
+        onMarkSentAndLock={() => {
+          void handleMarkSentAndLock();
+        }}
+        onUnlock={() => {
+          void handleUnlock();
+        }}
+        onExpandPreview={() => setIsPreviewExpanded(true)}
+        onOpenPdf={openGeneratedPdfInNewTab}
+        onDownloadPdf={downloadGeneratedPdf}
+        onRequiredFieldBlur={(fieldId, value) => {
+          void handleRequiredFieldBlur(fieldId, value);
+        }}
+      />
+      {previewModal}
+    </>
   );
 }

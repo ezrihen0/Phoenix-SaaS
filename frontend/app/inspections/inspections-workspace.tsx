@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText } from "lucide-react";
 
+import { InspectionCommandCenterList } from "@/components/inspections/inspection-command-center-list";
+import type { SessionRole } from "@/lib/auth/server-session";
 import { MasterMobileList, MasterTable, MasterTableRow, type MasterTableState } from "@/components/master-table";
 import {
   createInspection,
@@ -73,7 +75,7 @@ function inspectionStatusBadgeClass(status: string) {
   return "theme-badge inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em]";
 }
 
-export default function InspectionsWorkspace() {
+export function LegacyInspectionsWorkspace() {
   const router = useRouter();
   const [rows, setRows] = useState<InspectionListRow[]>([]);
   const [page, setPage] = useState(1);
@@ -698,6 +700,21 @@ export default function InspectionsWorkspace() {
       ) : null}
     </main>
   );
+}
+
+export const SHOW_LEGACY_INSPECTIONS = false;
+
+type InspectionsWorkspaceProps = {
+  permissions: string[];
+  sessionRole: SessionRole | null;
+};
+
+export default function InspectionsWorkspace({ permissions, sessionRole }: InspectionsWorkspaceProps) {
+  if (SHOW_LEGACY_INSPECTIONS) {
+    return <LegacyInspectionsWorkspace />;
+  }
+
+  return <InspectionCommandCenterList permissions={permissions} sessionRole={sessionRole} />;
 }
 
 

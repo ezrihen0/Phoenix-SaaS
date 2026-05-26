@@ -8,6 +8,9 @@ export type InspectionListRow = {
   report_type: string;
   workflow_type: string;
   status: string;
+  country_code?: string | null;
+  region_code?: string | null;
+  province_code?: string | null;
   compliance_status: string | null;
   safety_score: number | null;
   updated_at: string;
@@ -22,6 +25,8 @@ export type InspectionWorkspacePayload = {
     report_type: string;
     workflow_type: string;
     status: string;
+    country_code?: string | null;
+    region_code?: string | null;
     province_code: string;
     site_address_snapshot: string | null;
     client_display_name_snapshot: string | null;

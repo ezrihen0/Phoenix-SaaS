@@ -5,7 +5,8 @@ import { headers } from "next/headers";
 import InspectionsWorkspace from "./inspections-workspace";
 
 export default async function InspectionsPage() {
-  await requireServerSession("/inspections");
+  const session = await requireServerSession("/inspections");
+  const sessionRole = session.profile?.role ?? session.active_membership?.role ?? null;
   const userAgent = (await headers()).get("user-agent");
   if (isProbablyMobileUserAgent(userAgent)) {
     return (
@@ -16,5 +17,10 @@ export default async function InspectionsPage() {
       </main>
     );
   }
-  return <InspectionsWorkspace />;
+  return (
+    <InspectionsWorkspace
+      permissions={session.permissions}
+      sessionRole={sessionRole}
+    />
+  );
 }

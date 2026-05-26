@@ -9,7 +9,8 @@ export default async function InspectionWorkspacePage({
 }: {
   params: Promise<{ inspectionId: string }>;
 }) {
-  await requireServerSession("/inspections");
+  const session = await requireServerSession("/inspections");
+  const sessionRole = session.profile?.role ?? session.active_membership?.role ?? null;
   const userAgent = (await headers()).get("user-agent");
   if (isProbablyMobileUserAgent(userAgent)) {
     return (
@@ -21,5 +22,11 @@ export default async function InspectionWorkspacePage({
     );
   }
   const { inspectionId } = await params;
-  return <InspectionWorkspaceClient inspectionId={inspectionId} />;
+  return (
+    <InspectionWorkspaceClient
+      inspectionId={inspectionId}
+      permissions={session.permissions}
+      sessionRole={sessionRole}
+    />
+  );
 }
