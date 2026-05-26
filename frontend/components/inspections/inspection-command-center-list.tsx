@@ -266,36 +266,51 @@ export function InspectionCommandCenterList({ permissions, sessionRole }: Inspec
           </p>
         ) : null}
 
-        <InspectionLightPanel title="Search & filters" eyebrow="Library controls">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[280px] flex-1">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--sem-text-muted)]" />
-              <input
-                className="theme-input-control h-12 w-full rounded-[18px] pl-11 pr-3 text-sm"
-                placeholder="Search by client, address, or report type"
-                value={q}
-                onChange={(event) => setQ(event.target.value)}
-              />
-            </div>
-            <select className="theme-input-control h-12 rounded-[18px] px-3 text-sm" value={reportType} onChange={(e) => setReportType(e.target.value)}>
-              <option value="">All report types</option>
-              <option value="wood_burning_fireplace">Wood Fireplace</option>
-              <option value="wood_stove">Wood Stove</option>
-              <option value="wett_inspection">WETT Site Basic</option>
-              <option value="gas_fireplace">Gas Fireplace</option>
-            </select>
-            <select className="theme-input-control h-12 rounded-[18px] px-3 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">All statuses</option>
-              <option value="pass">Pass</option>
-              <option value="warning">Warning</option>
-              <option value="fail">Fail</option>
-            </select>
-            <button type="button" className="theme-btn-secondary h-12 rounded-[18px] px-4 text-sm font-medium" onClick={() => void load()}>
+        <section className="theme-control-surface rounded-2xl border border-[color:var(--cmp-border-subtle)] px-3 py-2.5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <label className="w-full lg:max-w-xl lg:flex-1">
+              <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)] lg:sr-only">
+                Search
+              </span>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[color:var(--sem-text-muted)]" />
+                <input
+                  className="theme-input-control h-10 w-full rounded-xl pl-9 pr-3 text-sm"
+                  placeholder="Search by client, address, or report type"
+                  value={q}
+                  onChange={(event) => setQ(event.target.value)}
+                />
+              </div>
+            </label>
+            <label className="w-full lg:w-60">
+              <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)] lg:sr-only">
+                Report type
+              </span>
+              <select className="theme-input-control h-10 w-full rounded-xl px-3 text-sm" value={reportType} onChange={(e) => setReportType(e.target.value)}>
+                <option value="">All report types</option>
+                <option value="wood_burning_fireplace">Wood Fireplace</option>
+                <option value="wood_stove">Wood Stove</option>
+                <option value="wett_inspection">WETT Site Basic</option>
+                <option value="gas_fireplace">Gas Fireplace</option>
+              </select>
+            </label>
+            <label className="w-full lg:w-48">
+              <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)] lg:sr-only">
+                Status
+              </span>
+              <select className="theme-input-control h-10 w-full rounded-xl px-3 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <option value="">All statuses</option>
+                <option value="pass">Pass</option>
+                <option value="warning">Warning</option>
+                <option value="fail">Fail</option>
+              </select>
+            </label>
+            <button type="button" className="theme-btn-secondary h-10 w-full shrink-0 rounded-xl px-4 text-sm font-medium lg:w-auto" onClick={() => void load()}>
               Search
             </button>
           </div>
-          {error ? <p className="theme-alert-error mt-3 rounded-[18px] border px-3 py-2 text-sm">{error}</p> : null}
-        </InspectionLightPanel>
+          {error ? <p className="theme-alert-error mt-2 rounded-xl border px-3 py-2 text-sm">{error}</p> : null}
+        </section>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
           <MetricTile icon={ClipboardList} label="In view" value={listStats.total} helper="Inspections in current list" />
