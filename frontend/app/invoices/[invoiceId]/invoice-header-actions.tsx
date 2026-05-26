@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ChevronDown, Download, FileText, LoaderCircle, X } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { ChevronDown, Download, FileText, LoaderCircle, Mail, MessageSquare, PenLine, X } from "lucide-react";
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
 
@@ -75,6 +76,45 @@ function getThemeCanvasColors() {
   return { fill, stroke };
 }
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function ExecutiveToolbarButton({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  primary,
+  tone,
+}: {
+  icon: typeof Mail;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  primary?: boolean;
+  tone?: "emerald" | "violet";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cx(
+        "flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
+        primary
+          ? "border-indigo-400/40 bg-indigo-500/20 text-indigo-100 shadow-[0_0_34px_rgba(99,102,241,0.16)] hover:bg-indigo-500/30"
+          : tone === "violet"
+            ? "border-violet-400/30 bg-violet-500/12 text-violet-100 hover:bg-violet-500/20"
+            : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70 text-[color:var(--sem-text-secondary)] hover:bg-[color:var(--cmp-surface-soft)] hover:text-[color:var(--sem-text-primary)]",
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
+  );
+}
+
 export default function InvoiceHeaderActions({
   invoiceId,
   initialInvoice,
@@ -88,6 +128,7 @@ export default function InvoiceHeaderActions({
   businessName: string | null;
   hasInvoiceLineItems: boolean;
 }) {
+  const t = useTranslations("invoiceDetailPage");
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [isSignaturePadOpen, setIsSignaturePadOpen] = useState(false);
@@ -350,61 +391,59 @@ export default function InvoiceHeaderActions({
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
+        <ExecutiveToolbarButton
+          icon={Mail}
+          label={isRefreshingInvoice ? t("loading") : t("sendEmail")}
+          primary
+          disabled={isRefreshingInvoice}
           onClick={() => {
             void refreshInvoiceForCompose();
           }}
-          disabled={isRefreshingInvoice}
-          className="theme-btn-primary inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isRefreshingInvoice ? "Loading..." : "Send"}
-        </button>
+        />
+        <ExecutiveToolbarButton
+          icon={MessageSquare}
+          label={isSendingSms ? t("sendingSms") : t("sendSms")}
+          disabled={isSendingSms}
+          onClick={() => {
+            void handleSendSms();
+          }}
+        />
+        <ExecutiveToolbarButton
+          icon={Download}
+          label={t("downloadPdf")}
+          disabled={!hasInvoiceLineItems}
+          onClick={downloadPdf}
+        />
+        <ExecutiveToolbarButton
+          icon={PenLine}
+          label={t("signature")}
+          tone="violet"
+          onClick={() => setIsSignaturePadOpen(true)}
+        />
 
         <div ref={menuRef} className="relative">
           <button
             type="button"
             onClick={() => setIsActionsOpen((current) => !current)}
-            className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
+            className="flex items-center gap-2 rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70 px-4 py-3 text-sm font-semibold text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-surface-soft)] hover:text-[color:var(--sem-text-primary)]"
             aria-haspopup="menu"
             aria-expanded={isActionsOpen}
           >
-            Actions
-            <ChevronDown className="theme-icon-accent h-4 w-4" />
+            {t("actions")}
+            <ChevronDown className="h-4 w-4" />
           </button>
 
           {isActionsOpen ? (
-            <div className="theme-modal-surface absolute right-0 z-[120] mt-2 w-56 overflow-hidden rounded-[16px] p-1 shadow-[0_20px_60px_color-mix(in_srgb,var(--bg-canvas)_62%,transparent)]">
+            <div className="absolute right-0 z-[120] mt-2 w-56 overflow-hidden rounded-[16px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-1 shadow-[0_20px_60px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)]">
               <button
                 type="button"
                 role="menuitem"
                 onClick={previewPdf}
                 disabled={!hasInvoiceLineItems}
-                className="theme-menu-item flex w-full items-center justify-between rounded-[12px] px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center justify-between rounded-[12px] px-3 py-2 text-left text-sm text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-surface-soft)] hover:text-[color:var(--sem-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <span>Preview</span>
-                <FileText className="theme-icon h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={downloadPdf}
-                disabled={!hasInvoiceLineItems}
-                className="theme-menu-item flex w-full items-center justify-between rounded-[12px] px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span>Download</span>
-                <Download className="theme-icon h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setIsActionsOpen(false);
-                  setIsSignaturePadOpen(true);
-                }}
-                className="theme-menu-item flex w-full items-center rounded-[12px] px-3 py-2 text-left text-sm"
-              >
-                Sign
+                <span>{t("previewPdf")}</span>
+                <FileText className="h-3.5 w-3.5" />
               </button>
               <button
                 type="button"
@@ -413,21 +452,9 @@ export default function InvoiceHeaderActions({
                   setIsActionsOpen(false);
                   void refreshInvoiceForCompose();
                 }}
-                className="theme-menu-item flex w-full items-center rounded-[12px] px-3 py-2 text-left text-sm"
+                className="flex w-full items-center rounded-[12px] px-3 py-2 text-left text-sm text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-surface-soft)] hover:text-[color:var(--sem-text-primary)]"
               >
-                Request Signature
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setIsActionsOpen(false);
-                  void handleSendSms();
-                }}
-                disabled={isSendingSms}
-                className="theme-menu-item flex w-full items-center rounded-[12px] px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSendingSms ? "Sending SMS..." : "Send via SMS"}
+                {t("requestSignature")}
               </button>
             </div>
           ) : null}
