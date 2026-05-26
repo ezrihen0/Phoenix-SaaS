@@ -22,7 +22,8 @@ function firstValue(value: SearchParam) {
 }
 
 export default async function PricebookPage({ searchParams }: PricebookPageContext) {
-  await requireServerSession("/pricebook");
+  const session = await requireServerSession("/pricebook");
+  const sessionRole = session.profile?.role ?? session.active_membership?.role ?? null;
 
   const resolvedSearchParams = await searchParams;
   const filters: PricebookItemFilters = {
@@ -61,5 +62,12 @@ export default async function PricebookPage({ searchParams }: PricebookPageConte
     loadError = error instanceof Error ? error.message : "The pricebook workspace could not be loaded.";
   }
 
-  return <PricebookTable initialResult={initialResult} initialFilters={filters} loadError={loadError} />;
+  return (
+    <PricebookTable
+      sessionRole={sessionRole}
+      initialResult={initialResult}
+      initialFilters={filters}
+      loadError={loadError}
+    />
+  );
 }
