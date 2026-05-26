@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { WalletCards } from "lucide-react";
+
 import { createStripeCheckoutSession } from "@/lib/billing/client-billing";
 
 export type BillingSummaryPayload = {
@@ -98,9 +100,10 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
     || Boolean(billing.attention_reason);
 
   return (
-    <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="rounded-[30px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)]">
       <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">WizField billing</p>
-      <h2 className="mt-3 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Shared billing account</h2>
+      <h2 className="mt-3 text-2xl font-semibold text-[color:var(--sem-display-headline)]">Shared billing account</h2>
       <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
         The active workspace belongs to a shared WizField billing account. One subscription can cover multiple
         businesses according to the current plan entitlement, while tenant invoice payments stay separate.
@@ -114,7 +117,15 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
             {billing.attention_reason ? ` — ${billing.attention_reason}` : ""}
           </p>
         </div>
-      ) : null}
+      ) : (
+        <div className="mt-4 rounded-[18px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] px-4 py-3">
+          <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Plan health</p>
+          <h4 className="mt-2 text-lg font-semibold text-[color:var(--sem-display-headline)]">Billing status: {billing.billing_status}</h4>
+          <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+            Checkout and plan changes remain controlled through the existing Stripe flow.
+          </p>
+        </div>
+      )}
 
       <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
         <div className="theme-control-surface-soft rounded-[16px] border px-4 py-3">
@@ -176,62 +187,64 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
           ))}
         </ul>
       </div>
+      </section>
 
-      <div className="mt-10 border-t border-[color:var(--cmp-border-subtle)] pt-8">
-        <h3 className="text-lg font-semibold text-[color:var(--sem-text-primary)]">Stripe checkout</h3>
-        <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
-          Launch Stripe Checkout for the shared billing account. Covered businesses inherit the same plan after verified
-          Stripe webhook events update the local billing account. WizField does not collect raw card details here.
-        </p>
-
-        {!checkoutReady ? (
-          <p className="mt-3 text-sm text-[color:var(--sem-text-muted)]">
-            Stripe checkout is not fully configured on the server yet. Set `STRIPE_SECRET_KEY` and ensure the success
-            / cancel redirect URLs are configured for this environment.
+      <aside className="space-y-5">
+        <div className="rounded-[30px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)]">
+          <WalletCards className="h-8 w-8 text-[color:var(--sem-accent-primary)]" />
+          <h4 className="mt-4 text-xl font-semibold text-[color:var(--sem-display-headline)]">Stripe checkout</h4>
+          <p className="mt-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+            Launch Stripe Checkout for the shared billing account. Covered businesses inherit the same plan after verified
+            Stripe webhook events update the local billing account.
           </p>
-        ) : null}
 
-        {!payload.webhook_verification_configured ? (
-          <p className="mt-2 text-xs text-amber-200/80">
-            Stripe webhook signature verification is not configured yet. A Checkout success redirect alone does not
-            activate the plan.
-          </p>
-        ) : null}
+          {!checkoutReady ? (
+            <p className="mt-3 text-sm text-[color:var(--sem-text-muted)]">
+              Stripe checkout is not fully configured on the server yet. Set `STRIPE_SECRET_KEY` and ensure the success
+              / cancel redirect URLs are configured for this environment.
+            </p>
+          ) : null}
 
-        <div className="mt-4 flex flex-wrap items-end gap-4">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-[color:var(--sem-text-muted)]">Plan for checkout</span>
-            <select
-              value={selectedPlan}
-              onChange={(event) => setSelectedPlan(event.target.value as (typeof planOptions)[number])}
-              className="theme-control-surface-soft rounded-[14px] border px-3 py-2 text-sm capitalize text-[color:var(--sem-text-primary)]"
+          {!payload.webhook_verification_configured ? (
+            <p className="mt-2 text-xs text-amber-200/80">
+              Stripe webhook signature verification is not configured yet. A Checkout success redirect alone does not
+              activate the plan.
+            </p>
+          ) : null}
+
+          <div className="mt-4 space-y-4">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-[color:var(--sem-text-muted)]">Plan for checkout</span>
+              <select
+                value={selectedPlan}
+                onChange={(event) => setSelectedPlan(event.target.value as (typeof planOptions)[number])}
+                className="theme-control-surface-soft rounded-[14px] border px-3 py-2 text-sm capitalize text-[color:var(--sem-text-primary)]"
+              >
+                {planOptions.map((key) => (
+                  <option key={key} value={key} disabled={planEnv ? !planEnv[key] : false}>
+                    {key}
+                    {planEnv && !planEnv[key] ? " (env missing)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={busy || !checkoutReady || !selectedPlanConfigured}
+              onClick={() => void startCheckout()}
+              className="w-full rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--sem-accent-primary)] px-4 py-3 text-sm font-semibold text-[color:var(--cmp-surface-canvas)] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {planOptions.map((key) => (
-                <option key={key} value={key} disabled={planEnv ? !planEnv[key] : false}>
-                  {key}
-                  {planEnv && !planEnv[key] ? " (env missing)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            disabled={busy || !checkoutReady || !selectedPlanConfigured}
-            onClick={() => void startCheckout()}
-            className="rounded-full border border-[color:var(--cmp-border-accent)] bg-[color:var(--sem-accent-primary)] px-5 py-2 text-sm font-semibold text-[color:var(--cmp-surface-canvas)] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {busy ? "Redirecting…" : "Start Stripe checkout"}
-          </button>
+              {busy ? "Redirecting…" : "Start Stripe checkout"}
+            </button>
+          </div>
+
+          <p className="mt-5 text-xs leading-6 text-[color:var(--sem-text-muted)]">
+            In-app Stripe plan change and cancellation controls are intentionally not exposed in this pass.
+          </p>
+
+          {message ? <p className="mt-3 text-sm text-[color:var(--sem-text-secondary)]">{message}</p> : null}
         </div>
-
-        <p className="mt-6 text-xs leading-6 text-[color:var(--sem-text-muted)]">
-          In-app Stripe plan change and cancellation controls are intentionally not exposed in this pass. The active
-          implementation covers Checkout Session creation plus verified webhook synchronization back into the shared
-          billing account.
-        </p>
-      </div>
-
-      {message ? <p className="mt-3 text-sm text-[color:var(--sem-text-secondary)]">{message}</p> : null}
-    </section>
+      </aside>
+    </div>
   );
 }

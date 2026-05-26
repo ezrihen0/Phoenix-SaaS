@@ -8,6 +8,7 @@ import type { SessionRole } from "@/lib/auth/server-session";
 
 import type { BillingSummaryPayload } from "./billing-panel";
 import type { OrganizationSettings } from "./organization-profile-panel";
+import { isSettingsTopic } from "./settings-sections";
 import { SettingsWorkspace } from "./settings-workspace";
 
 type StaffProfile = {
@@ -88,9 +89,8 @@ export default async function SettingsPage({
   }
 
   return (
-    <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
-      <Suspense fallback={<div className="mx-auto max-w-6xl text-sm text-[color:var(--sem-text-secondary)]">{t("loading")}</div>}>
-        <SettingsWorkspace
+    <Suspense fallback={<div className="mx-auto max-w-6xl px-6 py-10 text-sm text-[color:var(--sem-text-secondary)]">{t("loading")}</div>}>
+      <SettingsWorkspace
         role={role}
         ownerMode={ownerMode}
         currentProfileId={session.profile?.id ?? null}
@@ -99,17 +99,11 @@ export default async function SettingsPage({
         organizationSettings={organizationSettings}
         billingSummary={billingSummary}
         billingLoadError={billingLoadError}
-        initialTopic={
-          topicValue === "business"
-            || topicValue === "profile"
-            || topicValue === "appearance"
-            || topicValue === "roles"
-            || topicValue === "billing"
-            ? topicValue
-            : null
-        }
-        />
-      </Suspense>
-    </main>
+        profileFullName={session.profile?.full_name ?? null}
+        profileEmail={session.user.email}
+        activeOrganizationName={session.active_organization?.name ?? null}
+        initialTopic={isSettingsTopic(topicValue) ? topicValue : null}
+      />
+    </Suspense>
   );
 }

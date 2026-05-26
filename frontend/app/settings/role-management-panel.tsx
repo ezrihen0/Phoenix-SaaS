@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldCheck, UserPlus, UsersRound } from "lucide-react";
+import { Crown, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { SessionRole } from "@/lib/auth/server-session";
@@ -141,16 +141,17 @@ export function RoleManagementPanel({
   }
 
   return (
-    <section className="theme-surface-card overflow-hidden rounded-[32px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="overflow-hidden rounded-[32px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)]">
       <div className="border-b border-[color:var(--cmp-border-subtle)] p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="theme-control-surface-soft inline-flex h-12 w-12 items-center justify-center rounded-[18px] border">
-              <ShieldCheck className="h-5 w-5 text-[color:var(--sem-accent-primary)]" />
+              <UsersRound className="h-5 w-5 text-[color:var(--sem-accent-primary)]" />
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Owner Panel</p>
-              <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Staff roles</h2>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Team</p>
+              <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-display-headline)]">Staff roles</h2>
             </div>
           </div>
           <div className="theme-control-surface-soft rounded-[18px] border px-4 py-3 text-xs leading-5 text-[color:var(--sem-text-secondary)]">
@@ -263,7 +264,7 @@ export function RoleManagementPanel({
             <h3 className="text-lg font-semibold text-[color:var(--sem-text-primary)]">Current staff</h3>
           </div>
         </div>
-        <div className="grid grid-cols-[1.2fr_1.2fr_0.9fr] gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-3 text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">
+        <div className="grid grid-cols-[1.2fr_1.2fr_0.9fr] gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-3 text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)] max-md:hidden">
           <span>Name</span>
           <span>Login</span>
           <span>Assigned Role</span>
@@ -271,11 +272,16 @@ export function RoleManagementPanel({
         {sortedStaff.map((item) => (
           <div
             key={item.id}
-            className="grid grid-cols-[1.2fr_1.2fr_0.9fr] gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-4 text-sm last:border-b-0"
+            className="border-b border-[color:var(--cmp-border-subtle)] px-4 py-4 text-sm last:border-b-0 max-md:space-y-3 md:grid md:grid-cols-[1.2fr_1.2fr_0.9fr] md:gap-3 md:items-center"
           >
-            <div>
-              <p className="font-semibold text-[color:var(--sem-text-primary)]">{item.full_name}</p>
-              <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{item.phone || "No phone"}</p>
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] text-sm font-semibold text-[color:var(--sem-accent-primary)]">
+                {item.full_name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <p className="font-semibold text-[color:var(--sem-text-primary)]">{item.full_name}</p>
+                <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{item.phone || "No phone"}</p>
+              </div>
             </div>
             <p className="text-[color:var(--sem-text-secondary)]">{item.user?.email ?? "No login email"}</p>
             <select
@@ -294,6 +300,19 @@ export function RoleManagementPanel({
           </div>
         ))}
       </div>
-    </section>
+      </section>
+
+      <aside className="rounded-[30px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] p-5 shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-accent-primary)_8%,transparent)]">
+        <Crown className="h-8 w-8 text-[color:var(--sem-accent-primary)]" />
+        <h4 className="mt-4 text-xl font-semibold text-[color:var(--sem-display-headline)]">Owner panel</h4>
+        <p className="mt-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+          Create staff users, assign fixed roles, and protect your own owner access. Custom role definitions are not editable in V1.
+        </p>
+        <div className="mt-5 rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-4">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">Fixed roles</p>
+          <p className="mt-2 text-2xl font-semibold text-[color:var(--sem-display-headline)]">{roleOptions.length}</p>
+        </div>
+      </aside>
+    </div>
   );
 }
