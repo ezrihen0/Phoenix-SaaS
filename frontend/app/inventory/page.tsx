@@ -9,6 +9,10 @@ import type {
   InventoryTechnicianOption,
 } from "@/lib/crm/inventory-model";
 
+function canFetchItemCatalog(role: string | null) {
+  return role === "owner" || role === "admin" || role === "office_admin";
+}
+
 export default async function InventoryPage() {
   const session = await requireServerRoles("/inventory", [
     "owner",
@@ -34,27 +38,46 @@ export default async function InventoryPage() {
   };
   let technicians: InventoryTechnicianOption[] = [];
   let loadError: string | null = null;
+  let catalogLoadError: string | null = null;
+
+  const loadErrors: string[] = [];
 
   try {
-    const [locationsResponse, stockResponse, movementResponse, itemResponse, technicianResponse] = await Promise.all([
-      serverApiFetch<InventoryLocationListResult>("/api/inventory/locations?activeState=all"),
-      serverApiFetch<InventoryStockResult>("/api/inventory/stock?activeState=all"),
-      serverApiFetch<InventoryMovementListResult>("/api/inventory/movements?page=1&pageSize=200"),
-      role === "technician"
-        ? Promise.resolve({ items: [], totalCount: 0 } satisfies InventoryListResult)
-        : serverApiFetch<InventoryListResult>("/api/inventory/items?activeState=all"),
-      role === "office_admin"
-        ? serverApiFetch<InventoryTechnicianOption[]>("/api/technicians?active=true").catch(() => [])
-        : Promise.resolve([] as InventoryTechnicianOption[]),
-    ]);
-
-    locationsResult = locationsResponse;
-    stockResult = stockResponse;
-    movementResult = movementResponse;
-    itemsResult = itemResponse;
-    technicians = technicianResponse;
+    locationsResult = await serverApiFetch<InventoryLocationListResult>("/api/inventory/locations?activeState=all");
   } catch (error) {
-    loadError = error instanceof Error ? error.message : "The inventory workspace could not be loaded.";
+    loadErrors.push(error instanceof Error ? error.message : "Inventory locations could not be loaded.");
+  }
+
+  try {
+    stockResult = await serverApiFetch<InventoryStockResult>("/api/inventory/stock?activeState=all");
+  } catch (error) {
+    loadErrors.push(error instanceof Error ? error.message : "Inventory stock could not be loaded.");
+  }
+
+  try {
+    movementResult = await serverApiFetch<InventoryMovementListResult>("/api/inventory/movements?page=1&pageSize=200");
+  } catch (error) {
+    loadErrors.push(error instanceof Error ? error.message : "Inventory movements could not be loaded.");
+  }
+
+  if (canFetchItemCatalog(role)) {
+    try {
+      itemsResult = await serverApiFetch<InventoryListResult>("/api/inventory/items?activeState=all");
+    } catch (error) {
+      catalogLoadError = error instanceof Error ? error.message : "The item catalog could not be loaded.";
+    }
+  }
+
+  if (role === "office_admin") {
+    try {
+      technicians = await serverApiFetch<InventoryTechnicianOption[]>("/api/technicians?active=true");
+    } catch {
+      technicians = [];
+    }
+  }
+
+  if (loadErrors.length > 0) {
+    loadError = loadErrors.join(" ");
   }
 
   return (
@@ -66,6 +89,7 @@ export default async function InventoryPage() {
       initialMovementResult={movementResult}
       initialTechnicians={technicians}
       loadError={loadError}
+      catalogLoadError={catalogLoadError}
     />
   );
 }
