@@ -2,11 +2,48 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, LoaderCircle, MessageSquare, Phone, Plus, Send, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  Bot,
+  Check,
+  ChevronDown,
+  LoaderCircle,
+  Mail,
+  MessageSquare,
+  Paperclip,
+  Phone,
+  Plus,
+  Search,
+  Send,
+  Sparkles,
+  StickyNote,
+  Trash2,
+} from "lucide-react";
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
 
+/** Toggle prior lane-rail layout for rollback and QA. */
+const SHOW_LEGACY_MESSAGING_LAYOUT = false;
+
+const deskPanelClass =
+  "theme-surface-card border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--sem-accent-primary)_8%,transparent)] backdrop-blur-md";
+const deskEyebrowClass = "text-[10px] uppercase tracking-[0.32em] text-[color:var(--sem-text-muted)]";
+
 type Lane = "customers" | "unknown";
+type InboxFilter = "all" | "customers" | "unknown";
+type ComposerSurfaceMode = "customer" | "note";
+
+type UnifiedConversationRow = {
+  key: string;
+  kind: "customer" | "unknown";
+  customerId: string | null;
+  phoneKey: string | null;
+  displayName: string;
+  phoneNumber: string | null;
+  lastMessage: string;
+  lastMessageAt: string;
+  unreadCount: number;
+};
 
 type CustomerConversationRow = {
   customerId: string;
@@ -167,6 +204,424 @@ function formatDeliveryStatus(value: string) {
   }
 }
 
+function formatRelativeTime(value: string) {
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 60_000));
+
+  if (diffMinutes < 1) {
+    return "now";
+  }
+
+  if (diffMinutes < 60) {
+    return String(diffMinutes) + "m";
+  }
+
+  const hours = Math.floor(diffMinutes / 60);
+
+  if (hours < 24) {
+    return String(hours) + "h";
+  }
+
+  return String(Math.floor(hours / 24)) + "d";
+}
+
+function buildUnifiedRows(dashboard: MessagingDashboardResponse): UnifiedConversationRow[] {
+  const customerRows: UnifiedConversationRow[] = dashboard.customers.map((row) => ({
+    key: `customer:${row.customerId}`,
+    kind: "customer",
+    customerId: row.customerId,
+    phoneKey: null,
+    displayName: row.customerName?.trim() || "Unknown customer",
+    phoneNumber: row.phoneNumber,
+    lastMessage: row.lastMessage,
+    lastMessageAt: row.lastMessageAt,
+    unreadCount: row.unreadCount,
+  }));
+
+  const unknownRows: UnifiedConversationRow[] = dashboard.unknownNumbers.map((row) => ({
+    key: `phone:${row.phoneKey}`,
+    kind: "unknown",
+    customerId: null,
+    phoneKey: row.phoneKey,
+    displayName: row.phoneNumber?.trim() || row.phoneKey,
+    phoneNumber: row.phoneNumber,
+    lastMessage: row.lastMessage,
+    lastMessageAt: row.lastMessageAt,
+    unreadCount: row.unreadCount,
+  }));
+
+  return [...customerRows, ...unknownRows];
+}
+
+function sortConversationRows(rows: UnifiedConversationRow[]) {
+  return [...rows].sort((left, right) => {
+    const leftUnread = left.unreadCount > 0;
+    const rightUnread = right.unreadCount > 0;
+
+    if (leftUnread !== rightUnread) {
+      return leftUnread ? -1 : 1;
+    }
+
+    if (leftUnread && rightUnread) {
+      const newestInboundDelta = new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime();
+
+      if (newestInboundDelta !== 0) {
+        return newestInboundDelta;
+      }
+    }
+
+    if (left.kind !== right.kind) {
+      return left.kind === "customer" ? -1 : 1;
+    }
+
+    return new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime();
+  });
+}
+
+function isUnifiedRowActive(row: UnifiedConversationRow, lane: Lane, selectedCustomerId: string | null, selectedPhoneKey: string | null) {
+  if (row.kind === "customer") {
+    return lane === "customers" && row.customerId === selectedCustomerId;
+  }
+
+  return lane === "unknown" && row.phoneKey === selectedPhoneKey;
+}
+
+type DeskThreadPanelProps = {
+  composeMode: "text" | "email" | null;
+  closeComposer: () => void;
+  composeError: string | null;
+  composeModeText: boolean;
+  customerSearch: string;
+  setCustomerSearch: (value: string) => void;
+  isLoadingPicker: boolean;
+  filteredPickerResults: CustomerPickerItem[];
+  selectedComposeCustomer: CustomerPickerItem | null;
+  setSelectedComposeCustomer: (value: CustomerPickerItem | null) => void;
+  composeDirectRecipient: string;
+  setComposeDirectRecipient: (value: string) => void;
+  canUseDirectNumber: boolean;
+  canUseDirectEmail: boolean;
+  normalizedSearchDigits: string;
+  composeEmailToOverride: string;
+  setComposeEmailToOverride: (value: string) => void;
+  lane: Lane;
+  selectedConversation: CustomerConversationRow | UnknownConversationRow | null;
+  selectedCustomerId: string | null;
+  selectedPhoneKey: string | null;
+  selectedConversationId: string | null;
+  textThread: TextThreadResponse;
+  hasUnreadMessages: boolean;
+  hasInboundMessages: boolean;
+  isUpdatingReadState: boolean;
+  isLoadingThread: boolean;
+  threadError: string | null;
+  orderedTextMessages: TextThreadItem[];
+  updateReadState: (nextAction: "read" | "unread") => Promise<void>;
+  quickTemplates: SmsTemplateItem[];
+  isLoadingTemplates: boolean;
+  templatesError: string | null;
+  openTemplateBank: () => void;
+  handleApplyTemplate: (template: SmsTemplateItem) => void;
+  composerSurfaceMode: ComposerSurfaceMode;
+  setComposerSurfaceMode: (mode: ComposerSurfaceMode) => void;
+  composeTextBody: string;
+  setComposeTextBody: (value: string) => void;
+  composeEmailSubject: string;
+  setComposeEmailSubject: (value: string) => void;
+  composeEmailBody: string;
+  setComposeEmailBody: (value: string) => void;
+  isComposeSending: boolean;
+  handleComposeSend: () => Promise<void>;
+  textDraft: string;
+  setTextDraft: (value: string) => void;
+  isSending: boolean;
+  handleSend: () => Promise<void>;
+  formatTime: (value: string) => string;
+  formatDeliveryStatus: (value: string) => string;
+};
+
+function DeskThreadPanel(props: DeskThreadPanelProps) {
+  const isNoteMode = props.composerSurfaceMode === "note" && !props.composeMode;
+  const threadTitle = props.composeMode
+    ? props.composeMode === "text"
+      ? "New SMS"
+      : "New email"
+    : props.lane === "customers"
+      ? (props.selectedConversation as CustomerConversationRow | null)?.customerName ?? "Select a thread"
+      : (props.selectedConversation as UnknownConversationRow | null)?.phoneNumber
+        ?? (props.selectedConversation as UnknownConversationRow | null)?.phoneKey
+        ?? "Select a thread";
+
+  return (
+    <>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] px-5 py-4">
+        <div className="min-w-0">
+          <p className={deskEyebrowClass}>{props.composeMode ? "New conversation" : "Active thread"}</p>
+          <h2 className="truncate text-lg font-semibold text-[color:var(--sem-display-headline)]">{threadTitle}</h2>
+          {!props.composeMode && props.lane === "customers" && props.selectedCustomerId ? (
+            <Link href={`/customers/${props.selectedCustomerId}`} className="mt-1 inline-block text-xs text-[color:var(--sem-accent-primary)] hover:underline">
+              Open customer profile
+            </Link>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {!props.composeMode && props.selectedConversationId ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void props.updateReadState("read")}
+                disabled={props.isUpdatingReadState || props.isLoadingThread || !props.hasUnreadMessages}
+                className="theme-control-surface rounded-full px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Mark read
+              </button>
+              <button
+                type="button"
+                onClick={() => void props.updateReadState("unread")}
+                disabled={props.isUpdatingReadState || props.isLoadingThread || !props.hasInboundMessages}
+                className="theme-control-surface rounded-full px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Mark unread
+              </button>
+            </>
+          ) : null}
+          {props.composeMode ? (
+            <button type="button" onClick={props.closeComposer} className="theme-control-surface rounded-full px-3 py-1 text-xs">
+              Close
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {props.threadError ? (
+        <div className="theme-alert-error mx-5 mt-3 rounded-[16px] border px-3 py-2 text-sm">{props.threadError}</div>
+      ) : null}
+      {props.composeError ? (
+        <div className="theme-alert-error mx-5 mt-3 rounded-[16px] border px-3 py-2 text-sm">{props.composeError}</div>
+      ) : null}
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        {props.composeMode ? (
+          <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+            <label className="block">
+              <span className="mb-2 block text-[11px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">
+                {props.composeModeText ? "Search customer or type number" : "Search customer or type email"}
+              </span>
+              <input
+                type="text"
+                value={props.customerSearch}
+                onChange={(event) => props.setCustomerSearch(event.target.value)}
+                className="theme-input-control h-11 w-full rounded-[14px] px-3 text-sm"
+                placeholder={props.composeModeText ? "Start typing phone number..." : "Start typing email..."}
+              />
+            </label>
+            <div className="mt-3 max-h-52 overflow-auto rounded-[14px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-canvas)] p-2">
+              {props.isLoadingPicker ? (
+                <p className="text-sm text-[color:var(--sem-text-secondary)]">
+                  <LoaderCircle className="mr-2 inline h-4 w-4 animate-spin" />
+                  Searching customers...
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {props.filteredPickerResults.map((customer) => (
+                    <button
+                      key={customer.id}
+                      type="button"
+                      onClick={() => {
+                        props.setSelectedComposeCustomer(customer);
+                        props.setComposeDirectRecipient("");
+                      }}
+                      className={[
+                        "w-full rounded-[12px] px-3 py-2 text-left text-sm",
+                        props.selectedComposeCustomer?.id === customer.id && !props.composeDirectRecipient
+                          ? "bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-primary)]"
+                          : "text-[color:var(--sem-text-secondary)] hover:bg-[color:var(--cmp-surface-panel)]",
+                      ].join(" ")}
+                    >
+                      <p className="font-medium">{customer.full_name}</p>
+                      <p className="text-xs">{customer.phone ?? customer.email ?? "No contact"}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : props.isLoadingThread ? (
+          <p className="text-sm text-[color:var(--sem-text-secondary)]">
+            <LoaderCircle className="mr-2 inline h-4 w-4 animate-spin" />
+            Loading conversation history...
+          </p>
+        ) : props.orderedTextMessages.length === 0 ? (
+          <p className="text-sm text-[color:var(--sem-text-secondary)]">Pick a conversation to see the history.</p>
+        ) : (
+          <div className="mx-auto max-w-3xl space-y-2">
+            {props.orderedTextMessages.map((message) => {
+              const isOutbound = message.direction === "outbound";
+
+              return (
+                <div key={message.id} className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}>
+                  <article
+                    className={[
+                      "max-w-[min(100%,78%)] rounded-2xl px-4 py-3 text-sm leading-6",
+                      isOutbound
+                        ? "border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-primary)]"
+                        : "border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] text-[color:var(--sem-text-primary)]",
+                    ].join(" ")}
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">
+                      <span>{isOutbound ? "Office" : "Customer"}</span>
+                      <span>{props.formatTime(message.createdAt)}</span>
+                      <span>{props.formatDeliveryStatus(message.deliveryStatus)}</span>
+                    </div>
+                    <p className="mt-2 whitespace-pre-line">{message.body}</p>
+                  </article>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {props.composeMode !== "email" ? (
+        <div className="shrink-0 border-t border-[color:var(--cmp-border-subtle)] px-5 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">Quick replies</span>
+            {props.isLoadingTemplates ? (
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin text-[color:var(--sem-text-muted)]" />
+            ) : (
+              props.quickTemplates.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => props.handleApplyTemplate(template)}
+                  className="theme-control-surface max-w-[200px] truncate rounded-full px-3 py-1.5 text-xs"
+                  title={template.name}
+                >
+                  {template.name}
+                </button>
+              ))
+            )}
+            <button type="button" onClick={props.openTemplateBank} className="theme-control-surface inline-flex h-8 w-8 items-center justify-center rounded-full" aria-label="Open template bank">
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+          {props.templatesError ? <p className="theme-alert-error mt-2 rounded-[12px] border px-2 py-1 text-xs">{props.templatesError}</p> : null}
+        </div>
+      ) : null}
+
+      <div className="shrink-0 border-t border-[color:var(--cmp-border-subtle)] p-4">
+        {!props.composeMode ? (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-1">
+              <button
+                type="button"
+                onClick={() => props.setComposerSurfaceMode("customer")}
+                className={[
+                  "rounded-full px-3 py-1.5 text-xs font-semibold",
+                  !isNoteMode ? "bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-primary)]" : "text-[color:var(--sem-text-muted)]",
+                ].join(" ")}
+              >
+                Reply to customer
+              </button>
+              <button
+                type="button"
+                onClick={() => props.setComposerSurfaceMode("note")}
+                className={[
+                  "rounded-full px-3 py-1.5 text-xs font-semibold",
+                  isNoteMode ? "bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-primary)]" : "text-[color:var(--sem-text-muted)]",
+                ].join(" ")}
+              >
+                Internal note
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={props.openTemplateBank}
+              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[color:var(--cmp-border-subtle)] px-3 py-1.5 text-xs text-[color:var(--sem-text-secondary)]"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              AI draft · review
+            </button>
+          </div>
+        ) : null}
+
+        <div className={[
+          "rounded-2xl border p-3",
+          isNoteMode ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)]" : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]",
+        ].join(" ")}>
+          {isNoteMode ? (
+            <>
+              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">
+                <StickyNote className="h-3.5 w-3.5" />
+                Internal note
+              </div>
+              <textarea
+                rows={3}
+                disabled
+                className="theme-input-control min-h-[72px] w-full rounded-[14px] px-3 py-2 text-sm opacity-80"
+                placeholder="Internal notes are not stored in SMS yet — use customer profile or job notes."
+              />
+              <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">Assistive workflow only. Notes do not send to the customer.</p>
+            </>
+          ) : props.composeMode === "text" ? (
+            <div className="flex items-end gap-2">
+              <textarea
+                value={props.composeTextBody}
+                onChange={(event) => props.setComposeTextBody(event.target.value)}
+                disabled={props.isComposeSending}
+                rows={3}
+                className="theme-input-control min-h-[88px] w-full rounded-[14px] px-3 py-2 text-sm"
+                placeholder="Type new SMS message..."
+              />
+              <button
+                type="button"
+                onClick={() => void props.handleComposeSend()}
+                disabled={props.isComposeSending || !props.composeTextBody.trim()}
+                className="theme-btn-primary inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-60"
+                aria-label="Send new SMS"
+              >
+                {props.isComposeSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
+            </div>
+          ) : props.composeMode === "email" ? (
+            <p className="text-sm text-[color:var(--sem-text-secondary)]">Email compose remains preview-only in this workspace.</p>
+          ) : (
+            <div className="space-y-3">
+              <textarea
+                value={props.textDraft}
+                onChange={(event) => props.setTextDraft(event.target.value)}
+                disabled={(props.lane === "customers" ? !props.selectedCustomerId : !props.selectedPhoneKey) || props.isSending}
+                rows={3}
+                className="theme-input-control min-h-[88px] w-full rounded-[14px] px-3 py-2 text-sm"
+                placeholder={props.lane === "customers" ? "Write a reply to the customer..." : "Write a reply to this number..."}
+              />
+              <div className="flex items-center justify-between gap-2">
+                <button type="button" disabled className="theme-control-surface rounded-full p-2 opacity-50" aria-label="Attachments not available" title="Attachments not available">
+                  <Paperclip className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void props.handleSend()}
+                  disabled={(props.lane === "customers" ? !props.selectedCustomerId : !props.selectedPhoneKey) || props.isSending || !props.textDraft.trim()}
+                  className="theme-btn-primary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                >
+                  {props.isSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Send reply
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function MessagingDashboard({
   initialLane,
   initialCustomerId,
@@ -219,6 +674,9 @@ export default function MessagingDashboard({
   const [composeError, setComposeError] = useState<string | null>(null);
   const [isComposeSending, setIsComposeSending] = useState(false);
   const [composeDirectRecipient, setComposeDirectRecipient] = useState("");
+  const [inboxSearch, setInboxSearch] = useState("");
+  const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all");
+  const [composerSurfaceMode, setComposerSurfaceMode] = useState<ComposerSurfaceMode>("customer");
 
   const normalizedSearchDigits = useMemo(
     () => customerSearch.replace(/\D/g, ""),
@@ -339,6 +797,55 @@ export default function MessagingDashboard({
   const placeholderLinkedPreview = `Hi ${linkedPlaceholderName}, this is ${organizationDisplayName}.`;
   const placeholderUnknownPreview = `Hi there, this is ${organizationDisplayName}.`;
 
+  const unifiedRows = useMemo(() => sortConversationRows(buildUnifiedRows(dashboard)), [dashboard]);
+
+  const filteredInboxRows = useMemo(() => {
+    const query = inboxSearch.trim().toLowerCase();
+
+    return unifiedRows.filter((row) => {
+      if (inboxFilter === "customers" && row.kind !== "customer") {
+        return false;
+      }
+
+      if (inboxFilter === "unknown" && row.kind !== "unknown") {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      return row.displayName.toLowerCase().includes(query)
+        || (row.phoneNumber ?? "").toLowerCase().includes(query)
+        || row.lastMessage.toLowerCase().includes(query);
+    });
+  }, [inboxFilter, inboxSearch, unifiedRows]);
+
+  const inboxUnreadCount = useMemo(
+    () => unifiedRows.reduce((total, row) => total + row.unreadCount, 0),
+    [unifiedRows],
+  );
+
+  const unassignedCount = useMemo(
+    () => unifiedRows.filter((row) => row.kind === "unknown").length,
+    [unifiedRows],
+  );
+
+  function selectUnifiedConversation(row: UnifiedConversationRow) {
+    if (row.kind === "customer" && row.customerId) {
+      setLane("customers");
+      setSelectedCustomerId(row.customerId);
+      setSelectedPhoneKey(null);
+      return;
+    }
+
+    if (row.phoneKey) {
+      setLane("unknown");
+      setSelectedPhoneKey(row.phoneKey);
+      setSelectedCustomerId(null);
+    }
+  }
+
   function mergeTemplateBody(currentValue: string, nextValue: string) {
     const trimmedCurrent = currentValue.trimEnd();
     const trimmedNext = nextValue.trim();
@@ -410,6 +917,7 @@ export default function MessagingDashboard({
 
   function openComposer(nextMode: "text" | "email") {
     setComposeMode(nextMode);
+    setComposerSurfaceMode("customer");
     setCustomerSearch("");
     setPickerResults([]);
     setSelectedComposeCustomer(null);
@@ -937,6 +1445,265 @@ export default function MessagingDashboard({
   }
 
   return (
+    <>
+      {!SHOW_LEGACY_MESSAGING_LAYOUT ? (
+        <div className="flex h-[calc(100dvh-4.75rem)] min-h-[640px] flex-col overflow-hidden text-[color:var(--sem-text-primary)]">
+          <header className={`${deskPanelClass} mx-3 mt-3 flex shrink-0 flex-wrap items-center justify-between gap-4 rounded-[24px] px-5 py-4 lg:mx-4`}>
+            <div>
+              <p className={deskEyebrowClass}>WizField Communication Desk</p>
+              <h1 className="text-xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">Messaging Command Center</h1>
+              <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">
+                Move threads toward booking, payment, and task completion — not a passive inbox.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="hidden text-xs text-[color:var(--sem-text-muted)] lg:block">
+                {unifiedRows.length} threads · {inboxUnreadCount} unread · {unassignedCount} unassigned numbers
+              </p>
+              <button
+                type="button"
+                onClick={() => void loadDashboard(false)}
+                className="theme-btn-secondary rounded-full px-4 py-2 text-sm"
+                disabled={isBooting || isRefreshingList}
+              >
+                {isRefreshingList ? "Refreshing..." : "Refresh"}
+              </button>
+              <button
+                type="button"
+                onClick={() => openComposer("text")}
+                className="theme-btn-primary rounded-full px-4 py-2 text-sm font-semibold"
+              >
+                New message
+              </button>
+            </div>
+          </header>
+
+          {listError ? (
+            <div className="theme-alert-error mx-4 mt-3 rounded-[18px] border px-4 py-3 text-sm">{listError}</div>
+          ) : null}
+
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 p-3 pt-3 lg:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.85fr)_minmax(240px,0.62fr)] lg:gap-0 lg:p-4">
+            <aside className={`${deskPanelClass} flex min-h-0 flex-col overflow-hidden rounded-[24px] lg:mr-2`}>
+              <div className="shrink-0 border-b border-[color:var(--cmp-border-subtle)] p-4">
+                <label className="flex items-center gap-2 rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-2 text-sm text-[color:var(--sem-text-muted)]">
+                  <Search className="h-4 w-4 shrink-0" />
+                  <input
+                    type="search"
+                    value={inboxSearch}
+                    onChange={(event) => setInboxSearch(event.target.value)}
+                    placeholder="Search conversations..."
+                    className="w-full bg-transparent text-sm text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]"
+                  />
+                </label>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {([
+                    ["all", "All"],
+                    ["customers", "Linked customers"],
+                    ["unknown", "Unassigned numbers"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setInboxFilter(value)}
+                      className={[
+                        "rounded-full border px-3 py-1.5 text-[11px] font-medium transition",
+                        inboxFilter === value
+                          ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-primary)]"
+                          : "border-[color:var(--cmp-border-subtle)] text-[color:var(--sem-text-secondary)] hover:text-[color:var(--sem-text-primary)]",
+                      ].join(" ")}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                {isBooting ? (
+                  <p className="px-2 py-4 text-sm text-[color:var(--sem-text-secondary)]">
+                    <LoaderCircle className="mr-2 inline h-4 w-4 animate-spin" />
+                    Loading inbox...
+                  </p>
+                ) : filteredInboxRows.length === 0 ? (
+                  <p className="px-2 py-4 text-sm text-[color:var(--sem-text-secondary)]">No conversations match this view.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {filteredInboxRows.map((row) => {
+                      const active = isUnifiedRowActive(row, lane, selectedCustomerId, selectedPhoneKey);
+                      const unread = row.unreadCount > 0;
+
+                      return (
+                        <button
+                          key={row.key}
+                          type="button"
+                          onClick={() => selectUnifiedConversation(row)}
+                          className={[
+                            "w-full rounded-xl px-3 py-3 text-left transition",
+                            active
+                              ? "bg-[color:var(--cmp-surface-soft)] ring-1 ring-[color:var(--cmp-border-accent)]"
+                              : unread
+                                ? "bg-[color:var(--cmp-surface-panel)] hover:bg-[color:var(--cmp-surface-soft)]"
+                                : "hover:bg-[color:var(--cmp-surface-panel)]",
+                          ].join(" ")}
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="mt-1.5 flex h-2 w-2 shrink-0 justify-center">
+                              {unread ? <span className="h-2 w-2 rounded-full bg-[color:var(--sem-accent-primary)]" /> : null}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <p className={`truncate text-sm ${unread ? "font-semibold text-[color:var(--sem-text-primary)]" : "font-medium text-[color:var(--sem-text-secondary)]"}`}>
+                                  {row.displayName}
+                                </p>
+                                <span className="shrink-0 text-[11px] tabular-nums text-[color:var(--sem-text-muted)]">{formatRelativeTime(row.lastMessageAt)}</span>
+                              </div>
+                              <p className={`mt-1 line-clamp-2 text-xs leading-5 ${unread ? "text-[color:var(--sem-text-secondary)]" : "text-[color:var(--sem-text-muted)]"}`}>
+                                {row.lastMessage}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </aside>
+
+            <main className={`${deskPanelClass} flex min-h-0 flex-col overflow-hidden rounded-[24px] lg:mx-1`}>
+              <DeskThreadPanel
+                composeMode={composeMode}
+                closeComposer={closeComposer}
+                composeError={composeError}
+                composeModeText={composeMode === "text"}
+                customerSearch={customerSearch}
+                setCustomerSearch={setCustomerSearch}
+                isLoadingPicker={isLoadingPicker}
+                filteredPickerResults={filteredPickerResults}
+                selectedComposeCustomer={selectedComposeCustomer}
+                setSelectedComposeCustomer={setSelectedComposeCustomer}
+                composeDirectRecipient={composeDirectRecipient}
+                setComposeDirectRecipient={setComposeDirectRecipient}
+                canUseDirectNumber={canUseDirectNumber}
+                canUseDirectEmail={canUseDirectEmail}
+                normalizedSearchDigits={normalizedSearchDigits}
+                composeEmailToOverride={composeEmailToOverride}
+                setComposeEmailToOverride={setComposeEmailToOverride}
+                lane={lane}
+                selectedConversation={selectedConversation}
+                selectedCustomerId={selectedCustomerId}
+                selectedPhoneKey={selectedPhoneKey}
+                selectedConversationId={selectedConversationId}
+                textThread={textThread}
+                hasUnreadMessages={hasUnreadMessages}
+                hasInboundMessages={hasInboundMessages}
+                isUpdatingReadState={isUpdatingReadState}
+                isLoadingThread={isLoadingThread}
+                threadError={threadError}
+                orderedTextMessages={orderedTextMessages}
+                updateReadState={updateReadState}
+                quickTemplates={quickTemplates}
+                isLoadingTemplates={isLoadingTemplates}
+                templatesError={templatesError}
+                openTemplateBank={openTemplateBank}
+                handleApplyTemplate={handleApplyTemplate}
+                composerSurfaceMode={composerSurfaceMode}
+                setComposerSurfaceMode={setComposerSurfaceMode}
+                composeTextBody={composeTextBody}
+                setComposeTextBody={setComposeTextBody}
+                composeEmailSubject={composeEmailSubject}
+                setComposeEmailSubject={setComposeEmailSubject}
+                composeEmailBody={composeEmailBody}
+                setComposeEmailBody={setComposeEmailBody}
+                isComposeSending={isComposeSending}
+                handleComposeSend={handleComposeSend}
+                textDraft={textDraft}
+                setTextDraft={setTextDraft}
+                isSending={isSending}
+                handleSend={handleSend}
+                formatTime={formatTime}
+                formatDeliveryStatus={formatDeliveryStatus}
+              />
+            </main>
+
+            <aside className={`${deskPanelClass} hidden min-h-0 flex-col overflow-hidden rounded-[24px] lg:ml-2 lg:flex`}>
+              <div className="shrink-0 border-b border-[color:var(--cmp-border-subtle)] px-4 py-3">
+                <p className={deskEyebrowClass}>CRM context</p>
+                <h2 className="text-sm font-semibold text-[color:var(--sem-text-primary)]">Customer snapshot</h2>
+              </div>
+              <div className="min-h-0 flex-1 space-y-3 overflow-hidden px-4 py-3">
+                <div className="rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                  <p className="truncate text-sm font-semibold text-[color:var(--sem-text-primary)]">
+                    {composeMode
+                      ? selectedComposeCustomer?.full_name ?? "New conversation"
+                      : lane === "customers"
+                        ? (selectedConversation as CustomerConversationRow | null)?.customerName ?? "Select a thread"
+                        : (selectedConversation as UnknownConversationRow | null)?.phoneNumber
+                          ?? (selectedConversation as UnknownConversationRow | null)?.phoneKey
+                          ?? "Select a thread"}
+                  </p>
+                  <p className="mt-1 truncate text-xs text-[color:var(--sem-text-muted)]">
+                    {lane === "customers" ? "Linked customer" : "Unassigned number"}
+                  </p>
+                  <div className="mt-3 space-y-2 text-xs text-[color:var(--sem-text-secondary)]">
+                    <p className="flex items-center gap-2 truncate"><Phone className="h-3.5 w-3.5 shrink-0 text-[color:var(--sem-text-muted)]" />{(selectedConversation as CustomerConversationRow | UnknownConversationRow | null)?.phoneNumber ?? "No phone on thread"}</p>
+                    {lane === "customers" && selectedCustomerId ? (
+                      <p className="flex items-center gap-2 truncate"><Mail className="h-3.5 w-3.5 shrink-0 text-[color:var(--sem-text-muted)]" />Open profile for email & company</p>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Linked operations</p>
+                  <p className="mt-2 text-xs leading-5 text-[color:var(--sem-text-secondary)]">Jobs, invoices, and tasks will surface here when linked to messaging.</p>
+                </div>
+                <div className="rounded-xl border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                  <div className="flex items-start gap-2">
+                    <Bot className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
+                    <div>
+                      <p className="text-xs font-medium text-[color:var(--sem-text-primary)]">AI assist · review required</p>
+                      <p className="mt-1 text-[11px] leading-5 text-[color:var(--sem-text-muted)]">Suggested replies and summaries assist operators. Nothing sends without human approval.</p>
+                      <button
+                        type="button"
+                        onClick={openTemplateBank}
+                        className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-[color:var(--sem-accent-primary)]"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Open draft templates
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="shrink-0 border-t border-[color:var(--cmp-border-subtle)] p-4">
+                {lane === "customers" && selectedCustomerId ? (
+                  <Link
+                    href={`/customers/${selectedCustomerId}`}
+                    className="theme-btn-secondary flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold"
+                  >
+                    Open full customer profile
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                ) : (
+                  <p className="text-center text-xs text-[color:var(--sem-text-muted)]">Link a customer to open the full CRM profile.</p>
+                )}
+              </div>
+            </aside>
+          </div>
+
+          {lane === "customers" && selectedCustomerId ? (
+            <div className="shrink-0 border-t border-[color:var(--cmp-border-subtle)] px-4 py-3 lg:hidden">
+              <Link
+                href={`/customers/${selectedCustomerId}`}
+                className="theme-btn-secondary flex w-full items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+              >
+                Open full customer profile
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {SHOW_LEGACY_MESSAGING_LAYOUT ? (
     <section className="theme-surface-modal rounded-[32px] border border-[color:rgba(212,175,55,0.2)] bg-[linear-gradient(170deg,rgba(8,8,8,0.96),rgba(19,19,19,0.9))] p-5 shadow-[0_36px_120px_rgba(0,0,0,0.4)] sm:p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -1457,6 +2224,9 @@ export default function MessagingDashboard({
           </div>
         </section>
       </div>
+    </section>
+
+      ) : null}
 
       {isTemplateBankOpen ? (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-4 py-6">
@@ -1633,6 +2403,6 @@ export default function MessagingDashboard({
           </div>
         </div>
       ) : null}
-    </section>
+    </>
   );
 }

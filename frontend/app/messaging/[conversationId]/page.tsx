@@ -50,16 +50,14 @@ export default async function MessagingConversationPage({ params }: MessagingCon
   }
 
   return (
-    <main className="min-h-screen bg-[color:var(--flat-canvas)] text-[color:var(--text-primary)]">
-      <div className="mx-auto max-w-[1400px] px-6 py-12 lg:px-10">
-        <MessagingDashboard
-          key={initialConversation.publicConversationCode}
-          initialLane={initialConversation.lane}
-          initialCustomerId={initialConversation.customerId}
-          initialPhoneKey={initialConversation.phoneKey}
-          organizationDisplayName={organizationDisplayName}
-        />
-      </div>
+    <main className="flex min-h-0 flex-1 flex-col bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
+      <MessagingDashboard
+        key={initialConversation.publicConversationCode}
+        initialLane={initialConversation.lane}
+        initialCustomerId={initialConversation.customerId}
+        initialPhoneKey={initialConversation.phoneKey}
+        organizationDisplayName={organizationDisplayName}
+      />
     </main>
   );
 }

@@ -41,15 +41,13 @@ export default async function MessagingPage({ searchParams }: MessagingPageConte
   }
 
   return (
-    <main className="min-h-screen bg-[color:var(--flat-canvas)] text-[color:var(--text-primary)]">
-      <div className="mx-auto max-w-[1400px] px-6 py-12 lg:px-10">
-        <MessagingDashboard
-          initialLane={initialLane}
-          initialCustomerId={initialCustomerId}
-          initialPhoneKey={initialPhoneKey}
-          organizationDisplayName={organizationDisplayName}
-        />
-      </div>
+    <main className="flex min-h-0 flex-1 flex-col bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
+      <MessagingDashboard
+        initialLane={initialLane}
+        initialCustomerId={initialCustomerId}
+        initialPhoneKey={initialPhoneKey}
+        organizationDisplayName={organizationDisplayName}
+      />
     </main>
   );
 }
