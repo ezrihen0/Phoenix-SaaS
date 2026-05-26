@@ -2,56 +2,18 @@
 
 import { useEffect, useState } from "react";
 
-type ApiEnvelope<T> = {
-  data?: T;
-  error?: {
-    message?: string;
-  };
-};
+import {
+  type AutomationRule,
+  automationFetch,
+  readActionKey,
+  readTriggerKey,
+} from "./sentence-builder";
 
-type AutomationRule = {
-  id: string;
-  name: string;
-  status: "active" | "paused" | "disabled" | "failed";
-  enabled: boolean;
-  mode: "auto_send" | "manual_approval" | "always_draft";
-  rule_version: number;
-  trigger_json: Record<string, unknown>;
-  action_json: Record<string, unknown>;
-  updated_at: string;
-};
-
-async function automationFetch<T>(input: string, init?: RequestInit) {
-  const headers = new Headers(init?.headers);
-
-  if (init?.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(input, {
-    ...init,
-    headers,
-    credentials: "include",
-  });
-  const payload = await response.json().catch(() => null) as ApiEnvelope<T> | null;
-
-  if (!response.ok) {
-    throw new Error(payload?.error?.message ?? "Automation request failed.");
-  }
-
-  return payload?.data as T;
-}
-
-function readRuleTrigger(rule: AutomationRule) {
-  const key = rule.trigger_json.key ?? `${rule.trigger_json.entity ?? "event"}.${rule.trigger_json.event ?? "selected"}`;
-  return String(key);
-}
-
-function readRuleAction(rule: AutomationRule) {
-  return String(rule.action_json.type ?? rule.action_json.key ?? "action");
-}
-
-export function AutomationRuleList() {
+export function LegacyAutomationRuleList({
+  onRulesChange,
+}: {
+  onRulesChange?: (rules: AutomationRule[]) => void;
+}) {
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -62,7 +24,9 @@ export function AutomationRuleList() {
     setErrorMessage(null);
 
     try {
-      setRules(await automationFetch<AutomationRule[]>("/api/automations/rules"));
+      const nextRules = await automationFetch<AutomationRule[]>("/api/automations/rules");
+      setRules(nextRules);
+      onRulesChange?.(nextRules);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Automation rules could not be loaded.");
     } finally {
@@ -152,25 +116,13 @@ export function AutomationRuleList() {
                 <div>
                   <h3 className="font-semibold text-[color:var(--sem-text-primary)]">{rule.name}</h3>
                   <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">
-                    When {readRuleTrigger(rule)} do {readRuleAction(rule)}.
+                    When {readTriggerKey(rule)} do {readActionKey(rule)}.
                   </p>
                   <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">
                     Version {rule.rule_version} / {rule.mode} / {rule.status}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <a
-                    href="#activity"
-                    className="theme-control-surface-soft rounded-full border px-3 py-2 text-xs font-medium"
-                  >
-                    View Activity
-                  </a>
-                  <a
-                    href="#custom-builder"
-                    className="theme-control-surface-soft rounded-full border px-3 py-2 text-xs font-medium"
-                  >
-                    Edit
-                  </a>
                   <button
                     type="button"
                     onClick={() => void disableRule(rule.id)}
@@ -201,4 +153,8 @@ export function AutomationRuleList() {
       ) : null}
     </section>
   );
+}
+
+export function AutomationRuleList(props: { onRulesChange?: (rules: AutomationRule[]) => void }) {
+  return <LegacyAutomationRuleList {...props} />;
 }
