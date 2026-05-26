@@ -1,10 +1,11 @@
 "use client";
 
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  AlertCircle,
   ArrowRight,
   Flame,
   LockKeyhole,
@@ -17,15 +18,312 @@ import {
   loginWithPassword,
 } from "@/lib/auth/client-auth";
 
+export const SHOW_LEGACY_LOGIN = false;
+
+function LoadingSpinner() {
+  return (
+    <span
+      className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+      aria-hidden="true"
+    />
+  );
+}
+
+export function LoginAmbientShell({ children }: { children: ReactNode }) {
+  return (
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#09090b] px-5 py-10 text-slate-950">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.065)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.065)_1px,transparent_1px)] bg-[size:40px_40px] opacity-25"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[760px] w-[760px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-600/20 blur-[150px]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[42%] top-[38%] h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-600/16 blur-[145px]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[62%] top-[68%] h-[460px] w-[460px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/10 blur-[155px]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(9,9,11,0.18)_52%,rgba(9,9,11,0.78)_100%)]"
+      />
+      <div className="relative z-10 w-full">{children}</div>
+    </main>
+  );
+}
+
+export function LoginSessionLoading() {
+  return (
+    <section className="mx-auto w-full max-w-[460px]">
+      <div className="rounded-[32px] border border-white/20 bg-white/95 p-8 shadow-[0_50px_100px_rgba(0,0,0,0.60)] backdrop-blur-2xl">
+        <div className="flex flex-col items-center py-6 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-slate-950 text-white shadow-[0_24px_60px_rgba(15,23,42,0.28)]">
+            <Flame className="h-8 w-8" />
+          </div>
+          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.32em] text-slate-400">
+            Secure workspace access
+          </p>
+          <div className="mt-6 flex items-center gap-3 text-sm font-medium text-slate-600">
+            <LoadingSpinner />
+            <span>Checking session...</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function getStatusMessage(nextPath: string | null) {
   if (nextPath === "/pricing") {
     return "Sign in to continue with subscription activation for your WizField workspace.";
   }
 
-  return "Sign in to run leads, jobs, dispatch, estimates, invoices, and customer history in one WizField workspace.";
+  return null;
 }
 
-export default function LoginForm() {
+function getReasonMessage(reason: string | null) {
+  if (reason === "unsupported-account") {
+    return "This account is not authorized for the requested workspace. Sign in with a supported role or contact your administrator.";
+  }
+
+  if (reason === "role-resolution-failed") {
+    return "Your previous session could not resolve a workspace destination. Sign in again to continue.";
+  }
+
+  return null;
+}
+
+function CenteredLoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next");
+  const reason = searchParams.get("reason");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSendingRecovery, setIsSendingRecovery] = useState(false);
+
+  const contextMessage = getReasonMessage(reason) ?? getStatusMessage(nextPath);
+
+  async function completePasswordLogin() {
+    const response = await getClientDestination();
+    const destination = response.destination as string | null;
+
+    if (!destination) {
+      throw new Error(
+        "This account authenticated successfully, but no supported WizField dashboard destination is assigned yet.",
+      );
+    }
+
+    const nextDestination = nextPath && nextPath === destination
+      ? nextPath
+      : destination;
+
+    router.replace(nextDestination ?? "/pricing");
+    router.refresh();
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      setErrorMessage("Enter your email address to continue.");
+      return;
+    }
+
+    if (!password) {
+      setErrorMessage("Enter your password to continue.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    try {
+      await loginWithPassword(normalizedEmail, password);
+      await completePasswordLogin();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to sign in right now.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handlePasswordRecovery() {
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    setIsSendingRecovery(true);
+
+    try {
+      setStatusMessage(
+        "Sign in, then open Reset Password to set a new password. If you are locked out, contact an administrator.",
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to send a password reset link right now.",
+      );
+    } finally {
+      setIsSendingRecovery(false);
+    }
+  }
+
+  return (
+    <LoginAmbientShell>
+      <section className="mx-auto w-full max-w-[460px]">
+        <div className="rounded-[32px] border border-white/20 bg-white/95 p-7 shadow-[0_50px_100px_rgba(0,0,0,0.60)] backdrop-blur-2xl sm:p-8">
+          <div className="text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-slate-950 text-white shadow-[0_24px_60px_rgba(15,23,42,0.28)]">
+              <Flame className="h-8 w-8" />
+            </div>
+            <p className="mt-6 text-xs font-semibold uppercase tracking-[0.32em] text-slate-400">
+              Secure workspace access
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+              Sign in to WizField
+            </h1>
+            <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-slate-500">
+              Enter your credentials to access your command center.
+            </p>
+            {contextMessage ? (
+              <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-slate-600">
+                {contextMessage}
+              </p>
+            ) : null}
+          </div>
+
+          {errorMessage ? (
+            <div className="mt-7 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold">Authentication failed</p>
+                  <p className="mt-1 text-sm leading-5 text-rose-700">{errorMessage}</p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {statusMessage ? (
+            <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
+              <p className="text-sm leading-6">{statusMessage}</p>
+            </div>
+          ) : null}
+
+          <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Email address</span>
+              <div className="mt-2 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 transition focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100">
+                <Mail className="h-5 w-5 shrink-0 text-slate-400" />
+                <input
+                  required
+                  autoComplete="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  className="min-w-0 flex-1 bg-transparent text-sm text-slate-950 outline-none placeholder:text-slate-400"
+                  placeholder="you@company.com"
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Password</span>
+              <div className="mt-2 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 transition focus-within:border-violet-400 focus-within:ring-4 focus-within:ring-violet-100">
+                <LockKeyhole className="h-5 w-5 shrink-0 text-slate-400" />
+                <input
+                  required
+                  autoComplete="current-password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="min-w-0 flex-1 bg-transparent text-sm text-slate-950 outline-none placeholder:text-slate-400"
+                  placeholder="Enter your password"
+                />
+              </div>
+            </label>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  void handlePasswordRecovery();
+                }}
+                disabled={isSendingRecovery}
+                className="text-sm font-semibold text-slate-700 transition hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSendingRecovery ? "Sending reset link..." : "Reset password"}
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-slate-950 px-5 py-4 text-sm font-semibold text-white shadow-[0_22px_48px_rgba(15,23,42,0.24)] transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+            >
+              {isSubmitting ? <LoadingSpinner /> : null}
+              <span>{isSubmitting ? "Securing session..." : "Sign in"}</span>
+              {!isSubmitting ? <ArrowRight className="h-4 w-4" /> : null}
+            </button>
+          </form>
+
+          <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-slate-600" />
+              <p className="text-sm leading-6 text-slate-600">
+                Your destination is resolved securely after authentication based on role, organization, and activation status.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-7 text-center text-xs leading-5 text-slate-500">
+            <p>
+              Need access?{" "}
+              <Link href="/signup" className="font-semibold text-slate-700 transition hover:text-slate-950">
+                Create an account
+              </Link>
+              ,{" "}
+              <Link href="/contact" className="font-semibold text-slate-700 transition hover:text-slate-950">
+                Contact
+              </Link>
+              , or read the{" "}
+              <Link href="/landing" className="font-semibold text-slate-700 transition hover:text-slate-950">
+                overview
+              </Link>
+              .
+            </p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+              <Link href="/pricing" className="transition hover:text-slate-950">
+                Pricing
+              </Link>
+              <Link href="/terms" className="transition hover:text-slate-950">
+                Terms
+              </Link>
+              <Link href="/privacy" className="transition hover:text-slate-950">
+                Privacy
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+    </LoginAmbientShell>
+  );
+}
+
+function LegacyLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
@@ -35,6 +333,14 @@ export default function LoginForm() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSendingRecovery, setIsSendingRecovery] = useState(false);
+
+  function getLegacyStatusMessage(next: string | null) {
+    if (next === "/pricing") {
+      return "Sign in to continue with subscription activation for your WizField workspace.";
+    }
+
+    return "Sign in to run leads, jobs, dispatch, estimates, invoices, and customer history in one WizField workspace.";
+  }
 
   async function completePasswordLogin() {
     const response = await getClientDestination();
@@ -172,7 +478,7 @@ export default function LoginForm() {
           </div>
 
           <p className="mt-5 text-sm leading-6 text-white/58">
-            {getStatusMessage(nextPath)}
+            {getLegacyStatusMessage(nextPath)}
           </p>
 
           <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
@@ -274,4 +580,12 @@ export default function LoginForm() {
       </div>
     </main>
   );
+}
+
+export default function LoginForm() {
+  if (SHOW_LEGACY_LOGIN) {
+    return <LegacyLoginForm />;
+  }
+
+  return <CenteredLoginForm />;
 }

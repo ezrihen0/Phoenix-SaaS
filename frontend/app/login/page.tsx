@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -8,7 +8,7 @@ import {
   getClientSession,
 } from "@/lib/auth/client-auth";
 
-import LoginForm from "./login-form";
+import LoginForm, { LoginAmbientShell, LoginSessionLoading } from "./login-form";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -49,8 +49,22 @@ export default function LoginPage() {
   }, [router]);
 
   if (isCheckingSession) {
-    return null;
+    return (
+      <LoginAmbientShell>
+        <LoginSessionLoading />
+      </LoginAmbientShell>
+    );
   }
 
-  return <LoginForm />;
+  return (
+    <Suspense
+      fallback={(
+        <LoginAmbientShell>
+          <LoginSessionLoading />
+        </LoginAmbientShell>
+      )}
+    >
+      <LoginForm />
+    </Suspense>
+  );
 }
