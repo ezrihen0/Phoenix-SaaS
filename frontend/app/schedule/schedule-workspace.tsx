@@ -1,25 +1,30 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  CircleDollarSign,
+  Clock3,
+  ExternalLink,
+  Gauge,
   LoaderCircle,
-  LogOut,
   MapPin,
   Phone,
   RefreshCw,
   Save,
+  ShieldAlert,
   UserRound,
 } from "lucide-react";
 
-import { handleLogout } from "@/lib/auth/logout";
-import { formatAddress } from "@/lib/crm/display";
+import { BoardShell } from "@/components/board/board-shell";
+import { MetricTile } from "@/components/board/metric-tile";
+import { formatAddress, buildAddressQuery, buildGoogleMapsSearchUrl } from "@/lib/crm/display";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import { getJobStatusLabel, getServiceTypeLabel, type JobStatus } from "@/lib/crm/statuses";
 
@@ -81,6 +86,46 @@ type ScheduleFormState = {
 type ViewMode = "day" | "week";
 
 const SCHEDULE_ITEMS_PER_PAGE = 10;
+const WORK_DAY_START_MINUTES = 8 * 60;
+const WORK_DAY_END_MINUTES = 17 * 60;
+const MIN_GAP_MINUTES = 30;
+const DAY_CAPACITY_MINUTES = 8 * 60;
+
+/** Reserved for future secondary calendar view toggle. */
+const SHOW_LEGACY_WEEK_GRID = false;
+
+const schedulePanelClass =
+  "theme-surface-card rounded-[24px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] shadow-[0_18px_55px_color-mix(in_srgb,var(--bg-canvas)_72%,transparent)] backdrop-blur-md";
+
+const scheduleEyebrowClass = "text-[11px] font-semibold uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]";
+
+type OpenWindowRecord = {
+  id: string;
+  timeLabel: string;
+  area: string;
+  technicianId: string;
+  technicianName: string;
+  durationMinutes: number;
+  profitPotentialCents: number;
+  routeImpactScore: number;
+  techLoadPercent: number;
+  useLabel: string;
+};
+
+type DispatchRiskRecord = {
+  id: string;
+  title: string;
+  detail: string;
+  tone: "danger" | "warning" | "success";
+};
+
+type TechnicianLoadRecord = {
+  technicianId: string;
+  name: string;
+  jobs: number;
+  loadPercent: number;
+  tone: "danger" | "warning" | "primary" | "success";
+};
 
 function relationValue<T>(value: RelatedValue<T> | undefined) {
   if (Array.isArray(value)) {
@@ -90,30 +135,9 @@ function relationValue<T>(value: RelatedValue<T> | undefined) {
   return value ?? null;
 }
 
-function SectionFrame({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(12,12,12,0.94),rgba(18,18,18,0.88))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.36)] backdrop-blur-xl sm:p-6">
-      <p className="text-[11px] uppercase tracking-[0.38em] text-white/36">{subtitle}</p>
-      <h2 className="mt-3 font-[family:var(--font-flat-display)] text-3xl tracking-tight text-[#f5ecd2]">
-        {title}
-      </h2>
-      <div className="mt-5">{children}</div>
-    </section>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: number }) {
-  return (
-    <article className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-white/38">{label}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-tight text-white">{value}</p>
-    </article>
-  );
-}
-
 function FieldLabel({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block space-y-2 text-sm text-white/66">
+    <label className="block space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
       <span>{label}</span>
       {children}
     </label>
@@ -124,7 +148,7 @@ function FieldInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-[18px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/24 focus:border-[color:rgba(212,175,55,0.34)] ${props.className ?? ""}`}
+      className={`w-full rounded-[18px] theme-control-surface px-4 py-3 text-sm text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)] ${props.className ?? ""}`}
     />
   );
 }
@@ -133,9 +157,276 @@ function FieldSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-[18px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)] ${props.className ?? ""}`}
+      className={`w-full rounded-[18px] theme-control-surface px-4 py-3 text-sm text-[color:var(--sem-text-primary)] outline-none ${props.className ?? ""}`}
     />
   );
+}
+
+function formatCurrency(cents: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(cents / 100);
+}
+
+function getJobValueCents(job: JobRecord) {
+  return relationValue(job.service)?.default_price_cents ?? 0;
+}
+
+function getJobDurationMinutes(job: JobRecord) {
+  return relationValue(job.service)?.duration_minutes ?? 120;
+}
+
+function getJobEndDate(job: JobRecord) {
+  if (!job.scheduled_for) {
+    return null;
+  }
+
+  const start = new Date(job.scheduled_for);
+  return new Date(start.getTime() + getJobDurationMinutes(job) * 60_000);
+}
+
+function minutesFromDate(date: Date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function formatMinutesLabel(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+  return `${displayHour}:${String(mins).padStart(2, "0")} ${period}`;
+}
+
+function computeLoadPercent(totalMinutes: number) {
+  return Math.min(100, Math.round((totalMinutes / DAY_CAPACITY_MINUTES) * 100));
+}
+
+function loadTone(loadPercent: number): TechnicianLoadRecord["tone"] {
+  if (loadPercent >= 85) {
+    return "danger";
+  }
+
+  if (loadPercent >= 70) {
+    return "warning";
+  }
+
+  if (loadPercent >= 45) {
+    return "primary";
+  }
+
+  return "success";
+}
+
+function statusTone(status: JobStatus) {
+  if (status === "waiting_for_approval" || status === "new_lead" || status === "contacted") {
+    return "theme-status-warning";
+  }
+
+  if (status === "completed" || status === "paid") {
+    return "theme-status-success";
+  }
+
+  if (status === "cancelled") {
+    return "theme-status-error";
+  }
+
+  return "theme-status-info";
+}
+
+function getNextDispatchMove(job: JobRecord, t: ReturnType<typeof useTranslations<"schedule">>) {
+  if (!job.assigned_technician_id) {
+    return {
+      title: t("moveAssignTechnician"),
+      detail: t("moveAssignTechnicianDetail"),
+    };
+  }
+
+  if (!job.scheduled_for) {
+    return {
+      title: t("moveSetSchedule"),
+      detail: t("moveSetScheduleDetail"),
+    };
+  }
+
+  if (job.status === "waiting_for_approval") {
+    return {
+      title: t("moveResolveApproval"),
+      detail: t("moveResolveApprovalDetail"),
+    };
+  }
+
+  return {
+    title: t("moveConfirmProgress"),
+    detail: t("moveConfirmProgressDetail", { status: getJobStatusLabel(job.status) }),
+  };
+}
+
+function buildOpenWindows(
+  technicians: TechnicianRecord[],
+  dayJobs: JobRecord[],
+  avgValueCents: number,
+  unscheduledJobs: JobRecord[],
+  technicianLoads: TechnicianLoadRecord[],
+  labels: { fillHighValue: string; followUp: string },
+): OpenWindowRecord[] {
+  const loadByTechId = new Map(technicianLoads.map((entry) => [entry.technicianId, entry.loadPercent]));
+  const windows: OpenWindowRecord[] = [];
+
+  for (const technician of technicians) {
+    const techJobs = dayJobs
+      .filter((job) => job.assigned_technician_id === technician.id && job.scheduled_for)
+      .sort((left, right) => new Date(left.scheduled_for!).getTime() - new Date(right.scheduled_for!).getTime());
+
+    const techCities = new Set(techJobs.map((job) => job.service_city));
+    const techLoadPercent = loadByTechId.get(technician.id) ?? 0;
+    const gaps: Array<{ startMin: number; endMin: number; area: string }> = [];
+
+    if (techJobs.length === 0) {
+      gaps.push({ startMin: WORK_DAY_START_MINUTES, endMin: WORK_DAY_END_MINUTES, area: "Flexible" });
+    } else {
+      const firstStart = minutesFromDate(new Date(techJobs[0].scheduled_for!));
+      if (firstStart - WORK_DAY_START_MINUTES >= MIN_GAP_MINUTES) {
+        gaps.push({ startMin: WORK_DAY_START_MINUTES, endMin: firstStart, area: techJobs[0].service_city });
+      }
+
+      for (let index = 0; index < techJobs.length - 1; index += 1) {
+        const currentEnd = getJobEndDate(techJobs[index]);
+        const nextStart = new Date(techJobs[index + 1].scheduled_for!);
+
+        if (!currentEnd) {
+          continue;
+        }
+
+        const gapStart = minutesFromDate(currentEnd);
+        const gapEnd = minutesFromDate(nextStart);
+
+        if (gapEnd - gapStart >= MIN_GAP_MINUTES) {
+          gaps.push({ startMin: gapStart, endMin: gapEnd, area: techJobs[index].service_city });
+        }
+      }
+
+      const lastJob = techJobs[techJobs.length - 1];
+      const lastEnd = getJobEndDate(lastJob);
+
+      if (lastEnd) {
+        const gapStart = minutesFromDate(lastEnd);
+        if (WORK_DAY_END_MINUTES - gapStart >= MIN_GAP_MINUTES) {
+          gaps.push({ startMin: gapStart, endMin: WORK_DAY_END_MINUTES, area: lastJob.service_city });
+        }
+      }
+    }
+
+    for (const gap of gaps) {
+      const durationMinutes = gap.endMin - gap.startMin;
+      if (durationMinutes < MIN_GAP_MINUTES) {
+        continue;
+      }
+
+      const bestUnscheduledValue = unscheduledJobs
+        .filter((job) => getJobDurationMinutes(job) <= durationMinutes)
+        .reduce((max, job) => Math.max(max, getJobValueCents(job)), 0);
+
+      const hourlyValue = avgValueCents > 0 ? avgValueCents : 15_000;
+      const profitPotentialCents = Math.max(
+        bestUnscheduledValue,
+        Math.round((durationMinutes / 60) * hourlyValue),
+      );
+
+      let routeImpactScore = 50;
+      if (gap.area === "Flexible") {
+        routeImpactScore = 70;
+      } else if (techCities.size <= 1) {
+        routeImpactScore = 100;
+      } else if (techCities.has(gap.area)) {
+        routeImpactScore = 80;
+      }
+
+      windows.push({
+        id: `${technician.id}-${gap.startMin}-${gap.endMin}`,
+        timeLabel: `${formatMinutesLabel(gap.startMin)} - ${formatMinutesLabel(gap.endMin)}`,
+        area: gap.area,
+        technicianId: technician.id,
+        technicianName: technician.display_name,
+        durationMinutes,
+        profitPotentialCents,
+        routeImpactScore,
+        techLoadPercent,
+        useLabel: bestUnscheduledValue > 0 ? labels.fillHighValue : labels.followUp,
+      });
+    }
+  }
+
+  return windows.sort((left, right) => {
+    if (right.profitPotentialCents !== left.profitPotentialCents) {
+      return right.profitPotentialCents - left.profitPotentialCents;
+    }
+
+    if (left.techLoadPercent !== right.techLoadPercent) {
+      return left.techLoadPercent - right.techLoadPercent;
+    }
+
+    return right.routeImpactScore - left.routeImpactScore;
+  });
+}
+
+function buildDispatchRisks(
+  dayJobs: JobRecord[],
+  unscheduledJobs: JobRecord[],
+  technicianLoads: TechnicianLoadRecord[],
+  openWindows: OpenWindowRecord[],
+  locale: string,
+  t: ReturnType<typeof useTranslations<"schedule">>,
+): DispatchRiskRecord[] {
+  const risks: DispatchRiskRecord[] = [];
+
+  const unassignedDayJobs = dayJobs.filter((job) => !job.assigned_technician_id);
+  const highestUnassigned = [...unassignedDayJobs, ...unscheduledJobs]
+    .sort((left, right) => getJobValueCents(right) - getJobValueCents(left))[0];
+
+  if (highestUnassigned) {
+    const customer = relationValue(highestUnassigned.customer);
+    risks.push({
+      id: `unassigned-${highestUnassigned.id}`,
+      title: t("riskUnassignedHighValue"),
+      detail: `${customer?.full_name ?? highestUnassigned.title} Â· ${formatCurrency(getJobValueCents(highestUnassigned))}`,
+      tone: "danger",
+    });
+  }
+
+  const overloaded = technicianLoads
+    .filter((entry) => entry.technicianId !== "unassigned")
+    .find((entry) => entry.loadPercent >= 85);
+
+  if (overloaded) {
+    risks.push({
+      id: `overload-${overloaded.technicianId}`,
+      title: t("riskTechnicianOverload"),
+      detail: t("riskTechnicianOverloadDetail", { name: overloaded.name, load: overloaded.loadPercent }),
+      tone: "warning",
+    });
+  }
+
+  const bestWindow = openWindows[0];
+  if (bestWindow) {
+    risks.push({
+      id: `window-${bestWindow.id}`,
+      title: t("riskOpenWindow"),
+      detail: `${bestWindow.technicianName} Â· ${bestWindow.timeLabel} Â· ${formatCurrency(bestWindow.profitPotentialCents)}`,
+      tone: "success",
+    });
+  }
+
+  for (const job of dayJobs.filter((entry) => entry.status === "waiting_for_approval").slice(0, 2)) {
+    risks.push({
+      id: `approval-${job.id}`,
+      title: t("riskApprovalHold"),
+      detail: `${job.title} Â· ${getJobStatusLabel(job.status, locale)}`,
+      tone: "warning",
+    });
+  }
+
+  return risks.slice(0, 5);
 }
 
 function emptyFormState(): ScheduleFormState {
@@ -323,7 +614,7 @@ function ScheduleEditor({
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">{t("basicScheduling")}</p>
+      <p className={scheduleEyebrowClass}>{t("basicScheduling")}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <FieldLabel label={t("technicianField")}>
           <FieldSelect
@@ -367,7 +658,7 @@ function ScheduleEditor({
         type="button"
         disabled={isPending || technicians.length === 0}
         onClick={() => onSave(scheduleForm)}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+        className="theme-btn-primary inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         {t("saveSchedule")}
@@ -385,7 +676,6 @@ export default function ScheduleWorkspace({
   technicians: TechnicianRecord[];
   initialErrorMessage: string | null;
 }) {
-  const router = useRouter();
   const locale = useLocale();
   const t = useTranslations("schedule");
   const [jobs, setJobs] = useState<JobRecord[]>(() => sortJobs(initialJobs));
@@ -399,9 +689,14 @@ export default function ScheduleWorkspace({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const activeDay = startOfDay(selectedDate);
+  const weekStripDays = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addDays(getWeekStart(selectedDate), index)),
+    [selectedDate],
+  );
   const visibleDays = viewMode === "day"
-    ? [startOfDay(selectedDate)]
-    : Array.from({ length: 7 }, (_, index) => addDays(getWeekStart(selectedDate), index));
+    ? [activeDay]
+    : weekStripDays;
 
   const filteredJobs = jobs.filter((job) => {
     if (technicianFilter === "all") {
@@ -421,9 +716,19 @@ export default function ScheduleWorkspace({
     const jobDate = new Date(job.scheduled_for);
     return visibleDays.some((day) => isSameCalendarDay(jobDate, day));
   });
-  const scheduleTotalPages = Math.max(1, Math.ceil(visibleScheduledJobs.length / SCHEDULE_ITEMS_PER_PAGE));
+  const dayJobs = useMemo(
+    () => scheduledJobs.filter((job) => job.scheduled_for && isSameCalendarDay(new Date(job.scheduled_for), activeDay)),
+    [scheduledJobs, activeDay],
+  );
+  const scheduleTotalPages = Math.max(1, Math.ceil(dayJobs.length / SCHEDULE_ITEMS_PER_PAGE));
   const safeSchedulePage = Math.min(schedulePage, scheduleTotalPages);
   const scheduleStartIndex = (safeSchedulePage - 1) * SCHEDULE_ITEMS_PER_PAGE;
+  const timelineJobs = useMemo(() => {
+    const sorted = [...dayJobs].sort(
+      (left, right) => new Date(left.scheduled_for!).getTime() - new Date(right.scheduled_for!).getTime(),
+    );
+    return viewMode === "day" ? sorted.slice(scheduleStartIndex, scheduleStartIndex + SCHEDULE_ITEMS_PER_PAGE) : sorted;
+  }, [dayJobs, viewMode, scheduleStartIndex]);
   const pagedVisibleScheduledJobs = visibleScheduledJobs.slice(
     scheduleStartIndex,
     scheduleStartIndex + SCHEDULE_ITEMS_PER_PAGE,
@@ -443,10 +748,116 @@ export default function ScheduleWorkspace({
   ]);
   const effectiveSelectedJobId = selectedJobId && visibleJobIds.has(selectedJobId)
     ? selectedJobId
-    : (visibleScheduledJobs[0]?.id ?? unscheduledJobs[0]?.id ?? null);
+    : (dayJobs[0]?.id ?? unscheduledJobs[0]?.id ?? null);
   const selectedJob = filteredJobs.find((job) => job.id === effectiveSelectedJobId) ?? null;
   const selectedCustomer = relationValue(selectedJob?.customer);
   const selectedTechnician = relationValue(selectedJob?.technician);
+  const selectedJobMapsUrl = selectedJob
+    ? buildGoogleMapsSearchUrl(
+      buildAddressQuery(
+        selectedJob.service_address_line_1,
+        selectedJob.service_address_line_2,
+        selectedJob.service_city,
+        selectedJob.service_state_or_region,
+        selectedJob.service_postal_code,
+      ),
+    )
+    : null;
+
+  const controlMetrics = useMemo(() => {
+    const unassignedCount = dayJobs.filter((job) => !job.assigned_technician_id).length + unscheduledJobs.length;
+    const totalMinutes = dayJobs.reduce((sum, job) => sum + getJobDurationMinutes(job), 0);
+    const loadIndex = dayJobs.length > 0
+      ? Math.round(totalMinutes / Math.max(technicians.length, 1) / DAY_CAPACITY_MINUTES * 100)
+      : 0;
+    const scheduleValueCents = dayJobs.reduce((sum, job) => sum + getJobValueCents(job), 0);
+    const routeZones = new Set(dayJobs.map((job) => job.service_city).filter(Boolean));
+
+    return {
+      jobsToday: dayJobs.length,
+      unassignedCount,
+      loadIndex,
+      scheduleValueCents,
+      routeZones: routeZones.size,
+    };
+  }, [dayJobs, unscheduledJobs.length, technicians.length]);
+
+  const weekPressure = useMemo(
+    () => weekStripDays.map((day) => {
+      const jobsForDay = scheduledJobs.filter(
+        (job) => job.scheduled_for && isSameCalendarDay(new Date(job.scheduled_for), day),
+      );
+      const minutes = jobsForDay.reduce((sum, job) => sum + getJobDurationMinutes(job), 0);
+      const load = computeLoadPercent(minutes);
+      const tone = loadTone(load);
+
+      return {
+        day,
+        jobs: jobsForDay.length,
+        load,
+        tone,
+        active: isSameCalendarDay(day, activeDay),
+      };
+    }),
+    [weekStripDays, scheduledJobs, activeDay],
+  );
+
+  const technicianLoads = useMemo(() => {
+    const loads: TechnicianLoadRecord[] = technicians.map((technician) => {
+      const techJobs = dayJobs.filter((job) => job.assigned_technician_id === technician.id);
+      const totalMinutes = techJobs.reduce((sum, job) => sum + getJobDurationMinutes(job), 0);
+      const loadPercent = computeLoadPercent(totalMinutes);
+
+      return {
+        technicianId: technician.id,
+        name: technician.display_name,
+        jobs: techJobs.length,
+        loadPercent,
+        tone: loadTone(loadPercent),
+      };
+    });
+
+    const unassignedDayCount = dayJobs.filter((job) => !job.assigned_technician_id).length;
+    if (unassignedDayCount > 0) {
+      loads.push({
+        technicianId: "unassigned",
+        name: t("unassigned"),
+        jobs: unassignedDayCount,
+        loadPercent: 0,
+        tone: "danger",
+      });
+    }
+
+    return loads.sort((left, right) => right.loadPercent - left.loadPercent);
+  }, [technicians, dayJobs, t]);
+
+  const avgJobValueCents = useMemo(() => {
+    const values = [...dayJobs, ...unscheduledJobs].map(getJobValueCents).filter((value) => value > 0);
+    if (values.length === 0) {
+      return 0;
+    }
+
+    return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+  }, [dayJobs, unscheduledJobs]);
+
+  const openWindows = useMemo(
+    () => buildOpenWindows(
+      technicians,
+      dayJobs,
+      avgJobValueCents,
+      unscheduledJobs,
+      technicianLoads,
+      { fillHighValue: t("windowFillHighValue"), followUp: t("windowFollowUp") },
+    ),
+    [technicians, dayJobs, avgJobValueCents, unscheduledJobs, technicianLoads, t],
+  );
+
+  const dispatchRisks = useMemo(
+    () => buildDispatchRisks(dayJobs, unscheduledJobs, technicianLoads, openWindows, locale, t),
+    [dayJobs, unscheduledJobs, technicianLoads, openWindows, locale, t],
+  );
+
+  const nextDispatchMove = selectedJob ? getNextDispatchMove(selectedJob, t) : null;
 
   function shiftRange(direction: -1 | 1) {
     setSelectedDate((currentDate) => addDays(currentDate, viewMode === "day" ? direction : direction * 7));
@@ -513,407 +924,396 @@ export default function ScheduleWorkspace({
     setSelectedJobId(updatedJob.id);
   }
 
-  return (
-    <main className="relative min-h-screen overflow-hidden bg-[color:var(--flat-canvas)] text-white">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.16),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(80,200,120,0.12),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_32%)]" />
-      <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:32px_32px]" />
+  function handleRefresh() {
+    startTransition(() => {
+      void (async () => {
+        try {
+          await refreshJobs();
+          setStatusMessage(t("refreshed"));
+          setErrorMessage(null);
+        } catch (error) {
+          setErrorMessage(error instanceof Error ? error.message : t("refreshError"));
+        }
+      })();
+    });
+  }
 
-      <div className="relative mx-auto max-w-[1600px] px-5 py-6 lg:px-8">
-        <header className="rounded-[34px] border border-[color:rgba(212,175,55,0.18)] bg-[linear-gradient(180deg,rgba(9,9,9,0.94),rgba(18,18,18,0.88))] p-6 shadow-[0_34px_120px_rgba(0,0,0,0.42)] backdrop-blur-2xl">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+  function riskToneClass(tone: DispatchRiskRecord["tone"]) {
+    if (tone === "danger") {
+      return "theme-status-error";
+    }
+
+    if (tone === "warning") {
+      return "theme-status-warning";
+    }
+
+    return "theme-status-success";
+  }
+
+  return (
+    <BoardShell gridOpacity="subtle">
+      <div className="mx-auto max-w-[1720px] px-5 py-6 lg:px-8">
+        <header className={`${schedulePanelClass} px-6 py-5`}>
+          <div className="flex flex-wrap items-start justify-between gap-5">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
-                {t("brand")}
-              </p>
-              <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] sm:text-6xl">
-                {t("title")}
+              <p className={scheduleEyebrowClass}>{t("controlRoomEyebrow")}</p>
+              <h1 className="mt-2 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-display-headline)] sm:text-5xl">
+                {t("controlRoomTitle")}
               </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/56 sm:text-base">
-                {t("description")}
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+                {t("controlRoomDescription")}
               </p>
             </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-wrap items-center gap-3">
               <Link
                 href="/jobs"
-                className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+                className="inline-flex items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-4 py-2 text-sm text-[color:var(--sem-text-secondary)] hover:text-[color:var(--sem-text-primary)]"
               >
                 <ArrowLeft className="h-4 w-4" />
                 {t("backToJobs")}
               </Link>
-              <Link
-                href="/dispatch"
-                className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
-              >
-                <MapPin className="h-4 w-4" />
-                {t("dispatchView")}
-              </Link>
               <button
                 type="button"
-                onClick={() => {
-                  startTransition(() => {
-                    void handleLogout(router);
-                  });
-                }}
-                className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+                onClick={handleRefresh}
+                className="theme-btn-primary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
               >
-                <LogOut className="h-4 w-4" />
-                {t("signOut")}
+                <RefreshCw className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`} />
+                {t("refreshSchedule")}
               </button>
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard label={t("visibleJobs")} value={visibleScheduledJobs.length} />
-            <MetricCard label={t("unscheduled")} value={unscheduledJobs.length} />
-            <MetricCard label={t("activeTechnicians")} value={technicians.length} />
-            <MetricCard label={t("selectedRange")} value={visibleDays.length} />
+          <div className="mt-5 flex flex-col gap-4 border-t border-[color:var(--cmp-border-subtle)] pt-5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => shiftRange(-1)} className="inline-flex items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-2 text-sm text-[color:var(--sem-text-secondary)]">
+                <ChevronLeft className="h-4 w-4" />
+                {t("previous")}
+              </button>
+              <button type="button" onClick={() => setSelectedDate(startOfDay(new Date()))} className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-2 text-sm text-[color:var(--sem-text-secondary)]">
+                {t("today")}
+              </button>
+              <button type="button" onClick={() => shiftRange(1)} className="inline-flex items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-2 text-sm text-[color:var(--sem-text-secondary)]">
+                {t("next")}
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <span className="px-2 text-sm text-[color:var(--sem-text-muted)]">{formatVisibleRange(visibleDays, locale)}</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-1">
+                {(["day", "week"] as ViewMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setViewMode(mode)}
+                    className={`rounded-full px-4 py-2 text-sm ${viewMode === mode ? "theme-selected-card" : "text-[color:var(--sem-text-secondary)]"}`}
+                  >
+                    {mode === "day" ? t("day") : t("week")}
+                  </button>
+                ))}
+              </div>
+              <div className="min-w-[180px]">
+                <FieldSelect value={technicianFilter} onChange={(event) => setTechnicianFilter(event.target.value)}>
+                  <option value="all">{t("allTechnicians")}</option>
+                  {technicians.map((technician) => (
+                    <option key={technician.id} value={technician.id}>{technician.display_name}</option>
+                  ))}
+                </FieldSelect>
+              </div>
+            </div>
           </div>
         </header>
 
-        {(errorMessage || statusMessage) && (
-          <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <div className={`rounded-[22px] border px-4 py-3 text-sm ${errorMessage ? "border-rose-500/30 bg-rose-500/10 text-rose-100" : "border-[color:rgba(212,175,55,0.24)] bg-[color:rgba(212,175,55,0.1)] text-[#f5d980]"}`}>
-              {errorMessage ?? statusMessage}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                startTransition(() => {
-                  void (async () => {
-                    try {
-                      await refreshJobs();
-                      setStatusMessage(t("refreshed"));
-                      setErrorMessage(null);
-                    } catch (error) {
-                      setErrorMessage(error instanceof Error ? error.message : t("refreshError"));
-                    }
-                  })();
-                });
-              }}
-              className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
-            >
-              <RefreshCw className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`} />
-              {t("refreshSchedule")}
-            </button>
+        {errorMessage || statusMessage ? (
+          <div className={`mt-5 rounded-[22px] border px-4 py-3 text-sm ${errorMessage ? "theme-alert-error" : "theme-alert-info"}`}>
+            {errorMessage ?? statusMessage}
           </div>
-        )}
+        ) : null}
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_420px]">
-          <div className="space-y-6">
-            <SectionFrame title={t("board")} subtitle={t("calendar")}>
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricTile icon={CalendarDays} label={t("jobsToday")} value={controlMetrics.jobsToday} helper={t("jobsTodayHelper")} />
+          <MetricTile icon={AlertTriangle} label={t("unscheduled")} value={controlMetrics.unassignedCount} helper={t("dispatchRiskHelper")} />
+          <MetricTile icon={Clock3} label={t("openWindows")} value={openWindows.length} helper={t("sellableSlotsHelper")} />
+          <MetricTile icon={Gauge} label={t("loadIndex")} value={`${controlMetrics.loadIndex}%`} helper={t("fieldCapacityHelper")} />
+        </div>
+
+        <section className={`${schedulePanelClass} mt-5 p-4`}>
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <p className={scheduleEyebrowClass}>{t("weekPressure")}</p>
+              <p className="mt-1 text-sm text-[color:var(--sem-text-muted)]">{t("weekPressureHelper")}</p>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-7">
+            {weekPressure.map(({ day, jobs: jobCount, load, tone, active }) => (
+              <button
+                key={day.toISOString()}
+                type="button"
+                onClick={() => setSelectedDate(startOfDay(day))}
+                className={`rounded-[20px] border p-3 text-left ${active ? "theme-selected-card" : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]"}`}
+              >
+                <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">
+                  {new Intl.DateTimeFormat(locale, { weekday: "short" }).format(day)}
+                </p>
+                <p className="font-[family:var(--font-geist-mono)] text-2xl font-semibold text-[color:var(--sem-display-headline)]">
+                  {day.getDate()}
+                </p>
+                <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">{jobCount} {t("jobsShort")} Â· {load}%</p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[color:var(--cmp-surface-soft)]">
+                  <div className={`h-full rounded-full ${tone === "danger" ? "bg-[color:var(--sem-state-error)]" : tone === "warning" ? "bg-[color:var(--sem-state-warning)]" : tone === "primary" ? "bg-[color:var(--sem-accent-primary)]" : "bg-[color:var(--sem-state-success)]"}`} style={{ width: `${load}%` }} />
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricTile icon={CircleDollarSign} label={t("scheduleValue")} value={formatCurrency(controlMetrics.scheduleValueCents)} helper={t("scheduleValueHelper")} />
+          <MetricTile icon={MapPin} label={t("routePressure")} value={controlMetrics.routeZones} helper={t("routePressureHelper")} />
+          <MetricTile icon={ShieldAlert} label={t("dispatchRisk")} value={dispatchRisks.length} helper={t("dispatchRiskCountHelper")} />
+          <MetricTile icon={Clock3} label={t("sellableWindows")} value={openWindows.length} helper={t("sellableWindowsHelper")} />
+        </div>
+
+        <div className="mt-6 xl:grid xl:grid-cols-[minmax(0,1fr)_400px] xl:items-start xl:gap-6">
+          <div className="min-h-0 space-y-4">
+            <section className={`${schedulePanelClass} p-5`}>
+              <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm text-white/46">{formatVisibleRange(visibleDays, locale)}</p>
-                  <p className="mt-2 text-sm text-white/38">
-                    {t("description")}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => shiftRange(-1)}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      {t("previous")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDate(startOfDay(new Date()))}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white"
-                    >
-                      {t("today")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => shiftRange(1)}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white"
-                    >
-                      {t("next")}
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </div>
+                  <p className={scheduleEyebrowClass}>{t("todayTimeline")}</p>
+                  <h2 className="mt-2 text-xl font-semibold text-[color:var(--sem-display-headline)]">{formatDayHeading(activeDay, locale)}</h2>
                 </div>
-
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="inline-flex rounded-full border border-white/10 bg-black/25 p-1">
-                    {(["day", "week"] as ViewMode[]).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => setViewMode(mode)}
-                        className={`rounded-full px-4 py-2 text-sm transition ${viewMode === mode ? "bg-[color:rgba(212,175,55,0.18)] text-[#f5d980]" : "text-white/56 hover:text-white"}`}
-                      >
-                        {mode === "day" ? t("day") : t("week")}
-                      </button>
-                    ))}
-                  </div>
-                  <FieldSelect value={technicianFilter} onChange={(event) => setTechnicianFilter(event.target.value)}>
-                    <option value="all">{t("allTechnicians")}</option>
-                    {technicians.map((technician) => (
-                      <option key={technician.id} value={technician.id}>
-                        {technician.display_name}
-                      </option>
-                    ))}
-                  </FieldSelect>
-                </div>
+                <span className="text-xs text-[color:var(--sem-text-muted)]">{dayJobs.length} {t("jobsShort")}</span>
               </div>
 
-              <div className={`mt-6 grid gap-4 ${viewMode === "week" ? "xl:grid-cols-7" : "max-h-[680px] grid-cols-1 overflow-y-auto pr-1"}`}>
-                {visibleDays.map((day) => {
-                  const jobsForDay = groupJobsByDay(day);
-                  const totalJobsForDay = countJobsByDay(day);
+              <div className="mt-4 max-h-[42vh] overflow-y-auto rounded-[20px] border border-[color:var(--cmp-border-subtle)]">
+                {timelineJobs.length > 0 ? timelineJobs.map((job) => {
+                  const customer = relationValue(job.customer);
+                  const technician = relationValue(job.technician);
+                  const timeLabel = formatTimeOnly(job.scheduled_for, locale, t("timeNotSet"));
+                  const endLabel = formatScheduleTimeRange(job.scheduled_for, job.scheduled_window, locale, t("timeNotSet")).split(" - ")[1] ?? "";
 
                   return (
-                    <article key={day.toISOString()} className={`rounded-[24px] border border-white/10 bg-black/20 p-4 ${viewMode === "week" ? "flex min-h-[420px] flex-col" : ""}`}>
-                      <div className="flex shrink-0 items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">{viewMode === "day" ? t("selectedDay") : t("dayLabel")}</p>
-                          <h3 className="mt-2 text-lg font-semibold text-[#f5ecd2]">{formatDayHeading(day, locale)}</h3>
-                        </div>
-                        <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/56">
-                          {totalJobsForDay}
+                    <button
+                      key={job.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedJobId(job.id);
+                        setStatusMessage(null);
+                      }}
+                      className={`grid w-full grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-3 border-b border-[color:var(--cmp-border-subtle)] px-3 py-3 text-left last:border-b-0 ${effectiveSelectedJobId === job.id ? "theme-selected-card" : "bg-[color:var(--cmp-surface-panel)] hover:bg-[color:var(--cmp-hover-surface)]"}`}
+                    >
+                      <div>
+                        <p className="font-[family:var(--font-geist-mono)] text-xs text-[color:var(--sem-accent-primary)]">{timeLabel}</p>
+                        {endLabel ? <p className="text-[10px] text-[color:var(--sem-text-muted)]">{endLabel}</p> : null}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-[color:var(--sem-text-primary)]">{job.title}</p>
+                        <p className="truncate text-xs text-[color:var(--sem-text-muted)]">
+                          {customer?.full_name ?? t("customerPending")} Â· {job.service_city} Â· {technician?.display_name ?? t("unassigned")}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-[family:var(--font-geist-mono)] text-xs font-semibold text-[color:var(--sem-text-primary)]">{formatCurrency(getJobValueCents(job))}</p>
+                        <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] uppercase ${statusTone(job.status)}`}>
+                          {getJobStatusLabel(job.status, locale)}
                         </span>
                       </div>
-
-                      <div className={`mt-4 space-y-3 ${viewMode === "week" ? "min-h-0 flex-1 overflow-y-auto pr-1" : ""}`}>
-                        {jobsForDay.length > 0 ? jobsForDay.map((job) => {
-                          const customer = relationValue(job.customer);
-                          const technician = relationValue(job.technician);
-                          const service = relationValue(job.service);
-                          const scheduledDateLabel = job.scheduled_for ? formatDayHeading(new Date(job.scheduled_for), locale) : t("notScheduled");
-                          const scheduledTimeLabel = formatScheduleTimeRange(job.scheduled_for, job.scheduled_window, locale, t("timeNotSet"));
-
-                          return (
-                            <button
-                              key={job.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedJobId(job.id);
-                                setStatusMessage(null);
-                              }}
-                              className={`w-full rounded-[20px] border text-left transition ${viewMode === "week" ? "p-3" : "p-4"} ${selectedJobId === job.id ? "border-[color:rgba(212,175,55,0.28)] bg-[color:rgba(212,175,55,0.08)]" : "border-white/10 bg-white/[0.03] hover:border-white/18 hover:bg-white/[0.05]"}`}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <p className="font-medium text-white">{job.title}</p>
-                                  <p className="mt-1 text-xs text-white/48">
-                                    {viewMode === "week"
-                                      ? (service?.name ?? getServiceTypeLabel(job.requested_service_type, locale))
-                                      : (customer?.full_name ?? t("customerPending"))}
-                                  </p>
-                                </div>
-                                {viewMode === "day" ? (
-                                  <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.2em] text-white/56">
-                                    {getJobStatusLabel(job.status, locale)}
-                                  </span>
-                                ) : null}
-                              </div>
-
-                              {viewMode === "week" ? (
-                                <div className="mt-3 space-y-1 text-xs text-white/52">
-                                  <p>{scheduledTimeLabel}</p>
-                                  <p>{technician?.display_name ?? t("unassigned")}</p>
-                                </div>
-                              ) : (
-                              <div className="mt-3 grid gap-2 rounded-[18px] border border-white/10 bg-black/20 p-3 text-xs text-white/52">
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="uppercase tracking-[0.16em] text-white/34">{t("date")}</span>
-                                  <span className="text-white/74">{scheduledDateLabel}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="uppercase tracking-[0.16em] text-white/34">{t("time")}</span>
-                                  <span className="text-white/74">{scheduledTimeLabel}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="uppercase tracking-[0.16em] text-white/34">{t("customer")}</span>
-                                  <span className="text-right text-white/74">{customer?.full_name ?? t("customerPending")}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="uppercase tracking-[0.16em] text-white/34">{t("technician")}</span>
-                                  <span className="text-right text-white/74">{technician?.display_name ?? t("unassigned")}</span>
-                                </div>
-                              </div>
-                              )}
-                            </button>
-                          );
-                        }) : (
-                          <div className="rounded-[20px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-8 text-center text-sm text-white/42">
-                            {t("noJobsForDate")}
-                          </div>
-                        )}
-                      </div>
-                    </article>
+                    </button>
                   );
-                })}
+                }) : (
+                  <div className="px-4 py-10 text-center text-sm text-[color:var(--sem-text-secondary)]">{t("noJobsForDate")}</div>
+                )}
               </div>
 
-              {viewMode === "day" && visibleScheduledJobs.length > 0 ? (
-                <div className="mt-5 flex flex-col gap-3 rounded-[22px] border border-white/10 bg-black/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm text-white/52">
-                    {t("showingScheduled", {
-                      start: scheduleStartIndex + 1,
-                      end: Math.min(scheduleStartIndex + SCHEDULE_ITEMS_PER_PAGE, visibleScheduledJobs.length),
-                      totalCount: visibleScheduledJobs.length,
-                    })}
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={safeSchedulePage <= 1}
-                      onClick={() => setSchedulePage((current) => Math.max(1, current - 1))}
-                      className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {t("previous")}
-                    </button>
-                    <span className="text-sm text-white/52">
-                      {t("pageOf", { page: safeSchedulePage, totalPages: scheduleTotalPages })}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={safeSchedulePage >= scheduleTotalPages}
-                      onClick={() => setSchedulePage((current) => Math.min(scheduleTotalPages, current + 1))}
-                      className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {t("next")}
-                    </button>
+              {viewMode === "day" && dayJobs.length > SCHEDULE_ITEMS_PER_PAGE ? (
+                <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[color:var(--sem-text-muted)]">
+                  <span>{t("showingScheduled", { start: scheduleStartIndex + 1, end: Math.min(scheduleStartIndex + SCHEDULE_ITEMS_PER_PAGE, dayJobs.length), totalCount: dayJobs.length })}</span>
+                  <div className="flex items-center gap-2">
+                    <button type="button" disabled={safeSchedulePage <= 1} onClick={() => setSchedulePage((current) => Math.max(1, current - 1))} className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-1 disabled:opacity-50">{t("previous")}</button>
+                    <span>{t("pageOf", { page: safeSchedulePage, totalPages: scheduleTotalPages })}</span>
+                    <button type="button" disabled={safeSchedulePage >= scheduleTotalPages} onClick={() => setSchedulePage((current) => Math.min(scheduleTotalPages, current + 1))} className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-1 disabled:opacity-50">{t("next")}</button>
                   </div>
                 </div>
               ) : null}
-            </SectionFrame>
+            </section>
 
-            <SectionFrame title={t("unscheduledJobs")} subtitle={t("overflow")}>
-              {unscheduledJobs.length > 0 ? (
-                <>
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    {pagedUnscheduledJobs.map((job) => {
-                      const customer = relationValue(job.customer);
-                      const technician = relationValue(job.technician);
-
-                      return (
-                        <button
-                          key={job.id}
-                          type="button"
-                          onClick={() => setSelectedJobId(job.id)}
-                          className={`rounded-[22px] border p-4 text-left transition ${selectedJobId === job.id ? "border-[color:rgba(212,175,55,0.28)] bg-[color:rgba(212,175,55,0.08)]" : "border-white/10 bg-white/[0.03] hover:border-white/18 hover:bg-white/[0.05]"}`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-medium text-white">{job.title}</p>
-                              <p className="mt-1 text-sm text-white/52">{customer?.full_name ?? t("customerPending")}</p>
-                            </div>
-                            <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.2em] text-white/56">
-                              {getJobStatusLabel(job.status, locale)}
-                            </span>
-                          </div>
-                          <div className="mt-3 flex flex-wrap gap-4 text-xs text-white/46">
-                            <span className="inline-flex items-center gap-1.5">
-                              <UserRound className="h-3.5 w-3.5 text-[color:var(--flat-gold)]" />
-                              {technician?.display_name ?? t("unassigned")}
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <CalendarDays className="h-3.5 w-3.5 text-[color:var(--flat-gold)]" />
-                              {t("notScheduled")}
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-5 flex flex-col gap-3 rounded-[22px] border border-white/10 bg-black/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm text-white/52">
-                      {t("showingUnscheduled", {
-                        start: unscheduledStartIndex + 1,
-                        end: Math.min(unscheduledStartIndex + SCHEDULE_ITEMS_PER_PAGE, unscheduledJobs.length),
-                        totalCount: unscheduledJobs.length,
-                      })}
-                  </p>
-                    <div className="flex items-center gap-3">
+            {unscheduledJobs.length > 0 ? (
+              <section className={`${schedulePanelClass} p-4`}>
+                <p className={scheduleEyebrowClass}>{t("unscheduledJobs")}</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {pagedUnscheduledJobs.map((job) => {
+                    const customer = relationValue(job.customer);
+                    return (
                       <button
+                        key={job.id}
                         type="button"
-                        disabled={safeUnscheduledPage <= 1}
-                        onClick={() => setUnscheduledPage((current) => Math.max(1, current - 1))}
-                        className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => setSelectedJobId(job.id)}
+                        className={`rounded-[16px] border px-3 py-2 text-left ${effectiveSelectedJobId === job.id ? "theme-selected-card" : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]"}`}
                       >
-                      {t("previous")}
-                    </button>
-                    <span className="text-sm text-white/52">
-                      {t("pageOf", { page: safeUnscheduledPage, totalPages: unscheduledTotalPages })}
+                        <p className="text-sm font-medium text-[color:var(--sem-text-primary)]">{job.title}</p>
+                        <p className="text-xs text-[color:var(--sem-text-muted)]">{customer?.full_name ?? t("customerPending")}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                {unscheduledJobs.length > SCHEDULE_ITEMS_PER_PAGE ? (
+                  <div className="mt-3 flex items-center justify-between text-xs text-[color:var(--sem-text-muted)]">
+                    <span>{t("showingUnscheduled", { start: unscheduledStartIndex + 1, end: Math.min(unscheduledStartIndex + SCHEDULE_ITEMS_PER_PAGE, unscheduledJobs.length), totalCount: unscheduledJobs.length })}</span>
+                    <div className="flex gap-2">
+                      <button type="button" disabled={safeUnscheduledPage <= 1} onClick={() => setUnscheduledPage((p) => Math.max(1, p - 1))} className="rounded-full border px-2 py-1 disabled:opacity-50">{t("previous")}</button>
+                      <button type="button" disabled={safeUnscheduledPage >= unscheduledTotalPages} onClick={() => setUnscheduledPage((p) => Math.min(unscheduledTotalPages, p + 1))} className="rounded-full border px-2 py-1 disabled:opacity-50">{t("next")}</button>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+          </div>
+
+          <aside className="mt-6 xl:sticky xl:top-4 xl:mt-0 xl:max-h-[calc(100vh-1.5rem)] xl:self-start xl:overflow-y-auto">
+            <section className={`${schedulePanelClass} p-5`}>
+              <p className={scheduleEyebrowClass}>{t("selectedAppointment")}</p>
+              {selectedJob && selectedCustomer && nextDispatchMove ? (
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-[color:var(--sem-display-headline)]">{selectedCustomer.full_name}</h2>
+                    <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">{selectedJob.title}</p>
+                    <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] uppercase ${statusTone(selectedJob.status)}`}>
+                      {getJobStatusLabel(selectedJob.status, locale)}
                     </span>
-                      <button
-                        type="button"
-                        disabled={safeUnscheduledPage >= unscheduledTotalPages}
-                        onClick={() => setUnscheduledPage((current) => Math.min(unscheduledTotalPages, current + 1))}
-                        className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                      {t("next")}
-                    </button>
-                    </div>
                   </div>
-                </>
-              ) : (
-                <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-8 text-center text-sm text-white/42">
-                  {t("everyVisibleScheduled")}
-                </div>
-              )}
-            </SectionFrame>
-          </div>
 
-          <div className="space-y-6 xl:sticky xl:top-5 xl:self-start">
-            <SectionFrame title={t("selectedJob")} subtitle={t("quickEdit")}>
-              {selectedJob && selectedCustomer ? (
-                <div className="space-y-6">
-                  <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xl font-semibold tracking-tight text-white">{selectedJob.title}</p>
-                        <p className="mt-1 text-sm text-white/52">{selectedCustomer.full_name}</p>
-                      </div>
-                      <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-white/60">
-                        {getJobStatusLabel(selectedJob.status, locale)}
-                      </span>
+                  <div className="rounded-[20px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] p-4">
+                    <p className={scheduleEyebrowClass}>{t("nextDispatchMove")}</p>
+                    <p className="mt-2 font-semibold text-[color:var(--sem-text-primary)]">{nextDispatchMove.title}</p>
+                    <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">{nextDispatchMove.detail}</p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                      <p className={scheduleEyebrowClass}>{t("customer")}</p>
+                      <p className="mt-2 text-sm font-semibold text-[color:var(--sem-text-primary)]">{selectedCustomer.full_name}</p>
+                      {selectedCustomer.phone ? (
+                        <a href={`tel:${selectedCustomer.phone}`} className="mt-1 inline-flex items-center gap-1 text-sm text-[color:var(--sem-accent-primary)]">
+                          <Phone className="h-3.5 w-3.5" />
+                          {selectedCustomer.phone}
+                        </a>
+                      ) : null}
                     </div>
-                    <div className="mt-4 space-y-2 text-sm text-white/56">
-                      <div className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 text-[color:var(--flat-gold)]" />{formatAddress(selectedJob.service_address_line_1, selectedJob.service_address_line_2, selectedJob.service_city, selectedJob.service_state_or_region, selectedJob.service_postal_code)}</div>
-                      <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-[color:var(--flat-gold)]" />{selectedCustomer.phone}</div>
-                      <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[color:var(--flat-gold)]" />{selectedJob.scheduled_for ? formatDayHeading(new Date(selectedJob.scheduled_for), locale) : t("noDateSelected")}</div>
-                      <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[color:var(--flat-gold)]" />{formatScheduleTimeRange(selectedJob.scheduled_for, selectedJob.scheduled_window, locale, t("timeNotSet"))}</div>
-                      <div className="flex items-center gap-2"><UserRound className="h-4 w-4 text-[color:var(--flat-gold)]" />{selectedTechnician?.display_name ?? t("unassigned")}</div>
+                    <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                      <p className={scheduleEyebrowClass}>{t("time")}</p>
+                      <p className="mt-2 text-sm font-semibold text-[color:var(--sem-text-primary)]">
+                        {formatScheduleTimeRange(selectedJob.scheduled_for, selectedJob.scheduled_window, locale, t("timeNotSet"))}
+                      </p>
+                      <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{selectedTechnician?.display_name ?? t("unassigned")}</p>
+                    </div>
+                    <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3 sm:col-span-2">
+                      <p className={scheduleEyebrowClass}>{t("scheduleValue")}</p>
+                      <p className="mt-2 font-[family:var(--font-geist-mono)] text-xl font-semibold text-[color:var(--sem-display-headline)]">{formatCurrency(getJobValueCents(selectedJob))}</p>
                     </div>
                   </div>
 
-                    <ScheduleEditor
-                      key={selectedJob.id}
-                      job={selectedJob}
-                      technicians={technicians}
-                      isPending={isPending}
-                      locale={locale}
-                      t={t}
-                      onSave={(form) => {
-                        startTransition(() => {
-                          void (async () => {
-                            try {
-                              await saveSchedule(selectedJob.id, form);
-                            } catch (error) {
-                              setErrorMessage(error instanceof Error ? error.message : t("updateError"));
-                              setStatusMessage(null);
-                            }
-                          })();
-                        });
-                      }}
-                    />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Link href={`/jobs/${selectedJob.id}`} className="theme-btn-primary inline-flex items-center justify-center rounded-full px-3 py-2 text-sm font-semibold">{t("openJob")}</Link>
+                    {selectedJobMapsUrl ? (
+                      <a href={selectedJobMapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-2 text-sm text-[color:var(--sem-text-primary)]">
+                        <ExternalLink className="h-4 w-4" />
+                        {t("mapRoute")}
+                      </a>
+                    ) : null}
+                  </div>
+
+                  <ScheduleEditor
+                    key={selectedJob.id}
+                    job={selectedJob}
+                    technicians={technicians}
+                    isPending={isPending}
+                    locale={locale}
+                    t={t}
+                    onSave={(form) => {
+                      startTransition(() => {
+                        void (async () => {
+                          try {
+                            await saveSchedule(selectedJob.id, form);
+                          } catch (error) {
+                            setErrorMessage(error instanceof Error ? error.message : t("updateError"));
+                            setStatusMessage(null);
+                          }
+                        })();
+                      });
+                    }}
+                  />
                 </div>
               ) : (
-                <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-10 text-center text-sm text-white/42">
-                  {t("selectJob")}
-                </div>
+                <p className="mt-4 text-sm text-[color:var(--sem-text-secondary)]">{t("selectJob")}</p>
               )}
-            </SectionFrame>
-          </div>
+            </section>
+          </aside>
         </div>
+
+        <div className="mt-6 grid gap-4 xl:grid-cols-3">
+          <section className={`${schedulePanelClass} p-5`}>
+            <p className={scheduleEyebrowClass}>{t("technicianLoad")}</p>
+            <div className="mt-4 space-y-3">
+              {technicianLoads.map((entry) => (
+                <div key={entry.technicianId} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{entry.name}</p>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase ${entry.tone === "danger" ? "theme-status-error" : entry.tone === "warning" ? "theme-status-warning" : entry.tone === "primary" ? "theme-status-info" : "theme-status-success"}`}>{entry.loadPercent}%</span>
+                  </div>
+                  <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{entry.jobs} {t("jobsShort")}</p>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[color:var(--cmp-surface-soft)]">
+                    <div className="h-full rounded-full bg-[color:var(--sem-accent-primary)]" style={{ width: `${entry.loadPercent}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className={`${schedulePanelClass} p-5`}>
+            <p className={scheduleEyebrowClass}>{t("openWindowsTitle")}</p>
+            <div className="mt-4 space-y-3">
+              {openWindows.length > 0 ? openWindows.slice(0, 6).map((window) => (
+                <div key={window.id} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-[family:var(--font-geist-mono)] text-sm font-semibold text-[color:var(--sem-text-primary)]">{window.timeLabel}</p>
+                    <span className="text-xs font-semibold text-[color:var(--sem-accent-primary)]">{formatCurrency(window.profitPotentialCents)}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-[color:var(--sem-text-primary)]">{window.area}</p>
+                  <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{window.technicianName} Â· {window.useLabel}</p>
+                </div>
+              )) : (
+                <p className="text-sm text-[color:var(--sem-text-secondary)]">{t("noOpenWindows")}</p>
+              )}
+            </div>
+          </section>
+
+          <section className={`${schedulePanelClass} p-5`}>
+            <div className="flex items-center justify-between gap-2">
+              <p className={scheduleEyebrowClass}>{t("dispatchRisks")}</p>
+              <ShieldAlert className="h-4 w-4 text-[color:var(--sem-state-warning)]" />
+            </div>
+            <div className="mt-4 space-y-3">
+              {dispatchRisks.length > 0 ? dispatchRisks.map((risk) => (
+                <div key={risk.id} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                  <p className={`text-sm font-semibold ${riskToneClass(risk.tone)}`}>{risk.title}</p>
+                  <p className="mt-1 text-xs leading-5 text-[color:var(--sem-text-secondary)]">{risk.detail}</p>
+                </div>
+              )) : (
+                <p className="text-sm text-[color:var(--sem-text-secondary)]">{t("noDispatchRisks")}</p>
+              )}
+            </div>
+          </section>
+        </div>
+
+        {!SHOW_LEGACY_WEEK_GRID ? (
+          <div className="hidden" aria-hidden="true" data-schedule-legacy-week-grid="true">
+            {visibleDays.map((day) => (
+              <div key={day.toISOString()}>{formatDayHeading(day, locale)} Â· {countJobsByDay(day)} Â· {groupJobsByDay(day).length}</div>
+            ))}
+          </div>
+        ) : null}
       </div>
-    </main>
+    </BoardShell>
   );
 }
 
