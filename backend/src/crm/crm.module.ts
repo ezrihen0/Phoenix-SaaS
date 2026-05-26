@@ -4,6 +4,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "../auth/auth.module";
 import { CustomerEntity } from "../database/entities/customer.entity";
 import { CustomerPortalModule } from "../customer-portal/customer-portal.module";
+import { DocumentsPdfModule } from "../documents/pdf/documents-pdf.module";
 import { EmailModule } from "../email/email.module";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
 import { InvoiceLineItemEntity } from "../database/entities/invoice-line-item.entity";
@@ -28,6 +29,7 @@ import { CrmController } from "./crm.controller";
 import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
 import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
+import { InvoicePdfService } from "./invoice-pdf.service";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 
 @Module({
@@ -37,6 +39,7 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
     EmailModule,
     MessagingModule,
     CustomerPortalModule,
+    DocumentsPdfModule,
     TypeOrmModule.forFeature([
       ProfileEntity,
       TechnicianEntity,
@@ -59,7 +62,13 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
     ]),
   ],
   controllers: [CrmController],
-  providers: [DocumentPricingService, DocumentSnapshotService, InvoicePaymentLedgerService, CrmOfficeDashboardService],
+  providers: [
+    DocumentPricingService,
+    DocumentSnapshotService,
+    InvoicePaymentLedgerService,
+    CrmOfficeDashboardService,
+    InvoicePdfService,
+  ],
   exports: [CrmOfficeDashboardService],
 })
 export class CrmModule {}

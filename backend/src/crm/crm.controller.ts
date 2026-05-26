@@ -80,6 +80,8 @@ import { TechnicianEntity } from "../database/entities/technician.entity";
 import { startOfLocalDashboardDay } from "./crm-dashboard-time-window";
 import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
 import { CustomerPortalService } from "../customer-portal/customer-portal.service";
+import { DocumentBrandingSnapshotService } from "../documents/pdf/document-branding-snapshot.service";
+import { setPdfDownloadResponseHeaders } from "../documents/pdf/pdf-download-response";
 import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
 import { EmailService } from "../email/email.service";
@@ -88,6 +90,7 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
 import { TxtService } from "../messaging/txt/txt.service";
+import { type InvoicePdfBrandingSnapshot, InvoicePdfService } from "./invoice-pdf.service";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -140,6 +143,7 @@ const TECHNICIAN_FALLBACK_ROLE_PRIORITY: Record<(typeof TECHNICIAN_FALLBACK_MEMB
   admin: 1,
   office_admin: 2,
 };
+const ORGANIZATION_SETTINGS_KEY = "default";
 
 @UseGuards(SessionGuard)
 @Controller("api")
@@ -178,6 +182,8 @@ export class CrmController {
     private readonly emailService: EmailService,
     private readonly txtService: TxtService,
     private readonly customerPortalService: CustomerPortalService,
+    private readonly documentBrandingSnapshotService: DocumentBrandingSnapshotService,
+    private readonly invoicePdfService: InvoicePdfService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -1417,6 +1423,7 @@ export class CrmController {
       const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
       const listItem = this.buildInvoiceListItem(invoice);
       const ledgerSummary = this.summarizeInvoiceLedger(invoice);
+      const orgSettings = await this.findOrganizationSettings(organizationId);
 
       return apiSuccess({
         id: listItem.id,
@@ -1435,6 +1442,7 @@ export class CrmController {
         lifecycle_status: listItem.lifecycle_status,
         status: listItem.status,
         issued_at: listItem.issued_at,
+        due_at: this.toIsoString(invoice.due_at),
         paid_at: this.toIsoString(ledgerSummary.paidAt),
         approval_requested_at: this.toIsoString(invoice.approval_requested_at),
         approved_at: this.toIsoString(invoice.approved_at),
@@ -1470,6 +1478,10 @@ export class CrmController {
             notes: customer.notes,
           }
           : null,
+        organization: {
+          business_name: this.normalizeOptionalString(orgSettings?.business_name),
+          company_email: this.normalizeOptionalString(orgSettings?.company_email),
+        },
       });
     } catch (error) {
       apiError(400, "invoice_lookup_failed", "The invoice could not be loaded.", error);
@@ -1508,82 +1520,25 @@ export class CrmController {
     const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
     const documentNumber = this.buildInvoiceDocumentNumber(invoice);
     const ledgerSummary = this.summarizeInvoiceLedger(invoice);
-    const orgSettings = await this.organizationSettingsRepository.findOne({
-      where: { settings_key: "default", organization_id: organizationId },
-    });
-
-    const businessName = orgSettings?.business_name?.trim() || null;
-    const businessPhone = orgSettings?.phone?.trim() || null;
-    const businessEmail = orgSettings?.company_email?.trim() || null;
-    const businessWebsite = orgSettings?.website?.trim() || null;
-
-    const formatCents = (cents: number | null | undefined) => {
-      if (typeof cents !== "number") return "$0.00";
-      return `$${(cents / 100).toFixed(2)}`;
-    };
-
-    const formatDate = (value: Date | string | null | undefined) => {
-      if (!value) return "-";
-      const d = value instanceof Date ? value : new Date(value);
-      if (Number.isNaN(d.getTime())) return "-";
-      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    };
-
-    const sortedLineItems = [...(invoice.line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
-
-    const customerAddress = customer
-      ? [customer.service_address_line_1, customer.service_address_line_2, customer.service_city, customer.service_state_or_region, customer.service_postal_code]
-        .filter(Boolean).join(", ")
-      : "";
-
-    const subtotalCents = invoice.subtotal_cents || invoice.amount_cents;
-    const taxCents = invoice.tax_cents ?? 0;
-    const totalCents = invoice.total_cents || ledgerSummary.totalCents;
-
-    let taxLabel: string | null = null;
-    if (taxCents > 0 || (invoice.tax_rate_bps_snapshot ?? 0) > 0) {
-      const bps = invoice.tax_rate_bps_snapshot ?? 0;
-      taxLabel = `(${(bps / 100).toFixed(2).replace(/\.00$/, "").replace(/(\.\d*[1-9])0+$/, "$1")}%)`;
-    }
-
-    const content = this.buildInvoicePdfContent({
-      documentNumber,
-      issuedAt: formatDate(invoice.issued_at),
+    const orgSettings = await this.findOrganizationSettings(organizationId);
+    const dueDays = this.readDefaultDueDays(orgSettings);
+    const branding = this.parseInvoiceBrandingSnapshot(invoice.branding_snapshot_json)
+      ?? this.buildInvoiceBrandingSnapshot(orgSettings);
+    const pdfBuffer = this.buildInvoicePdfBuffer({
+      invoice,
+      customer,
       lifecycleStatus: ledgerSummary.lifecycleStatus,
-      businessName,
-      businessPhone,
-      businessEmail,
-      businessWebsite,
-      customerName: customer?.full_name ?? "Unknown",
-      customerCompany: customer?.company_name?.trim() || null,
-      customerAddress,
-      customerEmail: customer?.email?.trim() || null,
-      customerPhone: customer?.phone?.trim() || null,
-      description: invoice.description?.trim() || null,
-      lineItems: sortedLineItems.map((item) => ({
-        name: item.name_snapshot || "Item",
-        qty: String(item.quantity),
-        unitPrice: formatCents(item.unit_price_cents_snapshot),
-        subtotal: formatCents(item.line_subtotal_cents),
-      })),
-      subtotal: formatCents(subtotalCents),
-      taxLabel,
-      taxAmount: formatCents(taxCents),
-      total: formatCents(totalCents),
-      paid: ledgerSummary.netPaidCents > 0 ? formatCents(ledgerSummary.netPaidCents) : null,
-      balance: ledgerSummary.balanceCents > 0 ? formatCents(ledgerSummary.balanceCents) : null,
+      totalCents: invoice.total_cents || ledgerSummary.totalCents,
+      netPaidCents: ledgerSummary.netPaidCents,
+      balanceCents: ledgerSummary.balanceCents,
+      branding,
+      documentNumber,
+      dueDays,
     });
-
-    const pdfBuffer = this.buildPdf(content, [
-      { name: "F1", baseFont: "Helvetica" },
-      { name: "F2", baseFont: "Helvetica-Bold" },
-    ]);
-    const shouldDownload = download === "1" || download === "true";
-    response.setHeader("Content-Type", "application/pdf");
-    response.setHeader(
-      "Content-Disposition",
-      `${shouldDownload ? "attachment" : "inline"}; filename="invoice-${documentNumber}.pdf"`,
-    );
+    setPdfDownloadResponseHeaders(response, {
+      download,
+      filename: `invoice-${documentNumber}.pdf`,
+    });
     return new StreamableFile(pdfBuffer);
   }
 
@@ -1627,13 +1582,12 @@ export class CrmController {
       apiError(500, "email_not_configured", "Email service is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM.");
     }
 
-    const orgSettings = await this.organizationSettingsRepository.findOne({
-      where: { settings_key: "default", organization_id: organizationId },
-    });
-
-    const businessName = orgSettings?.business_name?.trim() || null;
+    const orgSettings = await this.findOrganizationSettings(organizationId);
+    const businessName = this.normalizeOptionalString(orgSettings?.business_name);
     const documentNumber = this.buildInvoiceDocumentNumber(invoice);
     const ledgerSummary = this.summarizeInvoiceLedger(invoice);
+    const dueDays = this.readDefaultDueDays(orgSettings);
+    const dueDateLabel = this.formatDueDate(invoice.due_at, invoice.issued_at, dueDays);
 
     // Build template variables
     const vars = {
@@ -1641,10 +1595,10 @@ export class CrmController {
       invoice_number: documentNumber,
       customer_name: customer?.full_name ?? "Customer",
       total: `$${((invoice.total_cents || ledgerSummary.totalCents) / 100).toFixed(2)}`,
-      due_date: this.formatDueDate(invoice.issued_at),
+      due_date: dueDateLabel,
       invoice_link: "",
-      business_phone: orgSettings?.phone?.trim() ?? "",
-      business_email: orgSettings?.company_email?.trim() ?? "",
+      business_phone: this.normalizeOptionalString(orgSettings?.phone) ?? "",
+      business_email: this.normalizeOptionalString(orgSettings?.company_email) ?? "",
     };
 
     const subject = this.resolveTemplate(
@@ -1656,66 +1610,18 @@ export class CrmController {
       vars,
     );
 
-    // Generate PDF attachment
-    const sortedLineItems = [...(invoice.line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
-    const formatCents = (cents: number | null | undefined) => {
-      if (typeof cents !== "number") return "$0.00";
-      return `$${(cents / 100).toFixed(2)}`;
-    };
-    const formatDate = (value: Date | string | null | undefined) => {
-      if (!value) return "-";
-      const d = value instanceof Date ? value : new Date(value);
-      if (Number.isNaN(d.getTime())) return "-";
-      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    };
-
-    const customerAddress = customer
-      ? [customer.service_address_line_1, customer.service_address_line_2, customer.service_city, customer.service_state_or_region, customer.service_postal_code]
-        .filter(Boolean).join(", ")
-      : "";
-
-    const subtotalCents = invoice.subtotal_cents || invoice.amount_cents;
-    const taxCents = invoice.tax_cents ?? 0;
-    const totalCents = invoice.total_cents || ledgerSummary.totalCents;
-
-    let taxLabel: string | null = null;
-    if (taxCents > 0 || (invoice.tax_rate_bps_snapshot ?? 0) > 0) {
-      const bps = invoice.tax_rate_bps_snapshot ?? 0;
-      taxLabel = `(${(bps / 100).toFixed(2).replace(/\.00$/, "").replace(/(\.\d*[1-9])0+$/, "$1")}%)`;
-    }
-
-    const pdfContent = this.buildInvoicePdfContent({
-      documentNumber,
-      issuedAt: formatDate(invoice.issued_at),
+    const branding = await this.ensureInvoiceBrandingSnapshot(invoice, organizationId);
+    const pdfBuffer = this.buildInvoicePdfBuffer({
+      invoice,
+      customer,
       lifecycleStatus: ledgerSummary.lifecycleStatus,
-      businessName: orgSettings?.business_name?.trim() || null,
-      businessPhone: orgSettings?.phone?.trim() || null,
-      businessEmail: orgSettings?.company_email?.trim() || null,
-      businessWebsite: orgSettings?.website?.trim() || null,
-      customerName: customer?.full_name ?? "Unknown",
-      customerCompany: customer?.company_name?.trim() || null,
-      customerAddress,
-      customerEmail: customer?.email?.trim() || null,
-      customerPhone: customer?.phone?.trim() || null,
-      description: invoice.description?.trim() || null,
-      lineItems: sortedLineItems.map((item) => ({
-        name: item.name_snapshot || "Item",
-        qty: String(item.quantity),
-        unitPrice: formatCents(item.unit_price_cents_snapshot),
-        subtotal: formatCents(item.line_subtotal_cents),
-      })),
-      subtotal: formatCents(subtotalCents),
-      taxLabel,
-      taxAmount: formatCents(taxCents),
-      total: formatCents(totalCents),
-      paid: ledgerSummary.netPaidCents > 0 ? formatCents(ledgerSummary.netPaidCents) : null,
-      balance: ledgerSummary.balanceCents > 0 ? formatCents(ledgerSummary.balanceCents) : null,
+      totalCents: invoice.total_cents || ledgerSummary.totalCents,
+      netPaidCents: ledgerSummary.netPaidCents,
+      balanceCents: ledgerSummary.balanceCents,
+      branding,
+      documentNumber,
+      dueDays,
     });
-
-    const pdfBuffer = this.buildPdf(pdfContent, [
-      { name: "F1", baseFont: "Helvetica" },
-      { name: "F2", baseFont: "Helvetica-Bold" },
-    ]);
 
     const emailResult = await this.emailService.send({
       to: toEmail,
@@ -1780,13 +1686,12 @@ export class CrmController {
       apiError(400, "invoice_sms_missing_job", "Invoice is missing required job or customer data.");
     }
 
-    const orgSettings = await this.organizationSettingsRepository.findOne({
-      where: { settings_key: "default", organization_id: organizationId },
-    });
-
-    const businessName = orgSettings?.business_name?.trim() || null;
+    const orgSettings = await this.findOrganizationSettings(organizationId);
+    const businessName = this.normalizeOptionalString(orgSettings?.business_name);
     const documentNumber = this.buildInvoiceDocumentNumber(invoice);
     const totalCents = invoice.total_cents || (invoice.subtotal_cents || invoice.amount_cents);
+    const dueDays = this.readDefaultDueDays(orgSettings);
+    const dueDateLabel = this.formatDueDate(invoice.due_at, invoice.issued_at, dueDays);
 
     // Resolve SMS template
     const smsVars = {
@@ -1794,10 +1699,10 @@ export class CrmController {
       invoice_number: documentNumber,
       customer_name: customer?.full_name ?? "Customer",
       total: `$${(totalCents / 100).toFixed(2)}`,
-      due_date: this.formatDueDate(invoice.issued_at),
+      due_date: dueDateLabel,
       invoice_link: "", // filled below
-      business_phone: orgSettings?.phone?.trim() ?? "",
-      business_email: orgSettings?.company_email?.trim() ?? "",
+      business_phone: this.normalizeOptionalString(orgSettings?.phone) ?? "",
+      business_email: this.normalizeOptionalString(orgSettings?.company_email) ?? "",
     };
 
     // Generate portal magic link for invoice
@@ -1830,6 +1735,9 @@ export class CrmController {
     });
 
     const now = new Date();
+    if (!invoice.branding_snapshot_json) {
+      invoice.branding_snapshot_json = JSON.stringify(this.buildInvoiceBrandingSnapshot(orgSettings));
+    }
     invoice.sms_sent_at = now;
     invoice.last_sent_at = now;
     invoice.last_sent_via = "sms";
@@ -2486,6 +2394,8 @@ export class CrmController {
 
       const timestamp = new Date();
       const paidAtTimestamp = this.formatSqlTimestamp(timestamp);
+      const orgSettings = await this.findOrganizationSettings(organizationId);
+      const dueDays = this.readDefaultDueDays(orgSettings);
       const invoiceDescription =
         payload.description
         ?? existingInvoice?.description
@@ -2493,6 +2403,8 @@ export class CrmController {
       const paid_at = payload.status === "paid"
         ? existingInvoice?.paid_at ?? (paidAtTimestamp as unknown as Date)
         : null;
+      const issuedAt = existingInvoice?.issued_at ?? timestamp;
+      const dueAt = existingInvoice?.due_at ?? this.computeDueAt(issuedAt, dueDays);
 
       let invoice: InvoiceEntity;
 
@@ -2505,6 +2417,7 @@ export class CrmController {
         existingInvoice.total_cents = invoiceTotals.totalCents;
         existingInvoice.status = payload.status;
         existingInvoice.paid_at = paid_at;
+        existingInvoice.due_at = dueAt;
         invoice = await this.invoicesRepository.save(existingInvoice);
       } else {
         invoice = await this.invoicesRepository.save(
@@ -2518,6 +2431,7 @@ export class CrmController {
             total_cents: invoiceTotals.totalCents,
             status: payload.status,
             paid_at,
+            due_at: dueAt,
           })),
         );
       }
@@ -3868,10 +3782,23 @@ export class CrmController {
     };
   }
 
-  private formatDueDate(issuedAt: Date) {
-    const due = new Date(issuedAt);
-    due.setDate(due.getDate() + 30);
+  private formatDueDate(dueAt: Date | null | undefined, issuedAt: Date, fallbackDueDays = 30) {
+    const due = dueAt ? new Date(dueAt) : new Date(issuedAt);
+    if (!dueAt) {
+      due.setDate(due.getDate() + fallbackDueDays);
+    }
     return due.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  private formatDisplayDate(value: Date | string | null | undefined) {
+    if (!value) {
+      return "-";
+    }
+    const parsed = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return "-";
+    }
+    return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
 
   private resolveTemplate(template: string, vars: Record<string, string>) {
@@ -3882,287 +3809,130 @@ export class CrmController {
     return result;
   }
 
-  private escapePdfText(value: string) {
-    return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  private buildOrganizationSettingsKey(organizationId: string) {
+    return `${organizationId}:${ORGANIZATION_SETTINGS_KEY}`;
   }
 
-  private buildPdf(contentStream: string, fonts: Array<{ name: string; baseFont: string }>) {
-    const fontObjects = fonts.map((font, index) =>
-      `<< /Type /Font /Subtype /Type1 /BaseFont /${font.baseFont} >>`,
-    );
-    const fontDict = fonts.map((font, index) => `/${font.name} ${5 + index} 0 R`).join(" ");
-
-    const objects = [
-      "<< /Type /Catalog /Pages 2 0 R >>",
-      "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 4 0 R /Resources << /Font << ${fontDict} >> >> >>`,
-      `<< /Length ${Buffer.byteLength(contentStream, "utf8")} >>\nstream\n${contentStream}\nendstream`,
-      ...fontObjects,
-    ];
-
-    let pdf = "%PDF-1.4\n";
-    const offsets = [0];
-    objects.forEach((object, index) => {
-      offsets.push(Buffer.byteLength(pdf, "utf8"));
-      pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  private async findOrganizationSettings(organizationId: string) {
+    const keyed = await this.organizationSettingsRepository.findOne({
+      where: {
+        settings_key: this.buildOrganizationSettingsKey(organizationId),
+        organization_id: organizationId,
+      },
     });
-
-    const xrefStart = Buffer.byteLength(pdf, "utf8");
-    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-    for (let index = 1; index < offsets.length; index += 1) {
-      pdf += `${offsets[index].toString().padStart(10, "0")} 00000 n \n`;
+    if (keyed) {
+      return keyed;
     }
-    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
-    return Buffer.from(pdf, "utf8");
+    return this.organizationSettingsRepository.findOne({
+      where: {
+        settings_key: ORGANIZATION_SETTINGS_KEY,
+        organization_id: organizationId,
+      },
+    });
   }
 
-  private buildSimplePdf(lines: string[]) {
-    const content = [
-      "BT",
-      "/F1 10 Tf",
-      "40 800 Td",
-      ...lines.flatMap((line, index) =>
-        index === 0
-          ? [`(${this.escapePdfText(line)}) Tj`]
-          : ["0 -14 Td", `(${this.escapePdfText(line)}) Tj`],
-      ),
-      "ET",
-    ].join("\n");
-
-    return this.buildPdf(content, [{ name: "F1", baseFont: "Helvetica" }]);
+  private normalizeOptionalString(value: string | null | undefined) {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : null;
   }
 
-  private buildInvoicePdfContent(input: {
-    documentNumber: string;
-    issuedAt: string;
+  private buildInvoiceBrandingSnapshot(
+    settings: OrganizationSettingEntity | null,
+  ): InvoicePdfBrandingSnapshot {
+    return this.documentBrandingSnapshotService.toInvoiceSnapshot(settings);
+  }
+
+  private parseInvoiceBrandingSnapshot(raw: string | null | undefined): InvoicePdfBrandingSnapshot | null {
+    return this.documentBrandingSnapshotService.parseInvoiceSnapshot(raw);
+  }
+
+  private async ensureInvoiceBrandingSnapshot(invoice: InvoiceEntity, organizationId: string) {
+    const existing = this.parseInvoiceBrandingSnapshot(invoice.branding_snapshot_json);
+    if (existing) {
+      return existing;
+    }
+
+    const orgSettings = await this.findOrganizationSettings(organizationId);
+    const snapshot = this.buildInvoiceBrandingSnapshot(orgSettings);
+    invoice.branding_snapshot_json = JSON.stringify(snapshot);
+    await this.invoicesRepository.save(invoice);
+    return snapshot;
+  }
+
+  private formatCents(cents: number | null | undefined) {
+    if (typeof cents !== "number" || !Number.isFinite(cents)) {
+      return "$0.00";
+    }
+    return `$${(cents / 100).toFixed(2)}`;
+  }
+
+  private buildInvoicePdfBuffer(input: {
+    invoice: InvoiceEntity;
+    customer: CustomerEntity | null;
     lifecycleStatus: string;
-    businessName: string | null;
-    businessPhone: string | null;
-    businessEmail: string | null;
-    businessWebsite: string | null;
-    customerName: string;
-    customerCompany: string | null;
-    customerAddress: string;
-    customerEmail: string | null;
-    customerPhone: string | null;
-    description: string | null;
-    lineItems: Array<{ name: string; qty: string; unitPrice: string; subtotal: string }>;
-    subtotal: string;
-    taxLabel: string | null;
-    taxAmount: string;
-    total: string;
-    paid: string | null;
-    balance: string | null;
+    totalCents: number;
+    netPaidCents: number;
+    balanceCents: number;
+    branding: InvoicePdfBrandingSnapshot;
+    documentNumber: string;
+    dueDays: number;
   }) {
-    const e = (v: string) => this.escapePdfText(v);
-    const L = 50;  // left margin
-    const R = 545; // right edge
-    const W = 495; // content width
-    let y = 790;   // current Y position (top of page)
-    const out: string[] = [];
+    const sortedLineItems = [...(input.invoice.line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+    const subtotalCents = input.invoice.subtotal_cents || input.invoice.amount_cents;
+    const taxRateBps = input.invoice.tax_rate_bps_snapshot ?? 0;
+    const taxLabel = taxRateBps > 0 ? `Tax (${(taxRateBps / 100).toFixed(2)}%)` : "Tax";
 
-    // Helper: draw text at absolute position
-    const text = (font: string, size: number, x: number, yPos: number, value: string, rightAlign = false) => {
-      out.push("BT");
-      out.push(`/${font} ${size} Tf`);
-      if (rightAlign) {
-        // PDF doesn't have native right-align; approximate with show-width calculation isn't trivial
-        // Use simple offset: place at x and hope it fits
-        out.push(`${x} ${yPos} Td`);
-        out.push(`(${e(value)}) Tj`);
-      } else {
-        out.push(`${x} ${yPos} Td`);
-        out.push(`(${e(value)}) Tj`);
-      }
-      out.push("ET");
-    };
+    const customerAddressLines = [
+      input.customer?.service_address_line_1 ?? null,
+      input.customer?.service_address_line_2 ?? null,
+      [input.customer?.service_city, input.customer?.service_state_or_region].filter(Boolean).join(", "),
+      input.customer?.service_postal_code ?? null,
+    ].filter((entry): entry is string => Boolean(entry && entry.trim()));
 
-    // Helper: horizontal rule
-    const rule = (yPos: number) => {
-      out.push(`0.6 G`);
-      out.push(`0.5 w`);
-      out.push(`${L} ${yPos} m`);
-      out.push(`${R} ${yPos} l`);
-      out.push(`S`);
-      out.push(`0 G`); // reset to black
-    };
+    const serviceAddressLines = [...customerAddressLines];
 
-    // Helper: right-aligned text (simple approximation using fixed offset)
-    const rightText = (font: string, size: number, yPos: number, value: string) => {
-      const approxWidth = value.length * size * 0.55; // rough estimate for Helvetica
-      const x = R - approxWidth;
-      text(font, size, Math.max(x, L), yPos, value);
-    };
+    return this.invoicePdfService.renderInvoicePdf({
+      documentNumber: input.documentNumber,
+      lifecycleStatus: input.lifecycleStatus,
+      issuedAtLabel: this.formatDisplayDate(input.invoice.issued_at),
+      dueAtLabel: this.formatDueDate(input.invoice.due_at, input.invoice.issued_at, input.dueDays),
+      generatedAtIso: new Date().toISOString(),
+      customerName: input.customer?.full_name ?? "Customer",
+      customerCompany: this.normalizeOptionalString(input.customer?.company_name),
+      customerAddressLines,
+      customerEmail: this.normalizeOptionalString(input.customer?.email),
+      customerPhone: this.normalizeOptionalString(input.customer?.phone),
+      serviceAddressLines,
+      description: this.normalizeOptionalString(input.invoice.description),
+      lineItems: sortedLineItems.map((item) => ({
+        name: item.name_snapshot || "Item",
+        description: item.description_snapshot,
+        quantity: String(item.quantity),
+        rateLabel: this.formatCents(item.unit_price_cents_snapshot),
+        amountLabel: this.formatCents(item.line_subtotal_cents),
+      })),
+      subtotalLabel: this.formatCents(subtotalCents),
+      taxLabel,
+      taxAmountLabel: this.formatCents(input.invoice.tax_cents ?? 0),
+      totalLabel: this.formatCents(input.totalCents),
+      paidLabel: input.netPaidCents > 0 ? this.formatCents(input.netPaidCents) : null,
+      balanceLabel: input.balanceCents > 0 ? this.formatCents(input.balanceCents) : null,
+      branding: input.branding,
+    });
+  }
 
-    // ===== HEADER =====
-    if (input.businessName) {
-      text("F2", 11, L, y, input.businessName);
+  private readDefaultDueDays(settings: OrganizationSettingEntity | null) {
+    const dueDays = settings?.default_due_days;
+    if (typeof dueDays === "number" && Number.isInteger(dueDays) && dueDays >= 0 && dueDays <= 365) {
+      return dueDays;
     }
-    if (input.businessPhone) {
-      text("F1", 8, L, y - 14, `Phone: ${input.businessPhone}`);
-    }
-    if (input.businessEmail) {
-      text("F1", 8, L, y - 26, input.businessEmail);
-    }
-    if (input.businessWebsite) {
-      text("F1", 8, L, y - 38, input.businessWebsite);
-    }
+    return 30;
+  }
 
-    // INVOICE title - right side
-    text("F2", 22, L, y, "INVOICE", false);
-    // Actually, right-align INVOICE
-    rightText("F2", 22, y, "INVOICE");
-
-    // Invoice meta below title
-    text("F1", 9, R - 160, y - 28, `# ${input.documentNumber}`, false);
-    text("F1", 8, R - 160, y - 42, `Date: ${input.issuedAt}`, false);
-    text("F1", 8, R - 160, y - 54, `Status: ${input.lifecycleStatus}`, false);
-
-    y -= input.businessName ? 65 : 40;
-    rule(y);
-    y -= 20;
-
-    // ===== BILL TO =====
-    text("F2", 9, L, y, "Bill To");
-    y -= 14;
-    text("F1", 9, L, y, input.customerName);
-    y -= 14;
-    if (input.customerCompany) {
-      text("F1", 9, L, y, input.customerCompany);
-      y -= 14;
-    }
-    if (input.customerAddress) {
-      text("F1", 9, L, y, input.customerAddress);
-      y -= 14;
-    }
-    if (input.customerEmail) {
-      text("F1", 8, L, y, input.customerEmail);
-      y -= 12;
-    }
-    if (input.customerPhone) {
-      text("F1", 8, L, y, input.customerPhone);
-      y -= 12;
-    }
-
-    // From block on right side of bill-to area
-    const fromY = y + (input.customerCompany ? 56 : 42) + (input.customerAddress ? 14 : 0) + (input.customerEmail ? 12 : 0) + (input.customerPhone ? 12 : 0);
-    if (input.businessName) {
-      text("F1", 8, R - 160, fromY, `From: ${input.businessName}`, false);
-    }
-
-    y -= 12;
-    rule(y);
-    y -= 16;
-
-    // ===== DESCRIPTION =====
-    if (input.description) {
-      text("F2", 9, L, y, "Description");
-      y -= 14;
-      text("F1", 8, L, y, input.description);
-      y -= 20;
-    }
-
-    // ===== LINE ITEMS TABLE =====
-    if (input.lineItems.length > 0) {
-      // Column positions
-      const colDesc = L;
-      const colQty = L + 280;
-      const colPrice = L + 340;
-      const colAmt = L + 430;
-
-      text("F2", 9, L, y, "Line Items");
-      y -= 18;
-
-      // Table header
-      out.push(`0.6 G`);
-      out.push(`0.5 w`);
-      out.push(`${L} ${y + 6} m`);
-      out.push(`${R} ${y + 6} l`);
-      out.push(`S`);
-      out.push(`0 G`);
-
-      text("F2", 7, colDesc, y, "Description");
-      text("F2", 7, colQty, y, "Qty");
-      text("F2", 7, colPrice, y, "Unit Price");
-      text("F2", 7, colAmt, y, "Amount");
-      y -= 12;
-
-      out.push(`0.6 G`);
-      out.push(`0.3 w`);
-      out.push(`${L} ${y + 2} m`);
-      out.push(`${R} ${y + 2} l`);
-      out.push(`S`);
-      out.push(`0 G`);
-      y -= 10;
-
-      for (const item of input.lineItems) {
-        text("F1", 8, colDesc, y, item.name.length > 44 ? item.name.substring(0, 43) + "\u2026" : item.name);
-        text("F1", 8, colQty, y, item.qty, false);
-        text("F1", 8, colPrice, y, item.unitPrice, false);
-        text("F1", 8, colAmt, y, item.subtotal, false);
-        y -= 14;
-      }
-
-      // Bottom rule of table
-      out.push(`0.6 G`);
-      out.push(`0.5 w`);
-      out.push(`${L} ${y + 6} m`);
-      out.push(`${R} ${y + 6} l`);
-      out.push(`S`);
-      out.push(`0 G`);
-      y -= 16;
-    }
-
-    // ===== TOTALS BLOCK (right-aligned) =====
-    const totalsX = R - 160;  // label column
-    const amountsX = R;       // amounts (right-aligned)
-
-    y -= 4;
-
-    text("F1", 9, totalsX, y, "Subtotal");
-    rightText("F1", 9, y, input.subtotal);
-    y -= 16;
-
-    if (input.taxLabel) {
-      text("F1", 9, totalsX, y, `Tax ${input.taxLabel}`);
-      rightText("F1", 9, y, input.taxAmount);
-      y -= 16;
-    }
-
-    out.push(`0.6 G`);
-    out.push(`0.5 w`);
-    out.push(`${totalsX} ${y + 6} m`);
-    out.push(`${amountsX} ${y + 6} l`);
-    out.push(`S`);
-    out.push(`0 G`);
-    y -= 10;
-
-    text("F2", 11, totalsX, y, "Total");
-    rightText("F2", 11, y, input.total);
-    y -= 20;
-
-    if (input.paid) {
-      text("F1", 9, totalsX, y, "Paid");
-      rightText("F1", 9, y, input.paid);
-      y -= 16;
-    }
-
-    if (input.balance) {
-      text("F2", 9, totalsX, y, "Balance Due");
-      rightText("F2", 9, y, input.balance);
-      y -= 20;
-    }
-
-    // ===== FOOTER =====
-    y = Math.max(y, 80); // ensure we don't go below page
-    rule(y);
-    y -= 18;
-
-    text("F1", 7, L, y, "Thank you for your business.");
-    y -= 12;
-    text("F1", 6, L, y, `Generated: ${new Date().toISOString()}`);
-
-    return out.join("\n");
+  private computeDueAt(issuedAt: Date, dueDays: number) {
+    const dueAt = new Date(issuedAt);
+    dueAt.setDate(dueAt.getDate() + dueDays);
+    return dueAt;
   }
 }
 
