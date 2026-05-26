@@ -28,6 +28,8 @@ export const inspectionReportTypes = [
   "wood_stove",
   "wett_inspection",
   "gas_fireplace",
+  "garage_door",
+  "hvac",
 ] as const;
 export type InspectionReportType = (typeof inspectionReportTypes)[number];
 
@@ -65,7 +67,13 @@ export class InspectionEntity {
   })
   workflow_type!: InspectionWorkflowType;
 
-  @Column({ type: "varchar", length: 8, default: "AB" })
+  @Column({ type: "varchar", length: 2, nullable: true })
+  country_code!: string | null;
+
+  @Column({ type: "varchar", length: 8, nullable: true })
+  region_code!: string | null;
+
+  @Column({ type: "varchar", length: 8, default: "UNSPEC" })
   province_code!: string;
 
   @Column({ type: "varchar", length: 255, nullable: true })

@@ -333,6 +333,7 @@ async function runIsolationChecks(summary: SmokeSummary, context: HarnessContext
 
   let existingCustomerWorkspaceId: string | null = null;
   let existingJobWorkspaceId: string | null = null;
+  let jurisdictionWorkspaceId: string | null = null;
   let newCustomerWorkspaceId: string | null = null;
   let internalDraftWorkspaceAId: string | null = null;
   let uploadedPhotoStorageKey: string | null = null;
@@ -457,12 +458,88 @@ async function runIsolationChecks(summary: SmokeSummary, context: HarnessContext
     if (!inspection) {
       throw new Error("Existing-job inspection was not created in Org A.");
     }
+    if (inspection.region_code !== "AB" || inspection.province_code !== "AB") {
+      throw new Error("Existing-job inspection did not inherit fallback region/province from job/customer.");
+    }
     return {
       inspectionId: inspection.id,
       customerId: inspection.customer_id,
       jobId: inspection.job_id,
+      countryCode: inspection.country_code,
+      regionCode: inspection.region_code,
+      provinceCode: inspection.province_code,
     };
   });
+
+  await expectPass(summary, "Org A inspection create accepts explicit jurisdiction context", async () => {
+    const workspace = await context.service.createInspection({
+      source: "existing_job",
+      customer_id: null,
+      job_id: orgA.job.id,
+      report_type: "wood_burning_fireplace",
+      country_code: "US",
+      state_code: "CO",
+      region_code: null,
+      province_code: null,
+      new_customer: null,
+      property_address: null,
+      actor: orgA.actor,
+      organizationId: orgA.organization.id,
+    });
+    jurisdictionWorkspaceId = workspace.inspectionMeta.id;
+
+    const inspection = await context.inspectionRepo.findOne({
+      where: { id: workspace.inspectionMeta.id, organization_id: orgA.organization.id },
+    });
+    if (!inspection) {
+      throw new Error("Jurisdiction inspection was not created in Org A.");
+    }
+    if (inspection.country_code !== "US" || inspection.region_code !== "CO" || inspection.province_code !== "CO") {
+      throw new Error("Explicit jurisdiction values were not normalized into inspection fields.");
+    }
+    if (workspace.inspectionMeta.country_code !== "US" || workspace.inspectionMeta.region_code !== "CO") {
+      throw new Error("Workspace payload did not expose normalized jurisdiction values.");
+    }
+
+    return {
+      inspectionId: inspection.id,
+      countryCode: inspection.country_code,
+      regionCode: inspection.region_code,
+      provinceCode: inspection.province_code,
+    };
+  });
+
+  await expectApiError(
+    summary,
+    "Garage door report type is guarded until template is configured",
+    ["template_not_configured"],
+    () => context.service.createInspection({
+      source: "existing_job",
+      customer_id: null,
+      job_id: orgA.job.id,
+      report_type: "garage_door",
+      new_customer: null,
+      property_address: null,
+      actor: orgA.actor,
+      organizationId: orgA.organization.id,
+    }),
+  );
+
+  await expectApiError(
+    summary,
+    "HVAC report type is guarded until template is configured",
+    ["template_not_configured"],
+    () => context.service.createInspection({
+      source: "existing_job",
+      customer_id: null,
+      job_id: orgA.job.id,
+      report_type: "hvac",
+      new_customer: null,
+      property_address: null,
+      actor: orgA.actor,
+      organizationId: orgA.organization.id,
+    }),
+  );
 
   await expectPass(summary, "Org A can create a new-customer inspection flow and all created rows are stamped with Org A organization_id", async () => {
     const workspace = await context.service.createInspection({
@@ -592,7 +669,11 @@ async function runIsolationChecks(summary: SmokeSummary, context: HarnessContext
   });
 
   await expectPass(summary, "Workspace loads successfully for a same-org inspection", async () => {
-    const workspaceId = existingJobWorkspaceId ?? existingCustomerWorkspaceId ?? newCustomerWorkspaceId ?? internalDraftWorkspaceAId;
+    const workspaceId = jurisdictionWorkspaceId
+      ?? existingJobWorkspaceId
+      ?? existingCustomerWorkspaceId
+      ?? newCustomerWorkspaceId
+      ?? internalDraftWorkspaceAId;
     if (!workspaceId) {
       throw new Error("No same-org workspace was created for verification.");
     }
@@ -600,10 +681,14 @@ async function runIsolationChecks(summary: SmokeSummary, context: HarnessContext
     if (!workspace.items.length || !workspace.required_fields.length) {
       throw new Error("Same-org workspace did not return inspection child data.");
     }
+    if (workspace.inspectionMeta.send_mode !== "metadata_lock_only") {
+      throw new Error("Workspace send semantics are not explicit about metadata-only behavior.");
+    }
     return {
       inspectionId: workspace.inspectionMeta.id,
       itemCount: workspace.items.length,
       requiredFieldCount: workspace.required_fields.length,
+      sendMode: workspace.inspectionMeta.send_mode,
     };
   });
 

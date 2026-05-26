@@ -238,7 +238,10 @@ export const requiredColumns = [
   },
   { table: "job_notes", columns: ["organization_id", "job_id"] },
   { table: "job_status_events", columns: ["organization_id", "job_id"] },
-  { table: "inspections", columns: ["organization_id", "customer_id", "job_id"] },
+  {
+    table: "inspections",
+    columns: ["organization_id", "customer_id", "job_id", "country_code", "region_code", "province_code"],
+  },
   { table: "inspection_items", columns: ["organization_id", "inspection_id", "item_key"] },
   { table: "inspection_photos", columns: ["organization_id", "inspection_id"] },
   { table: "inspection_required_fields", columns: ["organization_id", "inspection_id", "field_key"] },

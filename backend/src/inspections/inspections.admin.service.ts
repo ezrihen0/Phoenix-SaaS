@@ -21,7 +21,7 @@ import {
   InspectionEntity,
 } from "../database/entities/inspection.entity";
 import { JobEntity } from "../database/entities/job.entity";
-import { InspectionWorkflowService } from "./inspection-workflow.service";
+import { InspectionWorkflowService, TemplateNotConfiguredError } from "./inspection-workflow.service";
 
 @Injectable()
 export class InspectionsAdminService {
@@ -66,6 +66,10 @@ export class InspectionsAdminService {
     customer_id: string | null;
     job_id: string | null;
     report_type: InspectionReportType;
+    country_code?: string | null;
+    region_code?: string | null;
+    province_code?: string | null;
+    state_code?: string | null;
     new_customer: {
       first_name: string;
       last_name: string;
@@ -149,7 +153,27 @@ export class InspectionsAdminService {
       }
     }
 
-    const template = this.workflowService.getTemplateSeed(input.report_type);
+    let template: ReturnType<InspectionWorkflowService["getTemplateSeed"]>;
+    try {
+      template = this.workflowService.getTemplateSeed(input.report_type);
+    } catch (error) {
+      if (error instanceof TemplateNotConfiguredError) {
+        apiError(
+          409,
+          "template_not_configured",
+          `Inspection template checklist for '${error.reportType}' is not configured yet.`,
+        );
+      }
+      throw error;
+    }
+    const jurisdiction = this.resolveJurisdiction({
+      country_code: input.country_code ?? null,
+      region_code: input.region_code ?? null,
+      province_code: input.province_code ?? null,
+      state_code: input.state_code ?? null,
+      customer_region_code: customer.service_state_or_region,
+      job_region_code: job?.service_state_or_region ?? null,
+    });
     const inspection = await this.inspectionsRepository.save(
       this.inspectionsRepository.create({
         organization_id: organizationId,
@@ -157,7 +181,9 @@ export class InspectionsAdminService {
         job_id: job?.id ?? null,
         report_type: input.report_type,
         workflow_type: template.workflow_type,
-        province_code: "AB",
+        country_code: jurisdiction.country_code,
+        region_code: jurisdiction.region_code,
+        province_code: jurisdiction.province_code,
         status: "warning",
         site_address_snapshot: isInternalDraft
           ? null
@@ -295,6 +321,9 @@ export class InspectionsAdminService {
         "inspection.report_type",
         "inspection.workflow_type",
         "inspection.status",
+        "inspection.country_code",
+        "inspection.region_code",
+        "inspection.province_code",
         "inspection.compliance_status",
         "inspection.safety_score",
         "inspection.updated_at",
@@ -326,6 +355,9 @@ export class InspectionsAdminService {
       report_type: row.report_type,
       workflow_type: row.workflow_type,
       status: row.status,
+      country_code: row.country_code,
+      region_code: row.region_code,
+      province_code: row.province_code,
       compliance_status: row.compliance_status,
       safety_score: row.safety_score,
       updated_at: row.updated_at.toISOString(),
@@ -437,6 +469,8 @@ export class InspectionsAdminService {
         report_type: inspection.report_type,
         workflow_type: inspection.workflow_type,
         status: inspection.status,
+        country_code: inspection.country_code,
+        region_code: inspection.region_code,
         province_code: inspection.province_code,
         site_address_snapshot: inspection.site_address_snapshot,
         client_display_name_snapshot: inspection.client_display_name_snapshot,
@@ -448,6 +482,9 @@ export class InspectionsAdminService {
         generated_pdf_at: inspection.generated_pdf_at?.toISOString() ?? null,
         sent_to_customer_at: inspection.sent_to_customer_at?.toISOString() ?? null,
         locked_at: inspection.locked_at?.toISOString() ?? null,
+        send_mode: "metadata_lock_only",
+        send_delivery_status: inspection.sent_to_customer_at ? "metadata_marked_not_dispatched" : "not_sent",
+        send_delivery_channels: [],
         public_job_code: publicJobCode,
         quote_number: publicJobCode ? this.buildQuoteNumber(publicJobCode) : null,
         invoice_number: publicJobCode ? this.buildInvoiceNumber(publicJobCode) : null,
@@ -2566,6 +2603,55 @@ export class InspectionsAdminService {
         notes: "System draft customer for inspection demos.",
       }),
     );
+  }
+
+  private normalizeCountryCode(raw: string | null | undefined) {
+    const value = raw?.trim();
+    if (!value) {
+      return null;
+    }
+
+    const normalized = value.toUpperCase();
+    if (!/^[A-Z]{2}$/.test(normalized)) {
+      apiError(400, "invalid_country_code", "country_code must be a 2-letter ISO code.");
+    }
+    return normalized;
+  }
+
+  private normalizeRegionCode(raw: string | null | undefined) {
+    const value = raw?.trim();
+    if (!value) {
+      return null;
+    }
+
+    const normalized = value.toUpperCase();
+    if (!/^[A-Z0-9-]{2,8}$/.test(normalized)) {
+      apiError(400, "invalid_region_code", "region/state/province code must be 2-8 alphanumeric characters.");
+    }
+    return normalized;
+  }
+
+  private resolveJurisdiction(input: {
+    country_code: string | null;
+    region_code: string | null;
+    province_code: string | null;
+    state_code: string | null;
+    customer_region_code: string | null;
+    job_region_code: string | null;
+  }) {
+    const explicitCountryCode = this.normalizeCountryCode(input.country_code);
+    const explicitRegionCode = this.normalizeRegionCode(
+      input.region_code ?? input.province_code ?? input.state_code,
+    );
+    const jobRegionCode = this.normalizeRegionCode(input.job_region_code);
+    const customerRegionCode = this.normalizeRegionCode(input.customer_region_code);
+
+    const regionCode = explicitRegionCode ?? jobRegionCode ?? customerRegionCode ?? null;
+    return {
+      country_code: explicitCountryCode,
+      region_code: regionCode,
+      province_code: regionCode ?? "UNSPEC",
+    };
   }
 
   private requireOrganizationId(organizationId: string | null | undefined) {

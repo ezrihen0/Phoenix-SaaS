@@ -30,6 +30,10 @@ type CreateInspectionPayload = {
   customer_id?: string;
   job_id?: string | null;
   report_type?: string;
+  country_code?: string | null;
+  region_code?: string | null;
+  province_code?: string | null;
+  state_code?: string | null;
   new_customer?: {
     first_name?: string;
     last_name?: string;
@@ -133,6 +137,10 @@ export class InspectionsAdminController {
         }
         : null,
       property_address: body.property_address?.trim() || null,
+      country_code: body.country_code?.trim() || null,
+      region_code: body.region_code?.trim() || null,
+      province_code: body.province_code?.trim() || null,
+      state_code: body.state_code?.trim() || null,
       actor,
       organizationId,
     });

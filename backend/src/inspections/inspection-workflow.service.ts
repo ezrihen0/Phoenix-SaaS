@@ -63,11 +63,20 @@ export type GateValidationResult = {
   errors: string[];
 };
 
+export class TemplateNotConfiguredError extends Error {
+  constructor(public readonly reportType: InspectionReportType) {
+    super(`Inspection template is not configured for report type: ${reportType}`);
+    this.name = "TemplateNotConfiguredError";
+  }
+}
+
 const INSPECTION_WORKFLOW_MAP: Record<InspectionReportType, InspectionWorkflowType> = {
   wood_burning_fireplace: "safety_standard",
   wood_stove: "safety_standard",
   wett_inspection: "compliance_wett",
   gas_fireplace: "gas_simplified",
+  garage_door: "safety_standard",
+  hvac: "safety_standard",
 };
 
 const STANDARD_SECTION_ORDER = [
@@ -590,6 +599,10 @@ export class InspectionWorkflowService {
   }
 
   getTemplateSeed(reportType: InspectionReportType): InspectionTemplateSeed {
+    if (reportType === "garage_door" || reportType === "hvac") {
+      throw new TemplateNotConfiguredError(reportType);
+    }
+
     const workflowType = this.resolveWorkflowType(reportType);
     if (workflowType === "compliance_wett") {
       return {
