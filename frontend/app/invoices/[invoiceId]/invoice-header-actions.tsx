@@ -11,6 +11,7 @@ type InvoiceSnapshot = {
   document_number: string;
   total_cents: number;
   issued_at: string;
+  due_at?: string | null;
   signature_requested?: boolean;
   customer: {
     full_name: string;
@@ -33,15 +34,17 @@ function formatCurrency(cents: number) {
   }).format(cents / 100);
 }
 
-function formatDueDateFromIssuedAt(issuedAt: string) {
-  const baseDate = new Date(issuedAt);
+function formatDueDateLabel(issuedAt: string, dueAt?: string | null) {
+  const baseDate = dueAt ? new Date(dueAt) : new Date(issuedAt);
 
   if (Number.isNaN(baseDate.getTime())) {
     return "N/A";
   }
 
   const dueDate = new Date(baseDate);
-  dueDate.setDate(dueDate.getDate() + 30);
+  if (!dueAt) {
+    dueDate.setDate(dueDate.getDate() + 30);
+  }
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -58,7 +61,7 @@ function buildDefaultSubject(invoice: InvoiceSnapshot, businessName?: string | n
 function buildDefaultBody(invoice: InvoiceSnapshot, businessName?: string | null) {
   const customerName = invoice.customer?.full_name?.trim() || "there";
   const totalLabel = formatCurrency(invoice.total_cents);
-  const dueDateLabel = formatDueDateFromIssuedAt(invoice.issued_at);
+  const dueDateLabel = formatDueDateLabel(invoice.issued_at, invoice.due_at);
   const from = businessName?.trim() || "us";
 
   return `Hi ${customerName},\n\nThanks again for choosing ${from}! Your invoice total is ${totalLabel}, and is due by ${dueDateLabel}.`;
@@ -96,8 +99,8 @@ export default function InvoiceHeaderActions({
   const [invoiceSnapshot, setInvoiceSnapshot] = useState<InvoiceSnapshot>(initialInvoice);
   const [fromField, setFromField] = useState(organizationEmail?.trim() || "");
   const [toField, setToField] = useState(initialInvoice.customer?.email?.trim() ?? "");
-  const [subjectField, setSubjectField] = useState(buildDefaultSubject(initialInvoice));
-  const [bodyField, setBodyField] = useState(buildDefaultBody(initialInvoice));
+  const [subjectField, setSubjectField] = useState(buildDefaultSubject(initialInvoice, businessName));
+  const [bodyField, setBodyField] = useState(buildDefaultBody(initialInvoice, businessName));
   const [creditCardEnabled, setCreditCardEnabled] = useState(true);
   const [requestSignature, setRequestSignature] = useState(Boolean(initialInvoice.signature_requested));
 

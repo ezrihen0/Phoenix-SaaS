@@ -362,7 +362,129 @@ function getCallSecondaryLine(call: RecentCallListItem) {
   return call.toNumber ?? "Unknown destination";
 }
 
-const callsLedgerHeaderCellClass = "border-r border-[color:var(--border-subtle)] px-3 py-3 text-[11px] last:border-r-0";
+function getBookShare(count: number, total: number) {
+  if (total <= 0 || count <= 0) {
+    return null;
+  }
+
+  return `${Math.round((count / total) * 100)}% of book`;
+}
+
+function getMovementHint(count: number, activeLabel: string, flatLabel = "Flat") {
+  if (count <= 0) {
+    return flatLabel;
+  }
+
+  return `▲ ${activeLabel}`;
+}
+
+function getLatestSignalAge(calls: RecentCallListItem[]) {
+  if (calls.length === 0) {
+    return null;
+  }
+
+  const latestMs = calls.reduce((latest, call) => {
+    const parsed = new Date(call.createdAt).getTime();
+    return Number.isFinite(parsed) && parsed > latest ? parsed : latest;
+  }, 0);
+
+  if (!latestMs) {
+    return null;
+  }
+
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - latestMs) / 60_000));
+
+  if (diffMinutes < 1) {
+    return "just now";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+
+  const hours = Math.floor(diffMinutes / 60);
+  return `${hours}h ago`;
+}
+
+function getPressureSignal(call: RecentCallListItem) {
+  if (needsImmediateRecovery(call)) {
+    return {
+      label: "High pressure",
+      detail: "Missed — callback not in motion",
+    };
+  }
+
+  if (hasNegativeSentiment(call)) {
+    return {
+      label: "Sentiment drag",
+      detail: call.aiSentiment ?? "Negative AI read",
+    };
+  }
+
+  if (hasCallbackRecoveryInMotion(call)) {
+    return {
+      label: "Recovery active",
+      detail: call.queueCallbackRequested ? "Callback queued" : "Task in flight",
+    };
+  }
+
+  if (isUnmatchedCall(call) && (hasVoicemailContext(call) || isMissedOutcome(call))) {
+    return {
+      label: "Intake gap",
+      detail: "Unmatched caller needs routing",
+    };
+  }
+
+  if (hasVoicemailContext(call)) {
+    return {
+      label: "Voicemail signal",
+      detail: formatVoicemailStatusLabel(call.voicemailStatus ?? "ready"),
+    };
+  }
+
+  if (call.matchedClientId || call.matchedLeadId) {
+    return {
+      label: "Matched flow",
+      detail: call.matchedClientId ? "Client on file" : "Lead linked",
+    };
+  }
+
+  return {
+    label: "Monitor",
+    detail: call.aiSentiment ?? call.aiSummary ?? "No pressure flag",
+  };
+}
+
+function buildLiveTickerItems(params: {
+  totalCount: number;
+  urgentRecoveryCount: number;
+  callbacksInMotionCount: number;
+  negativeSentimentCount: number;
+  unmatchedCallerCount: number;
+  latestSignalAge: string | null;
+}) {
+  const items = [
+    `Live Call Flow · ${params.totalCount} positions`,
+    params.urgentRecoveryCount > 0
+      ? `Pressure · ${params.urgentRecoveryCount} watchlist ${params.urgentRecoveryCount === 1 ? "slot" : "slots"}`
+      : "Pressure · book clear",
+    params.callbacksInMotionCount > 0
+      ? `Recovery · ${params.callbacksInMotionCount} in motion`
+      : "Recovery · idle",
+    params.negativeSentimentCount > 0
+      ? `Signal · ${params.negativeSentimentCount} negative reads`
+      : "Signal · sentiment stable",
+    params.unmatchedCallerCount > 0
+      ? `Intake · ${params.unmatchedCallerCount} unmatched`
+      : "Intake · matched",
+    params.latestSignalAge ? `Last tick · ${params.latestSignalAge}` : "Last tick · awaiting feed",
+  ];
+
+  return items;
+}
+
+const callsLedgerHeaderCellClass = "border-r border-[color:var(--border-subtle)] px-3 py-3 text-[11px] font-medium uppercase tracking-[0.2em] last:border-r-0";
+const callsLedgerNumericClass = "font-[family:var(--font-geist-mono)] tabular-nums tracking-tight";
 const callsLedgerBodyCellClass = "border-r border-[color:var(--border-subtle)] px-3 py-3 align-top last:border-r-0";
 
 export default async function CallsPage({ searchParams }: CallsPageContext) {
@@ -420,22 +542,60 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
   };
   const previousPageHref = buildCallsQueryString({ ...paginationBase, page: String(Math.max(1, currentPage - 1)) });
   const nextPageHref = buildCallsQueryString({ ...paginationBase, page: String(Math.min(totalPages, currentPage + 1)) });
+  const latestSignalAge = getLatestSignalAge(calls);
+  const recoveryWatchlist = calls.filter(needsImmediateRecovery).slice(0, 6);
+  const liveTickerItems = buildLiveTickerItems({
+    totalCount,
+    urgentRecoveryCount,
+    callbacksInMotionCount,
+    negativeSentimentCount,
+    unmatchedCallerCount,
+    latestSignalAge,
+  });
+  const urgentBookShare = getBookShare(urgentRecoveryCount, totalCount);
+  const motionBookShare = getBookShare(callbacksInMotionCount, totalCount);
+  const matchedBookShare = getBookShare(matchedOpportunityCount, totalCount);
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-12 lg:px-10">
       <section className="theme-surface-modal rounded-[32px] border border-[color:rgba(212,175,55,0.2)] bg-[linear-gradient(170deg,rgba(8,8,8,0.96),rgba(19,19,19,0.9))] p-6 shadow-[0_36px_120px_rgba(0,0,0,0.4)]">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="overflow-hidden rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)]">
+          <div className="flex items-center gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-2">
+            <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--text-primary)]">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[color:var(--sem-accent-primary)] opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[color:var(--sem-accent-primary)]" />
+              </span>
+              Live ticker
+            </span>
+            <span className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">
+              {latestSignalAge ? `Feed refreshed · last signal ${latestSignalAge}` : "Scanning call flow"}
+            </span>
+          </div>
+          <div className="overflow-x-auto px-4 py-3">
+            <div className="flex min-w-max items-center gap-6 text-xs uppercase tracking-[0.18em] text-[color:var(--text-secondary)]">
+              {liveTickerItems.map((item) => (
+                <span key={item} className="whitespace-nowrap">
+                  <span className="mr-2 text-[color:var(--text-muted)]">▸</span>
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.3em] text-[color:var(--flat-gold)]">Calls</p>
+            <p className="text-[11px] uppercase tracking-[0.3em] text-[color:var(--flat-gold)]">Live Call Flow</p>
             <h1 className="mt-3 flex items-center gap-3 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--text-primary)]">
               <PhoneCall className="h-8 w-8 text-[color:var(--flat-gold)]" />
-              Recent Calls
+              Calls Trading Desk
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-[color:var(--text-secondary)]">
-              Revenue-recovery workspace for inbound call intake. Prioritize missed callers, confirm callback motion, and route the next best customer, lead, job, or SMS action without losing context.
+              Scan inbound pressure, watch recovery positions, and execute the next move on every caller without losing desk context.
             </p>
-            <p className="mt-3 text-xs uppercase tracking-[0.22em] text-[color:var(--text-muted)]">
-              {urgentRecoveryCount} immediate recoveries • {callbackTaskAssignees.length} callback assignees available • {negativeSentimentCount} negative AI signals
+            <p className={`mt-3 text-xs uppercase tracking-[0.22em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>
+              {urgentRecoveryCount} watchlist · {callbacksInMotionCount} recovery in motion · {negativeSentimentCount} negative signals · {totalCount} positions loaded
             </p>
           </div>
 
@@ -450,24 +610,56 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <article className="rounded-[24px] border border-[color:rgba(248,113,113,0.24)] bg-[color:rgba(120,18,18,0.08)] p-4">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-[color:#fecaca]">Immediate Recovery</p>
-            <p className="mt-3 text-3xl font-semibold text-[color:var(--text-primary)]">{urgentRecoveryCount}</p>
-            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Missed calls with no callback task in motion.</p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:#fecaca]">Recovery Watchlist</p>
+              <span className={`text-[10px] uppercase tracking-[0.18em] text-[color:#fecaca] ${callsLedgerNumericClass}`}>
+                {getMovementHint(urgentRecoveryCount, "Pressure")}
+              </span>
+            </div>
+            <p className={`mt-3 text-4xl font-semibold text-[color:var(--text-primary)] ${callsLedgerNumericClass}`}>{urgentRecoveryCount}</p>
+            <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-[color:#fecaca]">
+              {urgentBookShare ?? "No open pressure"}
+            </p>
+            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Missed callers with no callback in motion.</p>
           </article>
           <article className="rounded-[24px] border border-[color:rgba(212,175,55,0.18)] bg-[color:rgba(212,175,55,0.04)] p-4">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">Callbacks In Motion</p>
-            <p className="mt-3 text-3xl font-semibold text-[color:var(--text-primary)]">{callbacksInMotionCount}</p>
-            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Recovery already queued or actively assigned.</p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">Recovery In Motion</p>
+              <span className={`text-[10px] uppercase tracking-[0.18em] text-[color:var(--flat-gold)] ${callsLedgerNumericClass}`}>
+                {getMovementHint(callbacksInMotionCount, "Active")}
+              </span>
+            </div>
+            <p className={`mt-3 text-4xl font-semibold text-[color:var(--text-primary)] ${callsLedgerNumericClass}`}>{callbacksInMotionCount}</p>
+            <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-[color:var(--flat-gold)]">
+              {motionBookShare ?? "Queue idle"}
+            </p>
+            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Queued or assigned callback positions.</p>
           </article>
           <article className="rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)] p-4">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--text-muted)]">Context To Review</p>
-            <p className="mt-3 text-3xl font-semibold text-[color:var(--text-primary)]">{voicemailReviewCount}</p>
-            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Voicemail-rich calls and {missedCallSmsCount} SMS touchpoints.</p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--text-muted)]">Signal Backlog</p>
+              <span className={`text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>
+                {getMovementHint(voicemailReviewCount + missedCallSmsCount, "Review")}
+              </span>
+            </div>
+            <p className={`mt-3 text-4xl font-semibold text-[color:var(--text-primary)] ${callsLedgerNumericClass}`}>{voicemailReviewCount}</p>
+            <p className={`mt-1 text-[11px] uppercase tracking-[0.16em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>
+              +{missedCallSmsCount} SMS touchpoints
+            </p>
+            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Voicemail-rich calls awaiting desk review.</p>
           </article>
           <article className="rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)] p-4">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--text-muted)]">Conversion Paths</p>
-            <p className="mt-3 text-3xl font-semibold text-[color:var(--text-primary)]">{matchedOpportunityCount}</p>
-            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Matched opportunities with {unmatchedCallerCount} callers still needing intake.</p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--text-muted)]">Matched Flow</p>
+              <span className={`text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>
+                {unmatchedCallerCount > 0 ? `▼ ${unmatchedCallerCount} gap` : "Aligned"}
+              </span>
+            </div>
+            <p className={`mt-3 text-4xl font-semibold text-[color:var(--text-primary)] ${callsLedgerNumericClass}`}>{matchedOpportunityCount}</p>
+            <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
+              {matchedBookShare ?? "No matches"} · {unmatchedCallerCount} unmatched
+            </p>
+            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Client and lead matches ready for next move.</p>
           </article>
         </div>
 
@@ -480,14 +672,14 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
         <form className="mt-6 rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)] p-4" method="GET">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--text-muted)]">Working Set</p>
-              <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Filter the board before moving into ledger, hybrid, or grid review.</p>
+              <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--text-muted)]">Position Filter</p>
+              <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Narrow the working ledger before executing next moves.</p>
             </div>
-            <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)]">{calls.length} calls in view</p>
+            <p className={`text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>{calls.length} positions in view</p>
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.62fr)_auto]">
             <label className="space-y-2">
-              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Search</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Caller scan</span>
               <input
                 name="q"
                 defaultValue={q}
@@ -496,7 +688,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
               />
             </label>
             <label className="space-y-2">
-              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Call Status</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">State filter</span>
               <select
                 name="callStatus"
                 defaultValue={callStatus}
@@ -508,7 +700,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
               </select>
             </label>
             <label className="space-y-2">
-              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Page size</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Page depth</span>
               <select
                 name="pageSize"
                 defaultValue={String(pageSize)}
@@ -525,7 +717,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                 type="submit"
                 className="theme-btn-secondary inline-flex w-full items-center justify-center rounded-[18px] px-5 py-3 text-sm transition"
               >
-                Filter
+                Apply filter
               </button>
             </div>
           </div>
@@ -537,7 +729,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
           </div>
         ) : calls.length === 0 ? (
           <div className="theme-control-surface-soft mt-6 rounded-[24px] border border-dashed px-4 py-8 text-center text-sm text-[color:var(--text-muted)]">
-            No recent calls match the current search and filters.
+            No positions match the current scan filters.
           </div>
         ) : (
           <>
@@ -575,9 +767,9 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
 
             <div className="calls-display-toolbar mt-6 flex flex-col gap-4 rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)] p-4 xl:flex-row xl:items-center xl:justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--text-muted)]">Display</p>
+                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--text-muted)]">Desk view</p>
                 <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
-                  Ledger for active queue work, Hybrid for callback context, and Grid for quick call review.
+                  Working Ledger for position scan, Hybrid for callback depth, Grid for quick tape read.
                 </p>
               </div>
               <fieldset className="flex flex-wrap gap-2">
@@ -586,53 +778,101 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                   htmlFor="calls-display-ledger"
                   className="calls-display-chip cursor-pointer rounded-full border px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] transition"
                 >
-                  Ledger
+                  Working Ledger
                 </label>
                 <label
                   htmlFor="calls-display-hybrid"
                   className="calls-display-chip cursor-pointer rounded-full border px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] transition"
                 >
-                  Hybrid
+                  Hybrid depth
                 </label>
                 <label
                   htmlFor="calls-display-grid"
                   className="calls-display-chip cursor-pointer rounded-full border px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] transition"
                 >
-                  Grid
+                  Grid tape
                 </label>
               </fieldset>
             </div>
 
+            {recoveryWatchlist.length > 0 ? (
+              <div className="mt-6 rounded-[24px] border border-[color:rgba(248,113,113,0.24)] bg-[color:rgba(120,18,18,0.08)] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-[color:#fecaca]">Recovery Watchlist</p>
+                    <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
+                      Highest-pressure positions requiring immediate next move.
+                    </p>
+                  </div>
+                  <p className={`text-xs uppercase tracking-[0.18em] text-[color:#fecaca] ${callsLedgerNumericClass}`}>
+                    {recoveryWatchlist.length} of {urgentRecoveryCount} open
+                  </p>
+                </div>
+                <div className="mt-4 grid gap-2 lg:grid-cols-2 xl:grid-cols-3">
+                  {recoveryWatchlist.map((call) => {
+                    const pressure = getPressureSignal(call);
+                    const operationalState = getOperationalState(call);
+
+                    return (
+                      <article
+                        key={`watch-${call.id}`}
+                        className="rounded-[18px] border border-[color:rgba(248,113,113,0.22)] bg-[color:rgba(120,18,18,0.12)] px-4 py-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-[color:var(--text-primary)]">{getCallDisplayName(call)}</p>
+                            <p className={`mt-1 truncate text-[11px] text-[color:var(--text-secondary)] ${callsLedgerNumericClass}`}>
+                              {call.fromNumber ?? "Unknown"} · {formatDateTime(call.createdAt)}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 text-[10px] uppercase tracking-[0.16em] text-[color:#fecaca] ${callsLedgerNumericClass}`}>
+                            {pressure.label}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs text-[color:var(--text-secondary)]">{operationalState.nextAction}</p>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
             <div className="calls-display-panels mt-6">
               <div className="calls-display-panel calls-display-panel-ledger">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--text-muted)]">Working Ledger</p>
+                    <p className="mt-1 text-sm text-[color:var(--text-secondary)]">Live positions table — scan caller, pressure signal, and next move.</p>
+                  </div>
+                  <p className={`text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>
+                    Page {currentPage}/{totalPages} · {pagedCalls.length} rows
+                  </p>
+                </div>
                 <div className="theme-control-surface overflow-x-auto rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))]">
                   <table className="min-w-full table-fixed text-left text-xs leading-4">
                     <colgroup>
+                      <col className="w-[18%]" />
+                      <col className="w-[14%]" />
                       <col className="w-[16%]" />
-                      <col className="w-[20%]" />
-                      <col className="w-[11%]" />
-                      <col className="w-[10%]" />
-                      <col className="w-[11%]" />
-                      <col className="w-[10%]" />
-                      <col className="w-[11%]" />
-                      <col className="w-[11%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[12%]" />
+                      <col className="w-[26%]" />
                     </colgroup>
                     <thead className="border-b border-[color:var(--border-subtle)] bg-[color:rgba(255,255,255,0.03)] text-[color:var(--text-secondary)]">
                       <tr>
-                        <th className={callsLedgerHeaderCellClass}>Actions</th>
-                        <th className={callsLedgerHeaderCellClass}>Customer / Caller Name</th>
-                        <th className={callsLedgerHeaderCellClass}>Call Status</th>
-                        <th className={callsLedgerHeaderCellClass}>Phone</th>
+                        <th className={callsLedgerHeaderCellClass}>Caller</th>
+                        <th className={callsLedgerHeaderCellClass}>State</th>
+                        <th className={callsLedgerHeaderCellClass}>Signal</th>
                         <th className={callsLedgerHeaderCellClass}>Source</th>
-                        <th className={callsLedgerHeaderCellClass}>Date / Time</th>
-                        <th className={callsLedgerHeaderCellClass}>Duration</th>
-                        <th className={callsLedgerHeaderCellClass}>Recovery Context</th>
+                        <th className={callsLedgerHeaderCellClass}>Time</th>
+                        <th className={callsLedgerHeaderCellClass}>Next Move</th>
                       </tr>
                     </thead>
                     <tbody>
                       {pagedCalls.map((call) => {
                         const formattedCreatedAt = formatDateTime(call.createdAt);
                         const operationalState = getOperationalState(call);
+                        const pressureSignal = getPressureSignal(call);
                         const activeCallbackTask = hasActiveCallbackTask(call);
                         const resolvedCallbackTask = hasResolvedCallbackTask(call);
                         const recoveryInMotion = hasCallbackRecoveryInMotion(call);
@@ -649,9 +889,80 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
 
                         return (
                           <tr key={call.id} className={`border-b border-[color:var(--border-subtle)] transition last:border-b-0 ${operationalState.surfaceClass}`}>
-                            <td className={`${callsLedgerBodyCellClass} align-middle`}>
-                              <div className="flex min-w-[14rem] flex-col gap-2">
-                                <div className="flex flex-nowrap items-center justify-center gap-2">
+                            <td className={`${callsLedgerBodyCellClass} text-[color:var(--text-primary)]`}>
+                              <div className="min-w-0">
+                                {call.matchedClientId && call.matchedClientDisplayName && canManageCrmFromCalls ? (
+                                  <Link
+                                    href={`/customers/${call.matchedClientId}`}
+                                    className="block truncate font-medium text-[color:var(--flat-gold)] transition hover:text-[color:var(--text-primary)]"
+                                    title="Open matched customer"
+                                  >
+                                    {getCallDisplayName(call)}
+                                  </Link>
+                                ) : (
+                                  <span className="block truncate font-medium">{getCallDisplayName(call)}</span>
+                                )}
+                                <div className={`mt-1 truncate text-[11px] text-[color:var(--text-secondary)] ${callsLedgerNumericClass}`}>
+                                  {call.fromNumber ?? "Unknown"}
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {call.matchedClientId ? <span className="inline-flex rounded-full border border-[color:rgba(52,211,153,0.24)] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:#a7f3d0]">Client</span> : null}
+                                  {call.matchedLeadId ? <span className="inline-flex rounded-full border border-[color:rgba(56,189,248,0.24)] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:#bae6fd]">Lead</span> : null}
+                                </div>
+                              </div>
+                            </td>
+                            <td className={callsLedgerBodyCellClass}>
+                              <div className="space-y-2">
+                                <span className={operationalState.badgeClass}>{operationalState.label}</span>
+                                <div>
+                                  <span className={callStatusBadgeClass(call.callStatus)}>{call.callStatus}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className={`${callsLedgerBodyCellClass} text-[color:var(--text-secondary)]`}>
+                              <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Pressure</p>
+                              <p className="mt-1 font-medium text-[color:var(--text-primary)]">{pressureSignal.label}</p>
+                              <p className="mt-1 text-[11px]">{pressureSignal.detail}</p>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {hasVoicemail ? <span className="inline-flex rounded-full border border-[color:rgba(192,132,252,0.24)] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:#e9d5ff]">VM</span> : null}
+                                {hasSmsContext ? <span className="inline-flex rounded-full border border-[color:rgba(125,211,252,0.24)] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:#bae6fd]">SMS</span> : null}
+                                {negativeSentiment ? <span className="inline-flex rounded-full border border-[color:rgba(248,113,113,0.24)] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:#fecaca]">−AI</span> : null}
+                              </div>
+                              {voiceHybridHint ? (
+                                <p className="mt-2 text-[11px]">{voiceHybridHint}</p>
+                              ) : null}
+                            </td>
+                            <td className={`${callsLedgerBodyCellClass} text-[color:var(--text-secondary)]`}>
+                              <div>{formatCallSourceLabel(call.source)}</div>
+                              {call.campaignName ? <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">{call.campaignName}</div> : null}
+                              <div className={`mt-1 text-[11px] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>{inboundNumberLabel}</div>
+                              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] uppercase tracking-[0.16em]">
+                                {inboundMarketLabel ? (
+                                  <span className="inline-flex rounded-full border border-[color:rgba(125,211,252,0.2)] bg-[color:rgba(12,74,110,0.2)] px-2 py-1 text-[color:#bae6fd]">
+                                    {inboundMarketLabel}
+                                  </span>
+                                ) : null}
+                                <span className={`inline-flex rounded-full border px-2 py-1 ${inboundMappingState.className}`}>
+                                  {inboundMappingState.label}
+                                </span>
+                              </div>
+                            </td>
+                            <td className={`${callsLedgerBodyCellClass} text-[color:var(--text-secondary)]`}>
+                              <p className={`text-[11px] text-[color:var(--text-primary)] ${callsLedgerNumericClass}`}>{formattedCreatedAt}</p>
+                              <p className={`mt-2 text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>
+                                {formatDuration(call.durationSeconds) ?? "—"} duration
+                              </p>
+                            </td>
+                            <td className={`${callsLedgerBodyCellClass} text-[color:var(--text-secondary)]`}>
+                              <div className="font-medium text-[color:var(--text-primary)]">{operationalState.nextAction}</div>
+                              <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">{call.aiSummary ?? call.recordingStatus ?? "Pending review"}</div>
+                              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
+                                {activeCallbackTask ? <span>Task active</span> : null}
+                                {recoveryInMotion && call.queueCallbackRequested ? <span>Queued</span> : null}
+                                {resolvedCallbackTask ? <span>Resolved</span> : null}
+                              </div>
+                              <div className="mt-3 flex min-w-[14rem] flex-col gap-2">
+                                <div className="flex flex-nowrap items-center gap-2">
                                   {showQueueCallbackControl ? (
                                     <QueueCallbackRequestControl
                                       recentCallId={call.id}
@@ -678,66 +989,8 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                                     assignees={callbackTaskAssignees}
                                   />
                                 ) : null}
+                                <CallsCopilotSmsDraft recentCallId={call.id} hasMessagingSendPermission={session.permissions.includes("messaging.send")} />
                               </div>
-                            </td>
-                            <td className={`${callsLedgerBodyCellClass} text-[color:var(--text-primary)]`}>
-                              <div className="min-w-0">
-                                <div className="mb-2 flex flex-wrap gap-1.5">
-                                  <span className={operationalState.badgeClass}>{operationalState.label}</span>
-                                  {call.matchedClientId ? <span className="inline-flex rounded-full border border-[color:rgba(52,211,153,0.24)] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:#a7f3d0]">Client</span> : null}
-                                  {call.matchedLeadId ? <span className="inline-flex rounded-full border border-[color:rgba(56,189,248,0.24)] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:#bae6fd]">Lead</span> : null}
-                                  {hasVoicemail ? <span className="inline-flex rounded-full border border-[color:rgba(192,132,252,0.24)] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:#e9d5ff]">Voicemail</span> : null}
-                                  {hasSmsContext ? <span className="inline-flex rounded-full border border-[color:rgba(125,211,252,0.24)] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:#bae6fd]">SMS touchpoint</span> : null}
-                                </div>
-                                {call.matchedClientId && call.matchedClientDisplayName && canManageCrmFromCalls ? (
-                                  <Link
-                                    href={`/customers/${call.matchedClientId}`}
-                                    className="block truncate text-[color:var(--flat-gold)] transition hover:text-[color:var(--text-primary)]"
-                                    title="Open matched customer"
-                                  >
-                                    {getCallDisplayName(call)}
-                                  </Link>
-                                ) : (
-                                  <span className="block truncate font-medium">{getCallDisplayName(call)}</span>
-                                )}
-                                <div className="truncate text-[11px] text-[color:var(--text-secondary)]">{getCallSecondaryLine(call)}</div>
-                              </div>
-                            </td>
-                            <td className={callsLedgerBodyCellClass}>
-                              <span className={callStatusBadgeClass(call.callStatus)}>{call.callStatus}</span>
-                            </td>
-                            <td className={`${callsLedgerBodyCellClass} text-[color:var(--text-secondary)]`}>{call.fromNumber ?? "Unknown"}</td>
-                            <td className={`${callsLedgerBodyCellClass} text-[color:var(--text-secondary)]`}>
-                              <div>{formatCallSourceLabel(call.source)}</div>
-                              {call.campaignName ? <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">{call.campaignName}</div> : null}
-                              <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">{inboundNumberLabel}</div>
-                              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] uppercase tracking-[0.16em]">
-                                {inboundMarketLabel ? (
-                                  <span className="inline-flex rounded-full border border-[color:rgba(125,211,252,0.2)] bg-[color:rgba(12,74,110,0.2)] px-2 py-1 text-[color:#bae6fd]">
-                                    {inboundMarketLabel}
-                                  </span>
-                                ) : null}
-                                <span className={`inline-flex rounded-full border px-2 py-1 ${inboundMappingState.className}`}>
-                                  {inboundMappingState.label}
-                                </span>
-                              </div>
-                            </td>
-                            <td className={`${callsLedgerBodyCellClass} text-[11px] text-[color:var(--text-secondary)]`}>{formattedCreatedAt}</td>
-                            <td className={`${callsLedgerBodyCellClass} text-[color:var(--text-secondary)]`}>{formatDuration(call.durationSeconds) ?? "-"}</td>
-                            <td className={`${callsLedgerBodyCellClass} text-[color:var(--text-secondary)]`}>
-                              <div className="font-medium text-[color:var(--text-primary)]">{operationalState.nextAction}</div>
-                              <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">{call.aiSummary ?? call.recordingStatus ?? "Pending review"}</div>
-                              {voiceHybridHint ? (
-                                <div className="mt-1 text-[11px] text-[color:var(--text-secondary)]">{voiceHybridHint}</div>
-                              ) : null}
-                              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
-                                {activeCallbackTask ? <span>Callback task active</span> : null}
-                                {recoveryInMotion && call.queueCallbackRequested ? <span>Callback queued</span> : null}
-                                {resolvedCallbackTask ? <span>Callback resolved</span> : null}
-                                {negativeSentiment ? <span>Negative AI sentiment</span> : null}
-                                {!activeCallbackTask && !recoveryInMotion ? <span>{call.aiSentiment ?? formatVoicemailStatusLabel(call.voicemailStatus ?? "pending")}</span> : null}
-                              </div>
-                              <CallsCopilotSmsDraft recentCallId={call.id} hasMessagingSendPermission={session.permissions.includes("messaging.send")} />
                             </td>
                           </tr>
                         );
@@ -815,7 +1068,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
 
                           <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1 text-sm text-[color:var(--text-secondary)]">
                             <div>
-                              <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Status</p>
+                              <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">State</p>
                               <div className="mt-2">
                                 <span className={callStatusBadgeClass(call.callStatus)}>{call.callStatus}</span>
                               </div>
@@ -823,7 +1076,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                             <div>
                               <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Source</p>
                               <p className="mt-2">{formatCallSourceLabel(call.source)}</p>
-                              <p className="mt-2 text-[color:var(--text-muted)]">{inboundNumberLabel}</p>
+                              <p className={`mt-2 text-[color:var(--text-muted)] ${callsLedgerNumericClass}`}>{inboundNumberLabel}</p>
                               <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] uppercase tracking-[0.16em]">
                                 {inboundMarketLabel ? (
                                   <span className="inline-flex rounded-full border border-[color:rgba(125,211,252,0.2)] bg-[color:rgba(12,74,110,0.2)] px-2 py-1 text-[color:#bae6fd]">
@@ -836,18 +1089,19 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                               </div>
                             </div>
                             <div>
-                              <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Duration</p>
-                              <p className="mt-2">{formatDuration(call.durationSeconds) ?? "-"}</p>
+                              <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Time</p>
+                              <p className={`mt-2 ${callsLedgerNumericClass}`}>{formatDuration(call.durationSeconds) ?? "—"}</p>
                             </div>
                           </div>
 
                           <div className="rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.02)] px-4 py-4 text-sm text-[color:var(--text-secondary)]">
-                            <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Context</p>
+                            <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Signal · Next Move</p>
                             <div className="mt-3 grid gap-2">
-                              <p>Time: {formattedCreatedAt}</p>
+                              <p><span className="text-[color:var(--text-muted)]">Tick:</span> <span className={callsLedgerNumericClass}>{formattedCreatedAt}</span></p>
+                              <p><span className="text-[color:var(--text-muted)]">Pressure:</span> {getPressureSignal(call).label}</p>
                               <p>Summary: {call.aiSummary ?? call.recordingStatus ?? "Pending review"}</p>
                               {voiceHybridHint ? <p className="text-[color:var(--text-secondary)]">{voiceHybridHint}</p> : null}
-                              <p>Next action: {resolvedCallbackTask ? "Callback resolved." : recoveryInMotion && call.queueCallbackRequested ? "Callback queued" : operationalState.nextAction}</p>
+                              <p>Next move: {resolvedCallbackTask ? "Callback resolved." : recoveryInMotion && call.queueCallbackRequested ? "Callback queued" : operationalState.nextAction}</p>
                             </div>
                             <CallsCopilotSmsDraft recentCallId={call.id} hasMessagingSendPermission={session.permissions.includes("messaging.send")} />
                           </div>
@@ -959,9 +1213,9 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                         </div>
 
                         <div className="mt-5 border-t border-[color:var(--cmp-border-subtle)] pt-4 text-sm text-[color:var(--text-secondary)]">
-                          <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Recovery Context</p>
+                          <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Signal · Next Move</p>
                           <p className="mt-2 font-medium text-[color:var(--text-primary)]">{operationalState.nextAction}</p>
-                          <p className="mt-2">{call.aiSummary ?? call.recordingStatus ?? "Pending review"}</p>
+                          <p className="mt-2">{getPressureSignal(call).label} · {call.aiSummary ?? call.recordingStatus ?? "Pending review"}</p>
                           {voiceHybridHint ? <p className="mt-2 text-xs text-[color:var(--text-secondary)]">{voiceHybridHint}</p> : null}
                           <p className="mt-3 text-xs text-[color:var(--text-muted)]">{call.aiSentiment ?? (resolvedCallbackTask ? "Callback resolved" : recoveryInMotion && call.queueCallbackRequested ? "Callback queued" : "No follow-up flag")}</p>
                           <CallsCopilotSmsDraft recentCallId={call.id} hasMessagingSendPermission={session.permissions.includes("messaging.send")} />
@@ -977,8 +1231,8 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
 
         {totalCount > 0 ? (
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[color:var(--text-secondary)]">
-            <p>
-              Showing {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, totalCount)} of {totalCount}
+            <p className={callsLedgerNumericClass}>
+              Tape {String((currentPage - 1) * pageSize + 1).padStart(2, "0")}–{String(Math.min(currentPage * pageSize, totalCount)).padStart(2, "0")} of {String(totalCount).padStart(2, "0")} positions
             </p>
             <div className="flex items-center gap-2">
               <Link

@@ -23,6 +23,13 @@ export type OrganizationSettingsResponse = {
   invoiceEmailBody?: string | null;
   invoiceSmsBody?: string | null;
   invoicePdfFooter?: string | null;
+  logoUrl?: string | null;
+  accentColor?: string | null;
+  paymentInstructions?: string | null;
+  businessLicense?: string | null;
+  gstNumber?: string | null;
+  warrantyMessage?: string | null;
+  defaultDueDays?: number | null;
   taxRateBps: number;
 };
 
@@ -40,6 +47,13 @@ export type OrganizationSettingsUpdateInput = {
   invoiceEmailBody?: string | null | undefined;
   invoiceSmsBody?: string | null | undefined;
   invoicePdfFooter?: string | null | undefined;
+  logoUrl?: string | null | undefined;
+  accentColor?: string | null | undefined;
+  paymentInstructions?: string | null | undefined;
+  businessLicense?: string | null | undefined;
+  gstNumber?: string | null | undefined;
+  warrantyMessage?: string | null | undefined;
+  defaultDueDays?: number | null | undefined;
 };
 
 const ORGANIZATION_SETTINGS_KEY = "default";
@@ -79,6 +93,13 @@ export class SettingsService {
         invoiceEmailBody: null,
         invoiceSmsBody: null,
         invoicePdfFooter: null,
+        logoUrl: null,
+        accentColor: null,
+        paymentInstructions: null,
+        businessLicense: null,
+        gstNumber: null,
+        warrantyMessage: null,
+        defaultDueDays: null,
         taxRateBps: this.readNumber("ORG_TAX_RATE_BPS", 0),
       };
     }
@@ -138,6 +159,27 @@ export class SettingsService {
     if (input.invoicePdfFooter !== undefined) {
       settings.invoice_pdf_footer = input.invoicePdfFooter;
     }
+    if (input.logoUrl !== undefined) {
+      settings.logo_url = input.logoUrl;
+    }
+    if (input.accentColor !== undefined) {
+      settings.accent_color = input.accentColor;
+    }
+    if (input.paymentInstructions !== undefined) {
+      settings.payment_instructions = input.paymentInstructions;
+    }
+    if (input.businessLicense !== undefined) {
+      settings.business_license = input.businessLicense;
+    }
+    if (input.gstNumber !== undefined) {
+      settings.gst_number = input.gstNumber;
+    }
+    if (input.warrantyMessage !== undefined) {
+      settings.warranty_message = input.warrantyMessage;
+    }
+    if (input.defaultDueDays !== undefined) {
+      settings.default_due_days = input.defaultDueDays;
+    }
 
     const savedSettings = await this.organizationSettingsRepository.save(settings);
     return this.buildOrganizationSettingsResponse(savedSettings);
@@ -162,6 +204,13 @@ export class SettingsService {
       invoiceEmailBody: settings.invoice_email_body,
       invoiceSmsBody: settings.invoice_sms_body,
       invoicePdfFooter: settings.invoice_pdf_footer,
+      logoUrl: settings.logo_url,
+      accentColor: settings.accent_color,
+      paymentInstructions: settings.payment_instructions,
+      businessLicense: settings.business_license,
+      gstNumber: settings.gst_number,
+      warrantyMessage: settings.warranty_message,
+      defaultDueDays: settings.default_due_days,
       taxRateBps: this.readNumber("ORG_TAX_RATE_BPS", 0),
     };
   }

@@ -6,6 +6,9 @@ import type { ClientSession } from "@/lib/auth/client-auth";
  */
 export type ShellNavRole = NonNullable<ClientSession["profile"]>["role"];
 
+/** Flip to true when the dedicated dispatch route returns to the shell. */
+export const DISPATCH_ROUTE_ENABLED = false;
+
 const ROLES_LEADS: ReadonlySet<ShellNavRole> = new Set(["owner", "office_admin", "dispatcher"]);
 
 const ROLES_CALLS_VIEW: ReadonlySet<ShellNavRole> = new Set([
@@ -68,8 +71,10 @@ export function isShellNavHrefVisible(
     case "/jobs":
     case "/customers":
     case "/schedule":
-    case "/dispatch":
       return isOfficeCrmNavRole(role);
+
+    case "/dispatch":
+      return DISPATCH_ROUTE_ENABLED && isOfficeCrmNavRole(role);
 
     case "/leads":
       return ROLES_LEADS.has(role);

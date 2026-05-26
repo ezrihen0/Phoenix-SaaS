@@ -4,7 +4,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { createHash, randomBytes } from "crypto";
 import type { Request, Response } from "express";
 import type { EntityManager } from "typeorm";
-import { Repository } from "typeorm";
+import { IsNull, Repository } from "typeorm";
 
 import { CustomerEntity } from "../database/entities/customer.entity";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
@@ -14,6 +14,7 @@ import { PortalMagicLinkEntity } from "../database/entities/portal-magic-link.en
 import { PortalSessionEntity } from "../database/entities/portal-session.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
+import { WarrantyCertificateEntity } from "../database/entities/warranty-certificate.entity";
 
 /** Default magic-link lifetime when minting from staff (no new env var). */
 const STAFF_PORTAL_MAGIC_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -42,6 +43,8 @@ export class CustomerPortalService {
     private readonly sessionsRepository: Repository<PortalSessionEntity>,
     @InjectRepository(PortalAccessEventEntity)
     private readonly eventsRepository: Repository<PortalAccessEventEntity>,
+    @InjectRepository(WarrantyCertificateEntity)
+    private readonly warrantyCertificatesRepository: Repository<WarrantyCertificateEntity>,
     private readonly configService: ConfigService,
   ) {}
 
@@ -307,6 +310,15 @@ export class CustomerPortalService {
       }
     }
 
+    const warrantyCertificates = await this.warrantyCertificatesRepository.find({
+      where: [
+        { customer_id: customerId, organization_id: organizationScope },
+        { customer_id: customerId, organization_id: IsNull() },
+      ],
+      order: { created_at: "DESC" },
+      take: 5,
+    });
+
     return {
       active_inspection: null,
       active_quote: activeQuote
@@ -323,6 +335,14 @@ export class CustomerPortalService {
           paid_at: invoice.paid_at ? invoice.paid_at.toISOString() : null,
         }
         : null,
+      warranty_certificates: warrantyCertificates.map((certificate) => ({
+        id: certificate.id,
+        warranty_type: certificate.warranty_type,
+        warranty_start_date: certificate.warranty_start_date.toISOString(),
+        warranty_end_date: certificate.warranty_end_date.toISOString(),
+        created_at: certificate.created_at.toISOString(),
+        pdf_url: `/api/portal/warranty-certificates/${certificate.id}/pdf`,
+      })),
       contact: {
         office_phone: this.normalizeMaybe(customer.phone),
         office_email: this.normalizeMaybe(customer.email),

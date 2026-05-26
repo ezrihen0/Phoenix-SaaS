@@ -1,17 +1,16 @@
 ﻿"use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   CalendarDays,
   ChevronRight,
-  ChevronDown,
-  ChevronUp,
+  CircleDollarSign,
   ClipboardCheck,
   ExternalLink,
   FileText,
+  Filter,
   Flame,
-  FolderOpen,
   Hammer,
   LoaderCircle,
   MapPin,
@@ -19,11 +18,11 @@ import {
   Receipt,
   RefreshCw,
   ShieldCheck,
-  Sparkles,
   UserRound,
   Wrench,
 } from "lucide-react";
 
+import { BoardShell } from "@/components/board/board-shell";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import { MetricTile } from "@/components/board/metric-tile";
 import { SectionFrame } from "@/components/board/section-frame";
@@ -35,7 +34,6 @@ import {
   getDashboardStatusLabel,
   getJobStatusLabel,
   getServiceTypeLabel,
-  jobStatuses,
   type JobStatus,
 } from "@/lib/crm/statuses";
 
@@ -267,6 +265,29 @@ const emptyNoteForm: NoteFormState = {
 
 const QUEUE_ITEMS_PER_PAGE = 10;
 
+/** Reserved for a future secondary view toggle — kanban stays mounted but hidden in Flight Deck mode. */
+const SHOW_LEGACY_KANBAN = false;
+
+type OperationalLaneKey = "unassigned" | "today" | "blocked" | "ready" | "upcoming";
+
+const operationalLaneDefinitions: Array<{
+  key: OperationalLaneKey;
+  title: string;
+  helper: string;
+  tone: "danger" | "primary" | "warning" | "success" | "neutral";
+}> = [
+  { key: "unassigned", title: "Unassigned", helper: "Needs dispatch", tone: "danger" },
+  { key: "today", title: "Today", helper: "Active schedule", tone: "primary" },
+  { key: "blocked", title: "Blocked", helper: "Needs action", tone: "warning" },
+  { key: "ready", title: "Ready", helper: "Can close / move", tone: "success" },
+  { key: "upcoming", title: "Upcoming", helper: "Future work", tone: "neutral" },
+];
+
+const flightDeckPanelClass =
+  "theme-surface-card rounded-[24px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] shadow-[0_18px_55px_color-mix(in_srgb,var(--bg-canvas)_72%,transparent)] backdrop-blur-md";
+
+const flightDeckEyebrowClass = "text-[11px] font-semibold uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]";
+
 function relationValue<T>(value: RelatedValue<T> | undefined) {
   if (Array.isArray(value)) {
     return value[0] ?? null;
@@ -402,6 +423,180 @@ function getOfficeQuickStatusActions(status: JobStatus) {
   return [] satisfies JobStatus[];
 }
 
+function isScheduledToday(value: string | null) {
+  if (!value) {
+    return false;
+  }
+
+  const scheduled = new Date(value);
+  const today = new Date();
+  return scheduled.toDateString() === today.toDateString();
+}
+
+function isScheduledFuture(value: string | null) {
+  if (!value) {
+    return false;
+  }
+
+  const scheduled = new Date(value);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return scheduled > today;
+}
+
+function isTerminalJobStatus(status: JobStatus) {
+  return status === "completed" || status === "paid" || status === "cancelled";
+}
+
+function getOperationalLane(job: JobRecord): OperationalLaneKey {
+  if (job.status === "completed" || job.status === "paid") {
+    return "ready";
+  }
+
+  if (job.status === "waiting_for_approval") {
+    return "blocked";
+  }
+
+  if (!job.assigned_technician_id && !isTerminalJobStatus(job.status)) {
+    return "unassigned";
+  }
+
+  if (isScheduledToday(job.scheduled_for)) {
+    return "today";
+  }
+
+  if (isScheduledFuture(job.scheduled_for)) {
+    return "upcoming";
+  }
+
+  if (
+    job.status === "scheduled"
+    || job.status === "on_the_way"
+    || job.status === "in_progress"
+    || job.status === "contacted"
+    || job.status === "new_lead"
+  ) {
+    return "today";
+  }
+
+  return "upcoming";
+}
+
+function getJobMoneyCents(job: JobRecord) {
+  const invoice = relationValue(job.invoice);
+  const quote = relationValue(job.quote);
+  const service = relationValue(job.service);
+
+  if (invoice?.amount_cents) {
+    return invoice.amount_cents;
+  }
+
+  if (quote?.price_cents) {
+    return quote.price_cents;
+  }
+
+  if (service?.default_price_cents) {
+    return service.default_price_cents;
+  }
+
+  return null;
+}
+
+function getOperatorNextAction(
+  job: JobRecord,
+  quote: QuoteRecord | null,
+  invoice: InvoiceRecord | null,
+  technician: TechnicianRecord | null,
+) {
+  if (!technician && !isTerminalJobStatus(job.status)) {
+    return {
+      title: "Assign technician",
+      detail: "Dispatch this job before the customer window slips.",
+    };
+  }
+
+  if (job.status === "waiting_for_approval") {
+    return {
+      title: "Resolve approval hold",
+      detail: quote
+        ? `Quote is ${formatLifecycleStatus(quote.status)} — contact the customer or adjust the estimate.`
+        : "Office approval is blocking field progress.",
+    };
+  }
+
+  if (invoice?.status === "unpaid") {
+    return {
+      title: "Collect payment",
+      detail: `${formatCurrency(invoice.amount_cents)} invoice is still open.`,
+    };
+  }
+
+  if (job.status === "completed" && !invoice) {
+    return {
+      title: "Close out revenue",
+      detail: "Job is complete — generate or send the invoice.",
+    };
+  }
+
+  if (!quote && (job.status === "scheduled" || job.status === "contacted" || job.status === "new_lead")) {
+    return {
+      title: "Send estimate",
+      detail: "No quote on file yet — confirm scope and pricing with the customer.",
+    };
+  }
+
+  if (quote && quote.status === "draft") {
+    return {
+      title: "Send quote to customer",
+      detail: `${formatCurrency(quote.price_cents)} draft is ready to go out.`,
+    };
+  }
+
+  if (quote && quote.status === "sent") {
+    return {
+      title: "Follow up on quote",
+      detail: "Waiting on customer approval — call or text to keep momentum.",
+    };
+  }
+
+  const quickActions = getOfficeQuickStatusActions(job.status).filter((nextStatus) =>
+    canTransitionJobStatus(job.status, nextStatus),
+  );
+
+  if (quickActions.length > 0) {
+    const nextStatus = quickActions[0];
+    return {
+      title: `Move to ${getJobStatusLabel(nextStatus)}`,
+      detail: `Current status: ${getJobStatusLabel(job.status)}.`,
+    };
+  }
+
+  return {
+    title: "Monitor job progress",
+    detail: `${getJobStatusLabel(job.status)} — no immediate office action required.`,
+  };
+}
+
+function laneToneClass(tone: (typeof operationalLaneDefinitions)[number]["tone"]) {
+  if (tone === "danger") {
+    return "theme-status-error";
+  }
+
+  if (tone === "warning") {
+    return "theme-status-warning";
+  }
+
+  if (tone === "success") {
+    return "theme-status-success";
+  }
+
+  if (tone === "primary") {
+    return "theme-status-info";
+  }
+
+  return "theme-control-surface-soft text-[color:var(--sem-text-secondary)]";
+}
+
 function FieldLabel({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
@@ -513,6 +708,163 @@ function ControlWidget({
   );
 }
 
+function CompactControlTile({
+  icon: Icon,
+  title,
+  count,
+  tone,
+  onActivate,
+}: {
+  icon: typeof Flame;
+  title: string;
+  count: number;
+  tone: "warning" | "danger" | "primary" | "success";
+  onActivate: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onActivate}
+      className={`${flightDeckPanelClass} w-full p-4 text-left transition hover:border-[color:var(--cmp-border-accent)]`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-accent-primary)] ${laneToneClass(tone)}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="rounded-full theme-control-surface-soft px-2.5 py-1 text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-secondary)]">
+          Queue
+        </span>
+      </div>
+      <p className={`mt-4 ${flightDeckEyebrowClass}`}>{title}</p>
+      <p className="mt-2 font-[family:var(--font-geist-mono)] text-3xl font-semibold tabular-nums text-[color:var(--sem-display-headline)]">
+        {count}
+      </p>
+    </button>
+  );
+}
+
+function HiddenLegacyKanbanBoard({
+  boardColumns,
+  operationalLaneColumns,
+  selectedJobId,
+  selectedLeadId,
+  onSelectJob,
+  onSelectLead,
+}: {
+  boardColumns: Array<{
+    status: (typeof dashboardStatuses)[number];
+    leads: LeadRecord[];
+    jobs: JobRecord[];
+  }>;
+  operationalLaneColumns: Array<(typeof operationalLaneDefinitions)[number] & { jobs: JobRecord[] }>;
+  selectedJobId: string | null;
+  selectedLeadId: string | null;
+  onSelectJob: (jobId: string) => void;
+  onSelectLead: (lead: LeadRecord) => void;
+}) {
+  const legacyBoard = (
+    <>
+      <SectionFrame title="Main Dashboard" subtitle="Status Board">
+        <div className="grid gap-4 xl:grid-cols-8">
+          {boardColumns.map(({ status, leads, jobs }) => (
+            <section
+              key={status}
+              className="theme-control-surface-soft flex max-h-[560px] min-h-[360px] flex-col rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4"
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] pb-3">
+                <div>
+                  <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">
+                    {getDashboardStatusLabel(status)}
+                  </p>
+                  <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">
+                    {leads.length + jobs.length} item{leads.length + jobs.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                {leads.map((lead) => (
+                  <button
+                    type="button"
+                    key={lead.id}
+                    onClick={() => onSelectLead(lead)}
+                    className={`block w-full rounded-[18px] border px-3 py-3 text-left text-sm transition ${selectedLeadId === lead.id ? "theme-selected-card" : "theme-control-surface border-[color:var(--cmp-border-subtle)] hover:bg-[color:var(--cmp-hover-surface)]"}`}
+                  >
+                    <p className="font-medium text-[color:var(--sem-text-primary)]">{lead.full_name}</p>
+                    <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">
+                      Lead - {getServiceTypeLabel(lead.service_type)}
+                    </p>
+                    <p className="mt-2 text-xs text-[color:var(--sem-text-secondary)]">{lead.phone}</p>
+                  </button>
+                ))}
+
+                {jobs.map((job) => {
+                  const customer = relationValue(job.customer);
+                  const technician = relationValue(job.technician);
+
+                  return (
+                    <button
+                      type="button"
+                      key={job.id}
+                      onClick={() => onSelectJob(job.id)}
+                      className={`block w-full rounded-[18px] border px-3 py-3 text-left text-sm transition ${selectedJobId === job.id ? "theme-selected-card" : "theme-control-surface border-[color:var(--cmp-border-subtle)] hover:bg-[color:var(--cmp-hover-surface)]"}`}
+                    >
+                      <p className="font-medium text-[color:var(--sem-text-primary)]">{job.title}</p>
+                      <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">
+                        {customer?.full_name ?? "Customer pending"}
+                      </p>
+                      <p className="mt-2 text-xs text-[color:var(--sem-text-secondary)]">
+                        {formatDateTime(job.scheduled_for)}
+                      </p>
+                      <p className="mt-1 flex items-center gap-2 text-xs text-[color:var(--sem-text-secondary)]">
+                        <UserRound className="h-3.5 w-3.5 text-[color:var(--sem-accent-primary)]" />
+                        <span>{technician?.display_name ?? "Unassigned"}</span>
+                      </p>
+                    </button>
+                  );
+                })}
+
+                {leads.length === 0 && jobs.length === 0 ? (
+                  <div className="rounded-[18px] theme-control-surface-soft border-dashed px-3 py-6 text-center text-xs text-[color:var(--sem-text-muted)]">
+                    No items
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ))}
+        </div>
+      </SectionFrame>
+
+      <SectionFrame title="Operational Lanes" subtitle="Derived Board">
+        <div className="grid gap-4 xl:grid-cols-5">
+          {operationalLaneColumns.map((lane) => (
+            <section
+              key={lane.key}
+              className="theme-control-surface-soft min-h-[240px] rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4"
+            >
+              <div className="border-b border-[color:var(--cmp-border-subtle)] pb-3">
+                <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{lane.title}</p>
+                <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">{lane.helper}</p>
+              </div>
+              <p className="mt-4 text-sm text-[color:var(--sem-text-secondary)]">{lane.jobs.length} jobs</p>
+            </section>
+          ))}
+        </div>
+      </SectionFrame>
+    </>
+  );
+
+  if (SHOW_LEGACY_KANBAN) {
+    return legacyBoard;
+  }
+
+  return (
+    <div className="hidden" aria-hidden="true" data-flight-deck-legacy-board="true">
+      {legacyBoard}
+    </div>
+  );
+}
+
 export default function JobsWorkspace() {
   const router = useRouter();
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
@@ -610,6 +962,41 @@ export default function JobsWorkspace() {
       jobs: pagedQueueJobs.filter((job) => getDashboardBoardStatus(job.status) === status),
     }))
     .filter((section) => section.jobs.length > 0);
+  const operationalLaneColumns = useMemo(
+    () => operationalLaneDefinitions.map((lane) => ({
+      ...lane,
+      jobs: (dashboard?.jobs ?? []).filter((job) => getOperationalLane(job) === lane.key),
+    })),
+    [dashboard?.jobs],
+  );
+  const fleetCounts = useMemo(() => {
+    const jobs = dashboard?.jobs ?? [];
+    const boardValueCents = jobs.reduce((sum, job) => sum + (getJobMoneyCents(job) ?? 0), 0);
+
+    return {
+      boardValueCents,
+      unassigned: jobs.filter((job) => getOperationalLane(job) === "unassigned").length,
+      blocked: jobs.filter((job) => getOperationalLane(job) === "blocked").length,
+      ready: jobs.filter((job) => getOperationalLane(job) === "ready").length,
+      today: jobs.filter((job) => getOperationalLane(job) === "today").length,
+      upcoming: jobs.filter((job) => getOperationalLane(job) === "upcoming").length,
+    };
+  }, [dashboard?.jobs]);
+  const intakeLeads = (dashboard?.leads ?? []).filter((lead) => lead.status !== "converted");
+  const selectedQuickActions = displayedJob
+    ? getOfficeQuickStatusActions(displayedJob.status).filter((nextStatus) =>
+      canTransitionJobStatus(displayedJob.status, nextStatus),
+    )
+    : [];
+  const operatorNextAction = displayedJob
+    ? getOperatorNextAction(
+      displayedJob,
+      displayedQuote,
+      displayedInvoice,
+      displayedTechnician,
+    )
+    : null;
+  const displayedJobMoneyCents = displayedJob ? getJobMoneyCents(displayedJob) : null;
 
   useEffect(() => {
     setQueuePage(1);
@@ -843,203 +1230,203 @@ export default function JobsWorkspace() {
 
   if (isBooting && !dashboard) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
-        <div className="inline-flex items-center gap-3 text-sm text-[color:var(--sem-text-secondary)]">
-          <LoaderCircle className="h-4 w-4 animate-spin text-[color:var(--sem-accent-primary)]" />
-          Loading the office operations board...
+      <BoardShell gridOpacity="subtle">
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="inline-flex items-center gap-3 text-sm text-[color:var(--sem-text-secondary)]">
+            <LoaderCircle className="h-4 w-4 animate-spin text-[color:var(--sem-accent-primary)]" />
+            Loading the jobs command board...
+          </div>
         </div>
-      </main>
+      </BoardShell>
     );
   }
 
+  function selectLead(lead: LeadRecord) {
+    startTransition(() => {
+      setSelectedLeadId(lead.id);
+      setConversionForm(buildConversionForm(lead, dashboard?.services ?? []));
+    });
+  }
+
+  function selectJob(jobId: string) {
+    startTransition(() => {
+      setSelectedJobId(jobId);
+      setJobDetail(null);
+    });
+  }
+
+  function activateControlQueue(items: DashboardControlItem[]) {
+    const firstJobId = items.find((item) => item.jobId)?.jobId ?? null;
+    if (firstJobId) {
+      selectJobFromWidget(firstJobId);
+    }
+  }
+
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
-      <div className="absolute inset-0 theme-overlay-atmosphere" />
-      <div className="absolute inset-0 theme-overlay-grid opacity-20" />
-
-      <div className="relative mx-auto max-w-[1600px] px-5 py-7 lg:px-8">
-        <header className="theme-surface-modal rounded-[34px] p-6 sm:p-7">
-          <div>
-            <h1 className="max-w-4xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[color:var(--sem-display-headline)] sm:text-6xl">
-              Office board for lead intake, dispatch, estimates, and payment follow-through.
-            </h1>
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <MetricTile icon={Flame} label="New Leads" value={dashboard?.summary.newLeads ?? 0} />
-            <MetricTile icon={Sparkles} label="Contacted Leads" value={dashboard?.summary.contactedLeads ?? 0} />
-            <MetricTile icon={Hammer} label="Active Jobs" value={dashboard?.summary.activeJobs ?? 0} />
-            <MetricTile icon={CalendarDays} label="Scheduled Today" value={dashboard?.summary.jobsScheduledToday ?? 0} />
-            <MetricTile icon={Receipt} label="Unpaid Invoices" value={dashboard?.summary.unpaidInvoices ?? 0} />
+    <BoardShell gridOpacity="subtle">
+      <div className="mx-auto max-w-[1720px] px-5 py-6 lg:px-8">
+        <header className={`${flightDeckPanelClass} px-6 py-5`}>
+          <div className="flex flex-wrap items-start justify-between gap-5">
+            <div>
+              <p className={flightDeckEyebrowClass}>Jobs Control · Dispatch + Revenue</p>
+              <h1 className="mt-2 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-display-headline)] sm:text-5xl">
+                Jobs Command Board
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+                What needs assignment, what moves today, what is blocked, and what can be closed.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void runAction(
+                  "refresh",
+                  async () => {
+                    await Promise.all([
+                      refreshDashboard(selectedJobId, selectedLeadId),
+                      refreshJobDetail(selectedJobId),
+                    ]);
+                  },
+                  "The board was refreshed.",
+                );
+              }}
+              className="theme-btn-primary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+            >
+              <RefreshCw className={`h-4 w-4 ${busyAction === "refresh" || isPending ? "animate-spin" : ""}`} />
+              Refresh board
+            </button>
           </div>
         </header>
 
-        <div className="mt-6 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-          {errorMessage || statusMessage ? (
-            <div className={`rounded-[22px] border px-4 py-3 text-sm ${errorMessage ? "theme-alert-error" : "theme-alert-info"}`}>
-              {errorMessage ?? statusMessage}
-            </div>
-          ) : (
-            <div />
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              void runAction(
-                "refresh",
-                async () => {
-                  await Promise.all([
-                    refreshDashboard(selectedJobId, selectedLeadId),
-                    refreshJobDetail(selectedJobId),
-                  ]);
-                },
-                "The board was refreshed.",
-              );
-            }}
-            className="inline-flex items-center justify-center gap-2 rounded-[22px] theme-control-surface px-4 py-3 text-sm text-[color:var(--sem-text-secondary)] transition hover:border-[color:var(--cmp-border-subtle)] hover:text-[color:var(--sem-text-primary)]"
-          >
-            <RefreshCw className={`h-4 w-4 ${busyAction === "refresh" || isPending ? "animate-spin" : ""}`} />
-            Refresh board
-          </button>
+        {errorMessage || statusMessage ? (
+          <div className={`mt-5 rounded-[22px] border px-4 py-3 text-sm ${errorMessage ? "theme-alert-error" : "theme-alert-info"}`}>
+            {errorMessage ?? statusMessage}
+          </div>
+        ) : null}
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <MetricTile icon={Flame} label="New Leads" value={dashboard?.summary.newLeads ?? 0} />
+          <MetricTile icon={Hammer} label="Active Jobs" value={dashboard?.summary.activeJobs ?? 0} />
+          <MetricTile icon={Receipt} label="Unpaid Invoices" value={dashboard?.summary.unpaidInvoices ?? 0} />
         </div>
 
-        <div className="mt-7">
-          <SectionFrame title="Control Widgets" subtitle="Office Overview">
-            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-5">
-              <ControlWidget
-                icon={FileText}
-                title="Quotes Waiting Approval"
-                items={dashboard?.controls.quotesWaitingApproval ?? []}
-                emptyLabel="No quotes are waiting approval."
-                selectedJobId={selectedJobId}
-                onSelectJob={selectJobFromWidget}
-              />
-              <ControlWidget
-                icon={Receipt}
-                title="Unpaid Invoices"
-                items={dashboard?.controls.unpaidInvoices ?? []}
-                emptyLabel="No unpaid invoices are in the queue."
-                selectedJobId={selectedJobId}
-                onSelectJob={selectJobFromWidget}
-              />
-              <ControlWidget
-                icon={ClipboardCheck}
-                title="Follow-Ups Needed"
-                items={dashboard?.controls.followUpsNeeded ?? []}
-                emptyLabel="No follow-ups are waiting for office action."
-                selectedJobId={selectedJobId}
-                onSelectJob={selectJobFromWidget}
-              />
-              <ControlWidget
-                icon={CalendarDays}
-                title="Today's Scheduled Jobs"
-                items={dashboard?.controls.todaysScheduledJobs ?? []}
-                emptyLabel="No jobs are scheduled today."
-                selectedJobId={selectedJobId}
-                onSelectJob={selectJobFromWidget}
-              />
-              <p className="mt-2 text-xs leading-5 text-[color:var(--sem-text-muted)]">
-                Includes non-cancelled jobs scheduled for today, including completed/paid.
-              </p>
-              <ControlWidget
-                icon={ShieldCheck}
-                title="Recent Completed Jobs"
-                items={dashboard?.controls.recentCompletedJobs ?? []}
-                emptyLabel="No recent completed jobs are available."
-                selectedJobId={selectedJobId}
-                onSelectJob={selectJobFromWidget}
-              />
-            </div>
-          </SectionFrame>
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricTile
+            icon={CircleDollarSign}
+            label="Board Value"
+            value={formatCurrency(fleetCounts.boardValueCents)}
+            helper="Visible jobs in current board"
+          />
+          <MetricTile
+            icon={UserRound}
+            label="Unassigned"
+            value={fleetCounts.unassigned}
+            helper="Needs dispatch now"
+          />
+          <MetricTile
+            icon={Wrench}
+            label="Blocked"
+            value={fleetCounts.blocked}
+            helper="Approval / office action"
+          />
+          <MetricTile
+            icon={ShieldCheck}
+            label="Ready to Close"
+            value={fleetCounts.ready}
+            helper="Move revenue forward"
+          />
         </div>
 
-        <div className="mt-7">
-          <SectionFrame title="Main Dashboard" subtitle="Status Board">
-          <div className="grid gap-4 xl:grid-cols-8">
-            {boardColumns.map(({ status, leads, jobs }) => (
-              <section
-                key={status}
-                className="theme-control-surface-soft flex max-h-[560px] min-h-[360px] flex-col rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4"
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <CompactControlTile
+            icon={FileText}
+            title="Quotes Waiting"
+            count={dashboard?.controls.quotesWaitingApproval.length ?? 0}
+            tone="warning"
+            onActivate={() => activateControlQueue(dashboard?.controls.quotesWaitingApproval ?? [])}
+          />
+          <CompactControlTile
+            icon={Receipt}
+            title="Unpaid Invoices"
+            count={dashboard?.controls.unpaidInvoices.length ?? 0}
+            tone="danger"
+            onActivate={() => activateControlQueue(dashboard?.controls.unpaidInvoices ?? [])}
+          />
+          <CompactControlTile
+            icon={ClipboardCheck}
+            title="Follow-Ups"
+            count={dashboard?.controls.followUpsNeeded.length ?? 0}
+            tone="primary"
+            onActivate={() => activateControlQueue(dashboard?.controls.followUpsNeeded ?? [])}
+          />
+        </div>
+
+        <section className={`${flightDeckPanelClass} mt-5 p-4`}>
+          <p className={flightDeckEyebrowClass}>Job Flow</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {operationalLaneColumns.map((lane) => (
+              <div
+                key={lane.key}
+                className="rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-4 py-3"
               >
-                <div className="flex items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] pb-3">
+                <div className="flex items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">
-                      {getDashboardStatusLabel(status)}
-                    </p>
-                    <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">
-                      {leads.length + jobs.length} item{leads.length + jobs.length === 1 ? "" : "s"}
-                    </p>
+                    <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{lane.title}</p>
+                    <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{lane.helper}</p>
                   </div>
+                  <span className={`flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-semibold ${laneToneClass(lane.tone)}`}>
+                    {lane.jobs.length}
+                  </span>
                 </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-                <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-                  {leads.map((lead) => (
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(280px,0.95fr)_minmax(0,1.35fr)_minmax(260px,0.85fr)]">
+          <aside className={`${flightDeckPanelClass} flex min-h-[520px] flex-col p-4`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className={flightDeckEyebrowClass}>Daily Queue</p>
+                <h2 className="mt-2 text-xl font-semibold text-[color:var(--sem-display-headline)]">Scan list</h2>
+              </div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-1.5 text-xs text-[color:var(--sem-text-muted)]">
+                <Filter className="h-3.5 w-3.5" />
+                {queueJobs.length} jobs
+              </span>
+            </div>
+
+            {intakeLeads.length > 0 ? (
+              <div className="mt-4 rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className={flightDeckEyebrowClass}>Intake</p>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/leads")}
+                    className="text-xs font-medium text-[color:var(--sem-accent-primary)]"
+                  >
+                    Open Leads
+                  </button>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {intakeLeads.slice(0, 4).map((lead) => (
                     <button
-                      type="button"
                       key={lead.id}
-                      onClick={() => {
-                        startTransition(() => {
-                          setSelectedLeadId(lead.id);
-                          setConversionForm(buildConversionForm(lead, dashboard?.services ?? []));
-                        });
-                      }}
-                      className={`block w-full rounded-[18px] border px-3 py-3 text-left text-sm transition ${selectedLeadId === lead.id ? "theme-selected-card" : "theme-control-surface border-[color:var(--cmp-border-subtle)] hover:bg-[color:var(--cmp-hover-surface)]"}`}
+                      type="button"
+                      onClick={() => selectLead(lead)}
+                      className={`block w-full rounded-[16px] border px-3 py-2 text-left text-sm transition ${selectedLeadId === lead.id ? "theme-selected-card" : "theme-control-surface border-[color:var(--cmp-border-subtle)] hover:bg-[color:var(--cmp-hover-surface)]"}`}
                     >
                       <p className="font-medium text-[color:var(--sem-text-primary)]">{lead.full_name}</p>
                       <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">
-                        Lead - {getServiceTypeLabel(lead.service_type)}
+                        {getServiceTypeLabel(lead.service_type)} · {lead.phone}
                       </p>
-                      <p className="mt-2 text-xs text-[color:var(--sem-text-secondary)]">{lead.phone}</p>
                     </button>
                   ))}
-
-                  {jobs.map((job) => {
-                    const customer = relationValue(job.customer);
-                    const technician = relationValue(job.technician);
-
-                    return (
-                      <button
-                        type="button"
-                        key={job.id}
-                        onClick={() => {
-                          startTransition(() => {
-                            setSelectedJobId(job.id);
-                            setJobDetail(null);
-                          });
-                        }}
-                                className={`block w-full rounded-[18px] border px-3 py-3 text-left text-sm transition ${selectedJobId === job.id ? "theme-selected-card" : "theme-control-surface border-[color:var(--cmp-border-subtle)] hover:bg-[color:var(--cmp-hover-surface)]"}`}
-                      >
-                        <p className="font-medium text-[color:var(--sem-text-primary)]">{job.title}</p>
-                        <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">
-                          {customer?.full_name ?? "Customer pending"}
-                        </p>
-                        <p className="mt-2 text-xs text-[color:var(--sem-text-secondary)]">
-                          {formatDateTime(job.scheduled_for)}
-                        </p>
-                        <p className="mt-1 flex items-center gap-2 text-xs text-[color:var(--sem-text-secondary)]">
-                          <UserRound className="h-3.5 w-3.5 text-[color:var(--sem-accent-primary)]" />
-                          <span>{technician?.display_name ?? "Unassigned"}</span>
-                        </p>
-                      </button>
-                    );
-                  })}
-
-                  {leads.length === 0 && jobs.length === 0 ? (
-                    <div className="rounded-[18px] theme-control-surface-soft border-dashed px-3 py-6 text-center text-xs text-[color:var(--sem-text-muted)]">
-                      No items
-                    </div>
-                  ) : null}
                 </div>
-              </section>
-            ))}
-          </div>
-          </SectionFrame>
-        </div>
+              </div>
+            ) : null}
 
-        <div className="mt-7">
-
-          <SectionFrame title="Daily Job Queue" subtitle="Office Control">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <div className="mt-4 grid gap-3">
               <FieldLabel label="Filter by Technician">
                 <FieldSelect value={queueTechnicianFilter} onChange={(event) => setQueueTechnicianFilter(event.target.value)}>
                   <option value="all">All technicians</option>
@@ -1053,213 +1440,338 @@ export default function JobsWorkspace() {
               <FieldLabel label="Filter by Date">
                 <FieldInput type="date" value={queueDateFilter} onChange={(event) => setQueueDateFilter(event.target.value)} />
               </FieldLabel>
-              <div className="flex items-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQueueTechnicianFilter("all");
-                    setQueueDateFilter("");
-                  }}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-[18px] theme-control-surface border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-3 text-sm text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-hover-surface)] hover:text-[color:var(--sem-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--cmp-focus-ring)]"
-                >
-                  Clear filters
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setQueueTechnicianFilter("all");
+                  setQueueDateFilter("");
+                }}
+                className="rounded-[18px] theme-control-surface border border-[color:var(--cmp-border-subtle)] px-4 py-2.5 text-sm text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-hover-surface)] hover:text-[color:var(--sem-text-primary)]"
+              >
+                Clear filters
+              </button>
             </div>
 
-            {groupedJobSections.length ? (
-              <div className="mt-6 space-y-5">
-                {groupedJobSections.map(({ status, jobs }) => (
-                  <section key={status} className="theme-control-surface-soft rounded-[24px] p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] pb-3">
-                      <div>
-                        <p className="text-lg font-semibold text-[color:var(--sem-text-primary)]">{getDashboardStatusLabel(status)}</p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
-                          {jobs.length} job{jobs.length === 1 ? "" : "s"}
-                        </p>
+            <div className="mt-4 min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[color:var(--cmp-border-subtle)]">
+              {pagedQueueJobs.length > 0 ? (
+                <div className="max-h-[520px] overflow-y-auto">
+                  {pagedQueueJobs.map((job) => {
+                    const customer = relationValue(job.customer);
+                    const technician = relationValue(job.technician);
+                    const moneyLabel = formatCurrency(getJobMoneyCents(job));
+
+                    return (
+                      <button
+                        key={job.id}
+                        type="button"
+                        onClick={() => selectJob(job.id)}
+                        className={`grid w-full grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-2 border-b border-[color:var(--cmp-border-subtle)] px-3 py-3 text-left last:border-b-0 ${selectedJobId === job.id ? "theme-selected-card" : "bg-[color:var(--cmp-surface-panel)] hover:bg-[color:var(--cmp-hover-surface)]"}`}
+                      >
+                        <span className="font-[family:var(--font-geist-mono)] text-xs text-[color:var(--sem-accent-primary)]">
+                          {job.scheduled_for
+                            ? new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(job.scheduled_for))
+                            : "—"}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-[color:var(--sem-text-primary)]">{customer?.full_name ?? job.title}</p>
+                          <p className="truncate text-xs text-[color:var(--sem-text-muted)]">
+                            {technician?.display_name ?? "Unassigned"} · {getJobStatusLabel(job.status)}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="px-4 py-10 text-center text-sm text-[color:var(--sem-text-secondary)]">
+                  {queueFilterActive
+                    ? "No jobs match the current technician and date filters."
+                    : "No jobs are active yet. Start in Leads, then convert a lead to create the first service ticket."}
+                  {!queueFilterActive ? (
+                    <div className="mt-4">
+                      <button
+                        type="button"
+                        onClick={() => router.push("/leads")}
+                        className="inline-flex items-center justify-center rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-2 text-sm text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-hover-surface)] hover:text-[color:var(--sem-text-primary)]"
+                      >
+                        Open Leads
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            {pagedQueueJobs.length > 0 ? (
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-[color:var(--sem-text-muted)]">
+                  {queueStartIndex + 1}-{Math.min(queueStartIndex + QUEUE_ITEMS_PER_PAGE, queueJobs.length)} of {queueJobs.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={safeQueuePage <= 1}
+                    onClick={() => setQueuePage((current) => Math.max(1, current - 1))}
+                    className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-1.5 text-xs text-[color:var(--sem-text-secondary)] disabled:opacity-50"
+                  >
+                    Prev
+                  </button>
+                  <span className="text-xs text-[color:var(--sem-text-muted)]">{safeQueuePage}/{queueTotalPages}</span>
+                  <button
+                    type="button"
+                    disabled={safeQueuePage >= queueTotalPages}
+                    onClick={() => setQueuePage((current) => Math.min(queueTotalPages, current + 1))}
+                    className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-1.5 text-xs text-[color:var(--sem-text-secondary)] disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </aside>
+
+          <section className={`${flightDeckPanelClass} p-5`}>
+            {displayedJob && operatorNextAction ? (
+              <>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className={flightDeckEyebrowClass}>Selected Job</p>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">
+                      {displayedCustomer?.full_name ?? "Customer pending"}
+                    </h2>
+                    <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
+                      {displayedJob.title}
+                    </p>
+                  </div>
+                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusTone(displayedJob.status)}`}>
+                    {getJobStatusLabel(displayedJob.status)}
+                  </span>
+                </div>
+
+                <div className="mt-5 rounded-[22px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] p-4">
+                  <p className={flightDeckEyebrowClass}>Next Action</p>
+                  <p className="mt-2 text-lg font-semibold text-[color:var(--sem-text-primary)]">{operatorNextAction.title}</p>
+                  <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{operatorNextAction.detail}</p>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
+                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.25em] text-[color:var(--sem-text-muted)]">
+                      <UserRound className="h-3.5 w-3.5 text-[color:var(--sem-accent-primary)]" />
+                      Customer
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-[color:var(--sem-text-primary)]">
+                      {displayedCustomer?.full_name ?? "Customer pending"}
+                    </p>
+                    {displayedCustomer?.phone ? (
+                      <a href={`tel:${displayedCustomer.phone}`} className="mt-2 inline-flex items-center gap-2 text-sm text-[color:var(--sem-accent-primary)]">
+                        <Phone className="h-3.5 w-3.5" />
+                        {displayedCustomer.phone}
+                      </a>
+                    ) : null}
+                    <p className="mt-2 flex items-start gap-2 text-xs leading-5 text-[color:var(--sem-text-secondary)]">
+                      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[color:var(--sem-accent-primary)]" />
+                      {formatAddress(
+                        displayedJob.service_address_line_1,
+                        displayedJob.service_address_line_2,
+                        displayedJob.service_city,
+                        displayedJob.service_state_or_region,
+                        displayedJob.service_postal_code,
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
+                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.25em] text-[color:var(--sem-text-muted)]">
+                      <CalendarDays className="h-3.5 w-3.5 text-[color:var(--sem-accent-primary)]" />
+                      Schedule
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-[color:var(--sem-text-primary)]">
+                      {formatDateTime(displayedJob.scheduled_for)}
+                      {displayedJob.scheduled_window ? ` · ${displayedJob.scheduled_window}` : ""}
+                    </p>
+                    <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
+                      {displayedTechnician?.display_name ?? "Unassigned technician"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4 sm:col-span-2">
+                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.25em] text-[color:var(--sem-text-muted)]">
+                      <CircleDollarSign className="h-3.5 w-3.5 text-[color:var(--sem-accent-primary)]" />
+                      Money
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-end gap-4">
+                      <p className="font-[family:var(--font-geist-mono)] text-2xl font-semibold tabular-nums text-[color:var(--sem-display-headline)]">
+                        {formatCurrency(displayedJobMoneyCents)}
+                      </p>
+                      <div className="text-sm text-[color:var(--sem-text-secondary)]">
+                        {displayedQuote ? (
+                          <span>Quote · {formatLifecycleStatus(displayedQuote.status)} · {formatCurrency(displayedQuote.price_cents)}</span>
+                        ) : (
+                          <span>No quote on file</span>
+                        )}
+                        {displayedInvoice ? (
+                          <span className="ml-3">
+                            Invoice · {formatLifecycleStatus(displayedInvoice.status)} · {formatCurrency(displayedInvoice.amount_cents)}
+                          </span>
+                        ) : null}
                       </div>
-                      <span className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.24em] ${statusTone(status)}`}>
-                        {getDashboardStatusLabel(status)}
-                      </span>
                     </div>
+                  </div>
+                </div>
 
-                    <div className="mt-4 space-y-3">
-                      {jobs.map((job) => {
-                        const customer = relationValue(job.customer);
-                        const technician = relationValue(job.technician);
-                        const service = relationValue(job.service);
-                        const googleMapsUrl = buildGoogleMapsSearchUrl(
-                          buildAddressQuery(
-                            job.service_address_line_1,
-                            job.service_address_line_2,
-                            job.service_city,
-                            job.service_state_or_region,
-                            job.service_postal_code,
-                          ),
-                        );
-                        const quickActions = getOfficeQuickStatusActions(job.status).filter((nextStatus) =>
-                          canTransitionJobStatus(job.status, nextStatus),
-                        );
-
-                        return (
-                          <article
-                            key={job.id}
-                            className={`rounded-[22px] border p-4 transition ${selectedJobId === job.id ? "theme-selected-card" : "theme-control-surface"}`}
-                          >
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <p className="text-base font-semibold text-[color:var(--sem-text-primary)]">{job.title}</p>
-                                <p className="mt-1 text-sm text-[color:var(--sem-text-muted)]">
-                                  {formatAddress(
-                                    job.service_address_line_1,
-                                    job.service_address_line_2,
-                                    job.service_city,
-                                    job.service_state_or_region,
-                                    job.service_postal_code,
-                                  )}
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  router.push(`/jobs/${job.id}`);
-                                }}
-                                className="rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-3 py-1.5 text-xs uppercase tracking-[0.2em] text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-hover-surface)] hover:text-[color:var(--sem-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--cmp-focus-ring)]"
-                              >
-                                Open Job
-                              </button>
-                            </div>
-
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                              <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-3">
-                                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-secondary)]">Customer</p>
-                                <p className="mt-2 text-sm text-[color:var(--sem-text-primary)]">{customer?.full_name ?? "Customer pending"}</p>
-                              </div>
-                              <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-3">
-                                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-secondary)]">Service Type</p>
-                                <p className="mt-2 text-sm text-[color:var(--sem-text-primary)]">{service?.name ?? getServiceTypeLabel(job.requested_service_type)}</p>
-                              </div>
-                              <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-3">
-                                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-secondary)]">Scheduled</p>
-                                <p className="mt-2 text-sm text-[color:var(--sem-text-primary)]">{formatDateTime(job.scheduled_for)}{job.scheduled_window ? ` - ${job.scheduled_window}` : ""}</p>
-                              </div>
-                              <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-3">
-                                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-secondary)]">Assigned Technician</p>
-                                <p className="mt-2 text-sm text-[color:var(--sem-text-primary)]">{technician?.display_name ?? "Unassigned"}</p>
-                              </div>
-                              <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-3">
-                                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-secondary)]">Current Status</p>
-                                <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.2em] ${statusTone(job.status)}`}>
-                                  {getJobStatusLabel(job.status)}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="mt-4 flex flex-wrap items-center gap-2">
-                              <a
-                                href={googleMapsUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-2 rounded-full border border-[color:var(--button-secondary-border)] px-3 py-2 text-xs uppercase tracking-[0.18em] text-[color:var(--sem-accent-primary)] transition hover:border-[color:var(--button-secondary-border)] hover:bg-[color:var(--button-secondary-bg)]"
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                                Google Maps
-                              </a>
-                              <span className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-secondary)]">Quick Status</span>
-                              {quickActions.length ? quickActions.map((nextStatus) => {
-                                const actionKey = `queue-status-${job.id}-${nextStatus}`;
-
-                                return (
-                                  <button
-                                    key={nextStatus}
-                                    type="button"
-                                    disabled={Boolean(busyAction)}
-                                    onClick={() => {
-                                      void runAction(
-                                        actionKey,
-                                        async () => {
-                                          await crmApiFetch(`/api/jobs/${job.id}/status`, {
-                                            method: "POST",
-                                            body: JSON.stringify({ status: nextStatus, note: null }),
-                                          });
-                                          await Promise.all([
-                                            refreshDashboard(job.id, selectedLeadId),
-                                            refreshJobDetail(job.id),
-                                          ]);
-                                        },
-                                        `${customer?.full_name ?? "Job"} moved to ${getJobStatusLabel(nextStatus)}.`,
-                                      );
-                                    }}
-                                    className="inline-flex items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-2 text-xs uppercase tracking-[0.18em] text-[color:var(--sem-text-secondary)] transition hover:border-[color:var(--cmp-border-subtle)] hover:text-[color:var(--sem-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    {busyAction === actionKey ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : null}
-                                    {getJobStatusLabel(nextStatus)}
-                                  </button>
-                                );
-                              }) : (
-                                <span className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-2 text-xs uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
-                                  No quick actions
-                                </span>
-                              )}
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  </section>
-                ))}
-                <div className="flex flex-col gap-3 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm text-[color:var(--sem-text-secondary)]">
-                    Showing {queueStartIndex + 1}-{Math.min(queueStartIndex + QUEUE_ITEMS_PER_PAGE, queueJobs.length)} of {queueJobs.length} jobs
+                <div className="mt-4 rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
+                  <p className={flightDeckEyebrowClass}>Service</p>
+                  <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
+                    {displayedService?.name ?? getServiceTypeLabel(displayedJob.requested_service_type)}
                   </p>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={safeQueuePage <= 1}
-                      onClick={() => setQueuePage((current) => Math.max(1, current - 1))}
-                      className="rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-2 text-sm text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-hover-surface)] hover:text-[color:var(--sem-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-                    <span className="text-sm text-[color:var(--sem-text-secondary)]">
-                      Page {safeQueuePage} of {queueTotalPages}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={safeQueuePage >= queueTotalPages}
-                      onClick={() => setQueuePage((current) => Math.min(queueTotalPages, current + 1))}
-                      className="rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-2 text-sm text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-hover-surface)] hover:text-[color:var(--sem-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Next
-                    </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
+                <p className={flightDeckEyebrowClass}>Selected Job</p>
+                <p className="mt-3 text-lg font-semibold text-[color:var(--sem-text-primary)]">Select a job from the queue</p>
+                <p className="mt-2 max-w-sm text-sm text-[color:var(--sem-text-secondary)]">
+                  The focus panel shows customer, next action, schedule, and revenue for the active ticket.
+                </p>
+              </div>
+            )}
+          </section>
+
+          <aside className={`${flightDeckPanelClass} p-5`}>
+            <p className={flightDeckEyebrowClass}>Actions</p>
+            <h2 className="mt-2 text-xl font-semibold text-[color:var(--sem-display-headline)]">Move work forward</h2>
+
+            {displayedJob ? (
+              <div className="mt-4 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => router.push(`/jobs/${displayedJob.id}`)}
+                  className="theme-btn-primary w-full rounded-full px-4 py-2.5 text-sm font-semibold"
+                >
+                  Open Job
+                </button>
+
+                {displayedCustomer?.phone ? (
+                  <a
+                    href={`tel:${displayedCustomer.phone}`}
+                    className="flex w-full items-center justify-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-4 py-2.5 text-sm font-medium text-[color:var(--sem-text-primary)] transition hover:bg-[color:var(--cmp-hover-surface)]"
+                  >
+                    <Phone className="h-4 w-4" />
+                    Call Customer
+                  </a>
+                ) : null}
+
+                {displayedJobGoogleMapsUrl ? (
+                  <a
+                    href={displayedJobGoogleMapsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex w-full items-center justify-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-4 py-2.5 text-sm font-medium text-[color:var(--sem-text-primary)] transition hover:bg-[color:var(--cmp-hover-surface)]"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Google Maps
+                  </a>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => router.push(`/jobs/${displayedJob.id}${buildActionContextQuery()}#quote`)}
+                  className="w-full rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-4 py-2.5 text-sm font-medium text-[color:var(--sem-text-primary)] transition hover:bg-[color:var(--cmp-hover-surface)]"
+                >
+                  {quoteActionLabel}
+                </button>
+
+                {canGenerateInvoice ? (
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/jobs/${displayedJob.id}${buildActionContextQuery()}#invoice`)}
+                    className="w-full rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-4 py-2.5 text-sm font-medium text-[color:var(--sem-text-primary)] transition hover:bg-[color:var(--cmp-hover-surface)]"
+                  >
+                    {invoiceActionLabel}
+                  </button>
+                ) : null}
+
+                <div className="rounded-[20px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] p-4">
+                  <p className={flightDeckEyebrowClass}>Quick Status</p>
+                  <div className="mt-3 grid gap-2">
+                    {selectedQuickActions.length > 0 ? selectedQuickActions.map((nextStatus) => {
+                      const actionKey = `focus-status-${displayedJob.id}-${nextStatus}`;
+
+                      return (
+                        <button
+                          key={nextStatus}
+                          type="button"
+                          disabled={Boolean(busyAction)}
+                          onClick={() => {
+                            void runAction(
+                              actionKey,
+                              async () => {
+                                await crmApiFetch(`/api/jobs/${displayedJob.id}/status`, {
+                                  method: "POST",
+                                  body: JSON.stringify({ status: nextStatus, note: statusNote || null }),
+                                });
+                                await Promise.all([
+                                  refreshDashboard(displayedJob.id, selectedLeadId),
+                                  refreshJobDetail(displayedJob.id),
+                                ]);
+                              },
+                              `${displayedCustomer?.full_name ?? "Job"} moved to ${getJobStatusLabel(nextStatus)}.`,
+                            );
+                          }}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-2 text-sm font-medium text-[color:var(--sem-text-secondary)] transition hover:text-[color:var(--sem-text-primary)] disabled:opacity-60"
+                        >
+                          {busyAction === actionKey ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : null}
+                          {getJobStatusLabel(nextStatus)}
+                        </button>
+                      );
+                    }) : (
+                      <span className="text-sm text-[color:var(--sem-text-muted)]">No quick status moves available.</span>
+                    )}
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="mt-6 rounded-[28px] theme-control-surface-soft border-dashed bg-[color:var(--cmp-surface-panel)] px-5 py-10 text-center text-sm text-[color:var(--sem-text-secondary)]">
-                {queueFilterActive
-                  ? "No jobs match the current technician and date filters."
-                  : "No jobs are active yet. Start in Leads, then convert a lead to create the first service ticket."}
-                {!queueFilterActive ? (
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        router.push("/leads");
-                      }}
-                      className="inline-flex items-center justify-center rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-2 text-sm text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-hover-surface)] hover:text-[color:var(--sem-text-primary)]"
-                    >
-                      Open Leads
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+              <p className="mt-4 text-sm text-[color:var(--sem-text-secondary)]">
+                Select a job to unlock dispatch, customer, and billing actions.
+              </p>
             )}
-          </SectionFrame>
+          </aside>
+        </div>
 
+        <HiddenLegacyKanbanBoard
+          boardColumns={boardColumns}
+          operationalLaneColumns={operationalLaneColumns}
+          selectedJobId={selectedJobId}
+          selectedLeadId={selectedLeadId}
+          onSelectJob={selectJob}
+          onSelectLead={selectLead}
+        />
+
+        <div className="hidden" aria-hidden="true" data-flight-deck-legacy-widgets="true">
+          <ControlWidget
+            icon={FileText}
+            title="Quotes Waiting Approval"
+            items={dashboard?.controls.quotesWaitingApproval ?? []}
+            emptyLabel="No quotes are waiting approval."
+            selectedJobId={selectedJobId}
+            onSelectJob={selectJobFromWidget}
+          />
+          <ControlWidget
+            icon={ShieldCheck}
+            title="Recent Completed Jobs"
+            items={dashboard?.controls.recentCompletedJobs ?? []}
+            emptyLabel="No recent completed jobs are available."
+            selectedJobId={selectedJobId}
+            onSelectJob={selectJobFromWidget}
+          />
+          {groupedJobSections.map(({ status, jobs }) => (
+            <div key={status}>{getDashboardStatusLabel(status)} · {jobs.length}</div>
+          ))}
         </div>
       </div>
-    </main>
+    </BoardShell>
   );
 }
 

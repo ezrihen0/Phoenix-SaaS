@@ -21,6 +21,7 @@ import { PublicBookingsModule } from "./public/public-bookings.module";
 import { SearchModule } from "./search/search.module";
 import { SettingsModule } from "./settings/settings.module";
 import { TelephonyModule } from "./telephony/telephony.module";
+import { WarrantyModule } from "./warranty/warranty.module";
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { TelephonyModule } from "./telephony/telephony.module";
     TelephonyModule,
     AutomationsModule,
     BillingModule,
+    WarrantyModule,
   ],
 })
 export class AppModule implements OnModuleInit {

@@ -9,6 +9,7 @@ import {
   type PersistedInvoiceLineItem,
 } from "@/lib/crm/invoice-line-model";
 import type { JobStatus } from "@/lib/crm/statuses";
+import WarrantyCertificateActions from "./warranty-certificate-actions";
 
 type InvoiceLifecycleStatus = "sent" | "partial" | "paid" | "refunded" | "overpaid";
 
@@ -140,25 +141,32 @@ export default async function WarrantyCertificatePage({
 
           <div className="mt-6">
             {certificateAvailable ? (
-              <WarrantyCertificatePreview
-                certificateNumber={`WAR-${invoice.id.slice(0, 8).toUpperCase()}`}
-                invoiceNumber={invoice.document_number}
-                issuedAt={invoice.issued_at}
-                paidAt={invoice.paid_at}
-                customerName={invoice.customer?.full_name ?? invoice.customer_name}
-                customerCompanyName={invoice.customer?.company_name ?? null}
-                customerEmail={invoice.customer?.email ?? null}
-                customerPhone={invoice.customer?.phone ?? null}
-                customerAddressLines={[
-                  invoice.customer?.service_address_line_1 ?? "",
-                  invoice.customer?.service_address_line_2 ?? "",
-                  [invoice.customer?.service_city, invoice.customer?.service_state_or_region].filter(Boolean).join(", ")
-                    + (invoice.customer?.service_postal_code ? ` ${invoice.customer.service_postal_code}` : ""),
-                ].map((line) => line.trim()).filter(Boolean)}
-                jobTitle={invoice.job?.title ?? invoice.job_title}
-                companySettings={companySettings}
-                lineItems={invoice.line_items ?? []}
-              />
+              <div className="space-y-5">
+                <WarrantyCertificateActions
+                  invoiceId={invoice.id}
+                  customerId={invoice.customer?.id ?? null}
+                  disabled={!certificateAvailable}
+                />
+                <WarrantyCertificatePreview
+                  certificateNumber={`WAR-${invoice.id.slice(0, 8).toUpperCase()}`}
+                  invoiceNumber={invoice.document_number}
+                  issuedAt={invoice.issued_at}
+                  paidAt={invoice.paid_at}
+                  customerName={invoice.customer?.full_name ?? invoice.customer_name}
+                  customerCompanyName={invoice.customer?.company_name ?? null}
+                  customerEmail={invoice.customer?.email ?? null}
+                  customerPhone={invoice.customer?.phone ?? null}
+                  customerAddressLines={[
+                    invoice.customer?.service_address_line_1 ?? "",
+                    invoice.customer?.service_address_line_2 ?? "",
+                    [invoice.customer?.service_city, invoice.customer?.service_state_or_region].filter(Boolean).join(", ")
+                      + (invoice.customer?.service_postal_code ? ` ${invoice.customer.service_postal_code}` : ""),
+                  ].map((line) => line.trim()).filter(Boolean)}
+                  jobTitle={invoice.job?.title ?? invoice.job_title}
+                  companySettings={companySettings}
+                  lineItems={invoice.line_items ?? []}
+                />
+              </div>
             ) : (
               <section className="rounded-[32px] border border-amber-200 bg-amber-50 px-6 py-8 text-amber-950 shadow-[0_24px_80px_rgba(120,53,15,0.08)]">
                 <div className="flex items-center gap-3">

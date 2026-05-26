@@ -73,6 +73,7 @@ import { TranslationUsageLedgerEntity } from "./entities/translation-usage-ledge
 import { UserEntity } from "./entities/user.entity";
 import { UserOrganizationLanguagePreferenceEntity } from "./entities/user-organization-language-preference.entity";
 import { VoiceFlowEntity } from "./entities/voice-flow.entity";
+import { WarrantyCertificateEntity } from "./entities/warranty-certificate.entity";
 
 type ConfigLookup = Pick<ConfigService, "get">;
 
@@ -144,6 +145,7 @@ export const typeOrmEntities = [
   VoiceFlowEntity,
   TxtConversationEntity,
   TxtMessageEntity,
+  WarrantyCertificateEntity,
 ];
 
 function readBooleanFlag(value: string | undefined, fallback: boolean) {

@@ -42,6 +42,7 @@ type InvoiceDetailRecord = {
   lifecycle_status: InvoiceLifecycleStatus;
   status: "unpaid" | "paid";
   issued_at: string;
+  due_at?: string | null;
   paid_at: string | null;
   approval_requested_at?: string | null;
   approved_at?: string | null;
@@ -72,6 +73,10 @@ type InvoiceDetailRecord = {
     service_state_or_region: string | null;
     service_postal_code: string;
     notes: string | null;
+  } | null;
+  organization?: {
+    business_name: string | null;
+    company_email: string | null;
   } | null;
 };
 
@@ -193,13 +198,14 @@ export default async function InvoiceDetailPage({
                 document_number: invoice.document_number,
                 total_cents: invoice.total_cents,
                 issued_at: invoice.issued_at,
+                due_at: invoice.due_at ?? null,
                 signature_requested: invoice.signature_requested,
                 customer: invoice.customer
                   ? { full_name: invoice.customer.full_name, email: invoice.customer.email }
                   : null,
               }}
-              organizationEmail={invoice.customer?.email ?? null}
-              businessName={null}
+              businessName={invoice.organization?.business_name ?? null}
+              organizationEmail={invoice.organization?.company_email ?? null}
               hasInvoiceLineItems={(invoice.line_items?.length ?? 0) > 0}
             />
           </div>

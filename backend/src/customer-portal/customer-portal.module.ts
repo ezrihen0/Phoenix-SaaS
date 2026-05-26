@@ -10,6 +10,7 @@ import { PortalMagicLinkEntity } from "../database/entities/portal-magic-link.en
 import { PortalSessionEntity } from "../database/entities/portal-session.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
+import { WarrantyCertificateEntity } from "../database/entities/warranty-certificate.entity";
 import { CustomerPortalAuthController } from "./customer-portal.auth.controller";
 import { CustomerPortalReadController } from "./customer-portal.read.controller";
 import { CustomerPortalStaffController } from "./customer-portal.staff.controller";
@@ -28,6 +29,7 @@ import { PortalSessionGuard } from "./portal-session.guard";
       PortalMagicLinkEntity,
       PortalSessionEntity,
       PortalAccessEventEntity,
+      WarrantyCertificateEntity,
     ]),
   ],
   controllers: [CustomerPortalAuthController, CustomerPortalReadController, CustomerPortalStaffController],

@@ -21,7 +21,6 @@ import {
   Search,
   Settings,
   ShieldCheck,
-  Truck,
   Users,
   Workflow,
 } from "lucide-react";
@@ -142,7 +141,6 @@ export function AppShell({ children }: AppShellProps) {
     { href: "/home", label: t("shell.nav.home"), icon: House },
     { href: "/jobs", label: t("shell.nav.jobs"), icon: BriefcaseBusiness },
     { href: "/schedule", label: t("shell.nav.schedule"), icon: CalendarDays },
-    { href: "/dispatch", label: t("shell.nav.dispatch"), icon: Truck },
     { href: "/customers", label: t("shell.nav.customers"), icon: Users },
     { href: "/leads", label: t("shell.nav.leads"), icon: ClipboardList },
     { href: "/inventory", label: t("shell.nav.inventory"), icon: Boxes },
@@ -264,7 +262,7 @@ export function AppShell({ children }: AppShellProps) {
       <div className="flex min-h-screen bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
         <aside
           className={[
-            "sticky top-0 flex h-screen shrink-0 flex-col gap-4 border-r border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/95 px-3 py-4 backdrop-blur-xl transition-[width] duration-200",
+            "sticky top-0 flex h-screen shrink-0 flex-col gap-4 border-r border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/90 px-3 py-4 shadow-[inset_-1px_0_0_color-mix(in_srgb,var(--sem-accent-primary)_16%,transparent)] backdrop-blur-xl transition-[width] duration-200",
             collapsed ? "w-20" : "w-72",
           ].join(" ")}
         >
@@ -329,7 +327,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-40 px-4 py-4 sm:px-6 lg:px-8">
             <div className="mx-auto flex max-w-[1600px] items-start justify-between gap-4">
-              <div className="inline-flex h-[4.25rem] w-[min(58vw,16rem)] shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-1 shadow-[0_18px_45px_rgba(15,23,42,0.18)] ring-1 ring-white/5 backdrop-blur-xl sm:h-[4.75rem] sm:w-[17.8125rem] lg:w-[17.8125rem]">
+              <div className="inline-flex h-[4.25rem] w-[min(58vw,16rem)] shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)] p-1 shadow-[0_0_24px_color-mix(in_srgb,var(--sem-accent-primary)_14%,transparent),0_18px_45px_color-mix(in_srgb,var(--bg-canvas)_72%,transparent)] ring-1 ring-[color:var(--sem-board-border)] backdrop-blur-xl sm:h-[4.75rem] sm:w-[17.8125rem] lg:w-[17.8125rem]">
                 <img
                   src="/wizfield-logo.svg"
                   alt="WizField logo"
@@ -338,7 +336,7 @@ export function AppShell({ children }: AppShellProps) {
               </div>
 
               <div ref={searchPopoverRef} className="relative flex min-h-[76px] flex-1 items-center justify-end">
-                <div className="theme-surface-modal flex flex-wrap items-center justify-end gap-3 rounded-[30px] border bg-[color:var(--cmp-surface-panel)]/95 px-3 py-3 shadow-[0_20px_65px_color-mix(in_srgb,var(--bg-canvas)_56%,transparent)] backdrop-blur-xl">
+                <div className="theme-surface-modal flex flex-wrap items-center justify-end gap-3 rounded-[30px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)]/92 px-3 py-3 shadow-[0_0_28px_color-mix(in_srgb,var(--sem-board-glow)_70%,transparent),0_20px_65px_color-mix(in_srgb,var(--bg-canvas)_56%,transparent)] backdrop-blur-xl">
                   <OrganizationSwitcher />
                   <LanguageSwitcher variant="shell" />
                   <div className="theme-control-surface-soft flex items-center gap-3 rounded-full border px-3 py-2">

@@ -69,6 +69,27 @@ export class OrganizationSettingEntity {
   @Column({ type: "varchar", length: 255, nullable: true })
   invoice_pdf_footer!: string | null;
 
+  @Column({ type: "varchar", length: 1024, nullable: true })
+  logo_url!: string | null;
+
+  @Column({ type: "varchar", length: 16, nullable: true })
+  accent_color!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  payment_instructions!: string | null;
+
+  @Column({ type: "varchar", length: 128, nullable: true })
+  business_license!: string | null;
+
+  @Column({ type: "varchar", length: 128, nullable: true })
+  gst_number!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  warranty_message!: string | null;
+
+  @Column({ type: "int", nullable: true })
+  default_due_days!: number | null;
+
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;
 

@@ -20,6 +20,13 @@ type OrganizationSettingsPayload = {
   invoiceEmailBody?: unknown;
   invoiceSmsBody?: unknown;
   invoicePdfFooter?: unknown;
+  logoUrl?: unknown;
+  accentColor?: unknown;
+  paymentInstructions?: unknown;
+  businessLicense?: unknown;
+  gstNumber?: unknown;
+  warrantyMessage?: unknown;
+  defaultDueDays?: unknown;
 };
 
 function readNullableString(value: unknown, fieldName: string, maxLength: number) {
@@ -52,6 +59,31 @@ function readOptionalNullableString(value: unknown, fieldName: string, maxLength
   return readNullableString(value, fieldName, maxLength);
 }
 
+function readOptionalNullableInteger(
+  value: unknown,
+  fieldName: string,
+  minimum: number,
+  maximum: number,
+) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    apiError(400, "organization_settings_invalid", `${fieldName} must be an integer or null.`);
+  }
+
+  if (value < minimum || value > maximum) {
+    apiError(400, "organization_settings_invalid", `${fieldName} must be between ${minimum} and ${maximum}.`);
+  }
+
+  return value;
+}
+
 function parseOrganizationSettingsPayload(payload: OrganizationSettingsPayload) {
   return {
     businessName: readNullableString(payload.businessName, "Company name", 255),
@@ -67,6 +99,13 @@ function parseOrganizationSettingsPayload(payload: OrganizationSettingsPayload) 
     invoiceEmailBody: readOptionalNullableString(payload.invoiceEmailBody, "Invoice email body", 5000),
     invoiceSmsBody: readOptionalNullableString(payload.invoiceSmsBody, "Invoice SMS body", 480),
     invoicePdfFooter: readOptionalNullableString(payload.invoicePdfFooter, "Invoice PDF footer", 255),
+    logoUrl: readOptionalNullableString(payload.logoUrl, "Logo URL", 1024),
+    accentColor: readOptionalNullableString(payload.accentColor, "Accent color", 16),
+    paymentInstructions: readOptionalNullableString(payload.paymentInstructions, "Payment instructions", 5000),
+    businessLicense: readOptionalNullableString(payload.businessLicense, "Business license", 128),
+    gstNumber: readOptionalNullableString(payload.gstNumber, "GST number", 128),
+    warrantyMessage: readOptionalNullableString(payload.warrantyMessage, "Warranty message", 5000),
+    defaultDueDays: readOptionalNullableInteger(payload.defaultDueDays, "Default due days", 0, 365),
   };
 }
 

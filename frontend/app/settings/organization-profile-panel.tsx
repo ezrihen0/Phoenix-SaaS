@@ -18,6 +18,13 @@ export type OrganizationSettings = {
   website: string | null;
   companyEmail: string | null;
   phone: string | null;
+  logoUrl?: string | null;
+  accentColor?: string | null;
+  paymentInstructions?: string | null;
+  businessLicense?: string | null;
+  gstNumber?: string | null;
+  warrantyMessage?: string | null;
+  defaultDueDays?: number | null;
   taxRateBps: number;
 };
 
@@ -69,6 +76,15 @@ export function OrganizationProfilePanel({
   const [phone, setPhone] = useState(valueOrEmpty(initialSettings.phone));
   const [companyEmail, setCompanyEmail] = useState(valueOrEmpty(initialSettings.companyEmail));
   const [website, setWebsite] = useState(valueOrEmpty(initialSettings.website));
+  const [logoUrl, setLogoUrl] = useState(valueOrEmpty(initialSettings.logoUrl ?? null));
+  const [accentColor, setAccentColor] = useState(valueOrEmpty(initialSettings.accentColor ?? null));
+  const [paymentInstructions, setPaymentInstructions] = useState(valueOrEmpty(initialSettings.paymentInstructions ?? null));
+  const [businessLicense, setBusinessLicense] = useState(valueOrEmpty(initialSettings.businessLicense ?? null));
+  const [gstNumber, setGstNumber] = useState(valueOrEmpty(initialSettings.gstNumber ?? null));
+  const [warrantyMessage, setWarrantyMessage] = useState(valueOrEmpty(initialSettings.warrantyMessage ?? null));
+  const [defaultDueDays, setDefaultDueDays] = useState(
+    typeof initialSettings.defaultDueDays === "number" ? String(initialSettings.defaultDueDays) : "",
+  );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -92,6 +108,13 @@ export function OrganizationProfilePanel({
           phone,
           companyEmail,
           website,
+          logoUrl,
+          accentColor,
+          paymentInstructions,
+          businessLicense,
+          gstNumber,
+          warrantyMessage,
+          defaultDueDays: defaultDueDays.trim() ? Number(defaultDueDays) : null,
         }),
       });
 
@@ -100,6 +123,13 @@ export function OrganizationProfilePanel({
       setPhone(valueOrEmpty(settings.phone));
       setCompanyEmail(valueOrEmpty(settings.companyEmail));
       setWebsite(valueOrEmpty(settings.website));
+      setLogoUrl(valueOrEmpty(settings.logoUrl ?? null));
+      setAccentColor(valueOrEmpty(settings.accentColor ?? null));
+      setPaymentInstructions(valueOrEmpty(settings.paymentInstructions ?? null));
+      setBusinessLicense(valueOrEmpty(settings.businessLicense ?? null));
+      setGstNumber(valueOrEmpty(settings.gstNumber ?? null));
+      setWarrantyMessage(valueOrEmpty(settings.warrantyMessage ?? null));
+      setDefaultDueDays(typeof settings.defaultDueDays === "number" ? String(settings.defaultDueDays) : "");
       setMessage("Business profile saved. Invoices and estimates will use this header.");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "The organization profile could not be saved.");
@@ -195,6 +225,80 @@ export function OrganizationProfilePanel({
             onChange={(event) => setWebsite(event.target.value)}
             className="theme-control-surface w-full rounded-[16px] border px-4 py-3 text-[color:var(--sem-text-primary)] outline-none"
             placeholder="https://example.com"
+          />
+        </label>
+
+        <label className="space-y-2 text-sm lg:col-span-2">
+          <span className="text-[color:var(--sem-text-secondary)]">Logo URL</span>
+          <input
+            value={logoUrl}
+            onChange={(event) => setLogoUrl(event.target.value)}
+            className="theme-control-surface w-full rounded-[16px] border px-4 py-3 text-[color:var(--sem-text-primary)] outline-none"
+            placeholder="https://cdn.example.com/logo.png"
+          />
+        </label>
+
+        <label className="space-y-2 text-sm">
+          <span className="text-[color:var(--sem-text-secondary)]">Accent color</span>
+          <input
+            value={accentColor}
+            onChange={(event) => setAccentColor(event.target.value)}
+            className="theme-control-surface w-full rounded-[16px] border px-4 py-3 text-[color:var(--sem-text-primary)] outline-none"
+            placeholder="#1F6AA5"
+            maxLength={16}
+          />
+        </label>
+
+        <label className="space-y-2 text-sm">
+          <span className="text-[color:var(--sem-text-secondary)]">Default due days</span>
+          <input
+            value={defaultDueDays}
+            onChange={(event) => setDefaultDueDays(event.target.value.replace(/[^0-9]/g, ""))}
+            className="theme-control-surface w-full rounded-[16px] border px-4 py-3 text-[color:var(--sem-text-primary)] outline-none"
+            placeholder="30"
+            inputMode="numeric"
+          />
+        </label>
+
+        <label className="space-y-2 text-sm">
+          <span className="text-[color:var(--sem-text-secondary)]">Business license</span>
+          <input
+            value={businessLicense}
+            onChange={(event) => setBusinessLicense(event.target.value)}
+            className="theme-control-surface w-full rounded-[16px] border px-4 py-3 text-[color:var(--sem-text-primary)] outline-none"
+            placeholder="LIC-12345"
+          />
+        </label>
+
+        <label className="space-y-2 text-sm">
+          <span className="text-[color:var(--sem-text-secondary)]">GST / Tax number</span>
+          <input
+            value={gstNumber}
+            onChange={(event) => setGstNumber(event.target.value)}
+            className="theme-control-surface w-full rounded-[16px] border px-4 py-3 text-[color:var(--sem-text-primary)] outline-none"
+            placeholder="GST-98765"
+          />
+        </label>
+
+        <label className="space-y-2 text-sm lg:col-span-2">
+          <span className="text-[color:var(--sem-text-secondary)]">Payment instructions</span>
+          <textarea
+            value={paymentInstructions}
+            onChange={(event) => setPaymentInstructions(event.target.value)}
+            className="theme-control-surface w-full rounded-[16px] border px-4 py-3 text-[color:var(--sem-text-primary)] outline-none"
+            placeholder="Please pay by e-transfer to billing@example.com within 30 days."
+            rows={3}
+          />
+        </label>
+
+        <label className="space-y-2 text-sm lg:col-span-2">
+          <span className="text-[color:var(--sem-text-secondary)]">Warranty message</span>
+          <textarea
+            value={warrantyMessage}
+            onChange={(event) => setWarrantyMessage(event.target.value)}
+            className="theme-control-surface w-full rounded-[16px] border px-4 py-3 text-[color:var(--sem-text-primary)] outline-none"
+            placeholder="Workmanship is covered for 12 months from the service date."
+            rows={3}
           />
         </label>
 

@@ -56,6 +56,9 @@ export class InvoiceEntity {
   issued_at!: Date;
 
   @Column({ type: "datetime", precision: 6, nullable: true })
+  due_at!: Date | null;
+
+  @Column({ type: "datetime", precision: 6, nullable: true })
   paid_at!: Date | null;
 
   @Column({ type: "datetime", precision: 6, nullable: true })
@@ -84,6 +87,9 @@ export class InvoiceEntity {
 
   @Column({ type: "varchar", length: 16, nullable: true })
   last_sent_via!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  branding_snapshot_json!: string | null;
 
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;

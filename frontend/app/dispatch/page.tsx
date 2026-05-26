@@ -1,37 +1,13 @@
-import type { DispatchJobRecord, DispatchTechnicianRecord } from "@/lib/crm/dispatch";
-import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
-import { serverApiFetch } from "@/lib/api/server-fetch";
-import { getTranslations } from "next-intl/server";
+import { redirect } from "next/navigation";
 
-import DispatchWorkspace from "./dispatch-workspace";
+import { DISPATCH_ROUTE_ENABLED } from "@/lib/navigation/shell-nav-policy";
+
+import DispatchPageContent from "./dispatch-page-content";
 
 export default async function DispatchPage() {
-  const t = await getTranslations("dispatch");
-  await requireOfficeCrmRoute("/dispatch");
-
-  let initialJobs: DispatchJobRecord[] = [];
-  let technicians: DispatchTechnicianRecord[] = [];
-  let initialErrorMessage: string | null = null;
-
-  try {
-    const [jobsResponse, techniciansResponse] = await Promise.all([
-      serverApiFetch<DispatchJobRecord[]>("/api/jobs"),
-      serverApiFetch<DispatchTechnicianRecord[]>("/api/technicians"),
-    ]);
-
-    initialJobs = jobsResponse;
-    technicians = techniciansResponse;
-  } catch (error) {
-    initialErrorMessage = error instanceof Error
-      ? error.message
-      : t("refreshError");
+  if (!DISPATCH_ROUTE_ENABLED) {
+    redirect("/jobs");
   }
 
-  return (
-    <DispatchWorkspace
-      initialJobs={initialJobs}
-      technicians={technicians}
-      initialErrorMessage={initialErrorMessage}
-    />
-  );
+  return <DispatchPageContent />;
 }
