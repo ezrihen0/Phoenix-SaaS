@@ -1,5 +1,7 @@
 import { getTranslations } from "next-intl/server";
 
+import { Suspense } from "react";
+
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerSession } from "@/lib/auth/server-session";
 import type { SessionRole } from "@/lib/auth/server-session";
@@ -33,11 +35,26 @@ const defaultOrganizationSettings: OrganizationSettings = {
   website: null,
   companyEmail: null,
   phone: null,
+  logoUrl: null,
+  accentColor: null,
+  paymentInstructions: null,
+  businessLicense: null,
+  gstNumber: null,
+  warrantyMessage: null,
+  defaultDueDays: null,
   taxRateBps: 0,
 };
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ topic?: string | string[] }>;
+}) {
   const session = await requireServerSession("/settings");
+  const resolvedSearchParams = await searchParams;
+  const topicValue = Array.isArray(resolvedSearchParams.topic)
+    ? resolvedSearchParams.topic[0]
+    : resolvedSearchParams.topic;
   const t = await getTranslations("settings");
   const role = session.profile?.role ?? "technician";
   const ownerMode = role === "owner" && Boolean(session.profile?.id);
@@ -72,7 +89,8 @@ export default async function SettingsPage() {
 
   return (
     <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
-      <SettingsWorkspace
+      <Suspense fallback={<div className="mx-auto max-w-6xl text-sm text-[color:var(--sem-text-secondary)]">{t("loading")}</div>}>
+        <SettingsWorkspace
         role={role}
         ownerMode={ownerMode}
         currentProfileId={session.profile?.id ?? null}
@@ -81,7 +99,17 @@ export default async function SettingsPage() {
         organizationSettings={organizationSettings}
         billingSummary={billingSummary}
         billingLoadError={billingLoadError}
-      />
+        initialTopic={
+          topicValue === "business"
+            || topicValue === "profile"
+            || topicValue === "appearance"
+            || topicValue === "roles"
+            || topicValue === "billing"
+            ? topicValue
+            : null
+        }
+        />
+      </Suspense>
     </main>
   );
 }

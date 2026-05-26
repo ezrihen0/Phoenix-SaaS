@@ -74,7 +74,7 @@ export default async function PricingPage({ searchParams }: PricingPageContext) 
         <p className="mt-3 text-sm leading-7 text-white/65">
           {activationMode
             ? "Choose a plan and complete Stripe Checkout to activate this workspace. If checkout is interrupted, return here and continue from the same activation page."
-            : "Trial length, discounts, and rollout terms still need owner-level commercial confirmation. This page now reflects the real technical checkout model and current shared-business entitlement behavior without inventing a public contract that the product does not yet enforce elsewhere."}
+            : "Choose a plan and complete Stripe Checkout to activate this workspace. Activation usually completes within a minute after payment via verified webhook sync."}
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           {activationMode ? null : (

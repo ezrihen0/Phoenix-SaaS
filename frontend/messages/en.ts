@@ -27,6 +27,7 @@ const messages = {
     settingsAria: "Settings",
     expandQuickNavigation: "Expand quick navigation",
     collapseQuickNavigation: "Collapse quick navigation",
+    activationLocked: "Complete subscription activation to unlock CRM modules. Settings and billing remain available.",
     nav: {
       home: "Home",
       jobs: "Jobs",
@@ -91,6 +92,14 @@ const messages = {
     quickLinksDescription: "Open the module behind each snapshot metric without hunting the sidebar.",
     firstSessionTip: "First session tip: Start in Leads to capture your first lead, then continue to Jobs, Estimate, and Invoice.",
     tapToExpand: "Tap to expand",
+    commandFloorEyebrow: "Owner command floor",
+    intelligenceEyebrow: "Intelligence briefing",
+    intelligenceUnavailable: "Live briefing is temporarily unavailable. Your KPI tiles and command zones below remain active.",
+    zones: {
+      revenue: "Revenue",
+      operations: "Operations",
+      communications: "Communications",
+    },
     summary: {
       newLeads: {
         label: "New Leads",
@@ -181,6 +190,9 @@ const messages = {
     totalLinkedJobs: "{count} total linked job{count, plural, one {} other {s}}",
     noCustomerNotes: "No customer notes yet.",
     createFromJobWorkflow: "Create a customer from the job workflow to populate this workspace.",
+    searchLabel: "Search ledger",
+    searchPlaceholder: "Name, phone, email, or address",
+    searchAction: "Search",
     openJobsFooter: "{count} customers currently have open jobs.",
     columns: {
       actions: "Actions",
@@ -194,8 +206,9 @@ const messages = {
   },
   settings: {
     title: "Workspace control center",
-    description: "Choose a settings cube below. Each topic stays closed until you open it.",
+    description: "Choose a topic from the left rail. Each panel opens with a deep link you can bookmark.",
     label: "Settings",
+    loading: "Loading settings...",
     currentRole: "Current Role",
     ownerTools: "Owner Tools",
     enabled: "Enabled",

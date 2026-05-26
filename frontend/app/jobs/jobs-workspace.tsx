@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
+import { MetricTile } from "@/components/board/metric-tile";
+import { SectionFrame } from "@/components/board/section-frame";
 import { buildAddressQuery, buildGoogleMapsSearchUrl } from "@/lib/crm/display";
 import {
   canTransitionJobStatus,
@@ -433,46 +435,6 @@ function FieldSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
       {...props}
       className={`w-full rounded-[18px] theme-control-surface px-4 py-3 text-sm text-[color:var(--sem-text-primary)] outline-none transition  ${props.className ?? ""}`}
     />
-  );
-}
-
-function SectionFrame({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5 sm:p-6">
-      <p className="text-[11px] uppercase tracking-[0.38em] text-[color:var(--sem-text-muted)]">{subtitle}</p>
-      <h2 className="mt-3 font-[family:var(--font-flat-display)] text-3xl tracking-tight text-[color:var(--sem-text-primary)]">
-        {title}
-      </h2>
-      <div className="mt-5">{children}</div>
-    </section>
-  );
-}
-
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Flame;
-  label: string;
-  value: number;
-}) {
-  return (
-    <article className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-4">
-      <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl theme-control-surface-soft text-[color:var(--sem-accent-primary)]">
-        <Icon className="h-4 w-4" />
-      </span>
-      <p className="mt-4 text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--sem-text-primary)]">{value}</p>
-    </article>
   );
 }
 
@@ -898,17 +860,17 @@ export default function JobsWorkspace() {
       <div className="relative mx-auto max-w-[1600px] px-5 py-7 lg:px-8">
         <header className="theme-surface-modal rounded-[34px] p-6 sm:p-7">
           <div>
-            <h1 className="max-w-4xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[color:var(--sem-text-primary)] sm:text-6xl">
+            <h1 className="max-w-4xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[color:var(--sem-display-headline)] sm:text-6xl">
               Office board for lead intake, dispatch, estimates, and payment follow-through.
             </h1>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <MetricCard icon={Flame} label="New Leads" value={dashboard?.summary.newLeads ?? 0} />
-            <MetricCard icon={Sparkles} label="Contacted Leads" value={dashboard?.summary.contactedLeads ?? 0} />
-            <MetricCard icon={Hammer} label="Active Jobs" value={dashboard?.summary.activeJobs ?? 0} />
-            <MetricCard icon={CalendarDays} label="Scheduled Today" value={dashboard?.summary.jobsScheduledToday ?? 0} />
-            <MetricCard icon={Receipt} label="Unpaid Invoices" value={dashboard?.summary.unpaidInvoices ?? 0} />
+            <MetricTile icon={Flame} label="New Leads" value={dashboard?.summary.newLeads ?? 0} />
+            <MetricTile icon={Sparkles} label="Contacted Leads" value={dashboard?.summary.contactedLeads ?? 0} />
+            <MetricTile icon={Hammer} label="Active Jobs" value={dashboard?.summary.activeJobs ?? 0} />
+            <MetricTile icon={CalendarDays} label="Scheduled Today" value={dashboard?.summary.jobsScheduledToday ?? 0} />
+            <MetricTile icon={Receipt} label="Unpaid Invoices" value={dashboard?.summary.unpaidInvoices ?? 0} />
           </div>
         </header>
 

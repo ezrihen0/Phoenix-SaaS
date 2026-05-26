@@ -29,6 +29,7 @@ type CustomersPageContext = {
   searchParams: Promise<{
     page?: SearchParam;
     pageSize?: SearchParam;
+    q?: SearchParam;
   }>;
 };
 
@@ -124,6 +125,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
   const resolvedSearchParams = await searchParams;
   const pageValue = Number.parseInt((firstValue(resolvedSearchParams.page) ?? "1").trim(), 10);
   const pageSizeValue = Number.parseInt((firstValue(resolvedSearchParams.pageSize) ?? "10").trim(), 10);
+  const query = (firstValue(resolvedSearchParams.q) ?? "").trim().toLowerCase();
   const page = Number.isFinite(pageValue) && pageValue > 0 ? pageValue : 1;
   const pageSize = Number.isFinite(pageSizeValue) && [10, 25, 50, 100].includes(pageSizeValue) ? pageSizeValue : 10;
 
@@ -138,18 +140,36 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
     loadError = error instanceof Error ? error.message : t("listUnavailable");
   }
 
-  const activeCustomerCount = customers.filter((customer) => customer.relatedJobs.some((job) => openJobStatuses.includes(job.status))).length;
-  const totalCount = customers.length;
+  const filteredCustomers = customers.filter((customer) => {
+    if (!query) {
+      return true;
+    }
+
+    const haystack = [
+      customer.full_name,
+      customer.phone,
+      customer.email ?? "",
+      customer.service_address_line_1,
+      customer.service_city,
+    ].join(" ").toLowerCase();
+
+    return haystack.includes(query);
+  });
+
+  const activeCustomerCount = filteredCustomers.filter((customer) => customer.relatedJobs.some((job) => openJobStatuses.includes(job.status))).length;
+  const totalCount = filteredCustomers.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedCustomers = customers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const pagedCustomers = filteredCustomers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const previousPageHref = buildQueryString({
     page: String(Math.max(1, currentPage - 1)),
     pageSize: String(pageSize),
+    q: query || null,
   });
   const nextPageHref = buildQueryString({
     page: String(Math.min(totalPages, currentPage + 1)),
     pageSize: String(pageSize),
+    q: query || null,
   });
   const tableState: MasterTableState = loadError
     ? { status: "error", message: t("listUnavailable") }
@@ -229,7 +249,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                         <UserRound className="h-4 w-4" />
                       </div>
                     </div>
-                    <p className="mt-5 text-4xl font-semibold leading-none text-[color:var(--sem-text-primary)]">{customers.length}</p>
+                    <p className="mt-5 text-4xl font-semibold leading-none text-[color:var(--sem-text-primary)]">{totalCount}</p>
                     <p className="mt-3 text-sm text-[color:var(--sem-text-secondary)]">{t("totalCustomersHelper")}</p>
                   </div>
                 </div>
@@ -268,6 +288,33 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                   </div>
                 </div>
               </div>
+
+              <section className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
+                <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]" method="GET">
+                  <label className="space-y-2">
+                    <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">{t("searchLabel")}</span>
+                    <input
+                      name="q"
+                      defaultValue={query}
+                      placeholder={t("searchPlaceholder")}
+                      className="theme-input-control w-full rounded-[18px] px-4 py-3 text-sm outline-none"
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">Page size</span>
+                    <select name="pageSize" defaultValue={String(pageSize)} className="theme-input-control w-full rounded-[18px] px-4 py-3 text-sm outline-none">
+                      {[10, 25, 50, 100].map((size) => (
+                        <option key={size} value={size}>{size}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="flex items-end">
+                    <button type="submit" className="theme-btn-secondary inline-flex w-full items-center justify-center rounded-full px-5 py-3 text-sm">
+                      {t("searchAction")}
+                    </button>
+                  </div>
+                </form>
+              </section>
 
               {loadError ? (
                 <div className="theme-alert-error rounded-[24px] border px-5 py-4 text-sm shadow-sm">

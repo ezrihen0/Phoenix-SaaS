@@ -40,6 +40,15 @@ export default async function MessagingConversationPage({ params }: MessagingCon
     redirect("/messaging");
   }
 
+  let organizationDisplayName = "Your company";
+
+  try {
+    const settings = await serverApiFetch<{ businessName?: string | null }>("/api/settings/organization");
+    organizationDisplayName = settings.businessName?.trim() || organizationDisplayName;
+  } catch {
+    organizationDisplayName = session.active_organization?.name?.trim() || organizationDisplayName;
+  }
+
   return (
     <main className="min-h-screen bg-[color:var(--flat-canvas)] text-[color:var(--text-primary)]">
       <div className="mx-auto max-w-[1400px] px-6 py-12 lg:px-10">
@@ -48,6 +57,7 @@ export default async function MessagingConversationPage({ params }: MessagingCon
           initialLane={initialConversation.lane}
           initialCustomerId={initialConversation.customerId}
           initialPhoneKey={initialConversation.phoneKey}
+          organizationDisplayName={organizationDisplayName}
         />
       </div>
     </main>

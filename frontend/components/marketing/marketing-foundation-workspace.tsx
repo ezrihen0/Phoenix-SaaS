@@ -134,7 +134,7 @@ const routeDefinitions: RouteDefinition[] = [
     key: "opportunities",
     href: "/marketing/opportunities",
     label: "Opportunities",
-    eyebrow: "CRM Intelligence",
+    eyebrow: "Growth Intelligence",
     title: "Operational signals → marketing drafts",
     description:
       "WizField scans recent jobs and inspection photo types (no media URLs surfaced) to suggest opportunities. Owners, admins, and office admins refresh, dismiss, archive, or convert to Content Studio drafts — dispatchers read only.",
@@ -382,13 +382,14 @@ export function MarketingFoundationWorkspace({
   ];
   const suppressEducationalRails = interactiveRoutes.includes(activeRouteKey);
   const showPrimaryRail = activeRouteKey === "overview" || suppressEducationalRails;
+  const compactSubRoute = activeRouteKey !== "overview";
 
   const programV1Complete = isGrowthCenterProgramV1Complete(foundationData?.phase);
 
   const phaseLabel = programV1Complete
     ? "Growth Center · Program V1 (Phases 1–7)"
     : foundationData?.phase === "phase_4_crm_intelligence"
-      ? "Phase roll-out · CRM Intelligence Layer"
+      ? "Phase roll-out · Growth Intelligence Layer"
       : foundationData?.phase === "phase_3_publishing_integrations"
         ? "Phase roll-out · Publishing integrations"
         : foundationData?.phase === "phase_2_content_studio"
@@ -397,7 +398,7 @@ export function MarketingFoundationWorkspace({
   const heroEyebrow = programV1Complete
     ? "Growth Center · Program complete"
     : foundationData?.phase === "phase_4_crm_intelligence"
-      ? "CRM Intelligence online"
+      ? "Growth Intelligence online"
       : foundationData?.phase === "phase_3_publishing_integrations"
         ? "Publishing integrations online"
         : foundationData?.phase === "phase_2_content_studio"
@@ -640,6 +641,7 @@ export function MarketingFoundationWorkspace({
   return (
     <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
       <div className="mx-auto max-w-7xl space-y-6">
+        {!compactSubRoute ? (
         <section className="theme-surface-modal overflow-hidden rounded-[34px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-7 sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-4xl">
@@ -670,12 +672,25 @@ export function MarketingFoundationWorkspace({
             </div>
           ) : null}
         </section>
+        ) : (
+          <section className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Growth Center</p>
+                <h1 className="mt-1 text-2xl font-semibold text-[color:var(--sem-text-primary)]">{route.title}</h1>
+              </div>
+              <span className="theme-badge rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.18em]">{organizationLabel}</span>
+            </div>
+          </section>
+        )}
 
+        {!compactSubRoute ? (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {summaryCards.map((card) => (
             <SummaryCard key={card.label} {...card} />
           ))}
         </section>
+        ) : null}
 
         <section className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">

@@ -73,6 +73,12 @@
   --sem-text-accent: var(--fdn-color-gold-400);
   --sem-text-inverse: var(--fdn-text-inverse);
 
+  /* Trading-floor board tokens (Layer 3 extension) */
+  --sem-display-headline: var(--sem-text-primary);
+  --sem-board-glass: color-mix(in srgb, var(--sem-surface-panel) 88%, transparent);
+  --sem-board-grid: color-mix(in srgb, white 5%, transparent);
+  --sem-board-border: var(--sem-border-subtle);
+
   --sem-border-subtle: var(--fdn-alpha-white-08);
   --sem-border-strong: var(--fdn-alpha-white-14);
   --sem-border-accent: color-mix(in srgb, var(--fdn-color-gold-500) 42%, transparent);

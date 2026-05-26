@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { createStripeCheckoutSession } from "@/lib/billing/client-billing";
+import { PLAN_DISPLAY_CATALOG, type BillingPlanKey } from "@/lib/billing/plan-display";
 
 type PricingPlansProps = {
   ownerMode: boolean;
@@ -12,29 +13,8 @@ type PricingPlansProps = {
   activationMode: boolean;
 };
 
-const plans = [
-  {
-    key: "starter",
-    title: "Starter",
-    coverage: "Covers 1 business",
-    body: "Best for a single service brand under one shared WizField billing account.",
-  },
-  {
-    key: "pro",
-    title: "Pro",
-    coverage: "Covers up to 3 businesses",
-    body: "Designed for owners running a few brands or geographic business entities under one payer.",
-  },
-  {
-    key: "business",
-    title: "Business",
-    coverage: "Covers more businesses",
-    body: "Use when the current local entitlement model needs effectively uncapped shared-account coverage.",
-  },
-] as const;
-
 export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, activationMode }: PricingPlansProps) {
-  const [busyPlan, setBusyPlan] = useState<(typeof plans)[number]["key"] | null>(null);
+  const [busyPlan, setBusyPlan] = useState<BillingPlanKey | null>(null);
   const [message, setMessage] = useState<string | null>(
     checkoutCancelled
       ? activationMode
@@ -43,7 +23,7 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, acti
       : null,
   );
 
-  async function startCheckout(planKey: (typeof plans)[number]["key"]) {
+  async function startCheckout(planKey: BillingPlanKey) {
     setBusyPlan(planKey);
     setMessage(null);
 
@@ -57,58 +37,100 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, acti
   }
 
   return (
-    <section className="mt-10 grid gap-5 lg:grid-cols-3">
-      {plans.map((plan) => (
-        <article
-          key={plan.key}
-          className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.25)]"
-        >
-          <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">{plan.title}</p>
-          <h2 className="mt-3 text-2xl font-semibold text-[#f5ecd2]">{plan.coverage}</h2>
-          <p className="mt-4 text-sm leading-7 text-white/65">{plan.body}</p>
+    <>
+      <section className="mt-10 grid gap-5 lg:grid-cols-3">
+        {PLAN_DISPLAY_CATALOG.map((plan) => (
+          <article
+            key={plan.key}
+            className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.25)]"
+          >
+            <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">{plan.title}</p>
+            <p className="mt-3 text-3xl font-semibold text-[#f7df97]">{plan.monthlyPriceLabel}</p>
+            {plan.annualPriceLabel ? (
+              <p className="mt-1 text-sm text-white/50">or {plan.annualPriceLabel} billed annually</p>
+            ) : null}
+            <h2 className="mt-4 text-xl font-semibold text-[#f5ecd2]">{plan.coverage}</h2>
+            <p className="mt-3 text-sm leading-7 text-white/65">{plan.body}</p>
+            <ul className="mt-4 space-y-2 text-sm text-white/60">
+              {plan.features.map((feature) => (
+                <li key={feature} className="flex gap-2">
+                  <span className="text-[color:var(--flat-gold)]">•</span>
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
 
-          <div className="mt-6">
-            {ownerMode ? (
-              <button
-                type="button"
-                disabled={busyPlan !== null}
-                onClick={() => void startCheckout(plan.key)}
-                className="inline-flex w-full items-center justify-center rounded-full border border-[color:rgba(212,175,55,0.4)] bg-[color:rgba(212,175,55,0.15)] px-5 py-3 text-sm font-semibold text-[#f7df97] transition hover:border-[color:rgba(212,175,55,0.55)] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {busyPlan === plan.key ? "Redirecting to Stripe…" : activationMode ? "Start Plan" : "Start Stripe checkout"}
-              </button>
-            ) : authenticated ? (
-              <Link
-                href="/settings"
-                className="inline-flex w-full items-center justify-center rounded-full border border-white/15 px-5 py-3 text-sm font-medium text-white/80 transition hover:text-white"
-              >
-                Owner session required
-              </Link>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <Link
-                  href="/signup"
-                  className="inline-flex w-full items-center justify-center rounded-full border border-[color:rgba(212,175,55,0.4)] bg-[color:rgba(212,175,55,0.15)] px-5 py-3 text-sm font-semibold text-[#f7df97] transition hover:border-[color:rgba(212,175,55,0.55)]"
+            <div className="mt-6">
+              {ownerMode ? (
+                <button
+                  type="button"
+                  disabled={busyPlan !== null}
+                  onClick={() => void startCheckout(plan.key)}
+                  className="inline-flex w-full items-center justify-center rounded-full border border-[color:rgba(212,175,55,0.4)] bg-[color:rgba(212,175,55,0.15)] px-5 py-3 text-sm font-semibold text-[#f7df97] transition hover:border-[color:rgba(212,175,55,0.55)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Sign up first
-                </Link>
+                  {busyPlan === plan.key ? "Redirecting to Stripe…" : activationMode ? "Start Plan" : "Start Stripe checkout"}
+                </button>
+              ) : authenticated ? (
                 <Link
-                  href="/login?next=/pricing"
-                  className="inline-flex w-full items-center justify-center rounded-full border border-white/15 px-5 py-3 text-sm text-white/75 transition hover:text-white"
+                  href="/settings"
+                  className="inline-flex w-full items-center justify-center rounded-full border border-white/15 px-5 py-3 text-sm font-medium text-white/80 transition hover:text-white"
                 >
-                  Sign in as owner
+                  Owner session required
                 </Link>
-              </div>
-            )}
-          </div>
-        </article>
-      ))}
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <Link
+                    href="/signup"
+                    className="inline-flex w-full items-center justify-center rounded-full border border-[color:rgba(212,175,55,0.4)] bg-[color:rgba(212,175,55,0.15)] px-5 py-3 text-sm font-semibold text-[#f7df97] transition hover:border-[color:rgba(212,175,55,0.55)]"
+                  >
+                    Sign up first
+                  </Link>
+                  <Link
+                    href="/login?next=/pricing"
+                    className="inline-flex w-full items-center justify-center rounded-full border border-white/15 px-5 py-3 text-sm text-white/75 transition hover:text-white"
+                  >
+                    Sign in as owner
+                  </Link>
+                </div>
+              )}
+            </div>
+          </article>
+        ))}
+      </section>
 
       {message ? (
-        <div className="lg:col-span-3 rounded-[24px] border border-amber-500/35 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
+        <div className="mt-6 rounded-[20px] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           {message}
         </div>
       ) : null}
-    </section>
+
+      <section className="mt-10 overflow-x-auto rounded-[24px] border border-white/10 bg-white/[0.03]">
+        <table className="min-w-full text-left text-sm text-white/70">
+          <thead>
+            <tr className="border-b border-white/10 text-[11px] uppercase tracking-[0.2em] text-white/45">
+              <th className="px-4 py-3">Feature</th>
+              {PLAN_DISPLAY_CATALOG.map((plan) => (
+                <th key={plan.key} className="px-4 py-3">{plan.title}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { label: "Business workspaces", values: ["1", "Up to 3", "Expanded"] },
+              { label: "Calls + messaging desk", values: ["Included", "Included", "Included"] },
+              { label: "Jobs, estimates, invoices", values: ["Included", "Included", "Included"] },
+              { label: "Growth Center", values: ["—", "Included", "Included"] },
+            ].map((row) => (
+              <tr key={row.label} className="border-b border-white/5">
+                <td className="px-4 py-3 font-medium text-white/85">{row.label}</td>
+                {row.values.map((value, index) => (
+                  <td key={`${row.label}-${index}`} className="px-4 py-3">{value}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </>
   );
 }

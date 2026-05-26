@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Building2, CreditCard, Palette, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { ThemeAppearanceSelector } from "@/components/theme-appearance-selector";
 import type { SessionRole } from "@/lib/auth/server-session";
@@ -39,7 +40,16 @@ type SettingsWorkspaceProps = {
   organizationSettings: OrganizationSettings;
   billingSummary: BillingSummaryPayload | null;
   billingLoadError: string | null;
+  initialTopic?: SettingsTopic | null;
 };
+
+function isSettingsTopic(value: string | null): value is SettingsTopic {
+  return value === "business"
+    || value === "profile"
+    || value === "appearance"
+    || value === "roles"
+    || value === "billing";
+}
 
 function formatRoleLabel(role: string) {
   return role.replace("_", " ");
@@ -54,9 +64,18 @@ export function SettingsWorkspace({
   organizationSettings,
   billingSummary,
   billingLoadError,
+  initialTopic = null,
 }: SettingsWorkspaceProps) {
   const t = useTranslations("settings");
-  const [selectedTopic, setSelectedTopic] = useState<SettingsTopic | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const topicParam = searchParams.get("topic");
+  const selectedTopic = isSettingsTopic(topicParam)
+    ? topicParam
+    : isSettingsTopic(initialTopic)
+      ? initialTopic
+      : null;
   const allTopics = useMemo(() => ([
     {
       id: "business" as const,
@@ -96,6 +115,13 @@ export function SettingsWorkspace({
     },
   ]), [t]);
   const topics = ownerMode ? allTopics : allTopics.filter((topic) => !topic.ownerOnly);
+  const activeTopic = topics.find((topic) => topic.id === selectedTopic) ?? null;
+
+  function selectTopic(topic: SettingsTopic) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("topic", topic);
+    router.replace(`${pathname}?${params.toString()}`);
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -127,36 +153,51 @@ export function SettingsWorkspace({
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {topics.map(({ id, label, title, helper, Icon }) => {
-          const selected = selectedTopic === id;
+      <section className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
+          <p className="px-2 text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">{t("label")}</p>
+          <nav className="mt-3 space-y-1">
+            {topics.map(({ id, label, Icon }) => {
+              const selected = selectedTopic === id;
 
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setSelectedTopic((current) => (current === id ? null : id))}
-              aria-pressed={selected}
-              className={[
-                selected ? "theme-selected-card" : "theme-control-surface",
-                "group min-h-44 rounded-[30px] border p-5 text-left transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
-              ].join(" ")}
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => selectTopic(id)}
+                  aria-current={selected ? "page" : undefined}
+                  className={[
+                    selected ? "theme-selected-card" : "theme-control-surface-soft",
+                    "flex w-full items-center gap-3 rounded-[18px] border px-3 py-3 text-left text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)]",
+                  ].join(" ")}
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-[color:var(--sem-accent-primary)]" />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+            <Link
+              href="/language-store"
+              className="theme-control-surface-soft mt-2 flex w-full items-center gap-3 rounded-[18px] border px-3 py-3 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)]"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="theme-control-surface-soft inline-flex h-12 w-12 items-center justify-center rounded-[18px] border">
-                  <Icon className="h-5 w-5 text-[color:var(--sem-accent-primary)]" />
-                </div>
-                <span className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
-                  {selected ? t("open") : t("closed")}
-                </span>
-              </div>
-              <p className="mt-5 text-[11px] uppercase tracking-[0.26em] text-[color:var(--sem-accent-primary)]">{label}</p>
-              <h2 className="mt-2 text-xl font-semibold text-[color:var(--sem-text-primary)]">{title}</h2>
-              <p className="mt-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{helper}</p>
-            </button>
-          );
-        })}
-      </section>
+              <Sparkles className="h-4 w-4 shrink-0 text-[color:var(--sem-accent-primary)]" />
+              <span>{t("openLanguageStore")}</span>
+            </Link>
+          </nav>
+        </aside>
+
+        <div className="min-w-0 space-y-4">
+          {activeTopic ? (
+            <div className="theme-control-surface-soft rounded-[24px] border px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-accent-primary)]">{activeTopic.label}</p>
+              <h2 className="mt-1 text-2xl font-semibold text-[color:var(--sem-text-primary)]">{activeTopic.title}</h2>
+              <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">{activeTopic.helper}</p>
+            </div>
+          ) : (
+            <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+              {t("chooseClosedCube")}
+            </section>
+          )}
 
       {selectedTopic ? (
         <section>
@@ -246,31 +287,9 @@ export function SettingsWorkspace({
             )
           ) : null}
         </section>
-      ) : (
-        <div className="space-y-4">
-          <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-            {t("chooseClosedCube")}
-          </section>
-
-          <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Language Store</p>
-                <h2 className="mt-3 text-2xl font-semibold text-[color:var(--sem-text-primary)]">{t("languageStoreTitle")}</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                  {t("languageStoreDescription")}
-                </p>
-              </div>
-              <Link
-                href="/language-store"
-                className="theme-control-surface inline-flex items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold transition hover:border-[color:var(--cmp-border-accent)]"
-              >
-                {t("openLanguageStore")}
-              </Link>
-            </div>
-          </section>
+      ) : null}
         </div>
-      )}
+      </section>
     </div>
   );
 }

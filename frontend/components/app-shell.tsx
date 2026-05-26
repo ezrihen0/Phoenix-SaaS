@@ -30,7 +30,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
 import { ThemeRuntime } from "@/components/theme-runtime";
 import { GlobalSearchShell } from "@/features/global-search/global-search-shell";
-import { getClientSession } from "@/lib/auth/client-auth";
+import { getClientDestination, getClientSession } from "@/lib/auth/client-auth";
 import { handleLogout } from "@/lib/auth/logout";
 import { isShellNavHrefVisible, type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
 
@@ -49,6 +49,7 @@ type SearchCapableRole = "owner" | "admin" | "office_admin";
 const COLLAPSED_KEY = "wizfield.quick-nav.collapsed";
 const HIDDEN_PREFIXES = [
   "/access",
+  "/billing/success",
   "/book",
   "/contact",
   "/landing",
@@ -135,6 +136,7 @@ export function AppShell({ children }: AppShellProps) {
   const [userLabel, setUserLabel] = useState("WizField User");
   const [shellNavRole, setShellNavRole] = useState<ShellNavRole | null>(null);
   const [shellNavRoleResolved, setShellNavRoleResolved] = useState(false);
+  const [activationMode, setActivationMode] = useState(false);
   const enabled = shouldShowShell(pathname);
   const primaryNavItems: NavItem[] = [
     { href: "/home", label: t("shell.nav.home"), icon: House },
@@ -201,6 +203,13 @@ export function AppShell({ children }: AppShellProps) {
       setSearchEnabled(Boolean(canSearch));
       setShellNavRole(session?.profile?.role ?? null);
       setShellNavRoleResolved(true);
+
+      try {
+        const destinationResponse = await getClientDestination();
+        setActivationMode(destinationResponse.destination === "/pricing");
+      } catch {
+        setActivationMode(pathname === "/billing/success");
+      }
     }
 
     void loadUser();
@@ -237,13 +246,17 @@ export function AppShell({ children }: AppShellProps) {
     );
   }
 
-  const visiblePrimaryNav = primaryNavItems.filter((item) =>
-    isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
-  );
+  const visiblePrimaryNav = activationMode
+    ? []
+    : primaryNavItems.filter((item) =>
+      isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
+    );
 
-  const visibleHeaderQuickLinks = headerQuickLinks.filter((item) =>
-    isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
-  );
+  const visibleHeaderQuickLinks = activationMode
+    ? []
+    : headerQuickLinks.filter((item) =>
+      isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
+    );
 
   return (
     <>
@@ -273,6 +286,11 @@ export function AppShell({ children }: AppShellProps) {
           </div>
 
           <nav className="flex flex-1 flex-col gap-2 overflow-y-auto pr-1">
+            {activationMode ? (
+              <div className="theme-control-surface-soft rounded-[20px] border px-3 py-4 text-xs leading-6 text-[color:var(--sem-text-secondary)]">
+                {t("shell.activationLocked")}
+              </div>
+            ) : null}
             {visiblePrimaryNav.map((item) => (
               <SideNavLink
                 key={item.href}
@@ -311,7 +329,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-40 px-4 py-4 sm:px-6 lg:px-8">
             <div className="mx-auto flex max-w-[1600px] items-start justify-between gap-4">
-              <div className="inline-flex h-[4.25rem] w-[min(58vw,16rem)] shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[#14212a] p-1 shadow-[0_18px_45px_rgba(15,23,42,0.18)] ring-1 ring-white/5 backdrop-blur-xl sm:h-[4.75rem] sm:w-[17.8125rem] lg:w-[17.8125rem]">
+              <div className="inline-flex h-[4.25rem] w-[min(58vw,16rem)] shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-1 shadow-[0_18px_45px_rgba(15,23,42,0.18)] ring-1 ring-white/5 backdrop-blur-xl sm:h-[4.75rem] sm:w-[17.8125rem] lg:w-[17.8125rem]">
                 <img
                   src="/wizfield-logo.svg"
                   alt="WizField logo"

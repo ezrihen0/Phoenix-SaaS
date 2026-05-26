@@ -17,6 +17,8 @@ type InvoicesPageContext = {
   searchParams: Promise<{
     page?: SearchParam;
     pageSize?: SearchParam;
+    q?: SearchParam;
+    lifecycleStatus?: SearchParam;
   }>;
 };
 
@@ -116,6 +118,8 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
   const resolvedSearchParams = await searchParams;
   const pageValue = Number.parseInt((firstValue(resolvedSearchParams.page) ?? "1").trim(), 10);
   const pageSizeValue = Number.parseInt((firstValue(resolvedSearchParams.pageSize) ?? "10").trim(), 10);
+  const query = (firstValue(resolvedSearchParams.q) ?? "").trim().toLowerCase();
+  const lifecycleStatus = (firstValue(resolvedSearchParams.lifecycleStatus) ?? "").trim();
   const page = Number.isFinite(pageValue) && pageValue > 0 ? pageValue : 1;
   const pageSize = Number.isFinite(pageSizeValue) && [10, 25, 50, 100].includes(pageSizeValue) ? pageSizeValue : 10;
 
@@ -146,17 +150,39 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
     customerHrefByName = new Map();
   }
 
-  const totalCount = invoices.length;
+  const filteredInvoices = invoices.filter((invoice) => {
+    if (lifecycleStatus && invoice.lifecycle_status !== lifecycleStatus) {
+      return false;
+    }
+
+    if (!query) {
+      return true;
+    }
+
+    const haystack = [
+      invoice.document_number,
+      invoice.customer_name,
+      invoice.job_title,
+    ].join(" ").toLowerCase();
+
+    return haystack.includes(query);
+  });
+
+  const totalCount = filteredInvoices.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pagedInvoices = invoices.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const pagedInvoices = filteredInvoices.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const previousPageHref = buildQueryString({
     page: String(Math.max(1, currentPage - 1)),
     pageSize: String(pageSize),
+    q: query || null,
+    lifecycleStatus: lifecycleStatus || null,
   });
   const nextPageHref = buildQueryString({
     page: String(Math.min(totalPages, currentPage + 1)),
     pageSize: String(pageSize),
+    q: query || null,
+    lifecycleStatus: lifecycleStatus || null,
   });
 
   const tableState: MasterTableState = loadError
@@ -165,9 +191,9 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
       ? { status: "empty", message: "No invoices are available yet. Create an invoice from a job to populate this workspace." }
       : { status: "ready" };
 
-  const paidCount = invoices.filter((invoice) => invoice.status === "paid").length;
-  const openCount = invoices.length - paidCount;
-  const openBalanceCents = invoices.reduce((sum, invoice) => sum + invoice.balance_cents, 0);
+  const paidCount = filteredInvoices.filter((invoice) => invoice.status === "paid").length;
+  const openCount = filteredInvoices.length - paidCount;
+  const openBalanceCents = filteredInvoices.reduce((sum, invoice) => sum + invoice.balance_cents, 0);
 
   return (
     <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
@@ -294,6 +320,45 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
                   {loadError}
                 </div>
               ) : null}
+
+              <section className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">AR desk filters</p>
+                <form className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.62fr)_auto]" method="GET">
+                  <label className="space-y-2">
+                    <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">Search</span>
+                    <input
+                      name="q"
+                      defaultValue={query}
+                      placeholder="Invoice #, customer, or job"
+                      className="theme-input-control w-full rounded-[18px] px-4 py-3 text-sm outline-none"
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">Lifecycle</span>
+                    <select name="lifecycleStatus" defaultValue={lifecycleStatus} className="theme-input-control w-full rounded-[18px] px-4 py-3 text-sm outline-none">
+                      <option value="">All lifecycles</option>
+                      <option value="sent">Sent</option>
+                      <option value="partial">Partial</option>
+                      <option value="paid">Paid</option>
+                      <option value="refunded">Refunded</option>
+                      <option value="overpaid">Overpaid</option>
+                    </select>
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">Page size</span>
+                    <select name="pageSize" defaultValue={String(pageSize)} className="theme-input-control w-full rounded-[18px] px-4 py-3 text-sm outline-none">
+                      {[10, 25, 50, 100].map((size) => (
+                        <option key={size} value={size}>{size} per page</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="flex items-end">
+                    <button type="submit" className="theme-btn-secondary inline-flex w-full items-center justify-center rounded-full px-5 py-3 text-sm">
+                      Apply
+                    </button>
+                  </div>
+                </form>
+              </section>
 
               {totalCount ? (
                 <div className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/96 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.05)] sm:p-5">

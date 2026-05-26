@@ -84,8 +84,21 @@ type CallsPageContext = {
     q?: SearchParam;
     callStatus?: SearchParam;
     limit?: SearchParam;
+    page?: SearchParam;
+    pageSize?: SearchParam;
   }>;
 };
+
+const CALL_STATUS_OPTIONS = [
+  { value: "", label: "All statuses" },
+  { value: "missed", label: "Missed" },
+  { value: "completed", label: "Completed" },
+  { value: "answered", label: "Answered" },
+  { value: "voicemail", label: "Voicemail" },
+  { value: "failed", label: "Failed" },
+] as const;
+
+const CALL_PAGE_SIZE_OPTIONS = [10, 15, 25, 50] as const;
 
 function firstValue(value: SearchParam) {
   return Array.isArray(value) ? value[0] : value;
@@ -104,6 +117,19 @@ function formatDateTime(value: string) {
     hour: "numeric",
     minute: "2-digit",
   }).format(parsed);
+}
+
+function buildCallsQueryString(params: Record<string, string | null | undefined>) {
+  const searchParams = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value && value.trim()) {
+      searchParams.set(key, value);
+    }
+  }
+
+  const serialized = searchParams.toString();
+  return serialized ? `?${serialized}` : "";
 }
 
 function formatDuration(value: number | null) {
@@ -346,9 +372,15 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
   const canManageCrmFromCalls = session.profile?.role === "office_admin";
   const q = (firstValue(resolvedSearchParams.q) ?? "").trim();
   const callStatus = (firstValue(resolvedSearchParams.callStatus) ?? "").trim();
-  const requestedLimit = Number(firstValue(resolvedSearchParams.limit) ?? "10");
+  const requestedLimit = Number(firstValue(resolvedSearchParams.limit) ?? "100");
   const limit = CALL_LIMIT_OPTIONS.includes(requestedLimit as (typeof CALL_LIMIT_OPTIONS)[number])
     ? requestedLimit
+    : 100;
+  const pageValue = Number.parseInt((firstValue(resolvedSearchParams.page) ?? "1").trim(), 10);
+  const pageSizeValue = Number.parseInt((firstValue(resolvedSearchParams.pageSize) ?? "10").trim(), 10);
+  const page = Number.isFinite(pageValue) && pageValue > 0 ? pageValue : 1;
+  const pageSize = CALL_PAGE_SIZE_OPTIONS.includes(pageSizeValue as (typeof CALL_PAGE_SIZE_OPTIONS)[number])
+    ? pageSizeValue
     : 10;
 
   const query = new URLSearchParams();
@@ -376,6 +408,18 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
   const missedCallSmsCount = calls.filter((call) => Boolean(call.missedCallSms)).length;
   const unmatchedCallerCount = calls.filter(isUnmatchedCall).length;
   const negativeSentimentCount = calls.filter(hasNegativeSentiment).length;
+  const totalCount = calls.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedCalls = calls.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginationBase = {
+    q: q || null,
+    callStatus: callStatus || null,
+    limit: String(limit),
+    pageSize: String(pageSize),
+  };
+  const previousPageHref = buildCallsQueryString({ ...paginationBase, page: String(Math.max(1, currentPage - 1)) });
+  const nextPageHref = buildCallsQueryString({ ...paginationBase, page: String(Math.min(totalPages, currentPage + 1)) });
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-12 lg:px-10">
@@ -453,25 +497,29 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
             </label>
             <label className="space-y-2">
               <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Call Status</span>
-              <input
+              <select
                 name="callStatus"
                 defaultValue={callStatus}
-                placeholder="missed, answered, voicemail"
-                className="theme-input-control w-full rounded-[18px] px-4 py-3 text-sm outline-none placeholder:text-[color:var(--text-muted)]"
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Window</span>
-              <select
-                name="limit"
-                defaultValue={String(limit)}
                 className="theme-input-control w-full rounded-[18px] px-4 py-3 text-sm outline-none"
               >
-                {CALL_LIMIT_OPTIONS.map((value) => (
-                  <option key={value} value={value}>{value} / page</option>
+                {CALL_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value || "all"} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </label>
+            <label className="space-y-2">
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Page size</span>
+              <select
+                name="pageSize"
+                defaultValue={String(pageSize)}
+                className="theme-input-control w-full rounded-[18px] px-4 py-3 text-sm outline-none"
+              >
+                {CALL_PAGE_SIZE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option} per page</option>
+                ))}
+              </select>
+            </label>
+            <input type="hidden" name="limit" value={String(limit)} />
             <div className="flex items-end">
               <button
                 type="submit"
@@ -582,7 +630,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                       </tr>
                     </thead>
                     <tbody>
-                      {calls.map((call) => {
+                      {pagedCalls.map((call) => {
                         const formattedCreatedAt = formatDateTime(call.createdAt);
                         const operationalState = getOperationalState(call);
                         const activeCallbackTask = hasActiveCallbackTask(call);
@@ -701,7 +749,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
 
               <div className="calls-display-panel calls-display-panel-hybrid">
                 <div className="space-y-3">
-                  {calls.map((call) => {
+                  {pagedCalls.map((call) => {
                     const formattedCreatedAt = formatDateTime(call.createdAt);
                     const operationalState = getOperationalState(call);
                     const resolvedCallbackTask = hasResolvedCallbackTask(call);
@@ -812,7 +860,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
 
               <div className="calls-display-panel calls-display-panel-grid">
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {calls.map((call) => {
+                  {pagedCalls.map((call) => {
                     const formattedCreatedAt = formatDateTime(call.createdAt);
                     const operationalState = getOperationalState(call);
                     const resolvedCallbackTask = hasResolvedCallbackTask(call);
@@ -926,6 +974,33 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
             </div>
           </>
         )}
+
+        {totalCount > 0 ? (
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[color:var(--text-secondary)]">
+            <p>
+              Showing {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, totalCount)} of {totalCount}
+            </p>
+            <div className="flex items-center gap-2">
+              <Link
+                href={previousPageHref}
+                aria-disabled={currentPage <= 1}
+                className={`theme-control-surface rounded-full border px-4 py-2 text-xs ${currentPage <= 1 ? "pointer-events-none opacity-40" : ""}`}
+              >
+                Previous
+              </Link>
+              <span className="text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Link
+                href={nextPageHref}
+                aria-disabled={currentPage >= totalPages}
+                className={`theme-control-surface rounded-full border px-4 py-2 text-xs ${currentPage >= totalPages ? "pointer-events-none opacity-40" : ""}`}
+              >
+                Next
+              </Link>
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );

@@ -6,8 +6,6 @@ import { Check, LoaderCircle, MessageSquare, Phone, Plus, Send, Trash2 } from "l
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
 
-const COMPANY_PLACEHOLDER_VALUE = "Service Company";
-
 type Lane = "customers" | "unknown";
 
 type CustomerConversationRow = {
@@ -173,10 +171,12 @@ export default function MessagingDashboard({
   initialLane,
   initialCustomerId,
   initialPhoneKey,
+  organizationDisplayName,
 }: {
   initialLane: Lane;
   initialCustomerId: string | null;
   initialPhoneKey: string | null;
+  organizationDisplayName: string;
 }) {
   const lastSyncedConversationKeyRef = useRef<string | null>(null);
 
@@ -327,17 +327,17 @@ export default function MessagingDashboard({
     if (composeMode === "text") {
       return selectedComposeCustomer?.full_name?.trim()
         || (selectedConversation as CustomerConversationRow | null)?.customerName?.trim()
-        || "Eden";
+        || "there";
     }
 
     if (lane === "customers") {
-      return (selectedConversation as CustomerConversationRow | null)?.customerName?.trim() || "Eden";
+      return (selectedConversation as CustomerConversationRow | null)?.customerName?.trim() || "there";
     }
 
-    return "Eden";
+    return "there";
   }, [composeMode, lane, selectedComposeCustomer, selectedConversation]);
-  const placeholderLinkedPreview = `Hi ${linkedPlaceholderName}, this is ${COMPANY_PLACEHOLDER_VALUE}.`;
-  const placeholderUnknownPreview = `Hi there, this is ${COMPANY_PLACEHOLDER_VALUE}.`;
+  const placeholderLinkedPreview = `Hi ${linkedPlaceholderName}, this is ${organizationDisplayName}.`;
+  const placeholderUnknownPreview = `Hi there, this is ${organizationDisplayName}.`;
 
   function mergeTemplateBody(currentValue: string, nextValue: string) {
     const trimmedCurrent = currentValue.trimEnd();
@@ -357,7 +357,7 @@ export default function MessagingDashboard({
   function applyTemplatePlaceholders(body: string) {
     return body
       .replace(/\{customer\}/gi, templateRecipientName)
-      .replace(/\{company\}/gi, COMPANY_PLACEHOLDER_VALUE);
+      .replace(/\{company\}/gi, organizationDisplayName);
   }
 
   function openTemplateBank() {
@@ -1533,7 +1533,7 @@ export default function MessagingDashboard({
                   <div className="mt-3 space-y-2 text-xs leading-5 text-[color:var(--text-secondary)]">
                     <p className="break-words">Use placeholders inside your template: <span className="font-medium text-[color:var(--text-primary)]">Hi {`{customer}`}, this is {`{company}`}. </span></p>
                     <p className="break-words"><span className="font-medium text-[color:var(--text-primary)]">{`{customer}`}</span> = customer display name if linked, otherwise <span className="font-medium text-[color:var(--text-primary)]">there</span>.</p>
-                    <p className="break-words"><span className="font-medium text-[color:var(--text-primary)]">{`{company}`}</span> = <span className="font-medium text-[color:var(--text-primary)]">{COMPANY_PLACEHOLDER_VALUE}</span>.</p>
+                    <p className="break-words"><span className="font-medium text-[color:var(--text-primary)]">{`{company}`}</span> = <span className="font-medium text-[color:var(--text-primary)]">{organizationDisplayName}</span>.</p>
                   </div>
                   <div className="mt-4 rounded-[16px] border border-[color:var(--border-subtle)] bg-[color:var(--bg-canvas)] p-3 text-[11px] leading-5 text-[color:var(--text-secondary)]">
                     <p className="font-semibold uppercase tracking-[0.14em] text-[color:var(--text-muted)]">Preview</p>

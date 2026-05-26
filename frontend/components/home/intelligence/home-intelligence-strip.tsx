@@ -19,11 +19,24 @@ function severityAccentClass(severity: "high" | "medium" | "low") {
 export default function HomeIntelligenceStrip({
   brief,
 }: {
-  brief: AiBrainHomeBriefResponse;
+  brief: AiBrainHomeBriefResponse | null;
 }) {
   const homeT = useTranslations("home");
   const commonT = useTranslations("common.actions");
   const [explainIndex, setExplainIndex] = useState<number | null>(null);
+
+  if (!brief) {
+    return (
+      <section className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
+        <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
+          {homeT("intelligenceEyebrow")}
+        </p>
+        <p className="mt-3 text-sm leading-7 text-[color:var(--sem-text-secondary)]">
+          {homeT("intelligenceUnavailable")}
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section className="theme-surface-card rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-5">
