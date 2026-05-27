@@ -113,12 +113,12 @@ function canManageAutomations(permissions: string[]) {
   return permissions.includes("automations.manage");
 }
 
-function accentClass(accent: CanvasNode["accent"]) {
+function nodeRoleAccentClass(accent: CanvasNode["accent"]) {
   return {
-    violet: "border-violet-500/40 text-violet-300 shadow-violet-950/20",
-    amber: "border-amber-500/40 text-amber-300 shadow-amber-950/20",
-    zinc: "border-zinc-500/40 text-zinc-300 shadow-zinc-950/20",
-    cyan: "border-cyan-500/40 text-cyan-300 shadow-cyan-950/20",
+    violet: "border-[color:var(--sem-ai-connector-trigger)]",
+    amber: "border-[color:var(--sem-ai-connector-action)]",
+    zinc: "border-[color:var(--sem-ai-connector-fallback)]",
+    cyan: "border-[color:var(--sem-ai-connector-output)]",
   }[accent];
 }
 
@@ -136,10 +136,21 @@ function stopCanvasPointer(event: ReactPointerEvent<HTMLElement>) {
 }
 
 function NodeIcon({ type }: { type: NodeId }) {
-  if (type === "trigger") return <Zap className="h-3.5 w-3.5 text-violet-400" />;
-  if (type === "condition") return <GitBranch className="h-3.5 w-3.5 text-amber-400" />;
-  if (type === "delay") return <Clock3 className="h-3.5 w-3.5 text-zinc-400" />;
-  return <Send className="h-3.5 w-3.5 text-cyan-400" />;
+  const iconClass = "h-3.5 w-3.5";
+
+  if (type === "trigger") {
+    return <Zap className={`${iconClass} text-[color:var(--sem-ai-connector-trigger)]`} />;
+  }
+
+  if (type === "condition") {
+    return <GitBranch className={`${iconClass} text-[color:var(--sem-ai-connector-action)]`} />;
+  }
+
+  if (type === "delay") {
+    return <Clock3 className={`${iconClass} text-[color:var(--sem-ai-connector-fallback)]`} />;
+  }
+
+  return <Send className={`${iconClass} text-[color:var(--sem-ai-connector-output)]`} />;
 }
 
 function formatRuleDate(value: string) {
@@ -637,9 +648,10 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
   }
 
   return (
-    <div className="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-slate-950 text-white">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(rgba(229,231,235,0.14)_1px,transparent_1px)] [background-size:24px_24px]" />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-950/20 via-transparent to-cyan-950/20" />
+    <div className="sem-ai-grid-canvas relative min-h-[calc(100vh-4rem)] overflow-hidden">
+      <div aria-hidden="true" className="sem-ai-grid-dot-layer pointer-events-none absolute inset-0" />
+      <div aria-hidden="true" className="sem-ai-grid-glow-layer pointer-events-none absolute inset-0" />
+      <div aria-hidden="true" className="sem-ai-grid-vignette-layer pointer-events-none absolute inset-0" />
 
       <div className="relative z-10 flex min-h-[calc(100vh-4rem)] flex-col">
         <div className="border-b border-white/10 bg-zinc-950/80 px-4 py-4 backdrop-blur-md lg:px-6">
@@ -897,13 +909,13 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
                 <svg className="pointer-events-none absolute inset-0 h-full w-full min-h-[560px] min-w-[980px]">
                   <defs>
                     <marker id="automation-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                      <path d="M 0 1 L 10 5 L 0 9 z" fill="#71717a" />
+                      <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--sem-ai-connector-muted)" />
                     </marker>
                   </defs>
-                  <path d={connectorPaths.triggerToCondition} fill="none" stroke="#8b5cf6" strokeWidth="2" strokeDasharray="4 4" markerEnd="url(#automation-arrow)" />
-                  <path d={connectorPaths.conditionToAction} fill="none" stroke="#f59e0b" strokeWidth="2" markerEnd="url(#automation-arrow)" />
-                  <path d={connectorPaths.conditionToDelay} fill="none" stroke="#52525b" strokeWidth="2" markerEnd="url(#automation-arrow)" />
-                  <path d={connectorPaths.delayToAction} fill="none" stroke="#06b6d4" strokeWidth="2" markerEnd="url(#automation-arrow)" />
+                  <path d={connectorPaths.triggerToCondition} fill="none" stroke="var(--sem-ai-connector-trigger)" strokeWidth="2" strokeDasharray="4 4" markerEnd="url(#automation-arrow)" />
+                  <path d={connectorPaths.conditionToAction} fill="none" stroke="var(--sem-ai-connector-action)" strokeWidth="2" markerEnd="url(#automation-arrow)" />
+                  <path d={connectorPaths.conditionToDelay} fill="none" stroke="var(--sem-ai-connector-fallback)" strokeWidth="2" markerEnd="url(#automation-arrow)" />
+                  <path d={connectorPaths.delayToAction} fill="none" stroke="var(--sem-ai-connector-output)" strokeWidth="2" markerEnd="url(#automation-arrow)" />
                 </svg>
 
                 {nodes.map((node) => {
@@ -913,24 +925,27 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
                     <article
                       key={node.id}
                       data-automation-node
+                      data-selected={isSelected ? "true" : undefined}
                       style={{ left: node.x, top: node.y }}
                       onPointerDown={(event) => handleNodeDragStart(node.id, event)}
                       onClick={() => handleNodeSelect(node.id)}
-                      className={`absolute w-72 touch-none select-none rounded-2xl border bg-zinc-950/90 p-4 shadow-2xl backdrop-blur-md ${accentClass(node.accent)} ${isSelected ? "ring-2 ring-white/40" : ""} ${draggingNodeId === node.id ? "cursor-grabbing" : "cursor-grab"}`}
+                      className={`sem-ai-node-card absolute w-72 touch-none select-none rounded-2xl p-4 shadow-2xl ${nodeRoleAccentClass(node.accent)} ${isSelected ? "is-selected" : ""} ${draggingNodeId === node.id ? "cursor-grabbing" : "cursor-grab"}`}
                     >
-                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <div className="flex items-center justify-between border-b border-[color:var(--sem-ai-node-border)] pb-2">
                         <div className="flex items-center gap-2">
-                          <span className="rounded bg-white/5 p-1 text-zinc-400">
+                          <span className="rounded bg-[color:color-mix(in_srgb,var(--sem-ai-grid-text-primary)_6%,transparent)] p-1">
                             <NodeIcon type={node.type} />
                           </span>
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{node.title}</span>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--sem-ai-grid-text-muted)]">{node.title}</span>
                         </div>
-                        <div className={`h-1.5 w-1.5 rounded-full ${isSelected ? "bg-emerald-400" : "bg-white/30"}`} />
+                        <div
+                          className={`h-1.5 w-1.5 rounded-full ${isSelected ? "bg-emerald-500" : "bg-[color:color-mix(in_srgb,var(--sem-ai-grid-text-primary)_28%,transparent)]"}`}
+                        />
                       </div>
-                      <div className="mt-3 break-all rounded-lg border border-white/5 bg-black/40 p-2.5 font-[family:var(--font-geist-mono)] text-[11px] leading-relaxed text-zinc-200">
+                      <div className="mt-3 break-all rounded-lg border border-[color:var(--sem-ai-node-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-node-bg)_65%,black)] p-2.5 font-[family:var(--font-geist-mono)] text-[11px] leading-relaxed text-[color:var(--sem-ai-grid-text-primary)]">
                         {node.code}
                       </div>
-                      <div className="mt-2 text-[10px] leading-relaxed text-zinc-500">{node.helper}</div>
+                      <div className="mt-2 text-[10px] leading-relaxed text-[color:var(--sem-ai-grid-text-secondary)]">{node.helper}</div>
                     </article>
                   );
                 })}
