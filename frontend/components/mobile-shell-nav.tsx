@@ -3,8 +3,16 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, type ComponentType } from "react";
-import { Ellipsis, LogOut, Settings, type LucideProps } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import {
+  Ellipsis,
+  FileText,
+  LogOut,
+  Plus,
+  Receipt,
+  Settings,
+  type LucideProps,
+} from "lucide-react";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
@@ -120,6 +128,31 @@ function sectionLabelKey(sectionId: MobileMoreMenuSectionId) {
   return `shell.mobile.moreSections.${sectionId}` as const;
 }
 
+function QuickActionLink({
+  href,
+  label,
+  icon: Icon,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  icon: ShellNavIcon;
+  onNavigate: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className="theme-control-surface group flex items-center gap-2 rounded-[14px] border px-3 py-2 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+    >
+      <span className="theme-control-surface-soft inline-flex h-7 w-7 items-center justify-center rounded-lg border">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="truncate">{label}</span>
+    </Link>
+  );
+}
+
 export function MobileShellNav({
   primaryItems,
   navCatalog,
@@ -134,6 +167,7 @@ export function MobileShellNav({
   const pathname = usePathname();
   const router = useRouter();
   const workspaceSectionRef = useRef<HTMLDivElement | null>(null);
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
 
   const navByHref = useMemo(
     () => new Map(navCatalog.map((item) => [item.href, item])),
@@ -169,6 +203,34 @@ export function MobileShellNav({
 
   const moreActive = isMobileMoreTabActive(pathname, primaryItems, visibleMoreHrefs);
   const settingsActive = Boolean(pathname && isRouteActive(pathname, "/settings"));
+  const canCreateEstimate = navByHref.has("/estimates");
+  const canCreateInvoice = navByHref.has("/invoices");
+  const homeItem = navByHref.get("/home");
+  const scheduleItem = navByHref.get("/schedule");
+  const callsItem = navByHref.get("/calls");
+  const messagingItem = navByHref.get("/messaging");
+  const quickActions = useMemo(() => {
+    const actions: Array<{ href: string; label: string; icon: ShellNavIcon }> = [];
+
+    if (canCreateEstimate) {
+      actions.push({
+        href: "/estimates/new",
+        label: `${t("common.actions.open")} ${t("shell.nav.estimates")}`,
+        icon: FileText,
+      });
+    }
+
+    if (canCreateInvoice) {
+      actions.push({
+        href: "/invoices/new",
+        label: `${t("common.actions.open")} ${t("shell.nav.invoices")}`,
+        icon: Receipt,
+      });
+    }
+
+    return actions;
+  }, [canCreateEstimate, canCreateInvoice, t]);
+  const canShowQuickActions = quickActions.length > 0;
 
   useEffect(() => {
     if (!moreOpen || typeof document === "undefined") {
@@ -183,60 +245,153 @@ export function MobileShellNav({
     };
   }, [moreOpen]);
 
+  useEffect(() => {
+    setQuickActionsOpen(false);
+  }, [pathname, moreOpen]);
+
   return (
     <>
+      {quickActionsOpen ? (
+        <button
+          type="button"
+          aria-label={t("common.actions.close")}
+          className="fixed inset-0 z-40 bg-transparent lg:hidden"
+          onClick={() => setQuickActionsOpen(false)}
+        />
+      ) : null}
+
       <nav
         aria-label={t("shell.mobile.bottomNavigation")}
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/95 px-1 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-12px_40px_color-mix(in_srgb,var(--bg-canvas)_40%,transparent)] backdrop-blur-md lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 px-2 pb-[calc(0.6rem+env(safe-area-inset-bottom))] lg:hidden"
       >
-        <div className="mx-auto flex max-w-lg items-end justify-around">
-          {primaryItems.map((item) => (
-            <MobileNavTab
-              key={item.href}
-              {...item}
-              active={Boolean(pathname && isRouteActive(pathname, item.href))}
-            />
-          ))}
+        <div className="relative mx-auto max-w-lg rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--sem-board-glass)] shadow-[0_-18px_48px_color-mix(in_srgb,var(--bg-canvas)_52%,transparent)] backdrop-blur-xl">
+          {canShowQuickActions ? (
+            <>
+              {quickActionsOpen ? (
+                <div className="absolute inset-x-4 bottom-[calc(100%+0.75rem)] z-50 space-y-2 rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-modal)] p-3 shadow-[0_20px_50px_color-mix(in_srgb,var(--bg-canvas)_65%,transparent)]">
+                  {quickActions.map((action) => (
+                    <QuickActionLink
+                      key={action.href}
+                      href={action.href}
+                      label={action.label}
+                      icon={action.icon}
+                      onNavigate={() => setQuickActionsOpen(false)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
           <button
             type="button"
             aria-expanded={moreOpen}
             aria-haspopup="dialog"
             aria-label={t("shell.mobile.more")}
             onClick={() => {
+              setQuickActionsOpen(false);
               if (moreOpen) {
                 onMoreClose();
               } else {
                 onMoreOpen();
               }
             }}
-            className="relative flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center px-0.5 py-1"
+            className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)]/80"
           >
-            {moreActive ? (
-              <span
-                aria-hidden="true"
-                className="absolute -top-1 h-1 w-5 rounded-full bg-[color:var(--sem-accent-primary)]"
-              />
-            ) : null}
             <Ellipsis
               aria-hidden="true"
               className={[
-                "h-5 w-5 shrink-0",
+                "h-4 w-4 shrink-0",
                 moreActive || moreOpen
                   ? "text-[color:var(--sem-text-primary)]"
                   : "text-[color:var(--sem-text-muted)]",
               ].join(" ")}
             />
-            <span
-              className={[
-                "mt-1 max-w-full truncate text-[10px] font-medium tracking-wide max-[380px]:text-[9px]",
-                moreActive || moreOpen
-                  ? "font-semibold text-[color:var(--sem-text-primary)]"
-                  : "text-[color:var(--sem-text-muted)]",
-              ].join(" ")}
-            >
-              {t("shell.mobile.more")}
-            </span>
           </button>
+
+          <div className="mx-auto grid max-w-lg grid-cols-5 items-end gap-0.5 px-1 pb-1 pt-3">
+            {homeItem ? (
+              <MobileNavTab
+                {...homeItem}
+                active={Boolean(pathname && isRouteActive(pathname, homeItem.href))}
+              />
+            ) : (
+              <div className="min-h-11 min-w-11" />
+            )}
+            {scheduleItem ? (
+              <MobileNavTab
+                {...scheduleItem}
+                active={Boolean(pathname && isRouteActive(pathname, scheduleItem.href))}
+              />
+            ) : (
+              <div className="min-h-11 min-w-11" />
+            )}
+
+            <button
+              type="button"
+              disabled={!canShowQuickActions}
+              aria-expanded={quickActionsOpen}
+              aria-haspopup="menu"
+              aria-label="Add"
+              onClick={() => {
+                if (!canShowQuickActions) {
+                  return;
+                }
+                onMoreClose();
+                setQuickActionsOpen((current) => !current);
+              }}
+              className="relative flex min-h-11 min-w-11 flex-col items-center justify-end px-0.5 py-1"
+            >
+              {quickActionsOpen ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-1 h-1 w-5 rounded-full bg-[color:var(--sem-accent-primary)]"
+                />
+              ) : null}
+              <span
+                className={[
+                  "mb-0.5 inline-flex h-9 w-9 items-center justify-center rounded-2xl border shadow-[0_12px_26px_color-mix(in_srgb,var(--bg-canvas)_62%,transparent)] transition",
+                  quickActionsOpen
+                    ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-card)] text-[color:var(--sem-accent-primary)]"
+                    : canShowQuickActions
+                      ? "theme-control-surface text-[color:var(--sem-text-primary)] hover:border-[color:var(--cmp-border-accent)]"
+                      : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-muted)] opacity-70",
+                ].join(" ")}
+              >
+                <Plus
+                  aria-hidden="true"
+                  className={["h-5 w-5 shrink-0 transition-transform", quickActionsOpen ? "rotate-45" : ""].join(" ")}
+                />
+              </span>
+              <span
+                className={[
+                  "mt-1 max-w-full truncate text-[10px] font-medium tracking-wide max-[380px]:text-[9px]",
+                  quickActionsOpen
+                    ? "font-semibold text-[color:var(--sem-text-primary)]"
+                    : "text-[color:var(--sem-text-muted)]",
+                ].join(" ")}
+              >
+                Add
+              </span>
+            </button>
+
+            {callsItem ? (
+              <MobileNavTab
+                {...callsItem}
+                active={Boolean(pathname && isRouteActive(pathname, callsItem.href))}
+              />
+            ) : (
+              <div className="min-h-11 min-w-11" />
+            )}
+            {messagingItem ? (
+              <MobileNavTab
+                {...messagingItem}
+                active={Boolean(pathname && isRouteActive(pathname, messagingItem.href))}
+              />
+            ) : (
+              <div className="min-h-11 min-w-11" />
+            )}
+          </div>
         </div>
       </nav>
 

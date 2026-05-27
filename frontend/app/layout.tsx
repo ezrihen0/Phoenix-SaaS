@@ -1,27 +1,17 @@
 import type { Metadata } from "next";
+import type { CSSProperties } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import Script from "next/script";
-import { Cormorant_Garamond, Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "@/components/app-shell";
 import { getWorkerUiDirection, resolveSupportedWorkerUiLocale } from "@/lib/i18n/locales";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const cormorant = Cormorant_Garamond({
-  variable: "--font-flat-display",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
+const fontVariables = {
+  "--font-geist-sans": 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  "--font-geist-mono": 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+  "--font-flat-display": 'Georgia, "Times New Roman", serif',
+} as CSSProperties;
 
 export const metadata: Metadata = {
   title: "WizField",
@@ -46,7 +36,8 @@ export default async function RootLayout({
       dir={direction}
       data-theme="brown-cream"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} h-full antialiased`}
+      className="h-full antialiased"
+      style={fontVariables}
     >
       <body className="min-h-full flex flex-col">
         <NextIntlClientProvider>
