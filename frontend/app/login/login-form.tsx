@@ -105,7 +105,7 @@ export function LoginAmbientShell({ children }: { children: ReactNode }) {
     <main
       data-login-atmosphere={atmosphere}
       style={isDarkAtmosphere ? LOGIN_DARK_AUTH_VARS : undefined}
-      className="sem-auth-atmosphere relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-10"
+      className="sem-auth-atmosphere relative flex min-h-screen items-start justify-center overflow-y-auto px-5 py-10 md:items-center md:overflow-hidden"
     >
       <LoginAtmosphereToggle atmosphere={atmosphere} onToggle={toggleAtmosphere} />
       <div aria-hidden="true" className="sem-auth-grid-layer pointer-events-none absolute inset-0" />

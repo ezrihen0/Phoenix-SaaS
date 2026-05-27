@@ -126,7 +126,7 @@ export default function CallRowActions({
 
   return (
     <>
-      <div className="inline-flex flex-nowrap items-center gap-2 rounded-full border border-[color:rgba(255,255,255,0.06)] bg-[color:rgba(255,255,255,0.02)] px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-[color:rgba(255,255,255,0.06)] bg-[color:rgba(255,255,255,0.02)] px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
         {matchedClientId && canManageCrm ? (
           <ActionIconButton
             href={`/customers/${matchedClientId}`}

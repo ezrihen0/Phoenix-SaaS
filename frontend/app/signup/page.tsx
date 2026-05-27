@@ -91,10 +91,10 @@ export default function SignupPage() {
       <main className="relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.18),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(191,87,0,0.12),transparent_30%)]" />
 
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-6 py-10 lg:grid-cols-[minmax(0,1.05fr)_520px] lg:px-10">
-          <section className="max-w-2xl">
+        <div className="relative mx-auto grid max-w-7xl items-start gap-12 px-6 py-10 lg:grid-cols-[minmax(0,1.05fr)_520px] lg:items-center lg:px-10">
+          <section className="order-2 max-w-2xl lg:order-1">
             <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">WizField</p>
-            <h1 className="mt-5 max-w-xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[color:var(--sem-display-headline)] md:text-7xl">
+            <h1 className="mt-5 max-w-xl font-[family:var(--font-flat-display)] text-4xl leading-none tracking-tight text-[color:var(--sem-display-headline)] sm:text-5xl lg:text-7xl">
               Create your WizField workspace.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-[color:var(--sem-text-secondary)] md:text-lg">
@@ -119,8 +119,8 @@ export default function SignupPage() {
             </div>
           </section>
 
-          <section className="rounded-[36px] border border-[color:rgba(212,175,55,0.2)] bg-[linear-gradient(180deg,rgba(11,11,11,0.96),rgba(18,18,18,0.9))] p-7 shadow-[0_36px_120px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:p-9">
-            <div className="flex items-center justify-between gap-4">
+          <section className="order-1 rounded-[36px] border border-[color:rgba(212,175,55,0.2)] bg-[linear-gradient(180deg,rgba(11,11,11,0.96),rgba(18,18,18,0.9))] p-7 shadow-[0_36px_120px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:p-9 lg:order-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.38em] text-[color:var(--sem-text-muted)]">Create Account</p>
                 <h2 className="mt-3 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-display-headline)]">
@@ -137,7 +137,7 @@ export default function SignupPage() {
                 <span>Full name</span>
                 <div className="flex items-center gap-3 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-4 py-3 transition focus-within:border-[color:var(--cmp-border-accent)]">
                   <UserRound className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                  <input required value={fullName} onChange={(event) => setFullName(event.target.value)} className="w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="Jordan Smith" />
+                  <input required value={fullName} onChange={(event) => setFullName(event.target.value)} className="min-w-0 w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="Jordan Smith" />
                 </div>
               </label>
 
@@ -145,7 +145,7 @@ export default function SignupPage() {
                 <span>Business Name</span>
                 <div className="flex items-center gap-3 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-4 py-3 transition focus-within:border-[color:var(--cmp-border-accent)]">
                   <Building2 className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                  <input required value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} className="w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="Jordan Chimney & Fireplace" />
+                  <input required value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} className="min-w-0 w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="Jordan Chimney & Fireplace" />
                 </div>
               </label>
 
@@ -153,7 +153,7 @@ export default function SignupPage() {
                 <span>Email</span>
                 <div className="flex items-center gap-3 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-4 py-3 transition focus-within:border-[color:var(--cmp-border-accent)]">
                   <Mail className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                  <input required autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="owner@example.com" />
+                  <input required autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="min-w-0 w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="owner@example.com" />
                 </div>
               </label>
 
@@ -161,7 +161,7 @@ export default function SignupPage() {
                 <span>Password</span>
                 <div className="flex items-center gap-3 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-4 py-3 transition focus-within:border-[color:var(--cmp-border-accent)]">
                   <ShieldCheck className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                  <input required autoComplete="new-password" type="password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="Use at least 8 characters" />
+                  <input required autoComplete="new-password" type="password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} className="min-w-0 w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="Use at least 8 characters" />
                 </div>
                 {strength ? (
                   <p className={`text-xs ${strength.className}`}>Password strength: {strength.label}</p>

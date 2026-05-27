@@ -628,7 +628,7 @@ function CustomerContextSidebar({
   const t = useTranslations("customerProfile");
 
   return (
-    <aside className="sticky top-4 h-fit rounded-[32px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_30px_90px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)] backdrop-blur-xl">
+    <aside className="top-4 h-fit rounded-[32px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_30px_90px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)] backdrop-blur-xl lg:sticky">
       <div className="flex items-start gap-4">
         <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] font-[family:var(--font-flat-display)] text-xl text-[color:var(--sem-accent-primary)] shadow-[0_0_30px_color-mix(in_srgb,var(--sem-accent-primary)_18%,transparent)]">
           {getCustomerInitials(customerRecord.full_name)}

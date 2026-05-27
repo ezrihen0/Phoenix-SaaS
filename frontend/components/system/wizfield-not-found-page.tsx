@@ -31,7 +31,7 @@ const RECOVERY_ROUTES: RecoveryRoute[] = [
 
 export function WizFieldNotFoundPage() {
   return (
-    <main className="sem-ai-grid-canvas relative min-h-[calc(100vh-4rem)] overflow-hidden">
+    <main className="sem-ai-grid-canvas fixed inset-0 z-[300] overflow-y-auto bg-[color:var(--cmp-surface-canvas)] lg:static lg:z-auto lg:min-h-[calc(100vh-4rem)] lg:overflow-hidden">
       <div aria-hidden="true" className="sem-ai-grid-dot-layer pointer-events-none absolute inset-0 [background-size:54px_54px]" />
       <div aria-hidden="true" className="sem-ai-grid-glow-layer pointer-events-none absolute inset-0" />
       <div aria-hidden="true" className="sem-ai-grid-vignette-layer pointer-events-none absolute inset-0" />
@@ -48,7 +48,7 @@ export function WizFieldNotFoundPage() {
         className="pointer-events-none absolute left-1/2 top-1/2 h-[340px] w-[340px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[color:var(--sem-ai-node-border-selected)]"
       />
 
-      <section className="relative z-10 mx-auto grid min-h-[calc(100vh-4rem)] max-w-[1320px] items-center gap-10 px-5 py-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(420px,0.75fr)] lg:px-8">
+      <section className="relative z-10 mx-auto grid min-h-[calc(100vh-4rem)] max-w-[1320px] items-center gap-10 px-5 py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:px-8">
         <div>
           <div className="theme-status-warning inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.28em]">
             <MapPinOff className="h-3.5 w-3.5" />

@@ -25,7 +25,7 @@ export default async function PricingPage({ searchParams }: PricingPageContext) 
   const ownerMode = session?.profile?.role === "owner" && Boolean(session.active_organization?.id);
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-16 lg:px-10 lg:py-20">
+    <main className="mx-auto max-w-6xl px-6 py-16 lg:px-10 lg:py-20">
       <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--flat-gold)]">Pricing</p>
       <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-display-headline)] sm:text-5xl">
         {activationMode ? "Your workspace is ready." : "Shared billing-account plans"}

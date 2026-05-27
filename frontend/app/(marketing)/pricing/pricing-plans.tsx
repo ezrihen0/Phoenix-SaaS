@@ -38,7 +38,7 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, acti
 
   return (
     <>
-      <section className="mt-10 grid gap-5 lg:grid-cols-3">
+      <section className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {PLAN_DISPLAY_CATALOG.map((plan) => (
           <article
             key={plan.key}

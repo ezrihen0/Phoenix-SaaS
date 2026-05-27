@@ -400,7 +400,7 @@ function PricebookItemBuilderView({
 
   return (
     <BoardShell gridOpacity="subtle">
-      <div className="mx-auto max-w-[92rem] px-5 py-6 pb-32 lg:px-8">
+      <div className="mx-auto max-w-[92rem] px-5 py-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:px-8">
         <header className={`${panelClass()} p-6`}>
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-4xl">
@@ -761,7 +761,7 @@ function PricebookItemBuilderView({
           Saved items are pickable on job quotes and invoices, but edits do not rewrite existing document line snapshots. Inventory tracking modes remain metadata only — no live stock deduction or inventory auto-sync.
         </div>
 
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-canvas)]/95 px-5 py-4 backdrop-blur">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-canvas)]/95 px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur">
           <div className="mx-auto flex max-w-[92rem] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap gap-2">
               {mode === "edit" && canManage ? (

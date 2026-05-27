@@ -474,9 +474,10 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
         </section>
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside className="h-fit rounded-[34px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-4 shadow-[0_30px_90px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)] backdrop-blur-xl xl:sticky xl:top-6">
-            <p className="px-2 pb-3 text-xs uppercase tracking-[0.3em] text-[color:var(--sem-text-muted)]">{t("navEyebrow")}</p>
-            <nav className="space-y-2">
+          <aside className="h-fit rounded-[34px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-4 shadow-[0_30px_90px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)] backdrop-blur-xl lg:sticky lg:top-6">
+            <div className="-mx-1 flex flex-col gap-2 overflow-x-auto pb-1 md:flex-row md:overflow-visible xl:flex-col xl:pb-0">
+            <p className="hidden px-2 pb-3 text-xs uppercase tracking-[0.3em] text-[color:var(--sem-text-muted)] xl:block">{t("navEyebrow")}</p>
+            <nav className="flex gap-2 overflow-x-auto xl:block xl:space-y-2 xl:overflow-visible">
               {visibleSections.map((section) => {
                 const labels = resolveSectionLabels(section, t);
                 return (
@@ -490,6 +491,7 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
                 );
               })}
             </nav>
+            </div>
           </aside>
 
           <section className="min-w-0 rounded-[34px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_30px_90px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)] backdrop-blur-xl">

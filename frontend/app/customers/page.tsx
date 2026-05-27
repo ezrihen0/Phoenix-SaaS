@@ -750,7 +750,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
 
           {totalCount > 0 ? (
             <>
-              <div className="mt-6 hidden overflow-hidden rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/30 xl:block">
+              <div className="mt-6 hidden overflow-hidden rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/30 lg:block">
                 <table className="w-full border-collapse text-left text-sm">
                   <thead className="border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70 text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">
                     <tr>
@@ -766,7 +766,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
                 </table>
               </div>
 
-              <div className="mt-6 grid gap-4 xl:hidden">
+              <div className="mt-6 grid gap-4 lg:hidden">
                 <MasterMobileList items={pagedCustomers} emptyState={t("noCustomers")} renderItem={renderCustomerMobileCard} />
               </div>
             </>
