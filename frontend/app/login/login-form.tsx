@@ -31,27 +31,21 @@ function LoadingSpinner() {
 
 export function LoginAmbientShell({ children }: { children: ReactNode }) {
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#09090b] px-5 py-10 text-slate-950">
+    <main className="sem-auth-atmosphere relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-10">
+      <div aria-hidden="true" className="sem-auth-grid-layer pointer-events-none absolute inset-0" />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.065)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.065)_1px,transparent_1px)] bg-[size:40px_40px] opacity-25"
+        className="sem-auth-glow-1 pointer-events-none absolute left-1/2 top-1/2 h-[760px] w-[760px] -translate-x-1/2 -translate-y-1/2"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 h-[760px] w-[760px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-600/20 blur-[150px]"
+        className="sem-auth-glow-2 pointer-events-none absolute left-[42%] top-[38%] h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-[42%] top-[38%] h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-600/16 blur-[145px]"
+        className="sem-auth-glow-3 pointer-events-none absolute left-[62%] top-[68%] h-[460px] w-[460px] -translate-x-1/2 -translate-y-1/2"
       />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-[62%] top-[68%] h-[460px] w-[460px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/10 blur-[155px]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(9,9,11,0.18)_52%,rgba(9,9,11,0.78)_100%)]"
-      />
+      <div aria-hidden="true" className="sem-auth-vignette-layer pointer-events-none absolute inset-0" />
       <div className="relative z-10 w-full">{children}</div>
     </main>
   );
@@ -60,7 +54,7 @@ export function LoginAmbientShell({ children }: { children: ReactNode }) {
 export function LoginSessionLoading() {
   return (
     <section className="mx-auto w-full max-w-[460px]">
-      <div className="rounded-[32px] border border-white/20 bg-white/95 p-8 shadow-[0_50px_100px_rgba(0,0,0,0.60)] backdrop-blur-2xl">
+      <div className="sem-auth-card rounded-[32px] p-8 backdrop-blur-2xl">
         <div className="flex flex-col items-center py-6 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-slate-950 text-white shadow-[0_24px_60px_rgba(15,23,42,0.28)]">
             <Flame className="h-8 w-8" />
@@ -169,7 +163,7 @@ function CenteredLoginForm() {
   return (
     <LoginAmbientShell>
       <section className="mx-auto w-full max-w-[460px]">
-        <div className="rounded-[32px] border border-white/20 bg-white/95 p-7 shadow-[0_50px_100px_rgba(0,0,0,0.60)] backdrop-blur-2xl sm:p-8">
+        <div className="sem-auth-card rounded-[32px] p-7 backdrop-blur-2xl sm:p-8">
           <div className="text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-slate-950 text-white shadow-[0_24px_60px_rgba(15,23,42,0.28)]">
               <Flame className="h-8 w-8" />

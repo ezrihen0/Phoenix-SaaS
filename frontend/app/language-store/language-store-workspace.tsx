@@ -245,8 +245,8 @@ export function LanguageStoreWorkspace({
     return (
       <LanguageStorePremiumShell>
         <div className="mx-auto max-w-[96rem] px-4 py-10 lg:px-8">
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-6">
-            <p className="text-sm text-zinc-400">{errorMessage ?? t("unavailable")}</p>
+          <section className="sem-ai-inspector-surface rounded-2xl p-6">
+            <p className="text-sm text-[color:var(--sem-ai-grid-text-secondary)]">{errorMessage ?? t("unavailable")}</p>
           </section>
         </div>
       </LanguageStorePremiumShell>
@@ -278,13 +278,13 @@ export function LanguageStoreWorkspace({
 
       <div className="mx-auto max-w-[96rem] space-y-5 px-4 py-6 lg:px-8">
         {message ? (
-          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          <div className="theme-alert-success rounded-xl border px-4 py-3 text-sm">
             {message}
           </div>
         ) : null}
 
         {errorMessage ? (
-          <div className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          <div className="theme-alert-error rounded-xl border px-4 py-3 text-sm">
             {errorMessage}
           </div>
         ) : null}

@@ -28,13 +28,13 @@ function CapacityBar({ used, total }: { used: number; total: number }) {
 
   return (
     <div className="mt-2">
-      <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+      <div className="h-2 overflow-hidden rounded-full bg-[color:var(--sem-ai-node-border)]">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-400 transition-all"
+          className="h-full rounded-full bg-[linear-gradient(90deg,var(--sem-ai-connector-trigger),var(--sem-ai-connector-output))] transition-all"
           style={{ width: `${percent}%` }}
         />
       </div>
-      <p className="mt-1 font-[family:var(--font-geist-mono)] text-[11px] text-zinc-500">
+      <p className="mt-1 font-[family:var(--font-geist-mono)] text-[11px] text-[color:var(--sem-ai-grid-text-muted)]">
         {used} / {total}
       </p>
     </div>
@@ -48,34 +48,34 @@ export function TranslationUsagePanel({ payload, usage, usageLoadError }: Transl
   const slotTotal = payload.total_additional_language_slots;
 
   return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 backdrop-blur-md">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">{t("panels.usage")}</p>
-      <h2 className="mt-1 text-lg font-semibold text-zinc-100">{t("translationUnits")}</h2>
+    <section className="sem-ai-inspector-surface rounded-2xl p-5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-ai-grid-text-muted)]">{t("panels.usage")}</p>
+      <h2 className="mt-1 text-lg font-semibold text-[color:var(--sem-ai-grid-text-primary)]">{t("translationUnits")}</h2>
 
       <div className="mt-4 space-y-4">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">{t("usage.slotCapacity")}</p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--sem-ai-grid-text-muted)]">{t("usage.slotCapacity")}</p>
           <CapacityBar used={slotUsed} total={slotTotal} />
         </div>
 
         {usage && !usageLoadError ? (
           <>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">{t("usage.consumed")}</p>
-                <p className="mt-1 font-[family:var(--font-geist-mono)] text-lg font-semibold text-white">
+              <div className="theme-control-surface-soft rounded-xl border px-3 py-2.5">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--sem-ai-grid-text-muted)]">{t("usage.consumed")}</p>
+                <p className="mt-1 font-[family:var(--font-geist-mono)] text-lg font-semibold text-[color:var(--sem-ai-grid-text-primary)]">
                   {usage.consumed_translation_units}
                 </p>
               </div>
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">{t("usage.remaining")}</p>
-                <p className="mt-1 font-[family:var(--font-geist-mono)] text-lg font-semibold text-white">
+              <div className="theme-control-surface-soft rounded-xl border px-3 py-2.5">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--sem-ai-grid-text-muted)]">{t("usage.remaining")}</p>
+                <p className="mt-1 font-[family:var(--font-geist-mono)] text-lg font-semibold text-[color:var(--sem-ai-grid-text-primary)]">
                   {usage.remaining_translation_units}
                 </p>
               </div>
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">{t("usage.total")}</p>
-                <p className="mt-1 font-[family:var(--font-geist-mono)] text-lg font-semibold text-white">
+              <div className="theme-control-surface-soft rounded-xl border px-3 py-2.5">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--sem-ai-grid-text-muted)]">{t("usage.total")}</p>
+                <p className="mt-1 font-[family:var(--font-geist-mono)] text-lg font-semibold text-[color:var(--sem-ai-grid-text-primary)]">
                   {usage.total_translation_units}
                 </p>
               </div>
@@ -83,7 +83,7 @@ export function TranslationUsagePanel({ payload, usage, usageLoadError }: Transl
 
             <CapacityBar used={usage.consumed_translation_units} total={usage.total_translation_units} />
 
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-[color:var(--sem-ai-grid-text-muted)]">
               {t("usage.billingPeriod")}
               {": "}
               {formatPeriodDate(usage.billing_period_start)}
@@ -92,11 +92,11 @@ export function TranslationUsagePanel({ payload, usage, usageLoadError }: Transl
             </p>
           </>
         ) : payload.total_translation_units > 0 ? (
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-[color:var(--sem-ai-grid-text-secondary)]">
             {t("usage.unavailable", { total: payload.total_translation_units })}
           </p>
         ) : (
-          <p className="text-sm text-zinc-500">{t("usage.noUnits")}</p>
+          <p className="text-sm text-[color:var(--sem-ai-grid-text-muted)]">{t("usage.noUnits")}</p>
         )}
       </div>
     </section>

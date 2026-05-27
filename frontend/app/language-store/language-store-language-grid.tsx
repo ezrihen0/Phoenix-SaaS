@@ -68,21 +68,21 @@ export function LanguageStoreLanguageGrid({
   ];
 
   return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 backdrop-blur-md">
+    <section className="sem-ai-inspector-surface rounded-2xl p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">{t("panels.registry")}</p>
-          <h2 className="mt-1 text-lg font-semibold text-zinc-100">{t("tabs.all")}</h2>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-ai-grid-text-muted)]">{t("panels.registry")}</p>
+          <h2 className="mt-1 text-lg font-semibold text-[color:var(--sem-ai-grid-text-primary)]">{t("tabs.all")}</h2>
         </div>
 
         <div className="relative w-full sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--sem-ai-grid-text-muted)]" />
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t("searchPlaceholder")}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 py-2.5 pl-10 pr-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-violet-500/40 focus:ring-1 focus:ring-violet-500/20"
+            className="theme-input-control w-full rounded-xl py-2.5 pl-10 pr-3 text-sm"
           />
         </div>
       </div>
@@ -95,11 +95,11 @@ export function LanguageStoreLanguageGrid({
               key={item.id}
               type="button"
               onClick={() => setTab(item.id)}
-              className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${
+              className={
                 selected
-                  ? "border border-violet-500/40 bg-violet-500/15 text-violet-100"
-                  : "border border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
-              }`}
+                  ? "theme-selected-card rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em]"
+                  : "theme-control-surface rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--sem-ai-grid-text-secondary)] transition hover:border-[color:var(--cmp-border-accent)]"
+              }
             >
               {item.label}
             </button>
@@ -108,7 +108,7 @@ export function LanguageStoreLanguageGrid({
       </div>
 
       {filteredLanguages.length === 0 ? (
-        <p className="mt-6 rounded-xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+        <p className="mt-6 rounded-xl border border-dashed border-[color:var(--sem-ai-node-border)] px-4 py-8 text-center text-sm text-[color:var(--sem-ai-grid-text-muted)]">
           {t("noSearchResults")}
         </p>
       ) : (
