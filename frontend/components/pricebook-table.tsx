@@ -736,8 +736,8 @@ function PricebookControlDesk({
               <div className="theme-alert-error mt-6 rounded-[20px] border px-4 py-3 text-sm">{actionError}</div>
             ) : null}
 
-            <div className="mt-6 grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
-              <section className={`${panelClass()} overflow-hidden`}>
+            <div className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[1.45fr_0.85fr]">
+              <section className={`${panelClass()} min-w-0`}>
                 <div className="border-b border-[color:var(--cmp-border-subtle)] p-5">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Service catalog</p>
                   <h2 className="mt-2 text-lg font-semibold text-[color:var(--sem-display-headline)]">Universal schema table</h2>
@@ -746,7 +746,7 @@ function PricebookControlDesk({
                   </p>
                 </div>
 
-                <div className="hidden overflow-x-auto lg:block">
+                <div className="crm-table-frame hidden min-w-0 lg:block">
                   <table className="w-full min-w-[980px] text-left text-sm">
                     <thead className="border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
                       <tr>
@@ -812,13 +812,13 @@ function PricebookControlDesk({
                               </p>
                             </td>
                             {canManage ? (
-                              <td className="px-5 py-4 text-right align-top">
+                              <td className="master-table-actions-cell px-5 py-4 text-right align-top">
                                 <div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}>
                                   <Link
                                     href={`/pricebook/${item.id}`}
                                     aria-label={`Edit ${item.name}`}
                                     title="Edit"
-                                    className="theme-control-surface inline-flex h-9 w-9 items-center justify-center rounded-full"
+                                    className="theme-control-surface inline-flex h-11 w-11 items-center justify-center rounded-full"
                                   >
                                     <Pencil className="h-4 w-4" />
                                   </Link>
@@ -829,7 +829,7 @@ function PricebookControlDesk({
                                       title="Delete"
                                       onClick={() => void runItemAction(item, "archive")}
                                       disabled={isBusy}
-                                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                       {busyActionId === `archive:${item.id}` ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                                     </button>
@@ -840,7 +840,7 @@ function PricebookControlDesk({
                                       title="Restore"
                                       onClick={() => void runItemAction(item, "restore")}
                                       disabled={isBusy}
-                                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                       {busyActionId === `restore:${item.id}` ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
                                     </button>
@@ -983,7 +983,7 @@ const legacyColumns = [
   { key: "status", label: "Status", align: "center" as const },
 ];
 
-const pricebookActionIconBaseClass = "inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--cmp-border-subtle)] text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--cmp-focus-ring)] disabled:cursor-not-allowed disabled:opacity-60";
+const pricebookActionIconBaseClass = "inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--cmp-border-subtle)] text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--cmp-focus-ring)] disabled:cursor-not-allowed disabled:opacity-60";
 const pricebookEditIconClass = `${pricebookActionIconBaseClass} bg-amber-500 hover:bg-amber-600`;
 const pricebookDeleteIconClass = `${pricebookActionIconBaseClass} bg-rose-600 hover:bg-rose-700`;
 const pricebookRestoreIconClass = `${pricebookActionIconBaseClass} bg-emerald-600 hover:bg-emerald-700`;
@@ -1211,7 +1211,7 @@ function LegacyPricebookTable({ initialResult, initialFilters, loadError = null 
 
                   return (
                     <MasterTableRow key={item.id}>
-                      <td className="master-table-cell text-center align-middle">
+                      <td className="master-table-cell master-table-actions-cell text-center align-middle">
                         <div className="flex flex-wrap items-center justify-center gap-2">
                           <Link href={`/pricebook/${item.id}`} aria-label={`Edit ${item.name}`} title="Edit" className={pricebookEditIconClass}>
                             <Pencil className="h-4 w-4" />

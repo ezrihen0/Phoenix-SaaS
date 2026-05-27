@@ -525,15 +525,15 @@ function InventoryControlDesk({
           </section>
         ) : null}
 
-        <div className="mt-6 grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
-          <section className={`${panelClass()} overflow-hidden`}>
+        <div className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[1.45fr_0.85fr]">
+          <section className={`${panelClass()} min-w-0`}>
             <div className="border-b border-[color:var(--cmp-border-subtle)] p-5">
               <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Stock on hand</p>
               <h2 className="mt-2 text-lg font-semibold text-[color:var(--sem-display-headline)]">Stock on hand / item catalog</h2>
               <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">Dense inventory directory with stock-by-location breakdown.</p>
             </div>
 
-            <div className="hidden overflow-x-auto lg:block">
+            <div className="crm-table-frame hidden min-w-0 lg:block">
               <table className="w-full min-w-[820px] text-left text-sm">
                 <thead className="border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
                   <tr>
@@ -688,7 +688,7 @@ function InventoryControlDesk({
         </div>
 
         {canManage ? (
-          <section className={`${panelClass()} mt-6 overflow-hidden`}>
+          <section className={`${panelClass()} mt-6 min-w-0`}>
             <div className="border-b border-[color:var(--cmp-border-subtle)] p-5">
               <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Item catalog</p>
               <h2 className="mt-2 text-lg font-semibold text-[color:var(--sem-display-headline)]">Catalog management</h2>
@@ -697,7 +697,7 @@ function InventoryControlDesk({
             {catalogLoadError ? (
               <div className="theme-alert-error m-5 rounded-[20px] border px-4 py-3 text-sm">{catalogLoadError}</div>
             ) : null}
-            <div className="hidden overflow-x-auto lg:block">
+            <div className="crm-table-frame hidden min-w-0 lg:block">
               <table className="w-full min-w-[900px] text-left text-sm">
                 <thead className="border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
                   <tr>
@@ -723,10 +723,10 @@ function InventoryControlDesk({
                       <td className="px-5 py-4 font-[family:var(--font-geist-mono)] text-[color:var(--sem-text-secondary)]">{formatInventoryCurrencyFromCents(item.default_cost_before_tax_cents)}</td>
                       <td className="px-5 py-4 text-[color:var(--sem-text-secondary)]">{item.supplier_name ?? "-"}</td>
                       <td className="px-5 py-4 font-[family:var(--font-geist-mono)] text-[color:var(--sem-text-secondary)]">{item.reorder_point ?? "-"}</td>
-                      <td className="px-5 py-4 text-right">
+                      <td className="master-table-actions-cell px-5 py-4 text-right">
                         <div className="flex justify-end gap-2">
-                          <button type="button" onClick={() => { setSelectedItem(item); setItemFormMode("edit"); }} className="theme-control-surface rounded-full px-3 py-1.5 text-xs font-medium">Edit</button>
-                          <button type="button" onClick={() => void handleArchive(`/api/inventory/items/${item.id}`, "inventory item")} disabled={busyActionId === `/api/inventory/items/${item.id}`} className="theme-control-surface rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60">Archive</button>
+                          <button type="button" onClick={() => { setSelectedItem(item); setItemFormMode("edit"); }} className="theme-control-surface inline-flex min-h-11 items-center rounded-full px-4 py-2 text-xs font-medium">Edit</button>
+                          <button type="button" onClick={() => void handleArchive(`/api/inventory/items/${item.id}`, "inventory item")} disabled={busyActionId === `/api/inventory/items/${item.id}`} className="theme-control-surface inline-flex min-h-11 items-center rounded-full px-4 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60">Archive</button>
                         </div>
                       </td>
                     </tr>
@@ -743,9 +743,9 @@ function InventoryControlDesk({
                     <p className="font-[family:var(--font-geist-mono)] text-xs text-[color:var(--sem-text-muted)]">{item.internal_sku}</p>
                     <h3 className="mt-1 text-lg font-semibold text-[color:var(--sem-text-primary)]">{item.name}</h3>
                     <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">{getInventoryItemTypeLabel(item.item_type)} · {item.unit_of_measure}</p>
-                    <div className="mt-3 flex gap-2">
-                      <button type="button" onClick={() => { setSelectedItem(item); setItemFormMode("edit"); }} className="theme-control-surface rounded-full px-3 py-1.5 text-xs font-medium">Edit</button>
-                      <button type="button" onClick={() => void handleArchive(`/api/inventory/items/${item.id}`, "inventory item")} disabled={busyActionId === `/api/inventory/items/${item.id}`} className="theme-control-surface rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60">Archive</button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => { setSelectedItem(item); setItemFormMode("edit"); }} className="theme-control-surface inline-flex min-h-11 items-center rounded-full px-4 py-2 text-xs font-medium">Edit</button>
+                      <button type="button" onClick={() => void handleArchive(`/api/inventory/items/${item.id}`, "inventory item")} disabled={busyActionId === `/api/inventory/items/${item.id}`} className="theme-control-surface inline-flex min-h-11 items-center rounded-full px-4 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60">Archive</button>
                     </div>
                   </article>
                 )}
