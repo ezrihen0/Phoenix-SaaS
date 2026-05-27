@@ -210,11 +210,9 @@ Use the companion docs this way:
 - `WizField_Language_Store_Source_of_Truth.md` for active Language Store product and architecture truth
 - `WizField_Owner_Launch_Activation_Checklist.md` for owner-managed launch activation items
 - `WizField_Reverification_Runbook.md` for future production-like reruns and operator replay (see §6B for AI)
+- `WizField_Disaster_Recovery_and_Rebuild_Runbook.md` for operational disaster recovery and environment rebuild guidance (not product truth)
 
-Subordinate planning artifacts:
-
-- `PhoenixOS_WizField_Signup_Activation_Master_Plan.md` preserves signup and activation planning context only; current signup, billing, and owner activation truth comes from this document, the engineering closeout, and the owner launch checklist.
-- `WizField_Growth_Center_Marketing_Master_Plan.md` preserves strategic Growth Center planning context only; active Growth Center V1 truth comes from the Growth Center Source of Truth and closeout records.
+Signup and activation product contract: see §17 below (engineering closeout and owner launch checklist cover evidence and owner activation scope).
 
 Short handoff summary:
 
@@ -222,3 +220,25 @@ Short handoff summary:
 2. Treat live Stripe, legal/support closeout, monitoring, and launch-program approval as owner activation scope.
 3. Use the reverification runbook for any future production-like replay.
 4. Keep the active documentation system small and canonical; rely on git history for retired detail.
+
+## 17. Self-serve signup and activation product contract
+
+Locked product rules (do not reopen Gate 11-14 architecture):
+
+- Auth at signup: email + password only; no social login in V1 launch scope.
+- Signup form fields: Full Name, Email, Password, Business Name only — no phone, address, industry, or team-size fields at first launch.
+- Flow order: signup → first workspace created → mandatory plan selection → Stripe Checkout → webhook-authoritative activation → full CRM access.
+- Rejected model: checkout-before-signup (payer/workspace/billing anchor must exist before Checkout).
+- Post-signup UX: user lands on subscription activation, not live CRM; message frame is “workspace is ready — activate to enter.”
+- Hard gate: registered-but-unpaid users must not reach operational CRM routes; unpaid return paths route to activation/subscribe, not `/home`.
+- Activation authority: Stripe webhook sync only; `/billing/success` may show processing state but must not claim active subscription from redirect alone.
+- Pre-activation internal truth: user, first organization, owner membership, session active org, shared billing_account, org–billing coverage, subscription not yet active.
+- Access states:
+
+| State | CRM access | Activation screen |
+|---|---|---|
+| registered_unpaid | No | Yes |
+| checkout_pending | No | Yes |
+| active_trialing / active_paid | Yes | No |
+
+- Add-business: entitlement resolved from shared billing account before org creation; Starter=1, Pro=3, Business=expanded local model; block + upgrade path when over limit.

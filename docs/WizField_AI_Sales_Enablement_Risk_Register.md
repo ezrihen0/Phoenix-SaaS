@@ -76,4 +76,4 @@ When comparing to generic CRM AI:
 
 - [WizField_AI_Master_Source_of_Truth.md](WizField_AI_Master_Source_of_Truth.md)
 - [WizField_AI_Brain_V1_Home_Intelligence_SPEC.md](WizField_AI_Brain_V1_Home_Intelligence_SPEC.md)
-- [docs/AI_WORKFLOW_RULES.md](AI_WORKFLOW_RULES.md)
+- [AI_WORKFLOW_RULES.md](AI_WORKFLOW_RULES.md)

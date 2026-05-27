@@ -131,7 +131,7 @@ This addendum records the bounded P1-P6 Language Store verification pass only. I
 - P7 remains verification and closeout only.
 - No new Language Store product behavior, schema expansion, billing redesign, or UI expansion is part of this addendum.
 - Final evidence for Language Store V1 is captured from migration/schema checks, the four Language Store smoke commands, and backend/frontend builds.
-- Exact replay commands and future rerun procedure live in `docs/WizField_Reverification_Runbook.md`.
+- Exact replay commands and future rerun procedure live in `WizField_Reverification_Runbook.md`.
 
 ### Language Store V1 evidence summary
 

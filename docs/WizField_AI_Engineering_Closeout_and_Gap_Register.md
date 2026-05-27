@@ -123,4 +123,4 @@ Engineering closeout record for **AI Program Phases 0–4**. Product truth: [`Wi
 
 ## 7. Historical references
 
-Phase execution prompts and spike artifacts: [`archive/ai/`](archive/ai/) — audit trail only.
+Phase execution prompts and spike artifacts: [`docs/archive/ai/`](../archive/ai/) — audit trail only.

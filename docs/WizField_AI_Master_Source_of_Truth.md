@@ -12,7 +12,7 @@ This is the **canonical product and architecture truth** for the WizField AI pro
 - Execution process: [`AI_WORKFLOW_RULES.md`](AI_WORKFLOW_RULES.md)
 - Production replay: [`WizField_Reverification_Runbook.md`](WizField_Reverification_Runbook.md) §6B
 
-Historical phase execution prompts live under [`archive/ai/`](archive/ai/) for audit only — **not** authoritative.
+Historical phase execution prompts live under [`docs/archive/ai/`](../archive/ai/) for audit only — **not** authoritative.
 
 ---
 

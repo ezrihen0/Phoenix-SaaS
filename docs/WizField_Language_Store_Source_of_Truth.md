@@ -5,8 +5,8 @@
 **Project:** WizField  
 **Scope:** Billing architecture, entitlement scope, V1 product contract, and execution guardrails for Language Store  
 **Not a reopen of foundation work:** This document builds on the already-closed Gate 0-14 foundation and does not reopen tenancy, multi-org UX, billing-account authority, or document snapshot rules.
-**Companion docs:** `docs/WizField_Reverification_Runbook.md` for replay procedure and `docs/WizField_Engineering_Closeout_and_Verification.md` for final closeout evidence  
-**Historical only:** `docs/WizField_Language_Store_Execution_Packages.md` and `docs/WizField_Language_Store_Master_Plan_Prompt.md`
+**Companion docs:** `WizField_Reverification_Runbook.md` for replay procedure and `WizField_Engineering_Closeout_and_Verification.md` for final closeout evidence  
+**Retired planning detail:** preserved in git history only
 
 ---
 

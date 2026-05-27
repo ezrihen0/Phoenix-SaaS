@@ -98,7 +98,7 @@ Expected result:
 
 Use this addendum when the completed Language Store V1 package must be replayed as a bounded verification pass without reopening the underlying Gate 11-14 foundation decisions.
 
-This addendum is procedural only. Active Language Store product, billing, entitlement, and snapshot rules remain owned by `docs/WizField_Language_Store_Source_of_Truth.md`.
+This addendum is procedural only. Active Language Store product, billing, entitlement, and snapshot rules remain owned by `WizField_Language_Store_Source_of_Truth.md`.
 
 ### Language Store V1 prerequisites
 
@@ -175,7 +175,7 @@ Stop the Language Store portion of the run if any of the following occurs:
 
 Use this addendum when the shipped AI program (foundation through Copilot outcome loop) must be replayed without reopening Gate 11–14 foundation decisions.
 
-Product truth: `docs/WizField_AI_Master_Source_of_Truth.md`. Evidence matrices: `docs/WizField_AI_Engineering_Closeout_and_Gap_Register.md`.
+Product truth: `WizField_AI_Master_Source_of_Truth.md`. Evidence matrices: `WizField_AI_Engineering_Closeout_and_Gap_Register.md`.
 
 ### AI prerequisites
 

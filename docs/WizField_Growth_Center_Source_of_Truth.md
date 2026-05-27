@@ -3,7 +3,7 @@
 **Document status:** Canonical implementation truth (code-aligned)  
 **Module shell:** authenticated `/marketing` route family (`frontend/app/marketing/[[...slug]]`)  
 **Backend module:** [`backend/src/marketing`](../backend/src/marketing/)  
-**Strategic framing:** For product thesis and roadmap narrative, retain [`WizField_Growth_Center_Marketing_Master_Plan.md`](WizField_Growth_Center_Marketing_Master_Plan.md) as non-canonical strategy input; resolve conflicts **in favor of this document**.
+**Strategic thesis:** Retained in §1 below; retired strategy detail preserved in git history only.
 
 **Program scope:** Growth Center Phases **1–7** are **implemented and shipped** as a single coherent Growth Center (`growth_center_v1_program_complete`). This document replaces per-phase Execution Prompts and Feature Cards for day-to-day truth.
 
@@ -14,6 +14,13 @@
 Growth Center is **organization-scoped** marketing operations inside WizField: marketing profile, multi-platform draft composition, optional calendar metadata, OAuth-backed channel targets, explicit publish jobs, CRM-derived opportunities, campaign shells with slot coverage, V1 opportunity-triggered automations (no auto-publish), and **internal** analytics (no ROI or ad dashboards).
 
 **North-star constraint:** Outbound publishing is always **explicit** (`publish_job` with UTC `scheduled_at` or publish-now). Draft `scheduled_at` is **metadata only** and never silently posts.
+
+**Strategic thesis (product intent — not a second spec):**
+
+- **Marketing by Doing:** Growth Center converts real operational activity (completed jobs, reviews, schedule gaps, service-area concentration) into local marketing — not a generic AI caption tool.
+- **Retention moat:** Losing WizField also means losing connected channels, scheduled posts, campaign history, marketing profile/brand voice, and CRM-derived opportunities.
+- **Customer-facing line:** “Turn completed jobs, reviews, and open schedule gaps into ready-to-publish marketing — from the system you already use to run your business.”
+- **WizField stack:** (1) Run the business → (2) Get paid → (3) Stay visible — Growth Center owns layer 3.
 
 ---
 
@@ -211,9 +218,89 @@ Future monetization options (bundled vs add-on vs hybrid) remain **architecture-
 | Document | Role |
 |----------|------|
 | **This file** | Canonical **current-state** for Engineering / Support / PM handoff |
-| Master plan | Long-horizon strategy; subordinate where it conflicts with shipped truth |
-| [`WizField_Growth_Center_Closeout_and_Verification.md`](WizField_Growth_Center_Closeout_and_Verification.md) | Program closure, commits, verification gates |
-| Archived / uncommitted phase prompts (if any) | Historical; **do not** treat as specification unless re-opened |
+| **§14 below** | Program closure evidence (canonical) |
+| [`docs/archive/ai/`](../archive/ai/) phase prompts | Historical audit trail only; **do not** treat as specification unless re-opened |
+
+---
+
+## 14. Program closure evidence
+
+Product truth remains in §1–13 above.
+
+### 14.1 Program verdict
+
+| Gate | Result |
+|------|--------|
+| Full-program implementation | **Complete** (Phases 1–7 shipped on `SaaS-master`) |
+| Full-program audit | **PASS** — coherent product system; optional UX copy / phase token alignment completed or tracked in same delivery train as this closeout |
+| Monetization (Growth Center runtime) | **Deferred by design** — no `EntitlementService` integration in [`backend/src/marketing`](../backend/src/marketing/) |
+
+### 14.2 Phase completion summary (commit anchors)
+
+Representative feature commits on branch **`SaaS-master`** (verify locally with `git log --oneline --grep=Growth` if messages shift):
+
+| Phase | Theme | Representative commit (short hash) | Notes |
+|-------|--------|-------------------------------------|--------|
+| **1** | Foundation + `/marketing` shell | `ad703c8` | Authenticated route family, early scaffolding |
+| **2** | Content Studio | `8f1bdff` | Profiles, drafts, variants, calendar metadata |
+| **3** | Publishing integrations | `47785b2` | Channels OAuth, jobs, attempts, dispatcher pipeline |
+| **4** | CRM Intelligence | `f5f2b09` | Opportunities, detection, convert-to-draft |
+| **5** | Campaign Builder | `ce020e5` | Campaigns + items |
+| **6** | Automations V1 | `07921bb` | Rules + runs, no auto-publish |
+| **7** | Analytics | `41b368c` | `analytics/summary`, panel, foundation pulse |
+
+*(Exact hashes reflect `SaaS-master` at Growth Center closeout; amend this table if history is rewritten.)*
+
+### 14.3 Schema and migration verification
+
+| Check | Expectation |
+|--------|-------------|
+| Marketing tables present | All `marketing_*` tables in [`schema-manifest.ts`](../backend/src/database/schema-manifest.ts) |
+| TypeORM registration | All marketing entities registered in [`typeorm.config.ts`](../backend/src/database/typeorm.config.ts) and [`marketing.module.ts`](../backend/src/marketing/marketing.module.ts) `forFeature` |
+| Phase 2–6 migrations | `1778740000000-marketing-growth-center-phase2.ts` … `1778800000000-marketing-phase6-automation-rules.ts` |
+| Phase 7 migrations | **None** — analytics is read-only on existing tables |
+
+**Commands (release gate):**
+
+```bash
+npm run build --workspace backend
+npm run build --workspace frontend
+npm run schema:verify --workspace backend
+```
+
+All three must pass before tagging a release candidate that advertises Growth Center completeness.
+
+### 14.4 Functional verification checklist (smoke)
+
+Manual or automated smoke against a staging org:
+
+1. **Foundation** — `GET /api/marketing/foundation` returns org, capabilities, summary cards, pulse (if enabled).
+2. **Profile** — PATCH marketing profile persists fragments.
+3. **Drafts** — create draft, patch variants, workflow transition.
+4. **Calendar** — GET calendar range returns scheduled metadata only.
+5. **Channels** — list + OAuth start (owner/admin); disconnect.
+6. **Opportunities** — list, publisher refresh, dismiss/archive, convert (publisher).
+7. **Campaigns** — create campaign, attach/detach draft (publisher).
+8. **Automations** — create rule, preview, observe runs (publisher for writes).
+9. **Publishing** — schedule + complete path on test provider or mock (publisher).
+10. **Analytics** — `GET /api/marketing/analytics/summary` with preset; dispatcher can read.
+11. **RBAC** — dispatcher cannot publish, refresh opportunities, or mutate campaigns/automations channels admin paths per API.
+
+### 14.5 Known open items (non-blocking product backlog)
+
+- Instagram V1.5 outbound + media model.
+- Monetization: plan → capability matrix for Growth Center (no half-implemented SKU gates).
+- Analytics: export, time-series buckets, or materialized snapshots if performance requires.
+- Optional UX: further tighten dispatcher vs Content Studio write policy if product narrows “office” drafting rights.
+- SEO / Website Content Engine direction (separate initiative).
+
+### 14.6 Audit cross-reference
+
+Formal full-program audit verdict: **Growth Center Full Audit PASS — READY FOR SOURCE OF TRUTH CONSOLIDATION** (see internal audit record / plan capsule). Defects classified as **documentation and marketing copy drift** were addressed in workspace route chrome and foundation `phase` taxonomy in the same implementation train as these documents.
+
+### 14.7 Final sign-off line
+
+**Growth Center Phases 1–7 — Implemented, reviewed (audit), documented (Source of Truth), and released on `SaaS-master` subject to org’s normal release process.**
 
 ---
 

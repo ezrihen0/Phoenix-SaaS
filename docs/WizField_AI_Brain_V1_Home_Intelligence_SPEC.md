@@ -8,7 +8,7 @@
 
 ## Out of scope (V1)
 
-- Voice answering (**Phase 1.5** Voice Intake Pilot per master program)
+- Voice answering in the Brain strip (Voice Intake Phases **1.5A/1.5B** are separate shipped/pilot surfaces — see `WizField_AI_Master_Source_of_Truth.md` §1)
 - SMS/email send, portal magic link mint triggered by AI (**Phase 2+**)
 - Growth Center publish, draft approval automation, or Instagram
 - “Self-learning” claims without outcome logging
@@ -102,7 +102,7 @@ Ranking: default sort = **unpaid + quote waiting** first, then leads age, then f
 
 - **Input:** Bounded JSON derived from dashboard + rule outputs (hashed for audit from Phase 0).
 - **Output:** Short brief (≤ ~120 words) + **must not introduce facts** not present in input (evaluation rubric: “unsupported claim”).
-- **Copy discipline:** Forbidden to mention portal analytics, autopublish, autopilot scheduling, voice as live feature (Voice is Phase 1.5).
+- **Copy discipline:** Forbidden to mention portal analytics, autopublish, autopilot scheduling, or Voice Intake as if it were part of the Brain strip. Voice Intake Phases **1.5A/1.5B** are separate shipped/pilot surfaces per `WizField_AI_Master_Source_of_Truth.md` §1.
 - **Voice disclaimer (product copy reserve):** If marketing mentions roadmap voice, use:  
   > “Voice Intake is available as a **separate pilot** for eligible businesses — not included in the standard Brain experience.”
 
@@ -137,5 +137,5 @@ Scripted path from master program:
 ## References
 
 - Master program plan (strategic context): product owner’s **WizField AI Master Program Plan** (Cursor plan artifact — not edited in repo)
-- [WizField_AI_Phase0_Foundation_Execution_Prompt.md](WizField_AI_Phase0_Foundation_Execution_Prompt.md)
+- [`docs/archive/ai/WizField_AI_Phase0_Foundation_Execution_Prompt.md`](../archive/ai/WizField_AI_Phase0_Foundation_Execution_Prompt.md) — historical; audit only
 - [WizField_AI_Sales_Enablement_Risk_Register.md](WizField_AI_Sales_Enablement_Risk_Register.md)
