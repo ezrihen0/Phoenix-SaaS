@@ -12,17 +12,12 @@ import {
   type LucideProps,
 } from "lucide-react";
 
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
 import { handleLogout } from "@/lib/auth/logout";
 import {
   MOBILE_MORE_MENU_SECTIONS,
   type MobileMoreMenuSectionId,
 } from "@/lib/navigation/mobile-more-menu";
-import {
-  getMobileModulePolicyBadge,
-  getMobileModulePolicy,
-} from "@/lib/navigation/mobile-module-policy";
 import {
   isRouteActive,
 } from "@/lib/navigation/mobile-shell-nav";
@@ -97,8 +92,6 @@ function MoreNavLink({
   onNavigate: () => void;
 }) {
   const Icon = item.icon;
-  const policy = getMobileModulePolicy(item.href);
-  const badge = getMobileModulePolicyBadge(policy);
 
   return (
     <Link
@@ -107,18 +100,13 @@ function MoreNavLink({
       onClick={onNavigate}
       className={[
         active ? "theme-selected-card" : "theme-control-surface",
-        "relative flex min-h-12 items-center gap-3 rounded-[16px] border px-3 py-2.5 text-left transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
+        "relative flex min-h-11 items-center gap-2.5 rounded-[14px] border px-3 py-2 text-left transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
       ].join(" ")}
     >
-      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)]">
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)]">
         <Icon className="h-4 w-4 shrink-0" />
       </span>
       <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.label}</span>
-      {badge ? (
-        <span className="shrink-0 rounded-full border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-[color:var(--sem-text-muted)]">
-          {badge}
-        </span>
-      ) : null}
     </Link>
   );
 }
@@ -130,15 +118,15 @@ function sectionLabelKey(sectionId: MobileMoreMenuSectionId) {
 function resolveMoreMenuLabel(href: string, fallbackLabel: string) {
   switch (href) {
     case "/jobs":
-      return "All Jobs";
+      return "Jobs";
     case "/invoices":
-      return "All Invoices";
+      return "Invoices";
     case "/estimates":
-      return "All Estimates";
+      return "Estimates";
     case "/inspections":
-      return "All Inspections";
+      return "Inspections";
     case "/customers":
-      return "All Customers";
+      return "Customers";
     default:
       return fallbackLabel;
   }
@@ -386,7 +374,7 @@ export function MobileShellNav({
             aria-label={t("shell.mobile.more")}
             className="fixed inset-y-0 left-0 z-[60] flex h-full w-[80vw] max-w-[320px] flex-col border-r border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-modal)] pb-[calc(1rem+env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+0.4rem)] shadow-[24px_0_80px_color-mix(in_srgb,var(--bg-canvas)_65%,transparent)] backdrop-blur-xl lg:hidden"
           >
-            <div className="flex items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] px-5 py-4">
+            <div className="flex items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--sem-accent-primary),var(--sem-action-secondary))] text-sm font-semibold text-[color:var(--sem-text-inverse)]">
                   {userInitials}
@@ -407,7 +395,7 @@ export function MobileShellNav({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
               {MOBILE_MORE_MENU_SECTIONS.map((section) => {
                 const sectionLinks = section.links
                   .map((link) => navByHref.get(link.href))
@@ -418,14 +406,15 @@ export function MobileShellNav({
                     <div
                       key={section.id}
                       ref={workspaceSectionRef}
-                      className="mb-5 last:mb-0"
+                      className="mb-4 last:mb-0"
                     >
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                         {t(sectionLabelKey(section.id))}
                       </p>
-                      <div className="space-y-3 rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-3">
-                        <OrganizationSwitcher variant="compact" menuPlacement="bottom" />
-                        <LanguageSwitcher variant="compact" />
+                      <div className="space-y-2 rounded-[16px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-2.5">
+                        <div className="w-full">
+                          <OrganizationSwitcher variant="compact" menuPlacement="bottom" />
+                        </div>
                       </div>
                     </div>
                   );
@@ -436,11 +425,11 @@ export function MobileShellNav({
                 }
 
                 return (
-                  <div key={section.id} className="mb-5 last:mb-0">
+                  <div key={section.id} className="mb-4 last:mb-0">
                     <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                       {t(sectionLabelKey(section.id))}
                     </p>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {sectionLinks.map((item) => (
                         <MoreNavLink
                           key={item.href}
