@@ -208,66 +208,288 @@
 :root[data-theme="fire-ember"] {
   color-scheme: light;
 
-  /* Layer 1: Theme mode — Software Focus */
+  /* ==========================================================================
+     PREMIUM B2B SAAS BRIGHT MODE — SOFTWARE FOCUS (fire-ember)
+     ========================================================================== */
+
+  /* Layer 1: Theme mode */
   --theme-name: fire-ember;
-  --theme-tone-1: #F8FAFC;
-  --theme-tone-2: #FFFFFF;
-  --theme-tone-3: #6366F1;
-  --theme-tone-4: #64748B;
-  --background: var(--theme-tone-1);
-  --foreground: #334155;
+  --theme-tone-1: #f8fafc;
+  --theme-tone-2: #ffffff;
+  --theme-tone-3: #0284c7;
+  --theme-tone-4: #64748b;
+  --background: #f8fafc;
+  --foreground: #0f172a;
 
-  --flat-canvas: #F8FAFC;
-  --flat-panel: #FFFFFF;
-  --flat-border: color-mix(in srgb, #64748B 22%, transparent);
-  --flat-emerald: #10b981;
-  --flat-gold: #6366F1;
-  --flat-blue: #06B6D4;
-  --flat-coral: #f87171;
+  /* Layer 2: Foundations */
+  --flat-canvas: #f8fafc;
+  --flat-panel: #ffffff;
+  --flat-border: #e2e8f0;
+  --flat-emerald: #16a34a;
+  --flat-gold: #0284c7;
+  --flat-blue: #0284c7;
+  --flat-coral: #ef4444;
 
-  --fdn-color-neutral-980: #EEF2F7;
-  --fdn-color-neutral-950: #F8FAFC;
-  --fdn-color-neutral-920: #F1F5F9;
-  --fdn-color-neutral-900: #E2E8F0;
-  --fdn-color-neutral-850: #FFFFFF;
+  --fdn-color-neutral-980: #f8fafc;
+  --fdn-color-neutral-950: #f8fafc;
+  --fdn-color-neutral-920: #f1f5f9;
+  --fdn-color-neutral-900: #e2e8f0;
+  --fdn-color-neutral-850: #ffffff;
 
-  --fdn-surface-neutral-canvas: #F8FAFC;
-  --fdn-surface-neutral-panel: #FFFFFF;
-  --fdn-surface-neutral-card: #FFFFFF;
-  --fdn-surface-neutral-raised: #F1F5F9;
+  --fdn-surface-neutral-canvas: #f8fafc;
+  --fdn-surface-neutral-panel: #ffffff;
+  --fdn-surface-neutral-card: #ffffff;
+  --fdn-surface-neutral-raised: #f1f5f9;
 
-  --fdn-text-primary: #0F172A;
-  --fdn-text-secondary: #64748B;
-  --fdn-text-muted: #94A3B8;
-  --fdn-text-inverse: #FFFFFF;
+  --fdn-color-emerald-500: #16a34a;
+  --fdn-color-gold-500: #0284c7;
+  --fdn-color-gold-400: #0284c7;
+  --fdn-color-blue-500: #0284c7;
+  --fdn-color-amber-500: #d97706;
+  --fdn-color-red-500: #dc2626;
 
-  --fdn-color-gold-500: #6366F1;
-  --fdn-color-gold-400: #818CF8;
-  --fdn-color-blue-500: #06B6D4;
-  --fdn-color-amber-500: #f59e0b;
-
+  --fdn-alpha-white-02: rgba(15, 23, 42, 0.02);
+  --fdn-alpha-white-04: rgba(15, 23, 42, 0.04);
+  --fdn-alpha-white-06: rgba(15, 23, 42, 0.06);
   --fdn-alpha-white-08: rgba(15, 23, 42, 0.08);
-  --fdn-alpha-white-14: rgba(15, 23, 42, 0.14);
   --fdn-alpha-white-12: rgba(15, 23, 42, 0.12);
+  --fdn-alpha-white-14: rgba(15, 23, 42, 0.14);
   --fdn-alpha-white-18: rgba(15, 23, 42, 0.18);
+  --fdn-alpha-white-20: rgba(15, 23, 42, 0.20);
+  --fdn-alpha-white-24: rgba(15, 23, 42, 0.24);
+  --fdn-alpha-black-55: rgba(15, 23, 42, 0.55);
+  --fdn-alpha-black-68: rgba(15, 23, 42, 0.68);
+  --fdn-alpha-black-74: rgba(15, 23, 42, 0.74);
 
-  --sem-surface-modal: #FFFFFF;
-  --sem-surface-soft: #F8FAFC;
+  --fdn-text-primary: #0f172a;
+  --fdn-text-secondary: #334155;
+  --fdn-text-muted: #64748b;
+  --fdn-text-inverse: #ffffff;
+
+  /* Layer 3: Semantic roles */
+  --sem-canvas-base: #f8fafc;
+  --sem-surface-panel: #ffffff;
+  --sem-surface-card: #ffffff;
+  --sem-surface-raised: #f1f5f9;
+  --sem-surface-modal: #ffffff;
+  --sem-surface-soft: #f8fafc;
   --sem-surface-overlay: rgba(15, 23, 42, 0.45);
 
-  --sem-text-accent: #6366F1;
-  --sem-display-headline: #0F172A;
-  --sem-board-glass: color-mix(in srgb, #FFFFFF 88%, transparent);
-  --sem-board-grid: color-mix(in srgb, #6366F1 8%, transparent);
-  --sem-board-border: color-mix(in srgb, #6366F1 18%, rgba(15, 23, 42, 0.08));
-  --sem-board-glow: color-mix(in srgb, #6366F1 10%, transparent);
+  --sem-text-primary: #0f172a;
+  --sem-text-secondary: #334155;
+  --sem-text-muted: #64748b;
+  --sem-text-accent: #0284c7;
+  --sem-text-inverse: #ffffff;
 
-  --sem-border-accent: color-mix(in srgb, #6366F1 38%, transparent);
-  --sem-focus-ring: color-mix(in srgb, #6366F1 32%, transparent);
+  --sem-display-headline: #0f172a;
+  --sem-board-glass: #ffffff;
+  --sem-board-grid: rgba(15, 23, 42, 0.04);
+  --sem-board-border: rgba(15, 23, 42, 0.08);
+  --sem-board-glow: transparent;
 
-  --sem-accent-primary: #6366F1;
-  --sem-action-primary: #6366F1;
-  --sem-action-secondary: #06B6D4;
+  --sem-border-subtle: rgba(15, 23, 42, 0.06);
+  --sem-border-strong: rgba(15, 23, 42, 0.12);
+  --sem-border-accent: color-mix(in srgb, #0284c7 32%, transparent);
+  --sem-focus-ring: color-mix(in srgb, #0284c7 28%, transparent);
+
+  --sem-accent-primary: #0284c7;
+  --sem-action-primary: #0f172a;
+  --sem-action-primary-hover: #1e293b;
+  --sem-action-secondary: #0284c7;
+
+  --sem-state-success: #16a34a;
+  --sem-state-warning: #d97706;
+  --sem-state-info: #0284c7;
+  --sem-state-error: #dc2626;
+
+  --sem-state-success-bg: #f0fdf4;
+  --sem-state-success-border: #bbf7d0;
+  --sem-state-success-text: #166534;
+  --sem-state-warning-bg: #fffbeb;
+  --sem-state-warning-border: #fde68a;
+  --sem-state-warning-text: #92400e;
+  --sem-state-info-bg: #f0f9ff;
+  --sem-state-info-border: #bae6fd;
+  --sem-state-info-text: #075985;
+  --sem-state-error-bg: #fef2f2;
+  --sem-state-error-border: #fecaca;
+  --sem-state-error-text: #991b1b;
+
+  /* Layer 4: Component contract */
+  --cmp-surface-canvas: #f8fafc;
+  --cmp-surface-panel: #ffffff;
+  --cmp-surface-card: #ffffff;
+  --cmp-surface-raised: #f1f5f9;
+  --cmp-surface-modal: #ffffff;
+  --cmp-surface-soft: #f8fafc;
+
+  --cmp-action-primary: #0f172a;
+  --cmp-action-secondary: #0284c7;
+  --cmp-action-primary-bg: #0f172a;
+  --cmp-action-primary-border: #0f172a;
+  --cmp-action-primary-text: #ffffff;
+  --cmp-action-secondary-bg: #ffffff;
+  --cmp-action-secondary-border: rgba(15, 23, 42, 0.12);
+  --cmp-action-secondary-text: #0f172a;
+  --cmp-action-ghost-bg: transparent;
+  --cmp-action-ghost-border: rgba(15, 23, 42, 0.06);
+  --cmp-action-ghost-text: #334155;
+
+  --cmp-input-bg: #ffffff;
+  --cmp-input-text: #0f172a;
+  --cmp-input-placeholder: #64748b;
+  --cmp-input-border: #e2e8f0;
+  --cmp-input-focus: color-mix(in srgb, #0284c7 28%, transparent);
+
+  --cmp-border-subtle: rgba(15, 23, 42, 0.06);
+  --cmp-border-strong: rgba(15, 23, 42, 0.12);
+  --cmp-border-accent: color-mix(in srgb, #0284c7 32%, transparent);
+  --cmp-divider-subtle: rgba(15, 23, 42, 0.06);
+
+  --cmp-badge-success: #166534;
+  --cmp-badge-warning: #92400e;
+  --cmp-badge-info: #075985;
+  --cmp-badge-error: #991b1b;
+
+  --cmp-status-success-bg: #f0fdf4;
+  --cmp-status-success-border: #bbf7d0;
+  --cmp-status-success-text: #166534;
+  --cmp-status-warning-bg: #fffbeb;
+  --cmp-status-warning-border: #fde68a;
+  --cmp-status-warning-text: #92400e;
+  --cmp-status-info-bg: #f0f9ff;
+  --cmp-status-info-border: #bae6fd;
+  --cmp-status-info-text: #075985;
+  --cmp-status-error-bg: #fef2f2;
+  --cmp-status-error-border: #fecaca;
+  --cmp-status-error-text: #991b1b;
+
+  --cmp-widget-surface: #ffffff;
+  --cmp-widget-accent: #0284c7;
+  --cmp-hover-surface: #f1f5f9;
+  --cmp-selected-bg: #f1f5f9;
+  --cmp-selected-border: rgba(15, 23, 42, 0.12);
+  --cmp-selected-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --cmp-focus-ring: color-mix(in srgb, #0284c7 28%, transparent);
+  --cmp-backdrop-scrim: rgba(15, 23, 42, 0.45);
+
+  --bg-canvas: #f8fafc;
+  --bg-primary: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-card: #ffffff;
+  --bg-soft: #f8fafc;
+  --bg-overlay: rgba(15, 23, 42, 0.45);
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-accent: #0284c7;
+
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --border-strong: rgba(15, 23, 42, 0.12);
+  --border-accent: color-mix(in srgb, #0284c7 32%, transparent);
+
+  --input-border: #e2e8f0;
+  --input-focus-ring: color-mix(in srgb, #0284c7 28%, transparent);
+
+  --button-secondary-bg: #ffffff;
+  --button-secondary-border: rgba(15, 23, 42, 0.12);
+
+  --status-success-bg: #f0fdf4;
+  --status-success-border: #bbf7d0;
+  --status-success-text: #166534;
+  --status-warning-bg: #fffbeb;
+  --status-warning-border: #fde68a;
+  --status-warning-text: #92400e;
+  --status-info-bg: #f0f9ff;
+  --status-info-border: #bae6fd;
+  --status-info-text: #075985;
+  --status-error-bg: #fef2f2;
+  --status-error-border: #fecaca;
+  --status-error-text: #991b1b;
+}
+
+/* Layer 5: Software Focus bright-mode recipes */
+:root[data-theme="fire-ember"] body {
+  background: var(--bg-canvas);
+}
+
+:root[data-theme="fire-ember"] .theme-surface-card:not([class*="shadow"]) {
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.03),
+    0 4px 12px rgba(15, 23, 42, 0.02);
+}
+
+:root[data-theme="fire-ember"] .theme-surface-modal:not([class*="shadow"]) {
+  box-shadow:
+    0 4px 16px rgba(15, 23, 42, 0.06),
+    0 12px 32px rgba(15, 23, 42, 0.04);
+}
+
+:root[data-theme="fire-ember"] .theme-surface-modal,
+:root[data-theme="fire-ember"] .theme-modal-surface {
+  backdrop-filter: none;
+}
+
+:root[data-theme="fire-ember"] .theme-btn-primary {
+  border: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+:root[data-theme="fire-ember"] .theme-btn-primary:hover {
+  background: var(--sem-action-primary-hover);
+  filter: none;
+}
+
+:root[data-theme="fire-ember"] .theme-btn-secondary:hover {
+  filter: none;
+  background: var(--cmp-hover-surface);
+}
+
+:root[data-theme="fire-ember"] .theme-selected-card {
+  box-shadow: var(--cmp-selected-shadow);
+}
+
+:root[data-theme="fire-ember"] .master-table-wrap {
+  background: var(--cmp-surface-card);
+  border-color: var(--sem-border-strong);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
+}
+
+:root[data-theme="fire-ember"] .master-table-header-cell {
+  background: #f8fafc;
+  color: var(--sem-text-muted);
+  font-weight: 600;
+}
+
+:root[data-theme="fire-ember"] .master-table-row:nth-child(even) .master-table-cell {
+  background: #f8fafc;
+}
+
+:root[data-theme="fire-ember"] .master-table-row-interactive:hover .master-table-cell,
+:root[data-theme="fire-ember"] .master-table-row-selected .master-table-cell {
+  background: #f1f5f9;
+}
+
+:root[data-theme="fire-ember"] .crm-table-frame {
+  background: var(--cmp-surface-card);
+  border-color: var(--sem-border-strong);
+}
+
+:root[data-theme="fire-ember"] .crm-table th {
+  background: #f8fafc;
+}
+
+:root[data-theme="fire-ember"] .crm-table tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+:root[data-theme="fire-ember"] .theme-overlay-atmosphere {
+  background: transparent;
+}
+
+:root[data-theme="fire-ember"] .theme-overlay-grid {
+  background-image: none;
 }
 
 :root[data-theme="ash-rose"] {
