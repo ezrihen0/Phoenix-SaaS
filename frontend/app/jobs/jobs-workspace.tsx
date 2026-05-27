@@ -22,6 +22,7 @@ import {
   Wrench,
 } from "lucide-react";
 
+import { MobileJobsFieldCommand } from "@/app/jobs/mobile-jobs-field-command";
 import { BoardShell } from "@/components/board/board-shell";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import { MetricTile } from "@/components/board/metric-tile";
@@ -884,6 +885,7 @@ export default function JobsWorkspace() {
   const [queueTechnicianFilter, setQueueTechnicianFilter] = useState<string>("all");
   const [queueDateFilter, setQueueDateFilter] = useState<string>("");
   const [queuePage, setQueuePage] = useState(1);
+  const [mobileDetailJobId, setMobileDetailJobId] = useState<string | null>(null);
   const [isTimelineOpen, setIsTimelineOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -1231,7 +1233,36 @@ export default function JobsWorkspace() {
   if (isBooting && !dashboard) {
     return (
       <BoardShell gridOpacity="subtle">
-        <div className="flex min-h-screen items-center justify-center">
+        <MobileJobsFieldCommand
+          jobs={[]}
+          technicians={[]}
+          selectedJobId={null}
+          mobileDetailJobId={null}
+          queueTechnicianFilter={queueTechnicianFilter}
+          queueDateFilter={queueDateFilter}
+          queuePage={1}
+          queueTotalPages={1}
+          queueStartIndex={0}
+          queueFilterActive={false}
+          isBooting
+          isRefreshing={false}
+          errorMessage={errorMessage}
+          statusMessage={statusMessage}
+          displayedJob={null}
+          operatorNextAction={null}
+          displayedJobMoneyCents={null}
+          onSelectJob={() => {}}
+          onClearMobileDetail={() => {}}
+          onTechnicianFilterChange={setQueueTechnicianFilter}
+          onDateFilterChange={setQueueDateFilter}
+          onClearFilters={() => {
+            setQueueTechnicianFilter("all");
+            setQueueDateFilter("");
+          }}
+          onQueuePageChange={setQueuePage}
+          onRefresh={() => {}}
+        />
+        <div className="hidden min-h-screen items-center justify-center lg:flex">
           <div className="inline-flex items-center gap-3 text-sm text-[color:var(--sem-text-secondary)]">
             <LoaderCircle className="h-4 w-4 animate-spin text-[color:var(--sem-accent-primary)]" />
             Loading the jobs command board...
@@ -1255,6 +1286,15 @@ export default function JobsWorkspace() {
     });
   }
 
+  function selectJobMobile(jobId: string) {
+    setMobileDetailJobId(jobId);
+    selectJob(jobId);
+  }
+
+  function clearMobileJobDetail() {
+    setMobileDetailJobId(null);
+  }
+
   function activateControlQueue(items: DashboardControlItem[]) {
     const firstJobId = items.find((item) => item.jobId)?.jobId ?? null;
     if (firstJobId) {
@@ -1264,6 +1304,47 @@ export default function JobsWorkspace() {
 
   return (
     <BoardShell gridOpacity="subtle">
+      <MobileJobsFieldCommand
+        jobs={pagedQueueJobs}
+        technicians={dashboard?.technicians ?? []}
+        selectedJobId={selectedJobId}
+        mobileDetailJobId={mobileDetailJobId}
+        queueTechnicianFilter={queueTechnicianFilter}
+        queueDateFilter={queueDateFilter}
+        queuePage={safeQueuePage}
+        queueTotalPages={queueTotalPages}
+        queueStartIndex={queueStartIndex}
+        queueFilterActive={queueFilterActive}
+        isBooting={false}
+        isRefreshing={busyAction === "refresh" || isPending}
+        errorMessage={errorMessage}
+        statusMessage={statusMessage}
+        displayedJob={displayedJob}
+        operatorNextAction={operatorNextAction}
+        displayedJobMoneyCents={displayedJobMoneyCents}
+        onSelectJob={selectJobMobile}
+        onClearMobileDetail={clearMobileJobDetail}
+        onTechnicianFilterChange={setQueueTechnicianFilter}
+        onDateFilterChange={setQueueDateFilter}
+        onClearFilters={() => {
+          setQueueTechnicianFilter("all");
+          setQueueDateFilter("");
+        }}
+        onQueuePageChange={setQueuePage}
+        onRefresh={() => {
+          void runAction(
+            "refresh",
+            async () => {
+              await Promise.all([
+                refreshDashboard(selectedJobId, selectedLeadId),
+                refreshJobDetail(selectedJobId),
+              ]);
+            },
+            "The board was refreshed.",
+          );
+        }}
+      />
+      <div className="hidden lg:block">
       <div className="mx-auto max-w-[1720px] px-5 py-6 lg:px-8">
         <header className={`${flightDeckPanelClass} px-6 py-5`}>
           <div className="flex flex-wrap items-start justify-between gap-5">
@@ -1770,6 +1851,7 @@ export default function JobsWorkspace() {
             <div key={status}>{getDashboardStatusLabel(status)} · {jobs.length}</div>
           ))}
         </div>
+      </div>
       </div>
     </BoardShell>
   );

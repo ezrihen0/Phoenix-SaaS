@@ -22,6 +22,7 @@ import {
   UserRound,
 } from "lucide-react";
 
+import { MobileScheduleDayView } from "@/app/schedule/mobile-schedule-day-view";
 import { BoardShell } from "@/components/board/board-shell";
 import { MetricTile } from "@/components/board/metric-tile";
 import { formatAddress, buildAddressQuery, buildGoogleMapsSearchUrl } from "@/lib/crm/display";
@@ -234,7 +235,10 @@ function statusTone(status: JobStatus) {
   return "theme-status-info";
 }
 
-function getNextDispatchMove(job: JobRecord, t: ReturnType<typeof useTranslations<"schedule">>) {
+function getNextDispatchMove(
+  job: Pick<JobRecord, "assigned_technician_id" | "scheduled_for" | "status">,
+  t: ReturnType<typeof useTranslations<"schedule">>,
+) {
   if (!job.assigned_technician_id) {
     return {
       title: t("moveAssignTechnician"),
@@ -682,6 +686,7 @@ export default function ScheduleWorkspace({
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [mobileDetailJobId, setMobileDetailJobId] = useState<string | null>(null);
   const [technicianFilter, setTechnicianFilter] = useState<string>("all");
   const [schedulePage, setSchedulePage] = useState(1);
   const [unscheduledPage, setUnscheduledPage] = useState(1);
@@ -719,6 +724,12 @@ export default function ScheduleWorkspace({
   const dayJobs = useMemo(
     () => scheduledJobs.filter((job) => job.scheduled_for && isSameCalendarDay(new Date(job.scheduled_for), activeDay)),
     [scheduledJobs, activeDay],
+  );
+  const mobileDayJobs = useMemo(
+    () => [...dayJobs].sort(
+      (left, right) => new Date(left.scheduled_for!).getTime() - new Date(right.scheduled_for!).getTime(),
+    ),
+    [dayJobs],
   );
   const scheduleTotalPages = Math.max(1, Math.ceil(dayJobs.length / SCHEDULE_ITEMS_PER_PAGE));
   const safeSchedulePage = Math.min(schedulePage, scheduleTotalPages);
@@ -863,6 +874,15 @@ export default function ScheduleWorkspace({
     setSelectedDate((currentDate) => addDays(currentDate, viewMode === "day" ? direction : direction * 7));
   }
 
+  function selectJobMobile(jobId: string) {
+    setMobileDetailJobId(jobId);
+    setSelectedJobId(jobId);
+  }
+
+  function clearMobileScheduleDetail() {
+    setMobileDetailJobId(null);
+  }
+
   function groupJobsByDay(day: Date) {
     return calendarScheduledJobs.filter((job) => job.scheduled_for && isSameCalendarDay(new Date(job.scheduled_for), day));
   }
@@ -952,6 +972,32 @@ export default function ScheduleWorkspace({
 
   return (
     <BoardShell gridOpacity="subtle">
+      <MobileScheduleDayView
+        dayJobs={mobileDayJobs}
+        selectedDate={activeDay}
+        mobileDetailJobId={mobileDetailJobId}
+        isPending={isPending}
+        errorMessage={errorMessage}
+        statusMessage={statusMessage}
+        onPreviousDay={() => {
+          setSelectedDate((currentDate) => addDays(currentDate, -1));
+          setMobileDetailJobId(null);
+        }}
+        onToday={() => {
+          setSelectedDate(startOfDay(new Date()));
+          setMobileDetailJobId(null);
+        }}
+        onNextDay={() => {
+          setSelectedDate((currentDate) => addDays(currentDate, 1));
+          setMobileDetailJobId(null);
+        }}
+        onSelectJob={selectJobMobile}
+        onClearMobileDetail={clearMobileScheduleDetail}
+        onRefresh={handleRefresh}
+        getNextDispatchMove={(job) => getNextDispatchMove(job, t)}
+        getJobValueCents={(job) => relationValue(job.service)?.default_price_cents ?? 0}
+      />
+      <div className="hidden lg:block">
       <div className="mx-auto max-w-[1720px] px-5 py-6 lg:px-8">
         <header className={`${schedulePanelClass} px-6 py-5`}>
           <div className="flex flex-wrap items-start justify-between gap-5">
@@ -1312,6 +1358,7 @@ export default function ScheduleWorkspace({
             ))}
           </div>
         ) : null}
+      </div>
       </div>
     </BoardShell>
   );
