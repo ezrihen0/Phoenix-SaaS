@@ -19,6 +19,7 @@ import { useTranslations } from "next-intl";
 import { useMemo, type ReactNode } from "react";
 
 import { BoardShell } from "@/components/board/board-shell";
+import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
 import { MetricTile } from "@/components/board/metric-tile";
 import { ThemeAppearanceSelector } from "@/components/theme-appearance-selector";
 import type { SessionRole } from "@/lib/auth/server-session";
@@ -427,6 +428,7 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
   return (
     <BoardShell gridOpacity="subtle">
       <div className="mx-auto max-w-[1540px] px-5 py-6 lg:px-8">
+        <DesktopOptimizedNotice href="/settings" />
         <header className="rounded-[36px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_30px_90px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)] backdrop-blur-xl">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div>

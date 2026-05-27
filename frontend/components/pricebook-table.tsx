@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { BoardShell } from "@/components/board/board-shell";
+import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
 import { MetricTile } from "@/components/board/metric-tile";
 import {
   MasterMobileList,
@@ -507,6 +508,7 @@ function PricebookControlDesk({
   return (
     <BoardShell gridOpacity="subtle">
       <div className="mx-auto max-w-[1600px] px-5 py-6 lg:px-8">
+        <DesktopOptimizedNotice href="/pricebook" />
         <header className={`${panelClass()} p-5 sm:p-7`}>
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-4xl">

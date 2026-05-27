@@ -3,12 +3,16 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, type ComponentType } from "react";
 import { Ellipsis, LogOut, Settings, type LucideProps } from "lucide-react";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
 import { handleLogout } from "@/lib/auth/logout";
+import {
+  MOBILE_MORE_MENU_SECTIONS,
+  type MobileMoreMenuSectionId,
+} from "@/lib/navigation/mobile-more-menu";
 import {
   getMobileModulePolicyBadge,
   getMobileModulePolicy,
@@ -28,7 +32,7 @@ export type MobileShellNavItem = {
 
 type MobileShellNavProps = {
   primaryItems: MobileShellNavItem[];
-  moreItems: MobileShellNavItem[];
+  navCatalog: MobileShellNavItem[];
   userLabel: string;
   userInitials: string;
   moreOpen: boolean;
@@ -46,7 +50,7 @@ function MobileNavTab({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className="relative flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center px-1 py-1"
+      className="relative flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center px-0.5 py-1"
     >
       {active ? (
         <span
@@ -64,7 +68,7 @@ function MobileNavTab({
       />
       <span
         className={[
-          "mt-1 max-w-full truncate text-[10px] font-medium tracking-wide",
+          "mt-1 max-w-full truncate text-[10px] font-medium tracking-wide max-[380px]:text-[9px]",
           active
             ? "font-semibold text-[color:var(--sem-text-primary)]"
             : "text-[color:var(--sem-text-muted)]",
@@ -110,9 +114,13 @@ function MoreNavLink({
   );
 }
 
+function sectionLabelKey(sectionId: MobileMoreMenuSectionId) {
+  return `shell.mobile.moreSections.${sectionId}` as const;
+}
+
 export function MobileShellNav({
   primaryItems,
-  moreItems,
+  navCatalog,
   userLabel,
   userInitials,
   moreOpen,
@@ -122,7 +130,36 @@ export function MobileShellNav({
   const t = useTranslations();
   const pathname = usePathname();
   const router = useRouter();
-  const moreActive = isMobileMoreTabActive(pathname, primaryItems, moreItems);
+  const workspaceSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const navByHref = useMemo(
+    () => new Map(navCatalog.map((item) => [item.href, item])),
+    [navCatalog],
+  );
+
+  const visibleMoreHrefs = useMemo(
+    () => MOBILE_MORE_MENU_SECTIONS.flatMap((section) =>
+      section.links
+        .map((link) => link.href)
+        .filter((href) => navByHref.has(href)),
+    ),
+    [navByHref],
+  );
+
+  const visibleSecondaryMoreHrefs = useMemo(
+    () => MOBILE_MORE_MENU_SECTIONS
+      .filter((section) => section.id !== "workspace")
+      .flatMap((section) =>
+        section.links
+          .map((link) => link.href)
+          .filter((href) => navByHref.has(href)),
+      ),
+    [navByHref],
+  );
+
+  const visibleSecondaryMoreLinkCount = visibleSecondaryMoreHrefs.length;
+
+  const moreActive = isMobileMoreTabActive(pathname, primaryItems, visibleMoreHrefs);
   const settingsActive = Boolean(pathname && isRouteActive(pathname, "/settings"));
 
   useEffect(() => {
@@ -156,6 +193,7 @@ export function MobileShellNav({
             type="button"
             aria-expanded={moreOpen}
             aria-haspopup="dialog"
+            aria-label={t("shell.mobile.more")}
             onClick={() => {
               if (moreOpen) {
                 onMoreClose();
@@ -163,7 +201,7 @@ export function MobileShellNav({
                 onMoreOpen();
               }
             }}
-            className="relative flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center px-1 py-1"
+            className="relative flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center px-0.5 py-1"
           >
             {moreActive ? (
               <span
@@ -172,6 +210,7 @@ export function MobileShellNav({
               />
             ) : null}
             <Ellipsis
+              aria-hidden="true"
               className={[
                 "h-5 w-5 shrink-0",
                 moreActive || moreOpen
@@ -181,7 +220,7 @@ export function MobileShellNav({
             />
             <span
               className={[
-                "mt-1 text-[10px] font-medium tracking-wide",
+                "mt-1 max-w-full truncate text-[10px] font-medium tracking-wide max-[380px]:text-[9px]",
                 moreActive || moreOpen
                   ? "font-semibold text-[color:var(--sem-text-primary)]"
                   : "text-[color:var(--sem-text-muted)]",
@@ -230,48 +269,84 @@ export function MobileShellNav({
               </button>
             </div>
 
-            {moreItems.length > 0 ? (
-              <div className="grid grid-cols-3 gap-2 overflow-y-auto p-4">
-                {moreItems.map((item) => (
-                  <MoreNavLink
-                    key={item.href}
-                    item={item}
-                    active={Boolean(pathname && isRouteActive(pathname, item.href))}
-                    onNavigate={onMoreClose}
-                  />
-                ))}
-              </div>
-            ) : null}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+              {MOBILE_MORE_MENU_SECTIONS.map((section) => {
+                const sectionLinks = section.links
+                  .map((link) => navByHref.get(link.href))
+                  .filter((item): item is MobileShellNavItem => Boolean(item));
 
-            <div className="mt-auto space-y-4 border-t border-[color:var(--cmp-border-subtle)] px-5 pt-4">
-              <OrganizationSwitcher menuPlacement="top" />
-              <LanguageSwitcher variant="shell" />
+                if (section.id === "workspace") {
+                  return (
+                    <div
+                      key={section.id}
+                      ref={workspaceSectionRef}
+                      className="mb-5 last:mb-0"
+                    >
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
+                        {t(sectionLabelKey(section.id))}
+                      </p>
+                      <div className="space-y-3 rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-3">
+                        <OrganizationSwitcher variant="compact" menuPlacement="bottom" />
+                        <LanguageSwitcher variant="compact" />
+                        <Link
+                          href="/settings"
+                          aria-current={settingsActive ? "page" : undefined}
+                          onClick={onMoreClose}
+                          className={[
+                            settingsActive ? "theme-selected-card" : "theme-control-surface",
+                            "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[18px] border px-3 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
+                          ].join(" ")}
+                        >
+                          <Settings className="h-4 w-4 shrink-0" />
+                          <span>{t("shell.nav.settings")}</span>
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                }
 
-              <div className="grid grid-cols-2 gap-2">
-                <Link
-                  href="/settings"
-                  aria-current={settingsActive ? "page" : undefined}
-                  onClick={onMoreClose}
-                  className={[
-                    settingsActive ? "theme-selected-card" : "theme-control-surface",
-                    "inline-flex min-h-11 items-center justify-center gap-2 rounded-[18px] border px-3 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
-                  ].join(" ")}
-                >
-                  <Settings className="h-4 w-4 shrink-0" />
-                  <span>{t("shell.nav.settings")}</span>
-                </Link>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    onMoreClose();
-                    await handleLogout(router);
-                  }}
-                  className="theme-control-surface inline-flex min-h-11 items-center justify-center gap-2 rounded-[18px] border px-3 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
-                >
-                  <LogOut className="h-4 w-4 shrink-0" />
-                  <span>{t("common.actions.logOut")}</span>
-                </button>
-              </div>
+                if (sectionLinks.length === 0) {
+                  return null;
+                }
+
+                return (
+                  <div key={section.id} className="mb-5 last:mb-0">
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
+                      {t(sectionLabelKey(section.id))}
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 max-[380px]:grid-cols-2">
+                      {sectionLinks.map((item) => (
+                        <MoreNavLink
+                          key={item.href}
+                          item={item}
+                          active={Boolean(pathname && isRouteActive(pathname, item.href))}
+                          onNavigate={onMoreClose}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {visibleSecondaryMoreLinkCount === 0 ? (
+                <p className="rounded-[18px] border border-dashed border-[color:var(--cmp-border-subtle)] px-4 py-6 text-center text-sm text-[color:var(--sem-text-muted)]">
+                  {t("shell.mobile.moreEmpty")}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="border-t border-[color:var(--cmp-border-subtle)] px-5 pt-4">
+              <button
+                type="button"
+                onClick={async () => {
+                  onMoreClose();
+                  await handleLogout(router);
+                }}
+                className="theme-control-surface inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[18px] border px-3 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                <span>{t("common.actions.logOut")}</span>
+              </button>
             </div>
           </div>
         </>
@@ -279,3 +354,5 @@ export function MobileShellNav({
     </>
   );
 }
+
+export type { MobileShellNavProps };

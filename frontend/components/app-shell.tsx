@@ -9,6 +9,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   ClipboardList,
+  CreditCard,
   FileText,
   House,
   LogOut,
@@ -33,7 +34,7 @@ import { GlobalSearchShell } from "@/features/global-search/global-search-shell"
 import { getClientDestination, getClientSession } from "@/lib/auth/client-auth";
 import { handleLogout } from "@/lib/auth/logout";
 import { isShellNavHrefVisible, type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
-import { splitMobileNavItems } from "@/lib/navigation/mobile-shell-nav";
+import { resolveMobilePrimaryNav } from "@/lib/navigation/mobile-shell-nav";
 
 type AppShellProps = {
   children: ReactNode;
@@ -156,6 +157,7 @@ export function AppShell({ children }: AppShellProps) {
     { href: "/marketing", label: t("shell.nav.marketing"), icon: Megaphone },
     { href: "/inspections", label: t("shell.nav.inspections"), icon: ShieldCheck },
     { href: "/automations", label: t("shell.nav.automations"), icon: Workflow },
+    { href: "/billing", label: t("shell.nav.billing"), icon: CreditCard },
   ];
   const headerQuickLinks: Array<Pick<NavItem, "href" | "label" | "icon">> = [
     { href: "/calls", label: t("shell.nav.calls"), icon: Phone },
@@ -286,8 +288,18 @@ export function AppShell({ children }: AppShellProps) {
       isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
     );
 
-  const { primary: mobilePrimaryNav, more: mobileMoreNav } = splitMobileNavItems(visiblePrimaryNav);
-  const showMobileShellNav = !activationMode && (mobilePrimaryNav.length > 0 || mobileMoreNav.length > 0);
+  const mobilePrimaryNav = resolveMobilePrimaryNav(visiblePrimaryNav);
+  const mobileNavCatalog = (() => {
+    const items = [...visiblePrimaryNav];
+    const hrefs = new Set(items.map((item) => item.href));
+
+    if (!hrefs.has("/settings")) {
+      items.push({ href: "/settings", label: t("shell.nav.settings"), icon: Settings });
+    }
+
+    return items;
+  })();
+  const showMobileShellNav = !activationMode && (mobilePrimaryNav.length > 0 || mobileNavCatalog.length > 0);
 
   function renderSidebarContent(options: { collapsed: boolean }) {
     const { collapsed: sidebarCollapsed } = options;
@@ -369,24 +381,34 @@ export function AppShell({ children }: AppShellProps) {
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-40 border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/95 px-4 py-3 backdrop-blur-md lg:hidden">
-            <div className="flex h-11 items-center justify-between gap-3 pt-[env(safe-area-inset-top)]">
-              <Link href="/home" className="inline-flex min-w-0 items-center gap-2">
-                <span className="truncate font-[family:var(--font-flat-display)] text-lg text-[color:var(--sem-text-primary)]">
-                  WizField
-                </span>
-                <span className="text-[color:var(--sem-accent-primary)]">.</span>
-              </Link>
-              {searchEnabled ? (
-                <button
-                  type="button"
-                  aria-label={t("shell.searchAria")}
-                  aria-expanded={searchOpen}
-                  onClick={() => setSearchOpen(true)}
-                  className="theme-control-surface-soft inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
-                >
-                  <Search className="h-4 w-4" />
-                </button>
-              ) : null}
+            <div className="flex min-h-11 flex-col gap-2 pt-[env(safe-area-inset-top)]">
+              <div className="flex items-center justify-between gap-2">
+                <Link href="/home" className="inline-flex min-w-0 shrink-0 items-center gap-1">
+                  <span className="truncate font-[family:var(--font-flat-display)] text-lg text-[color:var(--sem-text-primary)]">
+                    WizField
+                  </span>
+                  <span className="text-[color:var(--sem-accent-primary)]">.</span>
+                </Link>
+                <div className="flex shrink-0 items-center gap-2">
+                  <LanguageSwitcher variant="compact" />
+                  {searchEnabled ? (
+                    <button
+                      type="button"
+                      aria-label={t("shell.searchAria")}
+                      aria-expanded={searchOpen}
+                      onClick={() => setSearchOpen(true)}
+                      className="theme-control-surface-soft inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+                    >
+                      <Search className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <OrganizationSwitcher
+                variant="compact"
+                menuPlacement="bottom"
+                onOpenMore={() => setMoreMenuOpen(true)}
+              />
             </div>
           </header>
 
@@ -467,7 +489,7 @@ export function AppShell({ children }: AppShellProps) {
         {showMobileShellNav ? (
           <MobileShellNav
             primaryItems={mobilePrimaryNav}
-            moreItems={mobileMoreNav}
+            navCatalog={mobileNavCatalog}
             userLabel={userLabel}
             userInitials={buildInitials(userLabel)}
             moreOpen={moreMenuOpen}

@@ -32,6 +32,16 @@ const messages = {
       done: "Gotowe",
       closeMore: "Zamknij menu",
       bottomNavigation: "Dolna nawigacja",
+      desktopOnlyTitle: "Najlepiej na komputerze",
+      limitedTitle: "Ograniczone na mobile",
+      continueAnyway: "Mozesz kontynuowac tutaj — pelny dostep pozostaje dostepny.",
+      moreSections: {
+        workspace: "Obszar pracy",
+        operations: "Operacje",
+        money: "Finanse",
+        admin: "Admin",
+      },
+      moreEmpty: "Brak dodatkowych modulow dla Twojej roli.",
     },
     nav: {
       home: "Start",
@@ -50,6 +60,7 @@ const messages = {
       inspections: "Inspekcje",
       automations: "Automatyzacje CRM",
       settings: "Ustawienia",
+      billing: "Rozliczenia",
     },
     workspace: {
       label: "Aktywny obszar pracy",
@@ -64,6 +75,7 @@ const messages = {
     },
     language: {
       label: "Jezyk obszaru pracy",
+      compactAria: "Zmien jezyk obszaru pracy",
       loading: "Ladowanie jezyka...",
       loadError: "Nie mozna zaladowac preferencji jezyka.",
       updateError: "Nie mozna zaktualizowac preferencji jezyka.",

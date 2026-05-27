@@ -32,6 +32,16 @@ const messages = {
       done: "סיום",
       closeMore: "סגור תפריט",
       bottomNavigation: "ניווט תחתון",
+      desktopOnlyTitle: "מומלץ במחשב",
+      limitedTitle: "מוגבל במובייל",
+      continueAnyway: "אפשר להמשיך כאן — הגישה המלאה עדיין זמינה.",
+      moreSections: {
+        workspace: "סביבת עבודה",
+        operations: "תפעול",
+        money: "כספים",
+        admin: "ניהול",
+      },
+      moreEmpty: "אין מודולים נוספים זמינים לתפקיד שלך.",
     },
     nav: {
       home: "בית",
@@ -50,6 +60,7 @@ const messages = {
       inspections: "בדיקות",
       automations: "אוטומציות CRM",
       settings: "הגדרות",
+      billing: "חיוב",
     },
     workspace: {
       label: "סביבת עבודה פעילה",
@@ -64,6 +75,7 @@ const messages = {
     },
     language: {
       label: "שפת סביבת העבודה",
+      compactAria: "שנה שפת סביבת עבודה",
       loading: "טוען שפה...",
       loadError: "לא ניתן לטעון את העדפת השפה.",
       updateError: "לא ניתן לעדכן את העדפת השפה.",

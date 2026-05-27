@@ -1,66 +1,29 @@
-export const MOBILE_PRIMARY_SLOT_COUNT = 4;
-
-const MOBILE_PRIMARY_PREFERENCE = [
-  "/home",
-  "/leads",
-  "/calls",
-  "/messaging",
-  "/schedule",
-  "/jobs",
-  "/customers",
-] as const;
+import { getMobileMoreMenuHrefs, MOBILE_FIELD_COMMAND_PRIMARY } from "@/lib/navigation/mobile-more-menu";
 
 export function isRouteActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function splitMobileNavItems<T extends { href: string }>(visiblePrimaryNav: readonly T[]) {
-  const visibleByHref = new Map(visiblePrimaryNav.map((item) => [item.href, item]));
+/** Resolve fixed Field Command primary tabs — no backfill of other routes. */
+export function resolveMobilePrimaryNav<T extends { href: string }>(visibleNav: readonly T[]): T[] {
+  const visibleByHref = new Map(visibleNav.map((item) => [item.href, item]));
   const primary: T[] = [];
-  const usedHrefs = new Set<string>();
 
-  function addIfVisible(href: string) {
-    if (primary.length >= MOBILE_PRIMARY_SLOT_COUNT) {
-      return;
-    }
-
+  for (const href of MOBILE_FIELD_COMMAND_PRIMARY) {
     const item = visibleByHref.get(href);
 
-    if (item && !usedHrefs.has(href)) {
+    if (item) {
       primary.push(item);
-      usedHrefs.add(href);
     }
   }
 
-  for (const href of MOBILE_PRIMARY_PREFERENCE) {
-    if (primary.length >= MOBILE_PRIMARY_SLOT_COUNT) {
-      break;
-    }
-
-    addIfVisible(href);
-  }
-
-  for (const item of visiblePrimaryNav) {
-    if (primary.length >= MOBILE_PRIMARY_SLOT_COUNT) {
-      break;
-    }
-
-    if (!usedHrefs.has(item.href)) {
-      primary.push(item);
-      usedHrefs.add(item.href);
-    }
-  }
-
-  const primaryHrefs = new Set(primary.map((item) => item.href));
-  const more = visiblePrimaryNav.filter((item) => !primaryHrefs.has(item.href));
-
-  return { primary, more };
+  return primary;
 }
 
 export function isMobileMoreTabActive(
   pathname: string | null,
   primaryItems: readonly { href: string }[],
-  moreItems: readonly { href: string }[],
+  visibleMoreHrefs: readonly string[],
 ) {
   if (!pathname) {
     return false;
@@ -76,5 +39,20 @@ export function isMobileMoreTabActive(
     return true;
   }
 
-  return moreItems.some((item) => isRouteActive(pathname, item.href));
+  return visibleMoreHrefs.some((href) => isRouteActive(pathname, href));
+}
+
+/** @deprecated Use resolveMobilePrimaryNav — kept for any external references during migration. */
+export const MOBILE_PRIMARY_SLOT_COUNT = MOBILE_FIELD_COMMAND_PRIMARY.length;
+
+/** @deprecated Use resolveMobilePrimaryNav. */
+export function splitMobileNavItems<T extends { href: string }>(visiblePrimaryNav: readonly T[]) {
+  const primary = resolveMobilePrimaryNav(visiblePrimaryNav);
+  const primaryHrefs = new Set(primary.map((item) => item.href));
+  const moreHrefs = new Set(getMobileMoreMenuHrefs());
+  const more = visiblePrimaryNav.filter(
+    (item) => !primaryHrefs.has(item.href) && moreHrefs.has(item.href),
+  );
+
+  return { primary, more };
 }

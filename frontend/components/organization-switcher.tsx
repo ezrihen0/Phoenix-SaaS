@@ -22,9 +22,15 @@ function listSwitchableMemberships(session: ClientSession) {
 
 type OrganizationSwitcherProps = {
   menuPlacement?: "bottom" | "top";
+  variant?: "shell" | "compact";
+  onOpenMore?: () => void;
 };
 
-export function OrganizationSwitcher({ menuPlacement = "bottom" }: OrganizationSwitcherProps) {
+export function OrganizationSwitcher({
+  menuPlacement = "bottom",
+  variant = "shell",
+  onOpenMore,
+}: OrganizationSwitcherProps) {
   const t = useTranslations("shell.workspace");
   const pathname = usePathname();
   const [session, setSession] = useState<ClientSession | null>(null);
@@ -75,9 +81,13 @@ export function OrganizationSwitcher({ menuPlacement = "bottom" }: OrganizationS
   const mutedClass = "text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]";
   const labelClass = "text-sm font-medium text-[color:var(--sem-text-primary)]";
   const panelClass = menuPlacement === "top"
-    ? "absolute right-0 bottom-full z-50 mb-2 min-w-[220px] rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] py-2 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
-    : "absolute right-0 z-50 mt-2 min-w-[220px] rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] py-2 shadow-[0_24px_80px_rgba(0,0,0,0.35)]";
-  const buttonClass = "inline-flex max-w-[min(100%,14rem)] items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] px-3 py-2 text-left text-sm transition hover:border-[color:var(--cmp-border-accent)]";
+    ? "absolute left-0 bottom-full z-50 mb-2 min-w-[220px] rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] py-2 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
+    : menuPlacement === "bottom" && variant === "compact"
+      ? "absolute left-0 top-full z-50 mt-2 min-w-[220px] rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] py-2 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
+      : "absolute right-0 z-50 mt-2 min-w-[220px] rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] py-2 shadow-[0_24px_80px_rgba(0,0,0,0.35)]";
+  const buttonClass = variant === "compact"
+    ? "inline-flex max-w-[min(100%,8rem)] items-center gap-1.5 rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] px-2 py-1.5 text-left text-xs transition hover:border-[color:var(--cmp-border-accent)]"
+    : "inline-flex max-w-[min(100%,14rem)] items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] px-3 py-2 text-left text-sm transition hover:border-[color:var(--cmp-border-accent)]";
   const optionClass = "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-[color:var(--sem-text-primary)] hover:bg-[color:var(--cmp-hover-surface)]";
 
   async function handleSelectOrganization(organizationId: string) {
@@ -100,6 +110,10 @@ export function OrganizationSwitcher({ menuPlacement = "bottom" }: OrganizationS
   }
 
   if (loadError && !session) {
+    if (variant === "compact") {
+      return null;
+    }
+
     return (
       <div className="max-w-xs">
         <p className={mutedClass}>{t("label")}</p>
@@ -109,6 +123,17 @@ export function OrganizationSwitcher({ menuPlacement = "bottom" }: OrganizationS
   }
 
   if (!session) {
+    if (variant === "compact") {
+      return (
+        <div
+          aria-label={t("loading")}
+          className="inline-flex h-8 max-w-[8rem] items-center gap-1.5 rounded-xl border border-dashed border-[color:var(--cmp-border-subtle)] px-2 text-[color:var(--sem-text-muted)]"
+        >
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        </div>
+      );
+    }
+
     return (
       <div className="inline-flex items-center gap-2 rounded-full border border-dashed border-[color:var(--cmp-border-subtle)] px-3 py-2 text-sm text-[color:var(--sem-text-muted)]">
         <Loader2 className="h-4 w-4 animate-spin" />
@@ -118,6 +143,10 @@ export function OrganizationSwitcher({ menuPlacement = "bottom" }: OrganizationS
   }
 
   if (switchable.length === 0) {
+    if (variant === "compact") {
+      return null;
+    }
+
     return (
       <div className="max-w-xs">
         <p className={mutedClass}>{t("label")}</p>
@@ -134,8 +163,41 @@ export function OrganizationSwitcher({ menuPlacement = "bottom" }: OrganizationS
     );
   }
 
+  const displayName = activeLabel
+    ?? switchable[0]?.organization?.name?.trim()
+    ?? t("currentOrganization");
+
   if (switchable.length === 1) {
-    const displayName = activeLabel ?? switchable[0]?.organization?.name?.trim() ?? t("currentOrganization");
+    if (variant === "compact") {
+      const content = (
+        <>
+          <Building2 className="h-3.5 w-3.5 shrink-0 text-[color:var(--sem-text-muted)]" />
+          <span className="truncate font-medium text-[color:var(--sem-text-primary)]">{displayName}</span>
+        </>
+      );
+
+      if (onOpenMore) {
+        return (
+          <button
+            type="button"
+            onClick={onOpenMore}
+            className={`${buttonClass} min-w-0`}
+            aria-label={`${t("label")}: ${displayName}`}
+          >
+            {content}
+          </button>
+        );
+      }
+
+      return (
+        <div
+          className={`${buttonClass} min-w-0`}
+          aria-label={`${t("label")}: ${displayName}`}
+        >
+          {content}
+        </div>
+      );
+    }
 
     return (
       <div className="inline-flex items-center gap-2">
@@ -144,6 +206,55 @@ export function OrganizationSwitcher({ menuPlacement = "bottom" }: OrganizationS
           <p className={mutedClass}>{t("label")}</p>
           <p className={`${labelClass} max-w-[14rem] truncate`}>{displayName}</p>
         </div>
+      </div>
+    );
+  }
+
+  if (variant === "compact") {
+    return (
+      <div className="relative inline-flex min-w-0" ref={menuRef}>
+        <button
+          type="button"
+          className={`${buttonClass} min-w-0`}
+          aria-expanded={menuOpen}
+          aria-haspopup="listbox"
+          aria-label={`${t("label")}: ${displayName}`}
+          onClick={() => {
+            setMenuOpen((open) => !open);
+          }}
+        >
+          <Building2 className="h-3.5 w-3.5 shrink-0 text-[color:var(--sem-text-muted)]" />
+          <span className="truncate font-medium text-[color:var(--sem-text-primary)]">{displayName}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[color:var(--sem-text-muted)]" />
+        </button>
+
+        {menuOpen ? (
+          <div className={panelClass} role="listbox">
+            {switchable.map((membership) => {
+              const org = membership.organization;
+              const label = org?.name?.trim() || t("unnamedOrganization");
+              const isActive = membership.organization_id === session.active_organization?.id;
+              const busy = switchingToId === membership.organization_id;
+
+              return (
+                <button
+                  key={membership.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isActive}
+                  disabled={Boolean(switchingToId)}
+                  className={`${optionClass} ${isActive ? "bg-[color:var(--cmp-hover-surface)]" : ""}`}
+                  onClick={() => {
+                    void handleSelectOrganization(membership.organization_id);
+                  }}
+                >
+                  <span className="truncate">{label}</span>
+                  {busy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
     );
   }

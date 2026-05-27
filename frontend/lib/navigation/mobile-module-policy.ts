@@ -4,25 +4,30 @@
  */
 export type MobileModulePolicy = "core" | "limited" | "desktopOnly";
 
-const CORE_ROUTES = ["/home", "/leads", "/calls", "/messaging"] as const;
+const CORE_ROUTES = [
+  "/home",
+  "/leads",
+  "/jobs",
+  "/schedule",
+  "/calls",
+  "/messaging",
+] as const;
 
 const DESKTOP_ONLY_PREFIXES = [
   "/automations",
   "/marketing",
-  "/invoices",
-  "/estimates",
   "/reports",
 ] as const;
 
 const LIMITED_PREFIXES = [
+  "/customers",
+  "/inspections",
   "/pricebook",
   "/inventory",
-  "/inspections",
   "/settings",
+  "/invoices",
+  "/estimates",
   "/billing",
-  "/customers",
-  "/jobs",
-  "/schedule",
 ] as const;
 
 function normalizeHref(href: string) {
@@ -73,7 +78,7 @@ export function getMobileModulePolicyReason(href: string): string {
   }
 
   if (matchesPrefix(normalized, "/inventory")) {
-    return "Stock and catalog desks are dense — desktop is recommended.";
+    return "Stock lookup works on mobile; full inventory workflows are easier on desktop.";
   }
 
   if (matchesPrefix(normalized, "/inspections")) {
@@ -81,7 +86,11 @@ export function getMobileModulePolicyReason(href: string): string {
   }
 
   if (matchesPrefix(normalized, "/invoices") || matchesPrefix(normalized, "/estimates")) {
-    return "Billing tables and admin workflows are desktop-first.";
+    return "Billing lists are available on mobile; detailed admin workflows work best on desktop.";
+  }
+
+  if (matchesPrefix(normalized, "/customers")) {
+    return "Customer profiles are dense — desktop is recommended for full edits.";
   }
 
   if (matchesPrefix(normalized, "/settings") || matchesPrefix(normalized, "/billing")) {

@@ -18,6 +18,7 @@ import {
 
 import { BoardShell } from "@/components/board/board-shell";
 import { MetricTile } from "@/components/board/metric-tile";
+import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
 import {
   MasterMobileList,
   MasterTable,
@@ -621,6 +622,7 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
   return (
     <BoardShell gridOpacity="subtle">
       <div className="mx-auto max-w-[1500px] px-5 py-6 lg:px-8">
+        <DesktopOptimizedNotice href="/customers" />
         <header className="rounded-[34px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_30px_90px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)] backdrop-blur-xl">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
             <div>

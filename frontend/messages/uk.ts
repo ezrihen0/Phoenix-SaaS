@@ -32,6 +32,16 @@ const messages = {
       done: "Готово",
       closeMore: "Закрити меню",
       bottomNavigation: "Нижня навігація",
+      desktopOnlyTitle: "Краще на комп'ютері",
+      limitedTitle: "Обмежено на мобільному",
+      continueAnyway: "Можна продовжити тут — повний доступ залишається доступним.",
+      moreSections: {
+        workspace: "Робочий простір",
+        operations: "Операції",
+        money: "Гроші",
+        admin: "Адмін",
+      },
+      moreEmpty: "Додаткові модулі для вашої ролі недоступні.",
     },
     nav: {
       home: "Головна",
@@ -50,6 +60,7 @@ const messages = {
       inspections: "Інспекції",
       automations: "CRM-автоматизації",
       settings: "Налаштування",
+      billing: "Білінг",
     },
     workspace: {
       label: "Активний робочий простір",
@@ -64,6 +75,7 @@ const messages = {
     },
     language: {
       label: "Мова робочого простору",
+      compactAria: "Змінити мову робочого простору",
       loading: "Завантаження мови...",
       loadError: "Не вдалося завантажити мовні налаштування.",
       updateError: "Не вдалося оновити мовні налаштування.",

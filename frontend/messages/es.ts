@@ -32,6 +32,16 @@ const messages = {
       done: "Listo",
       closeMore: "Cerrar menu",
       bottomNavigation: "Navegacion inferior",
+      desktopOnlyTitle: "Mejor en escritorio",
+      limitedTitle: "Limitado en movil",
+      continueAnyway: "Puedes continuar aqui — el acceso completo sigue disponible.",
+      moreSections: {
+        workspace: "Espacio de trabajo",
+        operations: "Operaciones",
+        money: "Dinero",
+        admin: "Administracion",
+      },
+      moreEmpty: "No hay modulos adicionales disponibles para tu rol.",
     },
     nav: {
       home: "Inicio",
@@ -50,6 +60,7 @@ const messages = {
       inspections: "Inspecciones",
       automations: "Automatizaciones CRM",
       settings: "Configuracion",
+      billing: "Facturacion",
     },
     workspace: {
       label: "Espacio activo",
@@ -64,6 +75,7 @@ const messages = {
     },
     language: {
       label: "Idioma del espacio",
+      compactAria: "Cambiar idioma del espacio",
       loading: "Cargando idioma...",
       loadError: "No se pudo cargar la preferencia de idioma.",
       updateError: "No se pudo actualizar la preferencia de idioma.",

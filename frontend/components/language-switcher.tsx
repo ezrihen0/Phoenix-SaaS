@@ -16,8 +16,12 @@ import {
 } from "@/lib/language-store/client-language-preferences";
 
 type LanguageSwitcherProps = {
-  variant: "shell";
+  variant: "shell" | "compact";
 };
+
+function localeCode(code: string) {
+  return code.split("-")[0]?.toUpperCase() ?? code.toUpperCase();
+}
 
 export function LanguageSwitcher({ variant }: LanguageSwitcherProps) {
   const t = useTranslations("shell.language");
@@ -47,7 +51,7 @@ export function LanguageSwitcher({ variant }: LanguageSwitcherProps) {
 
   const labelClass = variant === "shell"
     ? "text-sm font-medium text-[color:var(--sem-text-primary)]"
-    : "";
+    : "text-xs font-semibold uppercase tracking-wide text-[color:var(--sem-text-primary)]";
 
   async function handleChange(nextLanguageCode: string) {
     setSaving(true);
@@ -65,10 +69,47 @@ export function LanguageSwitcher({ variant }: LanguageSwitcherProps) {
   }
 
   if (!payload) {
+    if (variant === "compact") {
+      return (
+        <div
+          aria-label={t("loading")}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-dashed border-[color:var(--cmp-border-subtle)] text-[color:var(--sem-text-muted)]"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      );
+    }
+
     return (
       <div className="inline-flex items-center gap-2 rounded-full border border-dashed border-[color:var(--cmp-border-subtle)] px-3 py-2 text-sm text-[color:var(--sem-text-muted)]">
         <Loader2 className="h-4 w-4 animate-spin" />
         <span>{t("loading")}</span>
+      </div>
+    );
+  }
+
+  if (variant === "compact") {
+    return (
+      <div className="relative inline-flex shrink-0">
+        <label className="theme-control-surface-soft inline-flex h-9 min-w-9 cursor-pointer items-center justify-center gap-1 rounded-xl border px-2 transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]">
+          <Languages className="h-3.5 w-3.5 shrink-0 text-[color:var(--sem-text-muted)]" aria-hidden="true" />
+          <span className={labelClass}>{localeCode(payload.effective_language_code)}</span>
+          <select
+            value={payload.effective_language_code}
+            onChange={(event) => {
+              void handleChange(event.target.value);
+            }}
+            disabled={saving}
+            aria-label={t("compactAria")}
+            className="absolute inset-0 cursor-pointer opacity-0"
+          >
+            {payload.enabled_languages.map((language) => (
+              <option key={language.code} value={language.code}>
+                {isSupportedWorkerUiLocale(language.code) ? getWorkerUiLanguageLabel(language.code) : language.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
     );
   }

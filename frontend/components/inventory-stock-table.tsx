@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { BoardShell } from "@/components/board/board-shell";
+import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
 import { MetricTile } from "@/components/board/metric-tile";
 import {
   MasterMobileList,
@@ -421,6 +422,7 @@ function InventoryControlDesk({
   return (
     <BoardShell gridOpacity="subtle">
       <div className="mx-auto max-w-[1600px] px-5 py-6 lg:px-8">
+        <DesktopOptimizedNotice href="/inventory" />
         <header className={`${panelClass()} p-5`}>
           <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
             <div>

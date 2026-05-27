@@ -36,6 +36,13 @@ const messages = {
       desktopOnlyTitle: "Best on desktop",
       limitedTitle: "Limited on mobile",
       continueAnyway: "You can continue here — full access remains available.",
+      moreSections: {
+        workspace: "Workspace",
+        operations: "Operations",
+        money: "Money",
+        admin: "Admin",
+      },
+      moreEmpty: "No additional modules are available for your role.",
     },
     nav: {
       home: "Home",
@@ -54,6 +61,7 @@ const messages = {
       inspections: "Inspections",
       automations: "CRM automations",
       settings: "Settings",
+      billing: "Billing",
     },
     workspace: {
       label: "Active workspace",
@@ -68,6 +76,7 @@ const messages = {
     },
     language: {
       label: "Workspace language",
+      compactAria: "Change workspace language",
       loading: "Loading language...",
       loadError: "Language preference could not be loaded.",
       updateError: "Language preference could not be updated.",
