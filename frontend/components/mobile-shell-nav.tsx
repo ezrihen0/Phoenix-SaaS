@@ -128,6 +128,23 @@ function sectionLabelKey(sectionId: MobileMoreMenuSectionId) {
   return `shell.mobile.moreSections.${sectionId}` as const;
 }
 
+function resolveMoreMenuLabel(href: string, fallbackLabel: string) {
+  switch (href) {
+    case "/jobs":
+      return "All Jobs";
+    case "/invoices":
+      return "All Invoices";
+    case "/estimates":
+      return "All Estimates";
+    case "/inspections":
+      return "All Inspections";
+    case "/customers":
+      return "All Customers";
+    default:
+      return fallbackLabel;
+  }
+}
+
 function QuickActionLink({
   href,
   label,
@@ -212,19 +229,19 @@ export function MobileShellNav({
   const quickActions = useMemo(() => {
     const actions: Array<{ href: string; label: string; icon: ShellNavIcon }> = [];
 
-    if (canCreateEstimate) {
-      actions.push({
-        href: "/estimates/new",
-        label: `${t("common.actions.open")} ${t("shell.nav.estimates")}`,
-        icon: FileText,
-      });
-    }
-
     if (canCreateInvoice) {
       actions.push({
         href: "/invoices/new",
-        label: `${t("common.actions.open")} ${t("shell.nav.invoices")}`,
+        label: t("invoicesPage.newInvoice"),
         icon: Receipt,
+      });
+    }
+
+    if (canCreateEstimate) {
+      actions.push({
+        href: "/estimates/new",
+        label: t("estimatesPage.newEstimate"),
+        icon: FileText,
       });
     }
 
@@ -481,7 +498,10 @@ export function MobileShellNav({
                       {sectionLinks.map((item) => (
                         <MoreNavLink
                           key={item.href}
-                          item={item}
+                          item={{
+                            ...item,
+                            label: resolveMoreMenuLabel(item.href, item.label),
+                          }}
                           active={Boolean(pathname && isRouteActive(pathname, item.href))}
                           onNavigate={onMoreClose}
                         />
