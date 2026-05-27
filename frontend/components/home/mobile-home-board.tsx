@@ -27,6 +27,13 @@ type QueueConfig = {
   fallbackHref: string;
 };
 
+type QueueEntry = {
+  id: string;
+  label: string;
+  item: DashboardControlItem;
+  href: string;
+};
+
 function sumAmountCents(items: DashboardControlItem[]) {
   return items.reduce((total, item) => total + (item.amountCents ?? 0), 0);
 }
@@ -39,7 +46,73 @@ function formatControlPreview(item: DashboardControlItem) {
     item.statusLabel || null,
   ].filter(Boolean);
 
-  return parts.join(" · ");
+  return parts.join(" | ");
+}
+
+function formatQueueMeta(item: DashboardControlItem) {
+  const parts = [
+    item.scheduledFor ? formatDateTime(item.scheduledFor) : null,
+    item.statusLabel || null,
+    item.amountCents !== null ? formatCurrencyFromCents(item.amountCents) : null,
+  ].filter(Boolean);
+
+  return parts.join(" | ");
+}
+
+function getScheduledTimestamp(item: DashboardControlItem) {
+  if (!item.scheduledFor) {
+    return null;
+  }
+
+  const timestamp = Date.parse(item.scheduledFor);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function sortScheduledJobs(items: DashboardControlItem[]) {
+  return [...items].sort((left, right) => {
+    const leftTimestamp = getScheduledTimestamp(left);
+    const rightTimestamp = getScheduledTimestamp(right);
+
+    if (leftTimestamp !== null && rightTimestamp !== null) {
+      return leftTimestamp - rightTimestamp;
+    }
+
+    if (leftTimestamp !== null) {
+      return -1;
+    }
+
+    if (rightTimestamp !== null) {
+      return 1;
+    }
+
+    return (left.scheduledFor || "").localeCompare(right.scheduledFor || "");
+  });
+}
+
+function pickClosestScheduledJob(items: DashboardControlItem[], nowTimestamp: number) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  const withTimestamp = items
+    .map((item) => ({
+      item,
+      timestamp: getScheduledTimestamp(item),
+    }))
+    .filter(
+      (entry): entry is { item: DashboardControlItem; timestamp: number } => entry.timestamp !== null,
+    );
+
+  if (withTimestamp.length === 0) {
+    return items[0] ?? null;
+  }
+
+  const upcoming = withTimestamp.find((entry) => entry.timestamp >= nowTimestamp);
+  if (upcoming) {
+    return upcoming.item;
+  }
+
+  return withTimestamp[withTimestamp.length - 1]?.item ?? null;
 }
 
 function resolveQueueItemHref(item: DashboardControlItem, fallbackHref: string) {
@@ -60,6 +133,15 @@ function resolveSafeFallbackHref(role: SessionRole | null, preferredHref: string
   }
 
   return "/home";
+}
+
+function buildQueueEntries(config: QueueConfig, limit: number): QueueEntry[] {
+  return config.items.slice(0, limit).map((item) => ({
+    id: `${config.id}-${item.id}`,
+    label: config.label,
+    item,
+    href: resolveQueueItemHref(item, config.fallbackHref),
+  }));
 }
 
 type MobileHomeBoardProps = {
@@ -89,7 +171,15 @@ export default async function MobileHomeBoard({
 
   const { summary, controls } = dashboard;
   const arExposure = sumAmountCents(controls.unpaidInvoices);
+  const sortedTodayJobs = sortScheduledJobs(controls.todaysScheduledJobs);
+
   const queueConfigs: QueueConfig[] = [
+    {
+      id: "todayJobs",
+      label: t("todayJobsQueue"),
+      items: sortedTodayJobs,
+      fallbackHref: resolveSafeFallbackHref(role, "/jobs"),
+    },
     {
       id: "followUps",
       label: t("followUps"),
@@ -108,28 +198,40 @@ export default async function MobileHomeBoard({
       items: controls.unpaidInvoices,
       fallbackHref: resolveSafeFallbackHref(role, "/invoices"),
     },
-    {
-      id: "todayJobs",
-      label: t("todayJobsQueue"),
-      items: controls.todaysScheduledJobs,
-      fallbackHref: resolveSafeFallbackHref(role, "/jobs"),
-    },
   ];
 
-  const priorityQueue = queueConfigs.find((queue) => queue.items.length > 0) ?? null;
-  const nextAction = priorityQueue?.items[0] ?? null;
-  const nextActionHref = nextAction && priorityQueue
-    ? resolveQueueItemHref(nextAction, priorityQueue.fallbackHref)
+  const closestScheduledJob = pickClosestScheduledJob(sortedTodayJobs, Date.now());
+
+  const nextActionSelection = closestScheduledJob
+    ? {
+      item: closestScheduledJob,
+      fallbackHref: resolveSafeFallbackHref(role, "/jobs"),
+    }
+    : controls.followUpsNeeded[0]
+      ? {
+        item: controls.followUpsNeeded[0],
+        fallbackHref: resolveSafeFallbackHref(role, "/calls"),
+      }
+      : controls.quotesWaitingApproval[0]
+        ? {
+          item: controls.quotesWaitingApproval[0],
+          fallbackHref: resolveSafeFallbackHref(role, "/estimates"),
+        }
+        : controls.unpaidInvoices[0]
+          ? {
+            item: controls.unpaidInvoices[0],
+            fallbackHref: resolveSafeFallbackHref(role, "/invoices"),
+          }
+          : null;
+
+  const nextAction = nextActionSelection?.item ?? null;
+  const nextActionHref = nextActionSelection
+    ? resolveQueueItemHref(nextActionSelection.item, nextActionSelection.fallbackHref)
     : resolveSafeFallbackHref(role, "/jobs");
 
   const upcomingQueueItems = queueConfigs
-    .flatMap((queue) => queue.items.slice(0, 2).map((item) => ({
-      id: `${queue.id}-${item.id}`,
-      label: queue.label,
-      item,
-      href: resolveQueueItemHref(item, queue.fallbackHref),
-    })))
-    .slice(0, 8);
+    .flatMap((queue) => buildQueueEntries(queue, 2))
+    .slice(0, 6);
 
   return (
     <main className="space-y-3 px-4 pb-24 pt-4 text-[color:var(--sem-text-primary)]">
@@ -255,9 +357,16 @@ export default async function MobileHomeBoard({
                   <p className="truncate text-sm font-medium text-[color:var(--sem-text-primary)]">
                     {entry.item.title || entry.item.customerName}
                   </p>
-                  <p className="mt-1 truncate text-xs text-[color:var(--sem-text-secondary)]">
-                    {formatControlPreview(entry.item)}
-                  </p>
+                  {entry.item.customerName && entry.item.customerName !== entry.item.title ? (
+                    <p className="mt-1 truncate text-xs text-[color:var(--sem-text-muted)]">
+                      {entry.item.customerName}
+                    </p>
+                  ) : null}
+                  {formatQueueMeta(entry.item) ? (
+                    <p className="mt-1 truncate text-xs text-[color:var(--sem-text-secondary)]">
+                      {formatQueueMeta(entry.item)}
+                    </p>
+                  ) : null}
                 </div>
                 <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
               </Link>
