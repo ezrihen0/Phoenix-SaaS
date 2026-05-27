@@ -490,6 +490,7 @@ export function AppShell({ children }: AppShellProps) {
           <MobileShellNav
             primaryItems={mobilePrimaryNav}
             navCatalog={mobileNavCatalog}
+            roleNavCatalog={visiblePrimaryNav}
             userLabel={userLabel}
             userInitials={buildInitials(userLabel)}
             moreOpen={moreMenuOpen}

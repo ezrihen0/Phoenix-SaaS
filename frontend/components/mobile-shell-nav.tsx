@@ -33,6 +33,8 @@ export type MobileShellNavItem = {
 type MobileShellNavProps = {
   primaryItems: MobileShellNavItem[];
   navCatalog: MobileShellNavItem[];
+  /** Role-filtered nav without injected settings/billing — used for empty-state detection. */
+  roleNavCatalog: MobileShellNavItem[];
   userLabel: string;
   userInitials: string;
   moreOpen: boolean;
@@ -121,6 +123,7 @@ function sectionLabelKey(sectionId: MobileMoreMenuSectionId) {
 export function MobileShellNav({
   primaryItems,
   navCatalog,
+  roleNavCatalog,
   userLabel,
   userInitials,
   moreOpen,
@@ -135,6 +138,11 @@ export function MobileShellNav({
   const navByHref = useMemo(
     () => new Map(navCatalog.map((item) => [item.href, item])),
     [navCatalog],
+  );
+
+  const roleNavByHref = useMemo(
+    () => new Map(roleNavCatalog.map((item) => [item.href, item])),
+    [roleNavCatalog],
   );
 
   const visibleMoreHrefs = useMemo(
@@ -152,9 +160,9 @@ export function MobileShellNav({
       .flatMap((section) =>
         section.links
           .map((link) => link.href)
-          .filter((href) => navByHref.has(href)),
+          .filter((href) => roleNavByHref.has(href)),
       ),
-    [navByHref],
+    [roleNavByHref],
   );
 
   const visibleSecondaryMoreLinkCount = visibleSecondaryMoreHrefs.length;
