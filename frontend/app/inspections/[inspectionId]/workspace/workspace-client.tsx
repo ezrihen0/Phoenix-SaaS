@@ -849,14 +849,14 @@ export default function InspectionWorkspaceClient({ inspectionId, permissions, s
 
   const previewModal = isPreviewExpanded ? (
     <div className="fixed inset-0 z-[80] bg-black/70 p-4">
-      <div className="mx-auto flex h-full w-full max-w-[1200px] flex-col rounded-[16px] border border-zinc-200 bg-white p-3">
+      <div className="theme-surface-card mx-auto flex h-full w-full max-w-[1200px] flex-col rounded-[16px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">Expanded Preview</p>
-          <button type="button" className="rounded-xl border border-zinc-200 px-3 py-1 text-xs" onClick={() => setIsPreviewExpanded(false)}>
+          <button type="button" className="theme-control-surface rounded-xl border px-3 py-1 text-xs" onClick={() => setIsPreviewExpanded(false)}>
             Close
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-auto rounded border border-zinc-200 bg-zinc-50 p-2">
+        <div className="theme-control-surface-soft min-h-0 flex-1 overflow-auto rounded border border-[color:var(--cmp-border-subtle)] p-2">
           {generatedPdfUrl ? (
             <iframe title="pdf-preview-expanded" src={generatedPdfUrl} className="h-full min-h-[640px] w-full rounded" />
           ) : (

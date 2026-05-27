@@ -35,6 +35,9 @@ function includesQuery(query: string, lead: LeadQueueItem) {
     lead.email,
     lead.service_address_line_1,
     lead.service_city,
+    lead.source,
+    lead.service_type,
+    lead.description,
   ]
     .filter((value): value is string => Boolean(value))
     .some((value) => value.toLowerCase().includes(normalizedQuery));
@@ -64,37 +67,33 @@ export default async function LeadsPage({ searchParams }: LeadsPageContext) {
   }
 
   return (
-    <main className="min-h-screen bg-[color:var(--flat-canvas)] text-[color:var(--text-primary)]">
-      <div className="mx-auto max-w-7xl px-6 py-12 lg:px-10">
-        <section className="theme-surface-modal rounded-[32px] border border-[color:rgba(212,175,55,0.2)] bg-[linear-gradient(170deg,rgba(8,8,8,0.96),rgba(19,19,19,0.9))] p-6 shadow-[0_36px_120px_rgba(0,0,0,0.4)]">
-          {loadError ? (
-            <div className="theme-alert-error rounded-[20px] border px-4 py-3 text-sm">
-              {loadError}
-            </div>
-          ) : (
-            <LeadsWorkspace
-              initialLeads={leads}
-              initialFocusLeadId={leadId}
-              initialIntakePrefill={
-                prefillFullName || prefillPhone || prefillDescription || prefillSource
-                  ? {
-                    fullName: prefillFullName,
-                    phone: prefillPhone,
-                    description: prefillDescription,
-                    recentCallId,
-                    source: prefillSource === "website"
-                      || prefillSource === "google"
-                      || prefillSource === "referral"
-                      || prefillSource === "repeat_customer"
-                      || prefillSource === "other"
-                      ? prefillSource
-                      : "phone",
-                  }
-                  : null
-              }
-            />
-          )}
-        </section>
+    <main className="relative min-h-screen overflow-x-hidden bg-[color:var(--cmp-surface-canvas)] px-4 py-8 text-[color:var(--text-primary)] sm:px-6 sm:py-10 lg:px-8">
+      <div className="mx-auto max-w-[1520px]">
+        {loadError ? (
+          <div className="theme-alert-error rounded-[20px] border px-4 py-3 text-sm">{loadError}</div>
+        ) : (
+          <LeadsWorkspace
+            initialLeads={leads}
+            initialFocusLeadId={leadId}
+            initialIntakePrefill={
+              prefillFullName || prefillPhone || prefillDescription || prefillSource
+                ? {
+                  fullName: prefillFullName,
+                  phone: prefillPhone,
+                  description: prefillDescription,
+                  recentCallId,
+                  source: prefillSource === "website"
+                    || prefillSource === "google"
+                    || prefillSource === "referral"
+                    || prefillSource === "repeat_customer"
+                    || prefillSource === "other"
+                    ? prefillSource
+                    : "phone",
+                }
+                : null
+            }
+          />
+        )}
       </div>
     </main>
   );

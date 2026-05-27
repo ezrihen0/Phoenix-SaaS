@@ -82,17 +82,17 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[color:var(--flat-canvas)] text-white">
+    <main className="relative min-h-screen overflow-hidden bg-[color:var(--sem-canvas-base)] text-[color:var(--sem-text-primary)]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.16),transparent_24%),radial-gradient(circle_at_bottom_right,rgba(80,200,120,0.12),transparent_26%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_30%)]" />
 
       <div className="relative mx-auto flex min-h-screen max-w-3xl items-center px-6 py-10 lg:px-10">
         <section className="w-full rounded-[36px] border border-[color:rgba(212,175,55,0.2)] bg-[linear-gradient(180deg,rgba(11,11,11,0.96),rgba(18,18,18,0.9))] p-7 shadow-[0_36px_120px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:p-8">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.38em] text-white/40">
+              <p className="text-[11px] uppercase tracking-[0.38em] text-[color:var(--sem-text-muted)]">
                 Password Recovery
               </p>
-              <h1 className="mt-3 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[#f5ecd2]">
+              <h1 className="mt-3 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-display-headline)]">
                 Reset your CRM password
               </h1>
             </div>
@@ -101,14 +101,14 @@ export default function ResetPasswordPage() {
             </span>
           </div>
 
-          <p className="mt-4 text-sm leading-6 text-white/58">
+          <p className="mt-4 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
             {statusMessage}
           </p>
 
           <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
-            <label className="block space-y-2 text-sm text-white/68">
+            <label className="block space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
               <span>New Password</span>
-              <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
+              <div className="flex items-center gap-3 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
                 <LockKeyhole className="h-4 w-4 text-[color:var(--flat-gold)]" />
                 <input
                   required
@@ -116,15 +116,15 @@ export default function ResetPasswordPage() {
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="w-full bg-transparent text-white outline-none placeholder:text-white/28"
+                  className="w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]"
                   placeholder="Use at least 8 characters"
                 />
               </div>
             </label>
 
-            <label className="block space-y-2 text-sm text-white/68">
+            <label className="block space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
               <span>Confirm Password</span>
-              <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
+              <div className="flex items-center gap-3 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
                 <LockKeyhole className="h-4 w-4 text-[color:var(--flat-gold)]" />
                 <input
                   required
@@ -132,7 +132,7 @@ export default function ResetPasswordPage() {
                   type="password"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
-                  className="w-full bg-transparent text-white outline-none placeholder:text-white/28"
+                  className="w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]"
                   placeholder="Retype your new password"
                 />
               </div>
@@ -154,7 +154,7 @@ export default function ResetPasswordPage() {
             </button>
           </form>
 
-          <div className="mt-6 text-sm text-white/48">
+          <div className="mt-6 text-sm text-[color:var(--sem-text-muted)]">
             <Link href="/login" className="text-[color:var(--flat-gold)] transition hover:text-[#f7df97]">
               Back to sign in
             </Link>

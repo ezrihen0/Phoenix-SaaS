@@ -94,10 +94,10 @@ export default function SignupPage() {
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-6 py-10 lg:grid-cols-[minmax(0,1.05fr)_520px] lg:px-10">
           <section className="max-w-2xl">
             <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">WizField</p>
-            <h1 className="mt-5 max-w-xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] md:text-7xl">
+            <h1 className="mt-5 max-w-xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[color:var(--sem-display-headline)] md:text-7xl">
               Create your WizField workspace.
             </h1>
-            <p className="mt-6 max-w-xl text-base leading-7 text-white/62 md:text-lg">
+            <p className="mt-6 max-w-xl text-base leading-7 text-[color:var(--sem-text-secondary)] md:text-lg">
               Create your owner account and your first business. Your workspace will be prepared for activation through
               WizField&apos;s shared billing flow with Stripe as the checkout provider.
             </p>
@@ -108,12 +108,12 @@ export default function SignupPage() {
                 { icon: Building2, title: "First business", body: "Your first organization is prepared as the workspace you will activate next." },
                 { icon: ShieldCheck, title: "Shared billing model", body: "New workspaces link to the same shared billing account and count against the current business entitlement." },
               ].map(({ icon: Icon, title, body }) => (
-                <article key={title} className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+                <article key={title} className="rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-white/[0.04] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
                   <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[color:rgba(212,175,55,0.22)] bg-[color:rgba(212,175,55,0.12)] text-[color:var(--flat-gold)]">
                     <Icon className="h-4 w-4" />
                   </span>
-                  <h2 className="mt-4 text-lg font-semibold tracking-tight text-white">{title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-white/56">{body}</p>
+                  <h2 className="mt-4 text-lg font-semibold tracking-tight text-[color:var(--sem-text-primary)]">{title}</h2>
+                  <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{body}</p>
                 </article>
               ))}
             </div>
@@ -122,8 +122,8 @@ export default function SignupPage() {
           <section className="rounded-[36px] border border-[color:rgba(212,175,55,0.2)] bg-[linear-gradient(180deg,rgba(11,11,11,0.96),rgba(18,18,18,0.9))] p-7 shadow-[0_36px_120px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:p-9">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.38em] text-white/40">Create Account</p>
-                <h2 className="mt-3 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[#f5ecd2]">
+                <p className="text-[11px] uppercase tracking-[0.38em] text-[color:var(--sem-text-muted)]">Create Account</p>
+                <h2 className="mt-3 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-display-headline)]">
                   Create My Workspace
                 </h2>
               </div>
@@ -133,47 +133,47 @@ export default function SignupPage() {
             </div>
 
             <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
-              <label className="block space-y-2 text-sm text-white/68">
+              <label className="block space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
                 <span>Full name</span>
-                <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
+                <div className="flex items-center gap-3 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-4 py-3 transition focus-within:border-[color:var(--cmp-border-accent)]">
                   <UserRound className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                  <input required value={fullName} onChange={(event) => setFullName(event.target.value)} className="w-full bg-transparent text-white outline-none placeholder:text-white/28" placeholder="Jordan Smith" />
+                  <input required value={fullName} onChange={(event) => setFullName(event.target.value)} className="w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="Jordan Smith" />
                 </div>
               </label>
 
-              <label className="block space-y-2 text-sm text-white/68">
+              <label className="block space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
                 <span>Business Name</span>
-                <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
+                <div className="flex items-center gap-3 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-4 py-3 transition focus-within:border-[color:var(--cmp-border-accent)]">
                   <Building2 className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                  <input required value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} className="w-full bg-transparent text-white outline-none placeholder:text-white/28" placeholder="Jordan Chimney & Fireplace" />
+                  <input required value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} className="w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="Jordan Chimney & Fireplace" />
                 </div>
               </label>
 
-              <label className="block space-y-2 text-sm text-white/68">
+              <label className="block space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
                 <span>Email</span>
-                <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
+                <div className="flex items-center gap-3 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-4 py-3 transition focus-within:border-[color:var(--cmp-border-accent)]">
                   <Mail className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                  <input required autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full bg-transparent text-white outline-none placeholder:text-white/28" placeholder="owner@example.com" />
+                  <input required autoComplete="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="owner@example.com" />
                 </div>
               </label>
 
-              <label className="block space-y-2 text-sm text-white/68">
+              <label className="block space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
                 <span>Password</span>
-                <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 transition focus-within:border-[color:rgba(212,175,55,0.36)]">
+                <div className="flex items-center gap-3 rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-4 py-3 transition focus-within:border-[color:var(--cmp-border-accent)]">
                   <ShieldCheck className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                  <input required autoComplete="new-password" type="password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full bg-transparent text-white outline-none placeholder:text-white/28" placeholder="Use at least 8 characters" />
+                  <input required autoComplete="new-password" type="password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full bg-transparent text-[color:var(--sem-text-primary)] outline-none placeholder:text-[color:var(--sem-text-muted)]" placeholder="Use at least 8 characters" />
                 </div>
                 {strength ? (
                   <p className={`text-xs ${strength.className}`}>Password strength: {strength.label}</p>
                 ) : null}
               </label>
 
-              <label className="flex items-start gap-3 text-sm text-white/68">
+              <label className="flex items-start gap-3 text-sm text-[color:var(--sem-text-secondary)]">
                 <input
                   type="checkbox"
                   checked={acceptedTerms}
                   onChange={(event) => setAcceptedTerms(event.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-white/20 bg-black/40"
+                  className="theme-input-control mt-1 h-4 w-4 rounded"
                 />
                 <span>
                   I agree to the{" "}

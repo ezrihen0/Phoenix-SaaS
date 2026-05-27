@@ -52,55 +52,55 @@ export function LanguageStoreLanguageCard({
       <article
         className={`rounded-2xl border p-5 backdrop-blur-sm transition ${
           isActive
-            ? "border-violet-500/35 bg-gradient-to-br from-violet-950/40 to-zinc-950/80 shadow-[0_0_40px_rgba(139,92,246,0.08)]"
-            : "border-zinc-800 bg-zinc-950/70"
+            ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] shadow-[0_0_40px_color-mix(in_srgb,var(--sem-accent-primary)_12%,transparent)]"
+            : "theme-surface-card border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]"
         }`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/80">
+            <div className="theme-control-surface-soft inline-flex h-11 w-11 items-center justify-center rounded-xl border">
               {language.state === "locked" || language.state === "slot_full"
-                ? <LockKeyhole className="h-5 w-5 text-fuchsia-300" />
+                ? <LockKeyhole className="h-5 w-5 text-[color:var(--sem-accent-primary)]" />
                 : language.is_default
-                  ? <Sparkles className="h-5 w-5 text-cyan-300" />
-                  : <Globe2 className="h-5 w-5 text-violet-300" />}
+                  ? <Sparkles className="h-5 w-5 text-[color:var(--sem-accent-primary)]" />
+                  : <Globe2 className="h-5 w-5 text-[color:var(--sem-accent-primary)]" />}
             </div>
             <div>
-              <p className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+              <p className="font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                 {language.code}
               </p>
-              <h2 className="mt-1 text-lg font-semibold text-white">{language.label}</h2>
+              <h2 className="mt-1 text-lg font-semibold text-[color:var(--sem-text-primary)]">{language.label}</h2>
               {nativeLabel && nativeLabel !== language.label ? (
-                <p className="mt-0.5 text-sm text-zinc-400">{nativeLabel}</p>
+                <p className="mt-0.5 text-sm text-[color:var(--sem-text-secondary)]">{nativeLabel}</p>
               ) : null}
               <div className="mt-2 flex flex-wrap gap-2">
-                <span className="rounded-full border border-zinc-700 px-2 py-0.5 font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-[0.14em] text-zinc-400">
+                <span className="rounded-full border border-[color:var(--cmp-border-subtle)] px-2 py-0.5 font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-[0.14em] text-[color:var(--sem-text-muted)]">
                   {language.direction === "rtl" ? t("languageStore.direction.rtlShort") : t("languageStore.direction.ltrShort")}
                 </span>
                 {language.consumes_paid_slot ? (
-                  <span className="rounded-full border border-fuchsia-500/25 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-fuchsia-200">
+                  <span className="rounded-full border border-[color:var(--cmp-border-accent)] bg-[color:color-mix(in_srgb,var(--sem-accent-primary)_12%,transparent)] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[color:var(--sem-accent-primary)]">
                     Paid slot
                   </span>
                 ) : null}
               </div>
             </div>
           </div>
-          <span className="rounded-full border border-zinc-700 px-2.5 py-1 font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-[0.14em] text-zinc-300">
+          <span className="rounded-full border border-[color:var(--cmp-border-subtle)] px-2.5 py-1 font-[family:var(--font-geist-mono)] text-[10px] uppercase tracking-[0.14em] text-[color:var(--sem-text-secondary)]">
             {t(`languageStore.state.${statusKey}`)}
           </span>
         </div>
 
         <div className="mt-4 space-y-3">
           {language.is_default ? (
-            <p className="text-sm leading-6 text-zinc-400">{t("languageStore.englishAlwaysAvailable")}</p>
+            <p className="text-sm leading-6 text-[color:var(--sem-text-secondary)]">{t("languageStore.englishAlwaysAvailable")}</p>
           ) : (
-            <p className="text-sm leading-6 text-zinc-400">
+            <p className="text-sm leading-6 text-[color:var(--sem-text-secondary)]">
               {language.consumes_paid_slot ? t("languageStore.consumesSlot") : t("languageStore.doesNotConsumeSlot")}
             </p>
           )}
 
           {language.locked_reason ? (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5 text-sm text-zinc-400">
+            <div className="theme-control-surface-soft rounded-xl border px-3 py-2.5 text-sm text-[color:var(--sem-text-secondary)]">
               {language.locked_reason}
             </div>
           ) : null}
@@ -112,7 +112,7 @@ export function LanguageStoreLanguageCard({
               type="button"
               onClick={() => onActivate(language.code)}
               disabled={busy}
-              className="rounded-xl border border-violet-500/30 bg-violet-500/15 px-4 py-2 text-sm font-semibold text-violet-100 transition hover:border-violet-400/40 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl border border-[color:var(--cmp-border-accent)] bg-[color:color-mix(in_srgb,var(--sem-accent-primary)_14%,transparent)] px-4 py-2 text-sm font-semibold text-[color:var(--sem-accent-primary)] transition hover:border-[color:var(--cmp-border-accent)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {busy ? t("common.actions.activating") : t("common.actions.activate")}
             </button>
@@ -123,7 +123,7 @@ export function LanguageStoreLanguageCard({
               type="button"
               onClick={() => onDeactivate(language.code)}
               disabled={busy}
-              className="rounded-xl border border-zinc-700 bg-zinc-900/60 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-40"
+              className="theme-control-surface rounded-xl border px-4 py-2 text-sm font-semibold text-[color:var(--sem-text-primary)] transition hover:border-[color:var(--cmp-border-accent)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {busy ? t("common.actions.updating") : t("common.actions.deactivate")}
             </button>

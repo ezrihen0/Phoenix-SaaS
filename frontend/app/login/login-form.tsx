@@ -1,7 +1,7 @@
 "use client";
 
-import type { FormEvent, ReactNode } from "react";
-import { useState } from "react";
+import type { CSSProperties, FormEvent, ReactNode } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -10,7 +10,9 @@ import {
   Flame,
   LockKeyhole,
   Mail,
+  Moon,
   ShieldCheck,
+  Sun,
 } from "lucide-react";
 
 import {
@@ -19,6 +21,72 @@ import {
 } from "@/lib/auth/client-auth";
 
 export const SHOW_LEGACY_LOGIN = false;
+
+const LOGIN_ATMOSPHERE_STORAGE_KEY = "wizfield.login.atmosphere";
+
+type LoginAtmosphere = "default" | "dark";
+
+/** Hardware / Obsidian premium login atmosphere (local override only). */
+const LOGIN_DARK_AUTH_VARS: CSSProperties = {
+  "--sem-auth-canvas": "#09090b",
+  "--sem-auth-foreground": "#0f172a",
+  "--sem-auth-grid-line": "rgba(255, 255, 255, 0.065)",
+  "--sem-auth-grid-size": "40px",
+  "--sem-auth-grid-opacity": "0.25",
+  "--sem-auth-glow-1": "color-mix(in srgb, #4D00FF 20%, transparent)",
+  "--sem-auth-glow-2": "color-mix(in srgb, #8b5cf6 16%, transparent)",
+  "--sem-auth-glow-3": "color-mix(in srgb, #00F5A0 10%, transparent)",
+  "--sem-auth-vignette":
+    "radial-gradient(circle at center, transparent 0%, color-mix(in srgb, #09090b 18%, transparent) 52%, color-mix(in srgb, #09090b 78%, transparent) 100%)",
+  "--sem-auth-card-bg": "rgba(255, 255, 255, 0.95)",
+  "--sem-auth-card-border": "rgba(255, 255, 255, 0.2)",
+  "--sem-auth-card-shadow": "0 32px 96px rgba(15, 23, 42, 0.24)",
+} as CSSProperties;
+
+function useLoginAtmosphere() {
+  const [atmosphere, setAtmosphere] = useState<LoginAtmosphere>("default");
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(LOGIN_ATMOSPHERE_STORAGE_KEY);
+
+    if (stored === "dark" || stored === "default") {
+      setAtmosphere(stored);
+    }
+  }, []);
+
+  function toggleAtmosphere() {
+    setAtmosphere((current) => {
+      const next: LoginAtmosphere = current === "dark" ? "default" : "dark";
+      window.localStorage.setItem(LOGIN_ATMOSPHERE_STORAGE_KEY, next);
+      return next;
+    });
+  }
+
+  return { atmosphere, toggleAtmosphere };
+}
+
+function LoginAtmosphereToggle({
+  atmosphere,
+  onToggle,
+}: {
+  atmosphere: LoginAtmosphere;
+  onToggle: () => void;
+}) {
+  const isDark = atmosphere === "dark";
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={isDark}
+      aria-label={isDark ? "Use theme default login atmosphere" : "Use dark premium login atmosphere"}
+      className="fixed top-5 right-5 z-20 inline-flex items-center gap-2 rounded-full border border-[color:color-mix(in_srgb,var(--sem-auth-card-border)_85%,transparent)] bg-[color:color-mix(in_srgb,var(--sem-auth-card-bg)_82%,transparent)] px-3 py-1.5 text-xs font-semibold text-[color:var(--sem-auth-foreground)] shadow-[var(--sem-auth-card-shadow)] backdrop-blur-md transition hover:border-[color:var(--sem-auth-card-border)] sm:top-6 sm:right-6"
+    >
+      {isDark ? <Sun className="h-3.5 w-3.5 shrink-0 opacity-80" /> : <Moon className="h-3.5 w-3.5 shrink-0 opacity-80" />}
+      <span>{isDark ? "Bright mode" : "Dark mode"}</span>
+    </button>
+  );
+}
 
 function LoadingSpinner() {
   return (
@@ -30,8 +98,16 @@ function LoadingSpinner() {
 }
 
 export function LoginAmbientShell({ children }: { children: ReactNode }) {
+  const { atmosphere, toggleAtmosphere } = useLoginAtmosphere();
+  const isDarkAtmosphere = atmosphere === "dark";
+
   return (
-    <main className="sem-auth-atmosphere relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-10">
+    <main
+      data-login-atmosphere={atmosphere}
+      style={isDarkAtmosphere ? LOGIN_DARK_AUTH_VARS : undefined}
+      className="sem-auth-atmosphere relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-10"
+    >
+      <LoginAtmosphereToggle atmosphere={atmosphere} onToggle={toggleAtmosphere} />
       <div aria-hidden="true" className="sem-auth-grid-layer pointer-events-none absolute inset-0" />
       <div
         aria-hidden="true"

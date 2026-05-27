@@ -183,12 +183,12 @@ function statusTone(status: string) {
     return "border-emerald-400/25 bg-emerald-400/12 text-emerald-100";
   }
 
-  return "border-white/10 bg-white/5 text-white/72";
+  return "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-secondary)]";
 }
 
 function FieldLabel({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block space-y-2 text-sm text-white/66">
+    <label className="block space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
       <span>{label}</span>
       {children}
     </label>
@@ -199,16 +199,16 @@ function FieldTextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>)
   return (
     <textarea
       {...props}
-      className={`min-h-[110px] w-full rounded-[18px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/24 focus:border-[color:rgba(212,175,55,0.34)] ${props.className ?? ""}`}
+      className={`theme-input-control min-h-[110px] w-full rounded-[18px] px-4 py-3 text-sm outline-none transition ${props.className ?? ""}`}
     />
   );
 }
 
 function SectionFrame({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(12,12,12,0.94),rgba(18,18,18,0.88))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.36)] backdrop-blur-xl sm:p-6">
-      <p className="text-[11px] uppercase tracking-[0.38em] text-white/36">{subtitle}</p>
-      <h2 className="mt-3 font-[family:var(--font-flat-display)] text-3xl tracking-tight text-[#f5ecd2]">
+    <section className="theme-surface-card rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5 shadow-[0_28px_90px_color-mix(in_srgb,var(--bg-canvas)_42%,transparent)] backdrop-blur-xl sm:p-6">
+      <p className="text-[11px] uppercase tracking-[0.38em] text-[color:var(--sem-text-muted)]">{subtitle}</p>
+      <h2 className="mt-3 font-[family:var(--font-flat-display)] text-3xl tracking-tight text-[color:var(--sem-display-headline)]">
         {title}
       </h2>
       <div className="mt-5">{children}</div>
@@ -218,12 +218,12 @@ function SectionFrame({ title, subtitle, children }: { title: string; subtitle: 
 
 function MetricCard({ icon: Icon, label, value }: { icon: typeof Flame; label: string; value: number }) {
   return (
-    <article className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-      <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[color:rgba(212,175,55,0.18)] bg-[color:rgba(212,175,55,0.1)] text-[color:var(--flat-gold)]">
+    <article className="theme-control-surface-soft rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-4">
+      <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:color-mix(in_srgb,var(--sem-accent-primary)_12%,transparent)] text-[color:var(--sem-accent-primary)]">
         <Icon className="h-4 w-4" />
       </span>
-      <p className="mt-4 text-[11px] uppercase tracking-[0.28em] text-white/38">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight text-white">{value}</p>
+      <p className="mt-4 text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">{label}</p>
+      <p className="mt-2 text-3xl font-semibold tracking-tight text-[color:var(--sem-text-primary)]">{value}</p>
     </article>
   );
 }
@@ -381,9 +381,9 @@ export default function TechnicianHomeBoard() {
 
   if (isBooting && !dashboard) {
     return (
-      <div className="flex min-h-[220px] items-center justify-center rounded-[34px] bg-[color:var(--flat-canvas)] text-white">
-        <div className="inline-flex items-center gap-3 text-sm text-white/62">
-          <LoaderCircle className="h-4 w-4 animate-spin text-[color:var(--flat-gold)]" />
+      <div className="theme-control-surface-soft flex min-h-[220px] items-center justify-center rounded-[34px] border border-[color:var(--cmp-border-subtle)]">
+        <div className="inline-flex items-center gap-3 text-sm text-[color:var(--sem-text-secondary)]">
+          <LoaderCircle className="h-4 w-4 animate-spin text-[color:var(--sem-accent-primary)]" />
           {t("loading")}
         </div>
       </div>
@@ -392,13 +392,13 @@ export default function TechnicianHomeBoard() {
 
   const boardBody = (
     <div className="relative mx-auto max-w-none px-5 py-6 lg:px-8">
-      <header className="rounded-[34px] border border-[color:rgba(212,175,55,0.18)] bg-[linear-gradient(180deg,rgba(9,9,9,0.94),rgba(18,18,18,0.88))] p-6 shadow-[0_34px_120px_rgba(0,0,0,0.42)] backdrop-blur-2xl">
+      <header className="theme-surface-card rounded-[34px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-6 shadow-[0_34px_120px_color-mix(in_srgb,var(--bg-canvas)_42%,transparent)] backdrop-blur-2xl">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="max-w-3xl font-[family:var(--font-flat-display)] text-4xl leading-none tracking-tight text-[#f5ecd2] sm:text-5xl">
+            <h1 className="max-w-3xl font-[family:var(--font-flat-display)] text-4xl leading-none tracking-tight text-[color:var(--sem-display-headline)] sm:text-5xl">
               {t("heroTitle")}
             </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-white/56 sm:text-base">
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-[color:var(--sem-text-secondary)] sm:text-base">
               {t("heroBody")}
             </p>
           </div>
@@ -414,7 +414,7 @@ export default function TechnicianHomeBoard() {
 
       {(errorMessage || statusMessage) && (
         <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-          <div className={`rounded-[22px] border px-4 py-3 text-sm ${errorMessage ? "border-rose-500/30 bg-rose-500/10 text-rose-100" : "border-[color:rgba(212,175,55,0.24)] bg-[color:rgba(212,175,55,0.1)] text-[#f5d980]"}`}>
+          <div className={`rounded-[22px] border px-4 py-3 text-sm ${errorMessage ? "theme-alert-error" : "theme-alert-success"}`}>
             {errorMessage ?? statusMessage}
           </div>
           <button
@@ -431,7 +431,7 @@ export default function TechnicianHomeBoard() {
                 t("refreshed"),
               );
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+            className="theme-control-surface inline-flex items-center justify-center gap-2 rounded-[22px] border px-4 py-3 text-sm text-[color:var(--sem-text-secondary)] transition hover:border-[color:var(--cmp-border-accent)] hover:text-[color:var(--sem-text-primary)]"
           >
             <RefreshCw className={`h-4 w-4 ${busyAction === "refresh" || isPending ? "animate-spin" : ""}`} />
             {t("refreshBoard")}
@@ -458,18 +458,18 @@ export default function TechnicianHomeBoard() {
                       setStatusNote("");
                     });
                   }}
-                  className={`rounded-[28px] border p-5 text-left transition ${selectedJobId === job.id ? "border-[color:rgba(212,175,55,0.3)] bg-[color:rgba(212,175,55,0.08)]" : "border-white/10 bg-white/[0.03] hover:border-white/18 hover:bg-white/[0.05]"}`}
+                  className={`rounded-[28px] border p-5 text-left transition ${selectedJobId === job.id ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)]" : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"}`}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-lg font-semibold tracking-tight text-white">{job.title}</p>
-                      <p className="mt-1 text-sm text-white/46">{customer?.full_name ?? t("customerPending")}</p>
+                      <p className="text-lg font-semibold tracking-tight text-[color:var(--sem-text-primary)]">{job.title}</p>
+                      <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">{customer?.full_name ?? t("customerPending")}</p>
                     </div>
                     <span className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.24em] ${statusTone(job.status)}`}>
                       {getJobStatusLabel(job.status, locale)}
                     </span>
                   </div>
-                  <div className="mt-4 space-y-2 text-sm text-white/56">
+                  <div className="mt-4 space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
                     <div className="flex items-start gap-2">
                       <MapPin className="mt-0.5 h-4 w-4 text-[color:var(--flat-gold)]" />
                       <span>{formatAddress(job.service_address_line_1, job.service_address_line_2, job.service_city, job.service_state_or_region, job.service_postal_code)}</span>
@@ -493,7 +493,7 @@ export default function TechnicianHomeBoard() {
                 </button>
               );
             }) : (
-              <div className="rounded-[28px] border border-dashed border-white/10 bg-white/[0.03] px-5 py-10 text-center text-sm text-white/46 lg:col-span-2">
+              <div className="rounded-[28px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-5 py-10 text-center text-sm text-[color:var(--sem-text-secondary)] lg:col-span-2">
                 {t("noAssignedJobs")}
               </div>
             )}
@@ -504,25 +504,25 @@ export default function TechnicianHomeBoard() {
           <SectionFrame title={t("selectedJob")} subtitle={t("fieldDetail")}>
             {displayedJob && displayedCustomer ? (
               <div className="space-y-6">
-                <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-4">
+                <div className="rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-xl font-semibold tracking-tight text-white">{displayedJob.title}</p>
-                      <p className="mt-1 text-sm text-white/52">{displayedCustomer.full_name}</p>
+                      <p className="text-xl font-semibold tracking-tight text-[color:var(--sem-text-primary)]">{displayedJob.title}</p>
+                      <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">{displayedCustomer.full_name}</p>
                     </div>
                     <span className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.24em] ${statusTone(displayedJob.status)}`}>
                       {getJobStatusLabel(displayedJob.status, locale)}
                     </span>
                   </div>
 
-                  <div className="mt-4 space-y-2 text-sm text-white/56">
+                  <div className="mt-4 space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
                     <div className="flex items-start gap-2">
                       <MapPin className="mt-0.5 h-4 w-4 text-[color:var(--flat-gold)]" />
                       {formatAddress(displayedJob.service_address_line_1, displayedJob.service_address_line_2, displayedJob.service_city, displayedJob.service_state_or_region, displayedJob.service_postal_code)}
                     </div>
                     <div className="flex items-center gap-2">
                       <Phone className="h-4 w-4 text-[color:var(--flat-gold)]" />
-                      <a href={`tel:${displayedCustomer.phone}`} className="transition hover:text-white">
+                      <a href={`tel:${displayedCustomer.phone}`} className="transition hover:text-[color:var(--sem-text-primary)]">
                         {displayedCustomer.phone}
                       </a>
                     </div>
@@ -543,7 +543,7 @@ export default function TechnicianHomeBoard() {
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">{t("statusActions")}</p>
+                  <p className="text-[11px] uppercase tracking-[0.34em] text-[color:var(--sem-text-muted)]">{t("statusActions")}</p>
                   <FieldLabel label={t("statusNote")}>
                     <FieldTextArea
                       value={statusNote}
@@ -582,7 +582,7 @@ export default function TechnicianHomeBoard() {
                               t("markedStatus", { status: getJobStatusLabel(typedStatus, locale) }),
                             );
                           }}
-                          className={`rounded-[18px] border px-4 py-4 text-xs uppercase tracking-[0.24em] transition ${isCurrentStatus ? `${statusTone(typedStatus)} border-[color:rgba(212,175,55,0.28)]` : "border-white/10 bg-black/20 text-white/66 hover:border-white/20 hover:text-white"} disabled:cursor-not-allowed disabled:opacity-45`}
+                          className={`rounded-[18px] border px-4 py-4 text-xs uppercase tracking-[0.24em] transition ${isCurrentStatus ? `${statusTone(typedStatus)} border-[color:rgba(212,175,55,0.28)]` : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] text-[color:var(--sem-text-secondary)] hover:border-[color:var(--cmp-border-accent)] hover:text-[color:var(--sem-text-primary)]"} disabled:cursor-not-allowed disabled:opacity-45`}
                         >
                           {getJobStatusLabel(typedStatus, locale)}
                         </button>
@@ -592,7 +592,7 @@ export default function TechnicianHomeBoard() {
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">{t("fieldNotes")}</p>
+                  <p className="text-[11px] uppercase tracking-[0.34em] text-[color:var(--sem-text-muted)]">{t("fieldNotes")}</p>
                   <FieldLabel label={t("findings")}>
                     <FieldTextArea value={noteForm.findings} onChange={(event) => setNoteForm((current) => ({ ...current, findings: event.target.value }))} />
                   </FieldLabel>
@@ -624,7 +624,7 @@ export default function TechnicianHomeBoard() {
                         t("fieldNoteSaved"),
                       );
                     }}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-5 py-3 text-sm text-[color:var(--sem-text-secondary)] transition hover:border-[color:var(--cmp-border-accent)] hover:text-[color:var(--sem-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {busyAction === `note-${selectedJobId}` ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                     {t("saveFieldNote")}
@@ -632,43 +632,43 @@ export default function TechnicianHomeBoard() {
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">{t("recentNotes")}</p>
+                  <p className="text-[11px] uppercase tracking-[0.34em] text-[color:var(--sem-text-muted)]">{t("recentNotes")}</p>
                   {sortedNotes.length ? sortedNotes.map((note) => (
-                    <article key={note.id} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4 text-sm text-white/58">
-                      <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.24em] text-white/34">
+                    <article key={note.id} className="rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-4 text-sm text-[color:var(--sem-text-secondary)]">
+                      <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">
                         <span>{t("noteLabel", { id: note.id })}</span>
                         <span>{formatDateTime(note.created_at, locale, "Not scheduled")}</span>
                       </div>
-                      {note.findings ? <p className="mt-3"><span className="text-white/84">{t("noteFindings")}</span> {note.findings}</p> : null}
-                      {note.recommendations ? <p className="mt-2"><span className="text-white/84">{t("noteRecommendations")}</span> {note.recommendations}</p> : null}
+                      {note.findings ? <p className="mt-3"><span className="text-[color:var(--sem-text-primary)]">{t("noteFindings")}</span> {note.findings}</p> : null}
+                      {note.recommendations ? <p className="mt-2"><span className="text-[color:var(--sem-text-primary)]">{t("noteRecommendations")}</span> {note.recommendations}</p> : null}
                     </article>
                   )) : (
-                    <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-white/42">
+                    <div className="rounded-[22px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-4 py-6 text-sm text-[color:var(--sem-text-muted)]">
                       {t("noFieldNotes")}
                     </div>
                   )}
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-[11px] uppercase tracking-[0.34em] text-white/34">{t("statusTimeline")}</p>
+                  <p className="text-[11px] uppercase tracking-[0.34em] text-[color:var(--sem-text-muted)]">{t("statusTimeline")}</p>
                   {sortedStatusEvents.length ? sortedStatusEvents.map((event) => (
-                    <div key={event.id} className="flex gap-3 rounded-[20px] border border-white/10 bg-white/[0.03] p-4 text-sm text-white/56">
+                    <div key={event.id} className="flex gap-3 rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-4 text-sm text-[color:var(--sem-text-secondary)]">
                       <span className={`mt-0.5 h-3 w-3 rounded-full border ${statusTone(event.status)}`} />
                       <div>
-                        <p className="text-white/84">{getJobStatusLabel(event.status, locale)}</p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.24em] text-white/32">{formatDateTime(event.created_at, locale, "Not scheduled")}</p>
+                        <p className="text-[color:var(--sem-text-primary)]">{getJobStatusLabel(event.status, locale)}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">{formatDateTime(event.created_at, locale, "Not scheduled")}</p>
                         {event.note ? <p className="mt-2">{event.note}</p> : null}
                       </div>
                     </div>
                   )) : (
-                    <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-white/42">
+                    <div className="rounded-[22px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-4 py-6 text-sm text-[color:var(--sem-text-muted)]">
                       {t("noStatusTimeline")}
                     </div>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="rounded-[26px] border border-dashed border-white/10 bg-white/[0.03] px-5 py-14 text-center text-sm text-white/44">
+              <div className="rounded-[26px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-5 py-14 text-center text-sm text-[color:var(--sem-text-muted)]">
                 {t("selectJob")}
               </div>
             )}
@@ -678,12 +678,5 @@ export default function TechnicianHomeBoard() {
     </div>
   );
 
-  return (
-    <div className="relative overflow-hidden rounded-[34px] text-white">
-      <div className="absolute inset-0 bg-[color:var(--flat-canvas)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.15),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(80,200,120,0.16),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_32%)]" />
-      <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:32px_32px]" />
-      <div className="relative">{boardBody}</div>
-    </div>
-  );
+  return boardBody;
 }

@@ -1281,7 +1281,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                     Page {currentPage}/{totalPages} · {pagedCalls.length} rows
                   </p>
                 </div>
-                <div className="theme-control-surface overflow-x-auto rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))]">
+                <div className="theme-control-surface overflow-x-auto rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]">
                   <table className="min-w-full table-fixed text-left text-xs leading-4">
                     <colgroup>
                       <col className="w-[18%]" />
@@ -1454,7 +1454,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                     return (
                       <article
                         key={call.id}
-                        className={`theme-control-surface rounded-[28px] border bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))] px-5 py-4 shadow-[0_18px_36px_rgba(0,0,0,0.22)] ${operationalState.surfaceClass}`}
+                        className={`theme-control-surface rounded-[28px] border bg-[color:var(--cmp-surface-card)] px-5 py-4 shadow-[0_18px_36px_color-mix(in_srgb,var(--bg-canvas)_55%,transparent)] ${operationalState.surfaceClass}`}
                       >
                         <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1fr)_minmax(230px,0.8fr)] xl:items-start">
                           <div className="space-y-3">
@@ -1566,7 +1566,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                     return (
                       <article
                         key={call.id}
-                        className={`theme-control-surface flex h-full flex-col rounded-[28px] border bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))] p-5 shadow-[0_18px_36px_rgba(0,0,0,0.22)] ${operationalState.surfaceClass}`}
+                        className={`theme-control-surface flex h-full flex-col rounded-[28px] border bg-[color:var(--cmp-surface-card)] p-5 shadow-[0_18px_36px_color-mix(in_srgb,var(--bg-canvas)_55%,transparent)] ${operationalState.surfaceClass}`}
                       >
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="space-y-2">

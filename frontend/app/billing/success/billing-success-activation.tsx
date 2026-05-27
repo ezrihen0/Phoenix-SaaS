@@ -64,19 +64,19 @@ export function BillingSuccessActivation({
   }, [activationComplete, router]);
 
   return (
-    <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-8 shadow-[0_36px_120px_rgba(0,0,0,0.35)]">
+    <section className="rounded-[32px] border border-[color:var(--cmp-border-subtle)] bg-white/[0.04] p-8 shadow-[0_36px_120px_rgba(0,0,0,0.35)]">
       <p className="text-[11px] uppercase tracking-[0.32em] text-[color:var(--flat-gold)]">Billing</p>
-      <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[#f5ecd2]">
+      <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-display-headline)]">
         {activationComplete ? "Your subscription is active." : "Confirming your subscription…"}
       </h1>
-      <p className="mt-4 text-sm leading-7 text-white/65">
+      <p className="mt-4 text-sm leading-7 text-[color:var(--sem-text-secondary)]">
         {activationComplete
           ? "Webhook confirmation has updated your billing access. You can enter your workspace now."
           : "Stripe Checkout returned successfully. WizField activates your workspace after verified webhook synchronization — this usually completes within a minute."}
       </p>
 
       {!activationComplete && isPolling ? (
-        <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm text-white/70">
+        <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-[color:var(--cmp-border-subtle)] bg-black/30 px-4 py-2 text-sm text-[color:var(--sem-text-secondary)]">
           <LoaderCircle className="h-4 w-4 animate-spin text-[color:var(--flat-gold)]" />
           Checking activation status every few seconds…
         </div>
@@ -95,13 +95,13 @@ export function BillingSuccessActivation({
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
             href="/pricing"
-            className="inline-flex rounded-full border border-white/15 px-5 py-2.5 text-sm text-white/80 transition hover:text-white"
+            className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] px-5 py-2.5 text-sm text-[color:var(--sem-text-primary)] transition hover:text-[color:var(--sem-text-primary)]"
           >
             Return to pricing
           </Link>
           <Link
             href="/settings"
-            className="inline-flex rounded-full border border-white/15 px-5 py-2.5 text-sm text-white/80 transition hover:text-white"
+            className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] px-5 py-2.5 text-sm text-[color:var(--sem-text-primary)] transition hover:text-[color:var(--sem-text-primary)]"
           >
             Open settings
           </Link>

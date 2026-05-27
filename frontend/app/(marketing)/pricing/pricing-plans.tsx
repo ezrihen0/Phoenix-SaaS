@@ -42,16 +42,16 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, acti
         {PLAN_DISPLAY_CATALOG.map((plan) => (
           <article
             key={plan.key}
-            className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.25)]"
+            className="rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.25)]"
           >
             <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">{plan.title}</p>
             <p className="mt-3 text-3xl font-semibold text-[#f7df97]">{plan.monthlyPriceLabel}</p>
             {plan.annualPriceLabel ? (
-              <p className="mt-1 text-sm text-white/50">or {plan.annualPriceLabel} billed annually</p>
+              <p className="mt-1 text-sm text-[color:var(--sem-text-muted)]">or {plan.annualPriceLabel} billed annually</p>
             ) : null}
-            <h2 className="mt-4 text-xl font-semibold text-[#f5ecd2]">{plan.coverage}</h2>
-            <p className="mt-3 text-sm leading-7 text-white/65">{plan.body}</p>
-            <ul className="mt-4 space-y-2 text-sm text-white/60">
+            <h2 className="mt-4 text-xl font-semibold text-[color:var(--sem-display-headline)]">{plan.coverage}</h2>
+            <p className="mt-3 text-sm leading-7 text-[color:var(--sem-text-secondary)]">{plan.body}</p>
+            <ul className="mt-4 space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
               {plan.features.map((feature) => (
                 <li key={feature} className="flex gap-2">
                   <span className="text-[color:var(--flat-gold)]">•</span>
@@ -73,7 +73,7 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, acti
               ) : authenticated ? (
                 <Link
                   href="/settings"
-                  className="inline-flex w-full items-center justify-center rounded-full border border-white/15 px-5 py-3 text-sm font-medium text-white/80 transition hover:text-white"
+                  className="inline-flex w-full items-center justify-center rounded-full border border-[color:var(--cmp-border-subtle)] px-5 py-3 text-sm font-medium text-[color:var(--sem-text-primary)] transition hover:text-[color:var(--sem-text-primary)]"
                 >
                   Owner session required
                 </Link>
@@ -87,7 +87,7 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, acti
                   </Link>
                   <Link
                     href="/login?next=/pricing"
-                    className="inline-flex w-full items-center justify-center rounded-full border border-white/15 px-5 py-3 text-sm text-white/75 transition hover:text-white"
+                    className="inline-flex w-full items-center justify-center rounded-full border border-[color:var(--cmp-border-subtle)] px-5 py-3 text-sm text-[color:var(--sem-text-secondary)] transition hover:text-[color:var(--sem-text-primary)]"
                   >
                     Sign in as owner
                   </Link>
@@ -104,10 +104,10 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, acti
         </div>
       ) : null}
 
-      <section className="mt-10 overflow-x-auto rounded-[24px] border border-white/10 bg-white/[0.03]">
-        <table className="min-w-full text-left text-sm text-white/70">
+      <section className="mt-10 overflow-x-auto rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-white/[0.03]">
+        <table className="min-w-full text-left text-sm text-[color:var(--sem-text-secondary)]">
           <thead>
-            <tr className="border-b border-white/10 text-[11px] uppercase tracking-[0.2em] text-white/45">
+            <tr className="border-b border-[color:var(--cmp-border-subtle)] text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
               <th className="px-4 py-3">Feature</th>
               {PLAN_DISPLAY_CATALOG.map((plan) => (
                 <th key={plan.key} className="px-4 py-3">{plan.title}</th>
@@ -122,7 +122,7 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, acti
               { label: "Growth Center", values: ["—", "Included", "Included"] },
             ].map((row) => (
               <tr key={row.label} className="border-b border-white/5">
-                <td className="px-4 py-3 font-medium text-white/85">{row.label}</td>
+                <td className="px-4 py-3 font-medium text-[color:var(--sem-text-primary)]">{row.label}</td>
                 {row.values.map((value, index) => (
                   <td key={`${row.label}-${index}`} className="px-4 py-3">{value}</td>
                 ))}

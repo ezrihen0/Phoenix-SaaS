@@ -30,7 +30,7 @@ const columns = [
 type InspectionSource = "new_customer" | "existing_customer" | "existing_job" | "internal_draft";
 type InspectionType = "standard" | "wett" | "gas";
 
-const inspectionActionIconBaseClass = "inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--cmp-border-subtle)] text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--cmp-focus-ring)]";
+const inspectionActionIconBaseClass = "inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--cmp-border-subtle)] text-[color:var(--sem-text-primary)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--cmp-focus-ring)]";
 const inspectionOpenIconClass = `${inspectionActionIconBaseClass} bg-amber-500 hover:bg-amber-600`;
 
 function formatDateTime(value: string) {
