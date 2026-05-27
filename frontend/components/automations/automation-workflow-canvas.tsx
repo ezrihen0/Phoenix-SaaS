@@ -138,11 +138,17 @@ const AI_INSPECTOR = "sem-ai-inspector-surface pointer-events-auto rounded-2xl p
 const AI_SURFACE_CARD = "sem-ai-node-card rounded-xl border px-3 py-3";
 const AI_SURFACE_SOFT = "rounded-xl border border-[color:var(--sem-ai-node-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-node-bg)_88%,transparent)]";
 const AI_INPUT =
-  "w-full rounded-xl border border-[color:var(--sem-ai-node-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-inspector-bg)_72%,transparent)] px-3 py-2 outline-none text-[color:var(--sem-ai-grid-text-primary)] placeholder:text-[color:var(--sem-ai-grid-text-muted)] focus:border-[color:var(--sem-ai-node-border-selected)] disabled:opacity-70";
+  "w-full rounded-xl border border-[color:var(--sem-ai-node-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-inspector-bg)_72%,transparent)] px-3 py-2 outline-none text-[color:var(--sem-ai-grid-text-primary)] placeholder:text-[color:var(--sem-ai-grid-text-muted)] focus:border-[color:var(--sem-ai-node-border-selected)] focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--sem-ai-node-border-selected)_50%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--sem-ai-grid-canvas)] disabled:cursor-not-allowed disabled:opacity-60 read-only:opacity-80";
 const AI_BTN_GHOST =
-  "rounded-lg border border-[color:var(--sem-ai-hud-border)] transition hover:bg-[color:color-mix(in_srgb,var(--sem-ai-grid-text-primary)_6%,transparent)] hover:text-[color:var(--sem-ai-grid-text-primary)]";
+  "rounded-lg border border-[color:var(--sem-ai-hud-border)] text-[color:var(--sem-ai-grid-text-secondary)] transition hover:border-[color:var(--sem-ai-node-border-selected)] hover:bg-[color:color-mix(in_srgb,var(--sem-ai-grid-text-primary)_6%,transparent)] hover:text-[color:var(--sem-ai-grid-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--sem-ai-node-border-selected)_45%,transparent)] disabled:cursor-not-allowed disabled:opacity-50";
 const AI_BTN_PRIMARY =
-  "inline-flex items-center gap-2 rounded-xl border border-[color:var(--sem-ai-node-border-selected)] bg-[color:var(--sem-ai-grid-text-accent)] font-semibold text-[color:var(--sem-ai-grid-canvas)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex shrink-0 items-center gap-2 rounded-xl border border-[color:var(--sem-ai-node-border-selected)] bg-[color:var(--sem-ai-grid-text-accent)] font-semibold text-[color:var(--sem-ai-grid-canvas)] shadow-sm transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--sem-ai-node-border-selected)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--sem-ai-grid-canvas)] disabled:cursor-not-allowed disabled:opacity-50";
+const AI_ALERT_SUCCESS = "theme-alert-success rounded-xl border px-3 py-2 text-xs";
+const AI_ALERT_ERROR = "theme-alert-error rounded-xl border px-3 py-2 text-xs";
+const AI_STATUS_ACTIVE =
+  "rounded-full border border-[color:var(--cmp-status-success-border)] bg-[color:var(--cmp-status-success-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[color:var(--cmp-status-success-text)]";
+const AI_BTN_DANGER =
+  "inline-flex items-center gap-1 rounded-lg border border-[color:var(--cmp-status-error-border)] bg-[color:var(--cmp-status-error-bg)] px-2 py-1 text-[10px] font-medium text-[color:var(--cmp-status-error-text)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--cmp-status-error-border)] disabled:cursor-not-allowed disabled:opacity-50";
 
 function stopCanvasPointer(event: ReactPointerEvent<HTMLElement>) {
   event.stopPropagation();
@@ -661,7 +667,7 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
   }
 
   return (
-    <div className="sem-ai-grid-canvas relative min-h-[calc(100vh-4rem)] overflow-hidden">
+    <div className="sem-ai-grid-canvas relative min-h-[calc(100vh-4rem)] overflow-x-hidden overflow-y-auto">
       <div aria-hidden="true" className="sem-ai-grid-dot-layer pointer-events-none absolute inset-0" />
       <div aria-hidden="true" className="sem-ai-grid-glow-layer pointer-events-none absolute inset-0" />
       <div aria-hidden="true" className="sem-ai-grid-vignette-layer pointer-events-none absolute inset-0" />
@@ -737,16 +743,22 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
             </div>
 
             {rulesError ? (
-              <p className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">{rulesError}</p>
+              <p className={`mt-3 ${AI_ALERT_ERROR}`} role="alert">
+                {rulesError}
+              </p>
             ) : null}
 
             {listMessage ? (
-              <p className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">{listMessage}</p>
+              <p className={`mt-3 ${AI_ALERT_SUCCESS}`} role="status">
+                {listMessage}
+              </p>
             ) : null}
 
             <div className="mt-4 max-h-[28rem] space-y-2 overflow-y-auto xl:max-h-[calc(100vh-18rem)]">
               {rulesLoading ? (
-                <p className="text-sm text-[color:var(--sem-ai-grid-text-muted)]">Loading rules...</p>
+                <p className="text-sm text-[color:var(--sem-ai-grid-text-muted)]" aria-live="polite">
+                  Loading rules…
+                </p>
               ) : null}
 
               {!rulesLoading && rules.length === 0 ? (
@@ -768,11 +780,11 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-semibold text-[color:var(--sem-ai-grid-text-primary)]">{rule.name}</p>
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                        className={
                           rule.enabled && rule.status === "active"
-                            ? "bg-emerald-500/15 text-emerald-700"
-                            : "border border-[color:var(--sem-ai-node-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-node-bg)_90%,transparent)] text-[color:var(--sem-ai-grid-text-muted)]"
-                        }`}
+                            ? AI_STATUS_ACTIVE
+                            : "rounded-full border border-[color:var(--sem-ai-node-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-node-bg)_90%,transparent)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[color:var(--sem-ai-grid-text-muted)]"
+                        }
                       >
                         {rule.status}
                       </span>
@@ -804,7 +816,7 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
                             void deleteRule(rule.id);
                           }}
                           disabled={busyRuleId === rule.id}
-                          className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[10px] font-medium text-rose-100 disabled:opacity-60"
+                          className={AI_BTN_DANGER}
                         >
                           <Trash2 className="h-3 w-3" />
                           Delete
@@ -837,8 +849,8 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
             ) : null}
           </aside>
 
-          <div className="relative min-h-[520px] flex-1 overflow-hidden">
-            <div className="absolute left-4 right-4 top-4 z-20 flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative min-h-[520px] min-w-0 flex-1 overflow-hidden">
+            <div className="absolute left-4 right-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-col gap-3 lg:flex-row lg:items-stretch">
               <div className={`${AI_HUD_FLOAT} min-w-[260px]`}>
                 <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-ai-grid-text-muted)]">
                   <ShieldCheck className="h-3.5 w-3.5 text-[color:var(--sem-ai-grid-text-accent)]" />
@@ -872,19 +884,19 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
                 </div>
               </div>
 
-              <form onSubmit={handleBlueprintSubmit} className={`${AI_HUD_FLOAT} flex flex-1 items-center gap-3`}>
+              <form onSubmit={handleBlueprintSubmit} className={`${AI_HUD_FLOAT} flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center`}>
                 <Sparkles className="h-5 w-5 shrink-0 text-[color:var(--sem-ai-grid-text-accent)]" />
                 <input
                   type="text"
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   placeholder="Local blueprint hint only — e.g. switch action to CRM task..."
-                  className="w-full bg-transparent text-sm text-[color:var(--sem-ai-grid-text-primary)] outline-none placeholder:text-[color:var(--sem-ai-grid-text-muted)]"
+                  className="min-w-0 w-full bg-transparent text-sm text-[color:var(--sem-ai-grid-text-primary)] outline-none placeholder:text-[color:var(--sem-ai-grid-text-muted)] focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--sem-ai-node-border-selected)_45%,transparent)] disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={!canManage}
                 />
-                <button type="submit" disabled={!canManage} className={AI_BTN_PRIMARY}>
+                <button type="submit" disabled={!canManage} className={`${AI_BTN_PRIMARY} w-full justify-center px-3 py-2 text-sm sm:w-auto`}>
                   <Bot className="h-3.5 w-3.5" />
-                  Generate Blueprint
+                  <span className="whitespace-nowrap">Generate Blueprint</span>
                 </button>
               </form>
 
@@ -913,13 +925,16 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
             </div>
 
             {blueprintNote ? (
-              <p className="absolute left-4 right-4 top-[5.5rem] z-20 rounded-xl border border-[color:var(--sem-ai-connector-trigger)] bg-[color:color-mix(in_srgb,var(--sem-ai-connector-trigger)_12%,transparent)] px-3 py-2 text-xs text-[color:var(--sem-ai-grid-text-primary)]">
+              <p
+                className="theme-alert-info absolute left-4 right-4 top-[5.5rem] z-20 max-w-[calc(100%-2rem)] rounded-xl border px-3 py-2 text-xs sm:top-[4.5rem] lg:top-[5.5rem]"
+                role="status"
+              >
                 {blueprintNote}
               </p>
             ) : null}
 
             <div
-              className={`absolute inset-0 touch-none pt-28 ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
+              className={`absolute inset-0 touch-none ${blueprintNote ? "pt-44 sm:pt-40 lg:pt-32" : "pt-32 sm:pt-28 lg:pt-24"} ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
               onPointerDown={handleViewportPanStart}
             >
               <div
@@ -962,10 +977,10 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
                           <span className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--sem-ai-grid-text-muted)]">{node.title}</span>
                         </div>
                         <div
-                          className={`h-1.5 w-1.5 rounded-full ${isSelected ? "bg-emerald-500" : "bg-[color:color-mix(in_srgb,var(--sem-ai-grid-text-primary)_28%,transparent)]"}`}
+                          className={`h-1.5 w-1.5 rounded-full ${isSelected ? "bg-[color:var(--sem-ai-grid-text-accent)] shadow-[0_0_6px_color-mix(in_srgb,var(--sem-ai-grid-text-accent)_55%,transparent)]" : "bg-[color:color-mix(in_srgb,var(--sem-ai-grid-text-primary)_28%,transparent)]"}`}
                         />
                       </div>
-                      <div className="mt-3 break-all rounded-lg border border-[color:var(--sem-ai-node-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-node-bg)_65%,black)] p-2.5 font-[family:var(--font-geist-mono)] text-[11px] leading-relaxed text-[color:var(--sem-ai-grid-text-primary)]">
+                      <div className="mt-3 break-all rounded-lg border border-[color:var(--sem-ai-node-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-node-bg)_72%,transparent)] p-2.5 font-[family:var(--font-geist-mono)] text-[11px] leading-relaxed text-[color:var(--sem-ai-grid-text-primary)]">
                         {node.code}
                       </div>
                       <div className="mt-2 text-[10px] leading-relaxed text-[color:var(--sem-ai-grid-text-secondary)]">{node.helper}</div>
@@ -975,7 +990,7 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
               </div>
             </div>
 
-            <div className="pointer-events-none absolute right-4 top-28 z-30 flex w-[min(400px,calc(100%-2rem))] max-h-[calc(100%-8rem)] flex-col gap-3 overflow-y-auto pb-4">
+            <div className="pointer-events-none absolute inset-x-4 top-28 z-30 flex max-h-[calc(100%-8rem)] flex-col gap-3 overflow-y-auto pb-4 sm:inset-x-auto sm:right-4 sm:w-[min(400px,calc(100%-2rem))]">
               <form
                 onSubmit={handleSaveRule}
                 data-automation-inspector
@@ -1157,11 +1172,15 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
                 </div>
 
                 {saveMessage ? (
-                  <p className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">{saveMessage}</p>
+                  <p className={`mt-3 ${AI_ALERT_SUCCESS}`} role="status">
+                    {saveMessage}
+                  </p>
                 ) : null}
 
                 {saveError ? (
-                  <p className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">{saveError}</p>
+                  <p className={`mt-3 ${AI_ALERT_ERROR}`} role="alert">
+                    {saveError}
+                  </p>
                 ) : null}
 
                 {canManage && composeMode ? (

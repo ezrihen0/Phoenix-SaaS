@@ -54,7 +54,7 @@ export function TokenSidebar({ tokens, onInsert, variant = "ai" }: TokenSidebarP
           className={
             isLegacyLight
               ? "theme-badge rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.14em]"
-              : "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-700"
+              : "rounded-full border border-[color:var(--cmp-status-success-border)] bg-[color:var(--cmp-status-success-bg)] px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-[color:var(--cmp-status-success-text)]"
           }
         >
           Safe
@@ -87,7 +87,7 @@ export function TokenSidebar({ tokens, onInsert, variant = "ai" }: TokenSidebarP
                   className={
                     isLegacyLight
                       ? "theme-control-surface-soft rounded-full border px-3 py-2 text-left text-xs transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
-                      : "rounded-full border border-[color:var(--sem-ai-node-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-node-bg)_72%,transparent)] px-3 py-2 text-left text-xs text-[color:var(--sem-ai-grid-text-secondary)] transition hover:border-[color:var(--sem-ai-connector-output)] hover:bg-[color:color-mix(in_srgb,var(--sem-ai-connector-output)_8%,transparent)]"
+                      : "rounded-full border border-[color:var(--sem-ai-node-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-node-bg)_72%,transparent)] px-3 py-2 text-left text-xs text-[color:var(--sem-ai-grid-text-secondary)] transition hover:border-[color:var(--sem-ai-connector-output)] hover:bg-[color:color-mix(in_srgb,var(--sem-ai-connector-output)_8%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--sem-ai-node-border-selected)_45%,transparent)]"
                   }
                   title={token.token}
                 >

@@ -33,7 +33,7 @@ export function AutomationSentenceSegment({
         className={
           isLegacyLight
             ? "theme-selected-card cursor-pointer appearance-none rounded-full border px-4 py-2 pr-9 text-sm font-semibold text-[color:var(--sem-text-primary)] outline-none transition group-hover:border-[color:var(--cmp-border-accent)]"
-            : "w-full cursor-pointer appearance-none rounded-xl border border-[color:var(--sem-ai-inspector-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-inspector-bg)_72%,transparent)] px-3 py-2 pr-9 text-xs font-semibold text-[color:var(--sem-ai-grid-text-primary)] outline-none transition group-hover:border-[color:var(--sem-ai-node-border-selected)]"
+            : "w-full cursor-pointer appearance-none rounded-xl border border-[color:var(--sem-ai-inspector-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-inspector-bg)_72%,transparent)] px-3 py-2 pr-9 text-xs font-semibold text-[color:var(--sem-ai-grid-text-primary)] outline-none transition group-hover:border-[color:var(--sem-ai-node-border-selected)] focus-visible:border-[color:var(--sem-ai-node-border-selected)] focus-visible:ring-2 focus-visible:ring-[color:color-mix(in_srgb,var(--sem-ai-node-border-selected)_50%,transparent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--sem-ai-grid-canvas)] disabled:cursor-not-allowed disabled:opacity-60"
         }
         title={label}
       >
