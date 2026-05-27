@@ -11,6 +11,7 @@ import {
 
 import { BoardShell } from "@/components/board/board-shell";
 import { MetricTile } from "@/components/board/metric-tile";
+import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
 
 import { MarketingAutomationsPanel } from "./marketing-automations-panel";
 import { MarketingAnalyticsPanel } from "./marketing-analytics-panel";
@@ -321,7 +322,7 @@ function GrowthIntelligencePanel({ foundationData }: { foundationData: Marketing
 
 function CommandOverviewContent({ foundationData }: { foundationData: MarketingFoundationData }) {
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0 space-y-5">
         {foundationData.recommended_next_action ? (
           <div className="rounded-[26px] border border-emerald-200 bg-emerald-50 p-5">
@@ -436,6 +437,7 @@ function GrowthCommandCenterWorkspace({
   return (
     <BoardShell gridOpacity="subtle">
       <div className="mx-auto max-w-[1640px] px-5 py-6 lg:px-8">
+        <DesktopOptimizedNotice href="/marketing" />
         {!compactSubRoute ? (
           <header className="rounded-[34px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_30px_90px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)] backdrop-blur-xl">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
@@ -655,7 +657,7 @@ function LegacyMarketingFoundationWorkspace({
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
           <article className="theme-surface-modal rounded-[30px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-6">
             <div className="flex items-start gap-3">
               <div className="theme-control-surface-soft inline-flex h-12 w-12 items-center justify-center rounded-[18px] border">

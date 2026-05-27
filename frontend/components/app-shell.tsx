@@ -26,12 +26,14 @@ import {
 } from "lucide-react";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { MobileShellNav } from "@/components/mobile-shell-nav";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
 import { ThemeRuntime } from "@/components/theme-runtime";
 import { GlobalSearchShell } from "@/features/global-search/global-search-shell";
 import { getClientDestination, getClientSession } from "@/lib/auth/client-auth";
 import { handleLogout } from "@/lib/auth/logout";
 import { isShellNavHrefVisible, type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
+import { splitMobileNavItems } from "@/lib/navigation/mobile-shell-nav";
 
 type AppShellProps = {
   children: ReactNode;
@@ -128,7 +130,9 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchPopoverRef = useRef<HTMLDivElement | null>(null);
+  const searchSheetRef = useRef<HTMLDivElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [collapsedPreferenceReady, setCollapsedPreferenceReady] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
@@ -218,14 +222,40 @@ export function AppShell({ children }: AppShellProps) {
   }, [pathname]);
 
   useEffect(() => {
+    setMoreMenuOpen(false);
+    setSearchOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!searchOpen || typeof document === "undefined") {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [searchOpen]);
+
+  useEffect(() => {
     if (!searchOpen) {
       return;
     }
 
     function handlePointerDown(event: MouseEvent) {
-      if (!searchPopoverRef.current?.contains(event.target as Node)) {
-        setSearchOpen(false);
+      const target = event.target as Node;
+
+      if (searchPopoverRef.current?.contains(target)) {
+        return;
       }
+
+      if (searchSheetRef.current?.contains(target)) {
+        return;
+      }
+
+      setSearchOpen(false);
     }
 
     document.addEventListener("mousedown", handlePointerDown);
@@ -256,90 +286,129 @@ export function AppShell({ children }: AppShellProps) {
       isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
     );
 
+  const { primary: mobilePrimaryNav, more: mobileMoreNav } = splitMobileNavItems(visiblePrimaryNav);
+  const showMobileShellNav = !activationMode && (mobilePrimaryNav.length > 0 || mobileMoreNav.length > 0);
+
+  function renderSidebarContent(options: { collapsed: boolean }) {
+    const { collapsed: sidebarCollapsed } = options;
+
+    return (
+      <>
+        <div className="flex items-center justify-between gap-3 px-1">
+          {!sidebarCollapsed ? (
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.35em] text-[color:var(--sem-text-muted)]">{t("shell.quickNavigation")}</p>
+              <p className="mt-1 font-[family:var(--font-flat-display)] text-2xl text-[color:var(--sem-text-primary)]">WizField</p>
+            </div>
+          ) : <div className="h-12" />}
+          <button
+            type="button"
+            onClick={() => setCollapsed((current) => !current)}
+            aria-label={sidebarCollapsed ? t("shell.expandQuickNavigation") : t("shell.collapseQuickNavigation")}
+            className="theme-control-surface inline-flex h-11 w-11 items-center justify-center rounded-[18px] border transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
+
+        <nav className="flex flex-1 flex-col gap-2 overflow-y-auto pr-1">
+          {activationMode ? (
+            <div className="theme-control-surface-soft rounded-[20px] border px-3 py-4 text-xs leading-6 text-[color:var(--sem-text-secondary)]">
+              {t("shell.activationLocked")}
+            </div>
+          ) : null}
+          {visiblePrimaryNav.map((item) => (
+            <SideNavLink
+              key={item.href}
+              {...item}
+              collapsed={sidebarCollapsed}
+              active={Boolean(pathname && isRouteActive(pathname, item.href))}
+            />
+          ))}
+        </nav>
+
+        <div className="space-y-2 border-t border-[color:var(--cmp-border-subtle)] pt-4">
+          <SideNavLink
+            href="/settings"
+            label={t("shell.nav.settings")}
+            icon={Settings}
+            collapsed={sidebarCollapsed}
+            active={Boolean(pathname && isRouteActive(pathname, "/settings"))}
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              await handleLogout(router);
+            }}
+            className={[
+              "theme-control-surface flex w-full items-center gap-3 rounded-[20px] border px-3 py-3 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
+              sidebarCollapsed ? "justify-center" : "justify-start",
+            ].join(" ")}
+            title={sidebarCollapsed ? t("common.actions.logOut") : undefined}
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            {!sidebarCollapsed ? <span>{t("common.actions.logOut")}</span> : null}
+          </button>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <ThemeRuntime />
       <div className="flex min-h-screen bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
         <aside
           className={[
-            "sticky top-0 flex h-screen shrink-0 flex-col gap-4 border-r border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/90 px-3 py-4 shadow-[inset_-1px_0_0_color-mix(in_srgb,var(--sem-accent-primary)_16%,transparent)] backdrop-blur-xl transition-[width] duration-200",
+            "sticky top-0 hidden h-screen shrink-0 flex-col gap-4 border-r border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/90 px-3 py-4 shadow-[inset_-1px_0_0_color-mix(in_srgb,var(--sem-accent-primary)_16%,transparent)] backdrop-blur-xl transition-[width] duration-200 lg:flex",
             collapsed ? "w-20" : "w-72",
           ].join(" ")}
         >
-          <div className="flex items-center justify-between gap-3 px-1">
-            {!collapsed ? (
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.35em] text-[color:var(--sem-text-muted)]">{t("shell.quickNavigation")}</p>
-                <p className="mt-1 font-[family:var(--font-flat-display)] text-2xl text-[color:var(--sem-text-primary)]">WizField</p>
-              </div>
-            ) : <div className="h-12" />}
-            <button
-              type="button"
-              onClick={() => setCollapsed((current) => !current)}
-              aria-label={collapsed ? t("shell.expandQuickNavigation") : t("shell.collapseQuickNavigation")}
-              className="theme-control-surface inline-flex h-11 w-11 items-center justify-center rounded-[18px] border transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-          </div>
-
-          <nav className="flex flex-1 flex-col gap-2 overflow-y-auto pr-1">
-            {activationMode ? (
-              <div className="theme-control-surface-soft rounded-[20px] border px-3 py-4 text-xs leading-6 text-[color:var(--sem-text-secondary)]">
-                {t("shell.activationLocked")}
-              </div>
-            ) : null}
-            {visiblePrimaryNav.map((item) => (
-              <SideNavLink
-                key={item.href}
-                {...item}
-                collapsed={collapsed}
-                active={Boolean(pathname && isRouteActive(pathname, item.href))}
-              />
-            ))}
-          </nav>
-
-          <div className="space-y-2 border-t border-[color:var(--cmp-border-subtle)] pt-4">
-            <SideNavLink
-              href="/settings"
-              label={t("shell.nav.settings")}
-              icon={Settings}
-              collapsed={collapsed}
-              active={Boolean(pathname && isRouteActive(pathname, "/settings"))}
-            />
-            <button
-              type="button"
-              onClick={async () => {
-                await handleLogout(router);
-              }}
-              className={[
-                "theme-control-surface flex w-full items-center gap-3 rounded-[20px] border px-3 py-3 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
-                collapsed ? "justify-center" : "justify-start",
-              ].join(" ")}
-              title={collapsed ? t("common.actions.logOut") : undefined}
-            >
-              <LogOut className="h-4 w-4 shrink-0" />
-              {!collapsed ? <span>{t("common.actions.logOut")}</span> : null}
-            </button>
-          </div>
+          {renderSidebarContent({ collapsed })}
         </aside>
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-40 px-4 py-4 sm:px-6 lg:px-8">
-            <div className="mx-auto flex max-w-[1600px] items-start justify-between gap-4">
-              <div className="inline-flex h-[4.25rem] w-[min(58vw,16rem)] shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)] p-1 shadow-[0_0_24px_color-mix(in_srgb,var(--sem-accent-primary)_14%,transparent),0_18px_45px_color-mix(in_srgb,var(--bg-canvas)_72%,transparent)] ring-1 ring-[color:var(--sem-board-border)] backdrop-blur-xl sm:h-[4.75rem] sm:w-[17.8125rem] lg:w-[17.8125rem]">
-                <img
-                  src="/wizfield-logo.svg"
-                  alt="WizField logo"
-                  className="block h-full w-full object-fill drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
-                />
+          <header className="sticky top-0 z-40 border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/95 px-4 py-3 backdrop-blur-md lg:hidden">
+            <div className="flex h-11 items-center justify-between gap-3 pt-[env(safe-area-inset-top)]">
+              <Link href="/home" className="inline-flex min-w-0 items-center gap-2">
+                <span className="truncate font-[family:var(--font-flat-display)] text-lg text-[color:var(--sem-text-primary)]">
+                  WizField
+                </span>
+                <span className="text-[color:var(--sem-accent-primary)]">.</span>
+              </Link>
+              {searchEnabled ? (
+                <button
+                  type="button"
+                  aria-label={t("shell.searchAria")}
+                  aria-expanded={searchOpen}
+                  onClick={() => setSearchOpen(true)}
+                  className="theme-control-surface-soft inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+          </header>
+
+          <header className="sticky top-0 z-40 hidden px-4 py-4 sm:px-6 lg:block lg:px-8">
+            <div className="mx-auto flex max-w-[1600px] items-start justify-between gap-3 sm:gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="inline-flex h-[4.25rem] w-[min(42vw,12rem)] shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)] p-1 shadow-[0_0_24px_color-mix(in_srgb,var(--sem-accent-primary)_14%,transparent),0_18px_45px_color-mix(in_srgb,var(--bg-canvas)_72%,transparent)] ring-1 ring-[color:var(--sem-board-border)] backdrop-blur-xl sm:h-[4.75rem] sm:w-[17.8125rem] lg:w-[17.8125rem]">
+                  <img
+                    src="/wizfield-logo.svg"
+                    alt="WizField logo"
+                    className="block h-full w-full object-fill drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
+                  />
+                </div>
               </div>
 
-              <div ref={searchPopoverRef} className="relative flex min-h-[76px] flex-1 items-center justify-end">
-                <div className="theme-surface-modal flex flex-wrap items-center justify-end gap-3 rounded-[30px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)]/92 px-3 py-3 shadow-[0_0_28px_color-mix(in_srgb,var(--sem-board-glow)_70%,transparent),0_20px_65px_color-mix(in_srgb,var(--bg-canvas)_56%,transparent)] backdrop-blur-xl">
-                  <OrganizationSwitcher />
+              <div ref={searchPopoverRef} className="relative flex min-h-[76px] min-w-0 flex-1 items-center justify-end">
+                <div className="theme-surface-modal flex max-w-full flex-wrap items-center justify-end gap-2 rounded-[30px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)]/92 px-2 py-2 shadow-[0_0_28px_color-mix(in_srgb,var(--sem-board-glow)_70%,transparent),0_20px_65px_color-mix(in_srgb,var(--bg-canvas)_56%,transparent)] backdrop-blur-xl sm:gap-3 sm:px-3 sm:py-3">
+                  <div className="hidden min-w-0 sm:block">
+                    <OrganizationSwitcher />
+                  </div>
                   <LanguageSwitcher variant="shell" />
-                  <div className="theme-control-surface-soft flex items-center gap-3 rounded-full border px-3 py-2">
+                  <div className="theme-control-surface-soft hidden items-center gap-3 rounded-full border px-3 py-2 md:flex">
                     <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--sem-accent-primary),var(--sem-action-secondary))] text-sm font-semibold text-[color:var(--sem-text-inverse)]">
                       {buildInitials(userLabel)}
                     </div>
@@ -382,13 +451,36 @@ export function AppShell({ children }: AppShellProps) {
                   </div>
                 </div>
 
-                {searchEnabled ? <GlobalSearchShell mode="popover" open={searchOpen} /> : null}
+                {searchEnabled ? <GlobalSearchShell mode="popover" open={searchOpen} onClose={() => setSearchOpen(false)} /> : null}
               </div>
             </div>
           </header>
 
-          <div className="min-w-0 flex-1">{children}</div>
+          <div className={[
+            "min-w-0 flex-1",
+            showMobileShellNav ? "pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0" : "",
+          ].join(" ")}>
+            {children}
+          </div>
         </div>
+
+        {showMobileShellNav ? (
+          <MobileShellNav
+            primaryItems={mobilePrimaryNav}
+            moreItems={mobileMoreNav}
+            userLabel={userLabel}
+            userInitials={buildInitials(userLabel)}
+            moreOpen={moreMenuOpen}
+            onMoreOpen={() => setMoreMenuOpen(true)}
+            onMoreClose={() => setMoreMenuOpen(false)}
+          />
+        ) : null}
+
+        {searchEnabled && searchOpen ? (
+          <div ref={searchSheetRef} className="lg:hidden">
+            <GlobalSearchShell mode="sheet" open={searchOpen} onClose={() => setSearchOpen(false)} />
+          </div>
+        ) : null}
       </div>
     </>
   );

@@ -27,6 +27,12 @@ const messages = {
     settingsAria: "Налаштування",
     expandQuickNavigation: "Розгорнути швидку навігацію",
     collapseQuickNavigation: "Згорнути швидку навігацію",
+    mobile: {
+      more: "Більше",
+      done: "Готово",
+      closeMore: "Закрити меню",
+      bottomNavigation: "Нижня навігація",
+    },
     nav: {
       home: "Головна",
       jobs: "Роботи",

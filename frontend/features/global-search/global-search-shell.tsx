@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import { getClientSession } from "@/lib/auth/client-auth";
 import { ThemeRuntime } from "@/components/theme-runtime";
@@ -15,8 +16,9 @@ const DISALLOWED_PREFIXES = ["/login", "/reset-password"];
 type SearchCapableRole = "owner" | "admin" | "office_admin";
 
 type GlobalSearchShellProps = {
-  mode?: "bar" | "popover";
+  mode?: "bar" | "popover" | "sheet";
   open?: boolean;
+  onClose?: () => void;
 };
 
 function isAllowedPath(pathname: string) {
@@ -27,7 +29,8 @@ function canUseGlobalSearch(role: string | null | undefined): role is SearchCapa
   return role === "owner" || role === "admin" || role === "office_admin";
 }
 
-export function GlobalSearchShell({ mode = "bar", open = true }: GlobalSearchShellProps) {
+export function GlobalSearchShell({ mode = "bar", open = true, onClose }: GlobalSearchShellProps) {
+  const t = useTranslations();
   const pathname = usePathname();
   const [isOfficeRoute, setIsOfficeRoute] = useState(false);
 
@@ -77,8 +80,48 @@ export function GlobalSearchShell({ mode = "bar", open = true }: GlobalSearchShe
     return <ThemeRuntime />;
   }
 
-  if (mode === "popover" && !open) {
+  if ((mode === "popover" || mode === "sheet") && !open) {
     return null;
+  }
+
+  if (mode === "sheet") {
+    return (
+      <>
+        <ThemeRuntime />
+        <div className="fixed inset-0 z-[70] flex flex-col bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
+          <div className="flex shrink-0 items-center justify-between border-b border-[color:var(--cmp-border-subtle)] px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">
+              {t("shell.searchAria")}
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="theme-btn-ghost rounded-full px-3 py-2 text-xs font-semibold"
+            >
+              {t("common.actions.close")}
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col space-y-2 overflow-y-auto p-4">
+            <GlobalSearchCombobox
+              query={query}
+              onQueryChange={setQuery}
+              moveActiveIndex={moveActiveIndex}
+              activeIndex={activeIndex}
+              flatResults={flatResults}
+              autoFocus
+            />
+            <GlobalSearchResults
+              loading={loading}
+              transportError={transportError}
+              results={results}
+              activeIndex={activeIndex}
+              flatResults={flatResults}
+              onHover={setActiveIndex}
+            />
+          </div>
+        </div>
+      </>
+    );
   }
 
   if (mode === "popover") {

@@ -19,6 +19,7 @@ import { LeadTriagePanel } from "./lead-triage-panel";
 import { isStaleLead, leadMatchesSearch } from "./lead-card";
 import { LeadsCommandHeader } from "./leads-command-header";
 import { LeadsKpiStrip } from "./leads-kpi-strip";
+import { MobileLeadsOperatorFeed } from "./mobile-leads-operator-feed";
 import { LeadsPipelineBoard } from "./leads-pipeline-board";
 
 export const SHOW_LEGACY_LEADS = false;
@@ -874,7 +875,7 @@ export default function LeadsWorkspace({
                 <FieldSelect
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as LeadStatus | "all")}
-                  className="min-w-[160px] font-mono text-xs"
+                  className="w-full min-w-0 font-mono text-xs sm:max-w-none"
                 >
                   <option value="all">{t("commandCenter.filterAllStatuses")}</option>
                   <option value="new_lead">{t("newLead")}</option>
@@ -884,7 +885,7 @@ export default function LeadsWorkspace({
                 <FieldSelect
                   value={sourceFilter}
                   onChange={(event) => setSourceFilter(event.target.value as LeadSource | "all")}
-                  className="min-w-[160px] font-mono text-xs"
+                  className="w-full min-w-0 font-mono text-xs sm:max-w-none"
                 >
                   <option value="all">{t("commandCenter.filterAllSources")}</option>
                   {sourceOptions.map((source) => (
@@ -904,22 +905,42 @@ export default function LeadsWorkspace({
                 {leads.length === 0 ? t("noLeadsYet") : t("noMatches")}
               </div>
             ) : (
-              <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px]">
-                <LeadsPipelineBoard
+              <>
+                <MobileLeadsOperatorFeed
                   leads={filteredLeads}
                   selectedLeadId={selectedLeadId}
                   locale={locale}
-                  onSelectLead={(lead) => setSelectedLeadId(lead.id)}
-                />
-                <LeadTriagePanel
-                  selectedLead={selectedLead}
-                  locale={locale}
                   isPending={isPending}
+                  onSelectLead={(lead) => setSelectedLeadId(lead.id)}
                   onMarkContacted={markLeadContacted}
                   onCreateJob={createJobFromLead}
                   onEditLead={openEditModal}
                 />
-              </section>
+                <section className="hidden lg:block xl:hidden">
+                  <LeadsPipelineBoard
+                    leads={filteredLeads}
+                    selectedLeadId={selectedLeadId}
+                    locale={locale}
+                    onSelectLead={(lead) => setSelectedLeadId(lead.id)}
+                  />
+                </section>
+                <section className="hidden gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_390px]">
+                  <LeadsPipelineBoard
+                    leads={filteredLeads}
+                    selectedLeadId={selectedLeadId}
+                    locale={locale}
+                    onSelectLead={(lead) => setSelectedLeadId(lead.id)}
+                  />
+                  <LeadTriagePanel
+                    selectedLead={selectedLead}
+                    locale={locale}
+                    isPending={isPending}
+                    onMarkContacted={markLeadContacted}
+                    onCreateJob={createJobFromLead}
+                    onEditLead={openEditModal}
+                  />
+                </section>
+              </>
             )}
         </div>
 

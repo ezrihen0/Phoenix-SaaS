@@ -21,6 +21,7 @@ import {
   Zap,
 } from "lucide-react";
 
+import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
 import type { SessionRole } from "@/lib/auth/server-session";
 
 import { LegacyAutomationRuleList } from "./automation-rule-list";
@@ -673,6 +674,9 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
       <div aria-hidden="true" className="sem-ai-grid-vignette-layer pointer-events-none absolute inset-0" />
 
       <div className="relative z-10 flex min-h-[calc(100vh-4rem)] flex-col">
+        <div className="mx-auto w-full max-w-[96rem] px-4 pt-4">
+          <DesktopOptimizedNotice href="/automations" />
+        </div>
         <div className={AI_HUD_HEADER}>
           <div className="mx-auto flex max-w-[96rem] flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
@@ -849,7 +853,10 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
             ) : null}
           </aside>
 
-          <div className="relative min-h-[520px] min-w-0 flex-1 overflow-hidden">
+          <div className="relative min-h-[520px] min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
+            <p className="mx-4 mt-3 rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-3 py-2 text-xs text-[color:var(--sem-text-secondary)] lg:hidden">
+              Pinch or scroll horizontally to explore the workflow canvas. Use the inspector below for rule details.
+            </p>
             <div className="absolute left-4 right-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-col gap-3 lg:flex-row lg:items-stretch">
               <div className={`${AI_HUD_FLOAT} min-w-[260px]`}>
                 <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-ai-grid-text-muted)]">
@@ -934,11 +941,11 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
             ) : null}
 
             <div
-              className={`absolute inset-0 touch-none ${blueprintNote ? "pt-44 sm:pt-40 lg:pt-32" : "pt-32 sm:pt-28 lg:pt-24"} ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
+              className={`absolute inset-0 lg:touch-none ${blueprintNote ? "pt-44 sm:pt-40 lg:pt-32" : "pt-32 sm:pt-28 lg:pt-24"} ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
               onPointerDown={handleViewportPanStart}
             >
               <div
-                className="relative min-h-[560px] w-full origin-top-left touch-none"
+                className="relative min-h-[560px] w-full origin-top-left lg:touch-none"
                 style={{
                   transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
                   transformOrigin: "0 0",
@@ -967,7 +974,7 @@ function AutomationWorkflowCanvas({ sessionRole, permissions }: AutomationWorkfl
                       style={{ left: node.x, top: node.y }}
                       onPointerDown={(event) => handleNodeDragStart(node.id, event)}
                       onClick={() => handleNodeSelect(node.id)}
-                      className={`sem-ai-node-card absolute w-72 touch-none select-none rounded-2xl p-4 shadow-2xl ${nodeRoleAccentClass(node.accent)} ${isSelected ? "is-selected" : ""} ${draggingNodeId === node.id ? "cursor-grabbing" : "cursor-grab"}`}
+                      className={`sem-ai-node-card absolute w-72 select-none rounded-2xl p-4 shadow-2xl lg:touch-none ${nodeRoleAccentClass(node.accent)} ${isSelected ? "is-selected" : ""} ${draggingNodeId === node.id ? "cursor-grabbing" : "cursor-grab"}`}
                     >
                       <div className="flex items-center justify-between border-b border-[color:var(--sem-ai-node-border)] pb-2">
                         <div className="flex items-center gap-2">

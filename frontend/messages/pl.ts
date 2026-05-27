@@ -27,6 +27,12 @@ const messages = {
     settingsAria: "Ustawienia",
     expandQuickNavigation: "Rozwin szybka nawigacje",
     collapseQuickNavigation: "Zwin szybka nawigacje",
+    mobile: {
+      more: "Wiecej",
+      done: "Gotowe",
+      closeMore: "Zamknij menu",
+      bottomNavigation: "Dolna nawigacja",
+    },
     nav: {
       home: "Start",
       jobs: "Zlecenia",

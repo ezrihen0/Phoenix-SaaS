@@ -17,6 +17,8 @@ import {
   Send,
   Sparkles,
   Trash2,
+  UserRound,
+  X,
 } from "lucide-react";
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
@@ -512,7 +514,7 @@ function DeskThreadPanel(props: DeskThreadPanelProps) {
         </div>
       ) : null}
 
-      <div className="shrink-0 border-t border-[color:var(--cmp-border-subtle)] p-4">
+      <div className="sticky bottom-0 z-10 shrink-0 border-t border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:static lg:pb-4">
         {!props.composeMode ? (
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">Reply to customer</p>
@@ -639,6 +641,8 @@ export default function MessagingDashboard({
   const [composeDirectRecipient, setComposeDirectRecipient] = useState("");
   const [inboxSearch, setInboxSearch] = useState("");
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all");
+  const [mobileDeskPane, setMobileDeskPane] = useState<"inbox" | "thread">("inbox");
+  const [mobileContextOpen, setMobileContextOpen] = useState(false);
   const [composerSurfaceMode, setComposerSurfaceMode] = useState<ComposerSurfaceMode>("customer");
 
   const normalizedSearchDigits = useMemo(
@@ -799,6 +803,7 @@ export default function MessagingDashboard({
       setLane("customers");
       setSelectedCustomerId(row.customerId);
       setSelectedPhoneKey(null);
+      setMobileDeskPane("thread");
       return;
     }
 
@@ -806,6 +811,7 @@ export default function MessagingDashboard({
       setLane("unknown");
       setSelectedPhoneKey(row.phoneKey);
       setSelectedCustomerId(null);
+      setMobileDeskPane("thread");
     }
   }
 
@@ -890,6 +896,7 @@ export default function MessagingDashboard({
     setComposeEmailToOverride("");
     setComposeDirectRecipient("");
     setComposeError(null);
+    setMobileDeskPane("thread");
     void loadCustomerPicker("");
   }
 
@@ -1410,7 +1417,7 @@ export default function MessagingDashboard({
   return (
     <>
       {!SHOW_LEGACY_MESSAGING_LAYOUT ? (
-        <div className="flex h-[calc(100dvh-4.75rem)] min-h-[640px] flex-col overflow-hidden text-[color:var(--sem-text-primary)]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden text-[color:var(--sem-text-primary)] lg:min-h-[640px]">
           <header className={`${deskPanelClass} mx-3 mt-3 flex shrink-0 flex-wrap items-center justify-between gap-4 rounded-[24px] px-5 py-4 lg:mx-4`}>
             <div>
               <p className={deskEyebrowClass}>WizField Communication Desk</p>
@@ -1446,7 +1453,7 @@ export default function MessagingDashboard({
           ) : null}
 
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 p-3 pt-3 lg:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.85fr)_minmax(240px,0.62fr)] lg:gap-0 lg:p-4">
-            <aside className={`${deskPanelClass} flex min-h-0 flex-col overflow-hidden rounded-[24px] lg:mr-2`}>
+            <aside className={`${deskPanelClass} ${mobileDeskPane === "thread" ? "hidden lg:flex" : "flex"} min-h-0 flex-col overflow-hidden rounded-[24px] lg:mr-2`}>
               <div className="shrink-0 border-b border-[color:var(--cmp-border-subtle)] p-4">
                 <label className="flex items-center gap-2 rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-2 text-sm text-[color:var(--sem-text-muted)]">
                   <Search className="h-4 w-4 shrink-0" />
@@ -1532,7 +1539,30 @@ export default function MessagingDashboard({
               </div>
             </aside>
 
-            <main className={`${deskPanelClass} flex min-h-0 flex-col overflow-hidden rounded-[24px] lg:mx-1`}>
+            <main className={`${deskPanelClass} ${mobileDeskPane === "inbox" ? "hidden lg:flex" : "flex"} min-h-0 flex-col overflow-hidden rounded-[24px] lg:mx-1`}>
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[color:var(--cmp-border-subtle)] px-4 py-3 lg:hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileDeskPane("inbox");
+                    setMobileContextOpen(false);
+                    closeComposer();
+                  }}
+                  className="theme-control-surface rounded-full px-3 py-2 text-xs font-medium"
+                >
+                  Back to inbox
+                </button>
+                {!composeMode ? (
+                  <button
+                    type="button"
+                    onClick={() => setMobileContextOpen(true)}
+                    className="theme-control-surface inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-medium"
+                  >
+                    <UserRound className="h-3.5 w-3.5" />
+                    Customer
+                  </button>
+                ) : null}
+              </div>
               <DeskThreadPanel
                 composeMode={composeMode}
                 closeComposer={closeComposer}
@@ -1653,7 +1683,7 @@ export default function MessagingDashboard({
           </div>
 
           {lane === "customers" && selectedCustomerId ? (
-            <div className="shrink-0 border-t border-[color:var(--cmp-border-subtle)] px-4 py-3 lg:hidden">
+            <div className="hidden shrink-0 border-t border-[color:var(--cmp-border-subtle)] px-4 py-3 lg:hidden">
               <Link
                 href={`/customers/${selectedCustomerId}`}
                 className="theme-btn-secondary flex w-full items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
@@ -1662,6 +1692,79 @@ export default function MessagingDashboard({
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
+          ) : null}
+
+          {mobileContextOpen && mobileDeskPane === "thread" ? (
+            <>
+              <button
+                type="button"
+                aria-label="Close customer context"
+                className="fixed inset-0 z-40 bg-[color:color-mix(in_srgb,var(--bg-canvas)_55%,transparent)] backdrop-blur-sm lg:hidden"
+                onClick={() => setMobileContextOpen(false)}
+              />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Customer context"
+                className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex max-h-[70vh] flex-col rounded-t-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-modal)] shadow-[0_-24px_80px_color-mix(in_srgb,var(--bg-canvas)_65%,transparent)] lg:hidden"
+              >
+                <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-[color:var(--cmp-border-subtle)]" />
+                <div className="flex items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-3">
+                  <div>
+                    <p className={deskEyebrowClass}>CRM context</p>
+                    <h2 className="text-sm font-semibold text-[color:var(--sem-text-primary)]">Customer snapshot</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMobileContextOpen(false)}
+                    className="theme-control-surface inline-flex h-9 w-9 items-center justify-center rounded-full"
+                    aria-label="Close customer context"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+                  <div className="rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                    <p className="truncate text-sm font-semibold text-[color:var(--sem-text-primary)]">
+                      {composeMode
+                        ? selectedComposeCustomer?.full_name ?? "New conversation"
+                        : lane === "customers"
+                          ? (selectedConversation as CustomerConversationRow | null)?.customerName ?? "Select a thread"
+                          : (selectedConversation as UnknownConversationRow | null)?.phoneNumber
+                            ?? (selectedConversation as UnknownConversationRow | null)?.phoneKey
+                            ?? "Select a thread"}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-[color:var(--sem-text-muted)]">
+                      {lane === "customers" ? "Linked customer" : "Unassigned number"}
+                    </p>
+                    <div className="mt-3 space-y-2 text-xs text-[color:var(--sem-text-secondary)]">
+                      <p className="flex items-center gap-2 truncate">
+                        <Phone className="h-3.5 w-3.5 shrink-0 text-[color:var(--sem-text-muted)]" />
+                        {(selectedConversation as CustomerConversationRow | UnknownConversationRow | null)?.phoneNumber ?? "No phone on thread"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Linked operations · coming soon</p>
+                    <p className="mt-2 text-xs leading-5 text-[color:var(--sem-text-secondary)]">Jobs, invoices, and tasks will appear here in a future release.</p>
+                  </div>
+                </div>
+                <div className="shrink-0 border-t border-[color:var(--cmp-border-subtle)] p-4">
+                  {lane === "customers" && selectedCustomerId ? (
+                    <Link
+                      href={`/customers/${selectedCustomerId}`}
+                      onClick={() => setMobileContextOpen(false)}
+                      className="theme-btn-secondary flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold"
+                    >
+                      Open full customer profile
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  ) : (
+                    <p className="text-center text-xs text-[color:var(--sem-text-muted)]">Link a customer to open the full CRM profile.</p>
+                  )}
+                </div>
+              </div>
+            </>
           ) : null}
         </div>
       ) : null}

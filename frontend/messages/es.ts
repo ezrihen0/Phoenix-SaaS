@@ -27,6 +27,12 @@ const messages = {
     settingsAria: "Configuracion",
     expandQuickNavigation: "Expandir navegacion rapida",
     collapseQuickNavigation: "Contraer navegacion rapida",
+    mobile: {
+      more: "Mas",
+      done: "Listo",
+      closeMore: "Cerrar menu",
+      bottomNavigation: "Navegacion inferior",
+    },
     nav: {
       home: "Inicio",
       jobs: "Trabajos",

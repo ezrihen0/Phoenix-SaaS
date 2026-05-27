@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { BoardShell } from "@/components/board/board-shell";
+import MobileHomeBoard from "@/components/home/mobile-home-board";
 import TechnicianHomeBoard from "@/components/home/technician-home-board";
 import HomeIntelligenceStrip from "@/components/home/intelligence/home-intelligence-strip";
 import type { AiBrainHomeBriefResponse } from "@/lib/ai/brain-brief-types";
@@ -458,7 +459,7 @@ function OwnerExecutiveDesk({
               </div>
             </section>
 
-            <section className="grid gap-4 xl:grid-cols-5">
+            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
               <ExecutiveMetricCard
                 icon={Hammer}
                 label={t("summary.activeJobs.label")}
@@ -597,9 +598,14 @@ export default async function HomePage() {
   if (technicianRole) {
     return (
       <BoardShell gridOpacity="subtle">
-        <main className="px-6 py-10 lg:px-10">
-          <div className="mx-auto max-w-7xl space-y-6">
-            <section className="theme-surface-modal rounded-[34px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-7 sm:p-8">
+        <main className="px-4 py-4 lg:px-10 lg:py-10">
+          <div className="mx-auto max-w-7xl space-y-4 lg:space-y-6">
+            <section className="theme-surface-modal rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-4 lg:hidden">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{t("subtitle")}</p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">{t("title")}</h1>
+              <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">{t("technicianBoard")}</p>
+            </section>
+            <section className="theme-surface-modal hidden rounded-[34px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] p-7 sm:p-8 lg:block">
               <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">{t("subtitle")}</p>
               <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-display-headline)] sm:text-5xl">
                 {t("title")}
@@ -631,12 +637,23 @@ export default async function HomePage() {
   }
 
   return (
-    <OwnerExecutiveDesk
-      role={role}
-      officeDashboard={officeDashboard}
-      brainHomeBrief={brainHomeBrief}
-      loadError={loadError}
-      t={t}
-    />
+    <>
+      <div className="lg:hidden">
+        <MobileHomeBoard
+          role={role}
+          dashboard={officeDashboard}
+          loadError={loadError}
+        />
+      </div>
+      <div className="hidden lg:block">
+        <OwnerExecutiveDesk
+          role={role}
+          officeDashboard={officeDashboard}
+          brainHomeBrief={brainHomeBrief}
+          loadError={loadError}
+          t={t}
+        />
+      </div>
+    </>
   );
 }

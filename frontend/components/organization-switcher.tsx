@@ -20,7 +20,11 @@ function listSwitchableMemberships(session: ClientSession) {
   );
 }
 
-export function OrganizationSwitcher() {
+type OrganizationSwitcherProps = {
+  menuPlacement?: "bottom" | "top";
+};
+
+export function OrganizationSwitcher({ menuPlacement = "bottom" }: OrganizationSwitcherProps) {
   const t = useTranslations("shell.workspace");
   const pathname = usePathname();
   const [session, setSession] = useState<ClientSession | null>(null);
@@ -70,7 +74,9 @@ export function OrganizationSwitcher() {
 
   const mutedClass = "text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]";
   const labelClass = "text-sm font-medium text-[color:var(--sem-text-primary)]";
-  const panelClass = "absolute right-0 z-50 mt-2 min-w-[220px] rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] py-2 shadow-[0_24px_80px_rgba(0,0,0,0.35)]";
+  const panelClass = menuPlacement === "top"
+    ? "absolute right-0 bottom-full z-50 mb-2 min-w-[220px] rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] py-2 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
+    : "absolute right-0 z-50 mt-2 min-w-[220px] rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] py-2 shadow-[0_24px_80px_rgba(0,0,0,0.35)]";
   const buttonClass = "inline-flex max-w-[min(100%,14rem)] items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-raised)] px-3 py-2 text-left text-sm transition hover:border-[color:var(--cmp-border-accent)]";
   const optionClass = "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-[color:var(--sem-text-primary)] hover:bg-[color:var(--cmp-hover-surface)]";
 

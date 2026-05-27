@@ -23,6 +23,7 @@ import {
 
 import { BoardShell } from "@/components/board/board-shell";
 import { MetricTile } from "@/components/board/metric-tile";
+import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
 import {
   MasterMobileList,
   MasterTable,
@@ -725,6 +726,7 @@ function LegacyPricebookBundleEditor({ initialBundle }: PricebookBundleEditorPro
   return (
     <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
       <div className="mx-auto max-w-7xl px-6 py-12 lg:px-10">
+        <DesktopOptimizedNotice href="/pricebook" />
         <section className="theme-surface-modal rounded-[36px] border p-7 sm:p-8">
           <h1 className="text-4xl font-semibold">{initialBundle.name}</h1>
           {errorMessage ? <div className="mt-6 rounded-[20px] border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{errorMessage}</div> : null}

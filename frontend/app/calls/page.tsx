@@ -620,6 +620,7 @@ type SelectedCallFocusPanelProps = {
   canManageCrmFromCalls: boolean;
   callbackTaskAssignees: CallbackTaskAssigneeOption[];
   hasMessagingSendPermission: boolean;
+  backHref?: string;
 };
 
 function SelectedCallFocusPanel({
@@ -627,6 +628,7 @@ function SelectedCallFocusPanel({
   canManageCrmFromCalls,
   callbackTaskAssignees,
   hasMessagingSendPermission,
+  backHref,
 }: SelectedCallFocusPanelProps) {
   const formattedCreatedAt = formatDateTime(selectedCall.createdAt);
   const operationalState = getOperationalState(selectedCall);
@@ -642,6 +644,12 @@ function SelectedCallFocusPanel({
 
   return (
     <section className={`${callsPanelClass} p-5`}>
+      {backHref ? (
+        <Link href={backHref} className="mb-4 inline-flex items-center gap-2 text-sm text-[color:var(--sem-accent-primary)] lg:hidden">
+          <ArrowRight className="h-4 w-4 rotate-180" />
+          Back to queue
+        </Link>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className={callsEyebrowClass}>Selected call</p>
@@ -1030,8 +1038,8 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                   })}
                 </div>
 
-                <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-                  <section className={`${callsPanelClass} overflow-hidden`}>
+                <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+                  <section className={`${callsPanelClass} overflow-hidden ${selectedCall ? "hidden lg:block" : ""}`}>
                     <div className="border-b border-[color:var(--cmp-border-subtle)] px-5 py-4">
                       <p className={callsEyebrowClass}>Recovery queue</p>
                       <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">Prioritized caller scan</h2>
@@ -1091,13 +1099,14 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
                     </div>
                   </section>
 
-                  <aside className="xl:sticky xl:top-4 xl:max-h-[calc(100vh-1.5rem)] xl:self-start xl:overflow-y-auto">
+                  <aside className={`${selectedCall ? "block" : "hidden lg:block"} lg:sticky lg:top-4 lg:max-h-[calc(100vh-1.5rem)] lg:self-start lg:overflow-y-auto`}>
                     {selectedCall ? (
                       <SelectedCallFocusPanel
                         selectedCall={selectedCall}
                         canManageCrmFromCalls={canManageCrmFromCalls}
                         callbackTaskAssignees={callbackTaskAssignees}
                         hasMessagingSendPermission={session.permissions.includes("messaging.send")}
+                        backHref={buildCallsQueryString({ ...paginationBase, page: String(currentPage) })}
                       />
                     ) : null}
                   </aside>
