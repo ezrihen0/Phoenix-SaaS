@@ -203,6 +203,62 @@
   --status-error-bg: var(--cmp-status-error-bg);
   --status-error-border: var(--cmp-status-error-border);
   --status-error-text: var(--cmp-status-error-text);
+
+  /* Compatibility aliases */
+  --cmp-selected-surface: var(--cmp-selected-bg);
+  --cmp-overlay-backdrop: var(--cmp-backdrop-scrim);
+
+  /* Premium AI grid canvas — Hardware / Obsidian (brown-cream) */
+  --sem-ai-grid-canvas: var(--sem-canvas-base);
+  --sem-ai-grid-dot: rgba(229, 231, 235, 0.14);
+  --sem-ai-grid-dot-size: 24px;
+  --sem-ai-grid-wash: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--sem-action-secondary) 20%, transparent),
+    transparent 48%,
+    color-mix(in srgb, var(--sem-accent-primary) 18%, transparent)
+  );
+  --sem-ai-grid-vignette: radial-gradient(
+    circle at center,
+    transparent 0%,
+    color-mix(in srgb, var(--theme-tone-1) 18%, transparent) 52%,
+    color-mix(in srgb, var(--theme-tone-1) 78%, transparent) 100%
+  );
+  --sem-ai-grid-text-primary: #ffffff;
+  --sem-ai-grid-text-secondary: color-mix(in srgb, white 62%, var(--theme-tone-4) 38%);
+  --sem-ai-grid-text-muted: color-mix(in srgb, white 44%, var(--theme-tone-4) 56%);
+  --sem-ai-grid-text-accent: var(--sem-text-accent);
+  --sem-ai-hud-bg: color-mix(in srgb, var(--theme-tone-2) 80%, black 20%);
+  --sem-ai-hud-border: var(--fdn-alpha-white-08);
+  --sem-ai-node-bg: color-mix(in srgb, var(--theme-tone-2) 85%, black 15%);
+  --sem-ai-node-border: var(--fdn-alpha-white-08);
+  --sem-ai-node-border-selected: color-mix(in srgb, var(--sem-accent-primary) 40%, transparent);
+  --sem-ai-inspector-bg: color-mix(in srgb, var(--theme-tone-2) 90%, black 10%);
+  --sem-ai-inspector-border: var(--fdn-alpha-white-08);
+  --sem-ai-connector-muted: #71717a;
+  --sem-ai-connector-trigger: #8b5cf6;
+  --sem-ai-connector-action: #f59e0b;
+  --sem-ai-connector-fallback: #52525b;
+  --sem-ai-connector-output: #06b6d4;
+
+  /* Premium auth atmosphere — Hardware / Obsidian (brown-cream) */
+  --sem-auth-canvas: #09090b;
+  --sem-auth-foreground: #0f172a;
+  --sem-auth-grid-line: rgba(255, 255, 255, 0.065);
+  --sem-auth-grid-size: 40px;
+  --sem-auth-grid-opacity: 0.25;
+  --sem-auth-glow-1: color-mix(in srgb, var(--sem-action-secondary) 20%, transparent);
+  --sem-auth-glow-2: color-mix(in srgb, #8b5cf6 16%, transparent);
+  --sem-auth-glow-3: color-mix(in srgb, var(--sem-accent-primary) 10%, transparent);
+  --sem-auth-vignette: radial-gradient(
+    circle at center,
+    transparent 0%,
+    color-mix(in srgb, var(--sem-auth-canvas) 18%, transparent) 52%,
+    color-mix(in srgb, var(--sem-auth-canvas) 78%, transparent) 100%
+  );
+  --sem-auth-card-bg: rgba(255, 255, 255, 0.95);
+  --sem-auth-card-border: rgba(255, 255, 255, 0.2);
+  --sem-auth-card-shadow: 0 32px 96px rgba(15, 23, 42, 0.24);
 }
 
 :root[data-theme="fire-ember"] {
@@ -407,6 +463,62 @@
   --status-error-bg: #fef2f2;
   --status-error-border: #fecaca;
   --status-error-text: #991b1b;
+
+  /* Compatibility aliases */
+  --cmp-selected-surface: var(--cmp-selected-bg);
+  --cmp-overlay-backdrop: var(--cmp-backdrop-scrim);
+
+  /* Premium AI grid canvas — Software Focus (fire-ember) */
+  --sem-ai-grid-canvas: #f8fafc;
+  --sem-ai-grid-dot: rgba(15, 23, 42, 0.06);
+  --sem-ai-grid-dot-size: 24px;
+  --sem-ai-grid-wash: linear-gradient(
+    135deg,
+    color-mix(in srgb, #0284c7 8%, transparent),
+    transparent 52%,
+    color-mix(in srgb, #6366f1 6%, transparent)
+  );
+  --sem-ai-grid-vignette: radial-gradient(
+    circle at center,
+    transparent 0%,
+    color-mix(in srgb, #f8fafc 12%, transparent) 58%,
+    color-mix(in srgb, #e2e8f0 42%, transparent) 100%
+  );
+  --sem-ai-grid-text-primary: #0f172a;
+  --sem-ai-grid-text-secondary: #334155;
+  --sem-ai-grid-text-muted: #64748b;
+  --sem-ai-grid-text-accent: #0284c7;
+  --sem-ai-hud-bg: rgba(255, 255, 255, 0.92);
+  --sem-ai-hud-border: rgba(15, 23, 42, 0.08);
+  --sem-ai-node-bg: #ffffff;
+  --sem-ai-node-border: rgba(15, 23, 42, 0.08);
+  --sem-ai-node-border-selected: color-mix(in srgb, #0284c7 32%, transparent);
+  --sem-ai-inspector-bg: #ffffff;
+  --sem-ai-inspector-border: rgba(15, 23, 42, 0.08);
+  --sem-ai-connector-muted: #94a3b8;
+  --sem-ai-connector-trigger: #6366f1;
+  --sem-ai-connector-action: #d97706;
+  --sem-ai-connector-fallback: #cbd5e1;
+  --sem-ai-connector-output: #0284c7;
+
+  /* Premium auth atmosphere — Software Focus (fire-ember) */
+  --sem-auth-canvas: #f8fafc;
+  --sem-auth-foreground: #0f172a;
+  --sem-auth-grid-line: rgba(15, 23, 42, 0.05);
+  --sem-auth-grid-size: 40px;
+  --sem-auth-grid-opacity: 0.55;
+  --sem-auth-glow-1: color-mix(in srgb, #0284c7 10%, transparent);
+  --sem-auth-glow-2: color-mix(in srgb, #6366f1 8%, transparent);
+  --sem-auth-glow-3: color-mix(in srgb, #06b6d4 6%, transparent);
+  --sem-auth-vignette: radial-gradient(
+    circle at center,
+    transparent 0%,
+    color-mix(in srgb, #f8fafc 24%, transparent) 54%,
+    color-mix(in srgb, #e2e8f0 36%, transparent) 100%
+  );
+  --sem-auth-card-bg: #ffffff;
+  --sem-auth-card-border: #e2e8f0;
+  --sem-auth-card-shadow: 0 24px 64px rgba(15, 23, 42, 0.08);
 }
 
 /* Layer 5: Software Focus bright-mode recipes */
@@ -527,6 +639,62 @@
   --sem-accent-primary: #00F0FF;
   --sem-action-primary: #00F0FF;
   --sem-action-secondary: #7000FF;
+
+  /* Compatibility aliases */
+  --cmp-selected-surface: var(--cmp-selected-bg);
+  --cmp-overlay-backdrop: var(--cmp-backdrop-scrim);
+
+  /* Premium AI grid canvas — Hardware / Cyber (ash-rose) */
+  --sem-ai-grid-canvas: var(--theme-tone-1);
+  --sem-ai-grid-dot: color-mix(in srgb, #00f0ff 14%, transparent);
+  --sem-ai-grid-dot-size: 24px;
+  --sem-ai-grid-wash: linear-gradient(
+    135deg,
+    color-mix(in srgb, #7000ff 22%, transparent),
+    transparent 48%,
+    color-mix(in srgb, #00f0ff 18%, transparent)
+  );
+  --sem-ai-grid-vignette: radial-gradient(
+    circle at center,
+    transparent 0%,
+    color-mix(in srgb, var(--theme-tone-1) 18%, transparent) 52%,
+    color-mix(in srgb, var(--theme-tone-1) 78%, transparent) 100%
+  );
+  --sem-ai-grid-text-primary: #f8fafc;
+  --sem-ai-grid-text-secondary: color-mix(in srgb, #e2e8f0 68%, #10172a 32%);
+  --sem-ai-grid-text-muted: color-mix(in srgb, #e2e8f0 44%, #10172a 56%);
+  --sem-ai-grid-text-accent: #67f7ff;
+  --sem-ai-hud-bg: color-mix(in srgb, #10172a 82%, black 18%);
+  --sem-ai-hud-border: rgba(255, 255, 255, 0.1);
+  --sem-ai-node-bg: color-mix(in srgb, #10172a 88%, black 12%);
+  --sem-ai-node-border: rgba(255, 255, 255, 0.1);
+  --sem-ai-node-border-selected: color-mix(in srgb, #00f0ff 42%, transparent);
+  --sem-ai-inspector-bg: color-mix(in srgb, #10172a 92%, black 8%);
+  --sem-ai-inspector-border: rgba(255, 255, 255, 0.1);
+  --sem-ai-connector-muted: #64748b;
+  --sem-ai-connector-trigger: #a855f7;
+  --sem-ai-connector-action: #00f0ff;
+  --sem-ai-connector-fallback: #475569;
+  --sem-ai-connector-output: #22d3ee;
+
+  /* Premium auth atmosphere — Hardware / Cyber (ash-rose) */
+  --sem-auth-canvas: #0b0f19;
+  --sem-auth-foreground: #0f172a;
+  --sem-auth-grid-line: color-mix(in srgb, #00f0ff 10%, transparent);
+  --sem-auth-grid-size: 40px;
+  --sem-auth-grid-opacity: 0.28;
+  --sem-auth-glow-1: color-mix(in srgb, #7000ff 20%, transparent);
+  --sem-auth-glow-2: color-mix(in srgb, #00f0ff 16%, transparent);
+  --sem-auth-glow-3: color-mix(in srgb, #22d3ee 10%, transparent);
+  --sem-auth-vignette: radial-gradient(
+    circle at center,
+    transparent 0%,
+    color-mix(in srgb, var(--sem-auth-canvas) 18%, transparent) 52%,
+    color-mix(in srgb, var(--sem-auth-canvas) 78%, transparent) 100%
+  );
+  --sem-auth-card-bg: rgba(255, 255, 255, 0.95);
+  --sem-auth-card-border: rgba(255, 255, 255, 0.2);
+  --sem-auth-card-shadow: 0 32px 96px rgba(11, 15, 25, 0.42);
 }
 
 @theme inline {
@@ -768,6 +936,96 @@ body {
   background-size: 40px 40px;
 }
 
+/* Premium AI grid + auth atmosphere recipes (Part 1 foundation) */
+
+.sem-ai-grid-canvas {
+  background: var(--sem-ai-grid-canvas);
+  color: var(--sem-ai-grid-text-primary);
+}
+
+.sem-ai-grid-dot-layer {
+  background-image: radial-gradient(circle, var(--sem-ai-grid-dot) 1px, transparent 1px);
+  background-size: var(--sem-ai-grid-dot-size) var(--sem-ai-grid-dot-size);
+}
+
+.sem-ai-grid-glow-layer {
+  background: var(--sem-ai-grid-wash);
+}
+
+.sem-ai-grid-vignette-layer {
+  background: var(--sem-ai-grid-vignette);
+}
+
+.sem-ai-hud-bar {
+  background: var(--sem-ai-hud-bg);
+  border-color: var(--sem-ai-hud-border);
+  color: var(--sem-ai-grid-text-primary);
+  backdrop-filter: blur(12px);
+}
+
+.sem-ai-node-card {
+  background: var(--sem-ai-node-bg);
+  border: 1px solid var(--sem-ai-node-border);
+  color: var(--sem-ai-grid-text-primary);
+  backdrop-filter: blur(12px);
+}
+
+.sem-ai-node-card[data-selected="true"],
+.sem-ai-node-card.is-selected {
+  border-color: var(--sem-ai-node-border-selected);
+}
+
+.sem-ai-inspector-surface {
+  background: var(--sem-ai-inspector-bg);
+  border: 1px solid var(--sem-ai-inspector-border);
+  color: var(--sem-ai-grid-text-primary);
+  backdrop-filter: blur(12px);
+}
+
+.sem-auth-atmosphere {
+  background: var(--sem-auth-canvas);
+  color: var(--sem-auth-foreground);
+}
+
+.sem-auth-grid-layer {
+  background-image:
+    linear-gradient(var(--sem-auth-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--sem-auth-grid-line) 1px, transparent 1px);
+  background-size: var(--sem-auth-grid-size) var(--sem-auth-grid-size);
+  opacity: var(--sem-auth-grid-opacity);
+}
+
+.sem-auth-glow-1,
+.sem-auth-glow-2,
+.sem-auth-glow-3 {
+  border-radius: 9999px;
+  filter: blur(120px);
+  pointer-events: none;
+}
+
+.sem-auth-glow-1 {
+  background: var(--sem-auth-glow-1);
+}
+
+.sem-auth-glow-2 {
+  background: var(--sem-auth-glow-2);
+}
+
+.sem-auth-glow-3 {
+  background: var(--sem-auth-glow-3);
+}
+
+.sem-auth-vignette-layer {
+  background: var(--sem-auth-vignette);
+}
+
+.sem-auth-card {
+  background: var(--sem-auth-card-bg);
+  border: 1px solid var(--sem-auth-card-border);
+  box-shadow: var(--sem-auth-card-shadow);
+  color: var(--sem-auth-foreground);
+}
+
 .theme-icon {
   color: var(--text-secondary);
 }
@@ -899,8 +1157,8 @@ body {
 
 .document-line-table th,
 .document-line-table td {
-  border-right: 1px solid rgb(226 232 240);
-  border-bottom: 1px solid rgb(226 232 240);
+  border-right: 1px solid var(--cmp-border-subtle);
+  border-bottom: 1px solid var(--cmp-border-subtle);
   vertical-align: top;
 }
 
