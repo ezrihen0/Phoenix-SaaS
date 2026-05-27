@@ -19,7 +19,7 @@ import { LeadTriagePanel } from "./lead-triage-panel";
 import { isStaleLead, leadMatchesSearch } from "./lead-card";
 import { LeadsCommandHeader } from "./leads-command-header";
 import { LeadsKpiStrip } from "./leads-kpi-strip";
-import { MobileLeadsOperatorFeed } from "./mobile-leads-operator-feed";
+import { MobileLeadsOperatorActionBar, MobileLeadsOperatorFeed } from "./mobile-leads-operator-feed";
 import { LeadsPipelineBoard } from "./leads-pipeline-board";
 
 export const SHOW_LEGACY_LEADS = false;
@@ -916,7 +916,7 @@ export default function LeadsWorkspace({
                   onCreateJob={createJobFromLead}
                   onEditLead={openEditModal}
                 />
-                <section className="hidden lg:block xl:hidden">
+                <section className={`hidden lg:block xl:hidden ${selectedLead ? "pb-36" : ""}`}>
                   <LeadsPipelineBoard
                     leads={filteredLeads}
                     selectedLeadId={selectedLeadId}
@@ -924,6 +924,17 @@ export default function LeadsWorkspace({
                     onSelectLead={(lead) => setSelectedLeadId(lead.id)}
                   />
                 </section>
+                {selectedLead ? (
+                  <MobileLeadsOperatorActionBar
+                    selectedLead={selectedLead}
+                    locale={locale}
+                    isPending={isPending}
+                    onMarkContacted={markLeadContacted}
+                    onCreateJob={createJobFromLead}
+                    onEditLead={openEditModal}
+                    placement="tabletBand"
+                  />
+                ) : null}
                 <section className="hidden gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_390px]">
                   <LeadsPipelineBoard
                     leads={filteredLeads}

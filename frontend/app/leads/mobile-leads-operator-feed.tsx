@@ -37,6 +37,97 @@ function buildMessagingHref(phone: string) {
   return `/messaging?lane=unknown&phoneKey=${encodeURIComponent(digits)}`;
 }
 
+type MobileLeadsOperatorActionBarProps = {
+  selectedLead: LeadQueueItem;
+  locale: string;
+  isPending: boolean;
+  onMarkContacted: (lead: LeadQueueItem) => void;
+  onCreateJob: (lead: LeadQueueItem) => void;
+  onEditLead: (lead: LeadQueueItem) => void;
+  placement: "mobileShell" | "tabletBand";
+};
+
+export function MobileLeadsOperatorActionBar({
+  selectedLead,
+  locale,
+  isPending,
+  onMarkContacted,
+  onCreateJob,
+  onEditLead,
+  placement,
+}: MobileLeadsOperatorActionBarProps) {
+  const t = useTranslations("leads");
+  const messagingHref = buildMessagingHref(selectedLead.phone);
+  const placementClass = placement === "mobileShell"
+    ? "bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:hidden"
+    : "bottom-0 hidden pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:block xl:hidden";
+
+  return (
+    <div
+      className={[
+        "fixed inset-x-0 z-30 border-t border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/95 px-4 py-3 backdrop-blur-md",
+        placementClass,
+      ].join(" ")}
+    >
+      <div className={placement === "tabletBand" ? "mx-auto max-w-4xl" : "mx-auto max-w-lg"}>
+        <div className="mb-3 min-w-0">
+          <p className="truncate text-sm font-semibold text-[color:var(--text-primary)]">{selectedLead.full_name}</p>
+          <p className="mt-0.5 truncate text-xs text-[color:var(--text-secondary)]">
+            {getLeadSourceLabel(selectedLead.source, locale)} · {formatLeadLocation(selectedLead)} · {formatLeadAge(selectedLead.updated_at, t)}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {selectedLead.status === "new_lead" ? (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => onMarkContacted(selectedLead)}
+              className="theme-btn-secondary col-span-2 inline-flex h-11 items-center justify-center rounded-full px-4 text-xs font-semibold sm:col-span-4"
+            >
+              {t("commandCenter.markContacted")}
+            </button>
+          ) : null}
+          {selectedLead.status !== "converted" ? (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => onCreateJob(selectedLead)}
+              className="theme-btn-primary inline-flex h-11 items-center justify-center rounded-full px-3 text-xs font-semibold"
+            >
+              {t("commandCenter.createJob")}
+            </button>
+          ) : null}
+          <a
+            href={`tel:${selectedLead.phone}`}
+            className="theme-btn-secondary inline-flex h-11 items-center justify-center gap-2 rounded-full px-3 text-xs font-semibold"
+          >
+            <Phone className="h-4 w-4" />
+            {t("commandCenter.callLead")}
+          </a>
+          {messagingHref ? (
+            <Link
+              href={messagingHref}
+              className="theme-btn-secondary inline-flex h-11 items-center justify-center gap-2 rounded-full px-3 text-xs font-semibold"
+            >
+              <MessageSquare className="h-4 w-4" />
+              {t("commandCenter.messageLead")}
+            </Link>
+          ) : null}
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => onEditLead(selectedLead)}
+            className="theme-control-surface col-span-2 inline-flex h-11 items-center justify-center gap-2 rounded-full border px-3 text-xs font-semibold sm:col-span-4"
+          >
+            <Wrench className="h-4 w-4" />
+            {t("commandCenter.editLeadDetails")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MobileLeadsOperatorFeed({
   leads,
   selectedLeadId,
@@ -61,7 +152,6 @@ export function MobileLeadsOperatorFeed({
   const selectedLead = filteredLeads.find((lead) => lead.id === selectedLeadId)
     ?? leads.find((lead) => lead.id === selectedLeadId)
     ?? null;
-  const messagingHref = selectedLead ? buildMessagingHref(selectedLead.phone) : null;
 
   const filterOptions: Array<{ value: MobileLeadFilter; label: string }> = [
     { value: "all", label: t("commandCenter.filterAllStatuses") },
@@ -109,63 +199,15 @@ export function MobileLeadsOperatorFeed({
       </div>
 
       {selectedLead ? (
-        <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 border-t border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/95 px-4 py-3 backdrop-blur-md">
-          <div className="mx-auto max-w-lg">
-            <div className="mb-3 min-w-0">
-              <p className="truncate text-sm font-semibold text-[color:var(--text-primary)]">{selectedLead.full_name}</p>
-              <p className="mt-0.5 truncate text-xs text-[color:var(--text-secondary)]">
-                {getLeadSourceLabel(selectedLead.source, locale)} · {formatLeadLocation(selectedLead)} · {formatLeadAge(selectedLead.updated_at, t)}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {selectedLead.status === "new_lead" ? (
-                <button
-                  type="button"
-                  disabled={isPending}
-                  onClick={() => onMarkContacted(selectedLead)}
-                  className="theme-btn-secondary col-span-2 inline-flex h-11 items-center justify-center rounded-full px-4 text-xs font-semibold"
-                >
-                  {t("commandCenter.markContacted")}
-                </button>
-              ) : null}
-              {selectedLead.status !== "converted" ? (
-                <button
-                  type="button"
-                  disabled={isPending}
-                  onClick={() => onCreateJob(selectedLead)}
-                  className="theme-btn-primary inline-flex h-11 items-center justify-center rounded-full px-3 text-xs font-semibold"
-                >
-                  {t("commandCenter.createJob")}
-                </button>
-              ) : null}
-              <a
-                href={`tel:${selectedLead.phone}`}
-                className="theme-btn-secondary inline-flex h-11 items-center justify-center gap-2 rounded-full px-3 text-xs font-semibold"
-              >
-                <Phone className="h-4 w-4" />
-                {t("commandCenter.callLead")}
-              </a>
-              {messagingHref ? (
-                <Link
-                  href={messagingHref}
-                  className="theme-btn-secondary inline-flex h-11 items-center justify-center gap-2 rounded-full px-3 text-xs font-semibold"
-                >
-                  <MessageSquare className="h-4 w-4" />
-                  {t("commandCenter.messageLead")}
-                </Link>
-              ) : null}
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => onEditLead(selectedLead)}
-                className="theme-control-surface col-span-2 inline-flex h-11 items-center justify-center gap-2 rounded-full border px-3 text-xs font-semibold"
-              >
-                <Wrench className="h-4 w-4" />
-                {t("commandCenter.editLeadDetails")}
-              </button>
-            </div>
-          </div>
-        </div>
+        <MobileLeadsOperatorActionBar
+          selectedLead={selectedLead}
+          locale={locale}
+          isPending={isPending}
+          onMarkContacted={onMarkContacted}
+          onCreateJob={onCreateJob}
+          onEditLead={onEditLead}
+          placement="mobileShell"
+        />
       ) : null}
     </div>
   );
