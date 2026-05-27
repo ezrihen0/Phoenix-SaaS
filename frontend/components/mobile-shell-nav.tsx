@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
-  Ellipsis,
   FileText,
   LogOut,
   Plus,
@@ -26,7 +25,6 @@ import {
   getMobileModulePolicy,
 } from "@/lib/navigation/mobile-module-policy";
 import {
-  isMobileMoreTabActive,
   isRouteActive,
 } from "@/lib/navigation/mobile-shell-nav";
 
@@ -171,13 +169,11 @@ function QuickActionLink({
 }
 
 export function MobileShellNav({
-  primaryItems,
   navCatalog,
   roleNavCatalog,
   userLabel,
   userInitials,
   moreOpen,
-  onMoreOpen,
   onMoreClose,
 }: MobileShellNavProps) {
   const t = useTranslations();
@@ -196,15 +192,6 @@ export function MobileShellNav({
     [roleNavCatalog],
   );
 
-  const visibleMoreHrefs = useMemo(
-    () => MOBILE_MORE_MENU_SECTIONS.flatMap((section) =>
-      section.links
-        .map((link) => link.href)
-        .filter((href) => navByHref.has(href)),
-    ),
-    [navByHref],
-  );
-
   const visibleSecondaryMoreHrefs = useMemo(
     () => MOBILE_MORE_MENU_SECTIONS
       .filter((section) => section.id !== "workspace")
@@ -218,7 +205,6 @@ export function MobileShellNav({
 
   const visibleSecondaryMoreLinkCount = visibleSecondaryMoreHrefs.length;
 
-  const moreActive = isMobileMoreTabActive(pathname, primaryItems, visibleMoreHrefs);
   const settingsActive = Boolean(pathname && isRouteActive(pathname, "/settings"));
   const canCreateEstimate = navByHref.has("/estimates");
   const canCreateInvoice = navByHref.has("/invoices");
@@ -299,32 +285,6 @@ export function MobileShellNav({
               ) : null}
             </>
           ) : null}
-
-          <button
-            type="button"
-            aria-expanded={moreOpen}
-            aria-haspopup="dialog"
-            aria-label={t("shell.mobile.more")}
-            onClick={() => {
-              setQuickActionsOpen(false);
-              if (moreOpen) {
-                onMoreClose();
-              } else {
-                onMoreOpen();
-              }
-            }}
-            className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)]/80"
-          >
-            <Ellipsis
-              aria-hidden="true"
-              className={[
-                "h-4 w-4 shrink-0",
-                moreActive || moreOpen
-                  ? "text-[color:var(--sem-text-primary)]"
-                  : "text-[color:var(--sem-text-muted)]",
-              ].join(" ")}
-            />
-          </button>
 
           <div className="mx-auto grid max-w-lg grid-cols-5 items-end gap-0.5 px-1 pb-1 pt-3">
             {homeItem ? (
@@ -424,10 +384,8 @@ export function MobileShellNav({
             role="dialog"
             aria-modal="true"
             aria-label={t("shell.mobile.more")}
-            className="fixed inset-x-0 bottom-0 z-[60] flex max-h-[75vh] flex-col rounded-t-[32px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-modal)] pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-24px_80px_color-mix(in_srgb,var(--bg-canvas)_65%,transparent)] backdrop-blur-xl lg:hidden"
+            className="fixed inset-y-0 left-0 z-[60] flex h-full w-[80vw] max-w-[320px] flex-col border-r border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-modal)] pb-[calc(1rem+env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+0.4rem)] shadow-[24px_0_80px_color-mix(in_srgb,var(--bg-canvas)_65%,transparent)] backdrop-blur-xl lg:hidden"
           >
-            <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-[color:var(--cmp-border-subtle)]" />
-
             <div className="flex items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] px-5 py-4">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--sem-accent-primary),var(--sem-action-secondary))] text-sm font-semibold text-[color:var(--sem-text-inverse)]">
