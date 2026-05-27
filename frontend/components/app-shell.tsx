@@ -157,6 +157,8 @@ export function AppShell({ children }: AppShellProps) {
     { href: "/marketing", label: t("shell.nav.marketing"), icon: Megaphone },
     { href: "/inspections", label: t("shell.nav.inspections"), icon: ShieldCheck },
     { href: "/automations", label: t("shell.nav.automations"), icon: Workflow },
+  ];
+  const mobileSupplementalNavItems: NavItem[] = [
     { href: "/billing", label: t("shell.nav.billing"), icon: CreditCard },
   ];
   const headerQuickLinks: Array<Pick<NavItem, "href" | "label" | "icon">> = [
@@ -289,8 +291,13 @@ export function AppShell({ children }: AppShellProps) {
     );
 
   const mobilePrimaryNav = resolveMobilePrimaryNav(visiblePrimaryNav);
+  const visibleMobileSupplementalNav = activationMode
+    ? []
+    : mobileSupplementalNavItems.filter((item) =>
+      isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
+    );
   const mobileNavCatalog = (() => {
-    const items = [...visiblePrimaryNav];
+    const items = [...visiblePrimaryNav, ...visibleMobileSupplementalNav];
     const hrefs = new Set(items.map((item) => item.href));
 
     if (!hrefs.has("/settings")) {
