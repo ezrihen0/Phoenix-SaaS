@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "npm run dev:stop && concurrently -n frontend,backend -c cyan,yellow \"npm run dev --workspace frontend\" \"npm run start:dev --workspace backend\"",
+    "dev:local": "npm run dev:stop && concurrently -n frontend,backend -c cyan,yellow \"npm run dev:local --workspace frontend\" \"npm run start:dev --workspace backend\"",
     "dev:stop": "node scripts/kill-dev-ports.mjs",
     "build": "npm run build --workspace backend && npm run build --workspace frontend",
     "lint": "npm run lint --workspace frontend && npm run lint --workspace backend",
