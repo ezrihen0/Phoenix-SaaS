@@ -141,10 +141,10 @@ export function MasterTablePagination({
 
   return (
     <div className="master-table-pagination">
-      <p className="text-sm text-[color:var(--text-muted)]">
+      <p className="master-table-pagination-summary text-sm text-[color:var(--text-muted)]">
         {t("common.pagination.showing", { start, end, totalCount })}
       </p>
-      <div className="flex items-center gap-3">
+      <div className="master-table-pagination-controls">
         <Link
           href={page > 1 ? previousHref : "#"}
           aria-disabled={page <= 1}
@@ -156,7 +156,7 @@ export function MasterTablePagination({
         >
           {t("common.actions.prev")}
         </Link>
-        <span className="text-sm text-[color:var(--text-secondary)]">
+        <span className="master-table-pagination-page text-sm text-[color:var(--text-secondary)]">
           {t("common.pagination.pageOf", { page, totalPages })}
         </span>
         <Link
