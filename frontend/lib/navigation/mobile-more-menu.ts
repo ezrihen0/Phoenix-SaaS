@@ -27,8 +27,6 @@ export const MOBILE_MORE_MENU_SECTIONS: MobileMoreMenuSection[] = [
     links: [
       { href: "/home" },
       { href: "/jobs" },
-      { href: "/customers" },
-      { href: "/inspections" },
     ],
   },
   {
@@ -36,6 +34,14 @@ export const MOBILE_MORE_MENU_SECTIONS: MobileMoreMenuSection[] = [
     links: [
       { href: "/invoices" },
       { href: "/estimates" },
+    ],
+  },
+  {
+    id: "admin",
+    links: [
+      { href: "/inspections" },
+      { href: "/customers" },
+      { href: "/settings" },
     ],
   },
 ];

@@ -9,7 +9,6 @@ import {
   LogOut,
   Plus,
   Receipt,
-  Settings,
   type LucideProps,
 } from "lucide-react";
 
@@ -205,7 +204,6 @@ export function MobileShellNav({
 
   const visibleSecondaryMoreLinkCount = visibleSecondaryMoreHrefs.length;
 
-  const settingsActive = Boolean(pathname && isRouteActive(pathname, "/settings"));
   const canCreateEstimate = navByHref.has("/estimates");
   const canCreateInvoice = navByHref.has("/invoices");
   const homeItem = navByHref.get("/home");
@@ -426,18 +424,6 @@ export function MobileShellNav({
                       <div className="space-y-3 rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-3">
                         <OrganizationSwitcher variant="compact" menuPlacement="bottom" />
                         <LanguageSwitcher variant="compact" />
-                        <Link
-                          href="/settings"
-                          aria-current={settingsActive ? "page" : undefined}
-                          onClick={onMoreClose}
-                          className={[
-                            settingsActive ? "theme-selected-card" : "theme-control-surface",
-                            "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[18px] border px-3 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
-                          ].join(" ")}
-                        >
-                          <Settings className="h-4 w-4 shrink-0" />
-                          <span>{t("shell.nav.settings")}</span>
-                        </Link>
                       </div>
                     </div>
                   );
