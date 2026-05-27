@@ -9,7 +9,8 @@ type AutomationToken = {
 type TokenSidebarProps = {
   tokens: AutomationToken[];
   onInsert: (token: string) => void;
-  variant?: "light" | "dark";
+  /** @deprecated "dark" maps to sem-ai; "light" retained for legacy sentence builder only */
+  variant?: "light" | "dark" | "ai";
 };
 
 export const defaultAutomationTokens: AutomationToken[] = [
@@ -25,44 +26,58 @@ export const defaultAutomationTokens: AutomationToken[] = [
   { token: "{{invoice.paid_at}}", label: "Invoice paid time", group: "Invoice" },
 ];
 
-export function TokenSidebar({ tokens, onInsert, variant = "light" }: TokenSidebarProps) {
+export function TokenSidebar({ tokens, onInsert, variant = "ai" }: TokenSidebarProps) {
   const groupedTokens = tokens.reduce<Record<string, AutomationToken[]>>((groups, token) => {
     groups[token.group] = [...(groups[token.group] ?? []), token];
     return groups;
   }, {});
 
-  const isDark = variant === "dark";
+  const isLegacyLight = variant === "light";
 
   return (
     <aside
       className={
-        isDark
-          ? "rounded-2xl border border-white/10 bg-zinc-900/90 p-4 shadow-2xl"
-          : "rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4"
+        isLegacyLight
+          ? "rounded-[22px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4"
+          : "sem-ai-inspector-surface rounded-2xl p-4 shadow-2xl"
       }
     >
       <div className="flex items-center justify-between gap-3">
-        <p className={`text-[11px] uppercase tracking-[0.28em] ${isDark ? "text-cyan-300" : "text-[color:var(--sem-accent-primary)]"}`}>
+        <p
+          className={`text-[11px] uppercase tracking-[0.28em] ${
+            isLegacyLight ? "text-[color:var(--sem-accent-primary)]" : "text-[color:var(--sem-ai-grid-text-accent)]"
+          }`}
+        >
           {"{...}"} Tokens
         </p>
         <span
           className={
-            isDark
-              ? "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-200"
-              : "theme-badge rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.14em]"
+            isLegacyLight
+              ? "theme-badge rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.14em]"
+              : "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-700"
           }
         >
           Safe
         </span>
       </div>
-      <p className={`mt-2 text-xs leading-5 ${isDark ? "text-zinc-500" : "text-[color:var(--sem-text-secondary)]"}`}>
+      <p
+        className={`mt-2 text-xs leading-5 ${
+          isLegacyLight ? "text-[color:var(--sem-text-secondary)]" : "text-[color:var(--sem-ai-grid-text-secondary)]"
+        }`}
+      >
         Insert approved placeholders. Customer sends are blocked if tokens remain unresolved.
       </p>
 
       <div className="mt-4 space-y-4">
         {Object.entries(groupedTokens).map(([group, groupTokens]) => (
           <div key={group}>
-            <p className={`text-xs font-semibold ${isDark ? "text-zinc-200" : "text-[color:var(--sem-text-primary)]"}`}>{group}</p>
+            <p
+              className={`text-xs font-semibold ${
+                isLegacyLight ? "text-[color:var(--sem-text-primary)]" : "text-[color:var(--sem-ai-grid-text-primary)]"
+              }`}
+            >
+              {group}
+            </p>
             <div className="mt-2 flex flex-wrap gap-2">
               {groupTokens.map((token) => (
                 <button
@@ -70,9 +85,9 @@ export function TokenSidebar({ tokens, onInsert, variant = "light" }: TokenSideb
                   type="button"
                   onClick={() => onInsert(token.token)}
                   className={
-                    isDark
-                      ? "rounded-full border border-white/10 bg-black/30 px-3 py-2 text-left text-xs text-zinc-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/5"
-                      : "theme-control-surface-soft rounded-full border px-3 py-2 text-left text-xs transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+                    isLegacyLight
+                      ? "theme-control-surface-soft rounded-full border px-3 py-2 text-left text-xs transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+                      : "rounded-full border border-[color:var(--sem-ai-node-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-node-bg)_72%,transparent)] px-3 py-2 text-left text-xs text-[color:var(--sem-ai-grid-text-secondary)] transition hover:border-[color:var(--sem-ai-connector-output)] hover:bg-[color:color-mix(in_srgb,var(--sem-ai-connector-output)_8%,transparent)]"
                   }
                   title={token.token}
                 >

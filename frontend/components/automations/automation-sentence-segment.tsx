@@ -11,7 +11,8 @@ type AutomationSentenceSegmentProps = {
   value: string;
   options: SegmentOption[];
   onChange: (value: string) => void;
-  variant?: "light" | "dark";
+  /** @deprecated Use default sem-ai styling; "light" retained for legacy sentence builder only */
+  variant?: "light" | "dark" | "ai";
 };
 
 export function AutomationSentenceSegment({
@@ -19,9 +20,9 @@ export function AutomationSentenceSegment({
   value,
   options,
   onChange,
-  variant = "light",
+  variant = "ai",
 }: AutomationSentenceSegmentProps) {
-  const isDark = variant === "dark";
+  const isLegacyLight = variant === "light";
 
   return (
     <label className="group relative inline-flex w-full items-center">
@@ -30,19 +31,33 @@ export function AutomationSentenceSegment({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className={
-          isDark
-            ? "w-full cursor-pointer appearance-none rounded-xl border border-white/10 bg-black/40 px-3 py-2 pr-9 text-xs font-semibold text-zinc-100 outline-none transition group-hover:border-white/20"
-            : "theme-selected-card cursor-pointer appearance-none rounded-full border px-4 py-2 pr-9 text-sm font-semibold text-[color:var(--sem-text-primary)] outline-none transition group-hover:border-[color:var(--cmp-border-accent)]"
+          isLegacyLight
+            ? "theme-selected-card cursor-pointer appearance-none rounded-full border px-4 py-2 pr-9 text-sm font-semibold text-[color:var(--sem-text-primary)] outline-none transition group-hover:border-[color:var(--cmp-border-accent)]"
+            : "w-full cursor-pointer appearance-none rounded-xl border border-[color:var(--sem-ai-inspector-border)] bg-[color:color-mix(in_srgb,var(--sem-ai-inspector-bg)_72%,transparent)] px-3 py-2 pr-9 text-xs font-semibold text-[color:var(--sem-ai-grid-text-primary)] outline-none transition group-hover:border-[color:var(--sem-ai-node-border-selected)]"
         }
         title={label}
       >
         {options.map((option) => (
-          <option key={option.key} value={option.key} className={isDark ? "bg-zinc-950 text-white" : undefined}>
+          <option
+            key={option.key}
+            value={option.key}
+            className={
+              isLegacyLight
+                ? undefined
+                : "bg-[color:var(--sem-ai-inspector-bg)] text-[color:var(--sem-ai-grid-text-primary)]"
+            }
+          >
             {option.label}
           </option>
         ))}
       </select>
-      <span className={`pointer-events-none absolute right-3 text-xs ${isDark ? "text-zinc-500" : "text-[color:var(--sem-text-muted)]"}`}>⌄</span>
+      <span
+        className={`pointer-events-none absolute right-3 text-xs ${
+          isLegacyLight ? "text-[color:var(--sem-text-muted)]" : "text-[color:var(--sem-ai-grid-text-muted)]"
+        }`}
+      >
+        ⌄
+      </span>
     </label>
   );
 }
