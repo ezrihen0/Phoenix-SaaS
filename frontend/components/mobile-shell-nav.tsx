@@ -107,16 +107,18 @@ function MoreNavLink({
       onClick={onNavigate}
       className={[
         active ? "theme-selected-card" : "theme-control-surface",
-        "relative flex min-h-11 flex-col items-center justify-center rounded-[18px] border p-3 text-center transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
+        "relative flex min-h-12 items-center gap-3 rounded-[16px] border px-3 py-2.5 text-left transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
       ].join(" ")}
     >
+      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)]">
+        <Icon className="h-4 w-4 shrink-0" />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.label}</span>
       {badge ? (
-        <span className="absolute right-1.5 top-1.5 rounded-full border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-[color:var(--sem-text-muted)]">
+        <span className="shrink-0 rounded-full border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-[color:var(--sem-text-muted)]">
           {badge}
         </span>
       ) : null}
-      <Icon className="h-5 w-5 shrink-0" />
-      <span className="mt-1 w-full truncate text-[10px] font-medium">{item.label}</span>
     </Link>
   );
 }
@@ -438,7 +440,7 @@ export function MobileShellNav({
                     <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                       {t(sectionLabelKey(section.id))}
                     </p>
-                    <div className="grid grid-cols-3 gap-2 max-[380px]:grid-cols-2">
+                    <div className="space-y-2">
                       {sectionLinks.map((item) => (
                         <MoreNavLink
                           key={item.href}
