@@ -41,6 +41,7 @@ export default async function RootLayout({
     <html
       lang={locale}
       dir={direction}
+      data-theme="brown-cream"
       className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
