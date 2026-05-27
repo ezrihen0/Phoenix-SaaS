@@ -27,6 +27,9 @@ export const metadata: Metadata = {
   title: "WizField",
   description:
     "Field-service operating system for owners who are tired of losing calls, jobs, estimates, invoices, and customer history.",
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default async function RootLayout({
@@ -42,6 +45,7 @@ export default async function RootLayout({
       lang={locale}
       dir={direction}
       data-theme="brown-cream"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
