@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
+  Briefcase,
   FileText,
   LogOut,
   Plus,
@@ -196,6 +197,7 @@ export function MobileShellNav({
 
   const canCreateEstimate = navByHref.has("/estimates");
   const canCreateInvoice = navByHref.has("/invoices");
+  const canCreateJob = navByHref.has("/jobs");
   const homeItem = navByHref.get("/home");
   const scheduleItem = navByHref.get("/schedule");
   const callsItem = navByHref.get("/calls");
@@ -219,8 +221,16 @@ export function MobileShellNav({
       });
     }
 
+    if (canCreateJob) {
+      actions.push({
+        href: "/jobs/new",
+        label: "New Job",
+        icon: Briefcase,
+      });
+    }
+
     return actions;
-  }, [canCreateEstimate, canCreateInvoice, t]);
+  }, [canCreateEstimate, canCreateInvoice, canCreateJob, t]);
   const canShowQuickActions = quickActions.length > 0;
 
   useEffect(() => {
