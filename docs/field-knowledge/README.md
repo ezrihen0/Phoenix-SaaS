@@ -35,6 +35,7 @@ Every knowledge item is classified and reviewed across these dimensions:
 | `manifest/` | Machine-readable manifest of approved packs, scope, and loader rules (Phase 2+ wiring) |
 | `_protocols/` | **Methodology only** — research protocol + candidate/approved templates (not approved packs, not runtime AI) |
 | `_candidate-updates/` | Unapproved field feedback, AI correction forms, technician notes, and proposed knowledge updates awaiting review |
+| `runtime/` | **Planning only** — runtime safety and AI Voice booking plans (not approved packs, not loader input) |
 
 ## Research protocol (methodology only)
 
@@ -89,6 +90,8 @@ Approved gas-fireplace topic packs from early Field Copilot V1 remain at `gas-fi
 | Edmonton gas fireplace permits | `jurisdictions/canada/alberta/canada-alberta-edmonton-gas-fireplace-permits-v1.md` |
 
 Even with loader wiring complete, all future pack expansion still requires **manifest discipline**, **allowlist discipline**, and **real Field Copilot QA** to prevent hallucination gaps.
+
+**Runtime safety + AI Voice (planning):** See [`runtime/field-copilot-runtime-safety-and-voice-plan-v1.md`](runtime/field-copilot-runtime-safety-and-voice-plan-v1.md) and the 320-prompt QA appendix [`runtime/field-copilot-runtime-safety-and-voice-qa-appendix-v1.md`](runtime/field-copilot-runtime-safety-and-voice-qa-appendix-v1.md). Planning docs only — not loaded at runtime.
 
 **Next:** Continue real Field Copilot QA, fix hallucination gaps, then expand one trade/topic at a time through the research protocol.
 
