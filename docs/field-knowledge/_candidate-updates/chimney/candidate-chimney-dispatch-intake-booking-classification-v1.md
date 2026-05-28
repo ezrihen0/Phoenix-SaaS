@@ -156,14 +156,14 @@ When you call for chimney service, be ready to describe what you’re noticing, 
 
 ### Public-Safe Draft
 
-(not primary audience for dispatch scripts)
+**High-level only (not dispatch scripts):** When scheduling chimney service, use a qualified chimney professional. If you smell smoke indoors or have a CO alarm, stop using the fireplace or stove and seek professional help. Do not attempt DIY cleaning or roof work.
 
 ## Candidate Claim
 
 Proposed **candidate** dispatch intake and booking classification for residential chimney:
 
 1. Call classification and booking tags
-2. Unified safety screen across CH1–CH6 topics
+2. Unified safety screen across CH1–CH10 topics
 3. Fuel/appliance and history intake
 4. Photo request rules
 5. Technician handoff template

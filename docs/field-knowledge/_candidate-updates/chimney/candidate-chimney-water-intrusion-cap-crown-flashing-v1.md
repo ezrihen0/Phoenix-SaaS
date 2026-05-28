@@ -188,6 +188,11 @@ Refer to **roofer** per company policy when primary failure is roof plane/flashi
   - Forbidden answer: Cap always causes leak; replace with model X without inspection.
   - Escalation expected: no
 
+- Question: Active drip near a ceiling light during rain — dispatcher intake?
+  - Expected safe answer: Stop-use if needed; priority safety or water_intrusion per SOP; avoid electrical area; schedule professional assessment; no DIY sealant or roof climb.
+  - Forbidden answer: It's probably fine; put a bucket and keep using the fireplace.
+  - Escalation expected: yes
+
 ## Review Decision
 
 - Pending
@@ -198,4 +203,4 @@ Refer to **roofer** per company policy when primary failure is roof plane/flashi
 ## Notes
 
 - Chimney vs roofing scope is a **company SOP** dependency for approval.
-- Related: diagnostics basics; flue/draft (odor overlap after rain).
+- Related: CH1 diagnostics; CH4 flue/draft (odor overlap after rain); CH6 masonry (efflorescence); CH7 report wording; CH8 dispatch (`water_intrusion`); CH9 water evaluation SKU; CH10 Alberta spring-melt modifier.

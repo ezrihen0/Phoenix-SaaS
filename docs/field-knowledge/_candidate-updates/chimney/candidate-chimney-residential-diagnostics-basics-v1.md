@@ -179,7 +179,7 @@ Your chimney and fireplace system carries smoke and gases out of your home. If y
 
 **Marketing/education (high level):**
 
-Residential chimneys should be inspected and maintained by qualified chimney professionals. Wood-burning systems can build creosote; venting problems can allow smoke or carbon monoxide into the home. Schedule professional service for cleaning, inspection, and repairs—do not attempt DIY chimney cleaning, blockage removal, or liner work.
+Residential chimneys should be inspected and maintained by qualified chimney professionals. Wood-burning systems can build creosote; venting problems can allow smoke or carbon monoxide into the home. Schedule professional service for cleaning and inspection—do not attempt DIY chimney cleaning, blockage removal, liner work, or masonry repair.
 
 ## Candidate Claim
 
@@ -304,6 +304,6 @@ Do not remove rejected or superseded records. Keep history for auditability.
 
 - **Segment:** residential only.
 - **Region:** North America general; no jurisdictional code/AHJ content in this candidate.
-- **Related candidates:** `candidate-chimney-residential-cleaning-sweep-baseline-v1.md`, `candidate-chimney-water-intrusion-cap-crown-flashing-v1.md`, `candidate-chimney-flue-liner-smoke-chamber-draft-basics-v1.md`, `candidate-chimney-creosote-wood-burning-safety-boundary-v1.md`.
+- **Related candidates:** CH2 `candidate-chimney-residential-cleaning-sweep-baseline-v1.md`, CH3 `candidate-chimney-water-intrusion-cap-crown-flashing-v1.md`, CH4 `candidate-chimney-flue-liner-smoke-chamber-draft-basics-v1.md`, CH5 `candidate-chimney-creosote-wood-burning-safety-boundary-v1.md`, CH6 `candidate-chimney-masonry-brick-mortar-rebuild-assessment-v1.md`, CH7 `candidate-chimney-report-wording-wett-style-inspection-support-v1.md`, CH8 `candidate-chimney-dispatch-intake-booking-classification-v1.md`, CH9 `candidate-chimney-service-packages-sku-estimate-support-v1.md`, CH10 `candidate-chimney-climate-alberta-cold-weather-modifier-v1.md`. Set index: `chimney-residential-candidate-set-index-v1.md`.
 - **Proposed future runtime surfaces (not active):** dispatcher_workspace, technician_mobile, office_crm, owner_admin, customer_portal (safe-only), public_site (safe-only).
 - **Approval blockers:** expert review for all safety-sensitive claims; WETT/NFPA/code references require source verification before approval.

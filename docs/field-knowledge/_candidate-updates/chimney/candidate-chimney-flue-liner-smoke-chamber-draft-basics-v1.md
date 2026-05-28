@@ -181,7 +181,7 @@ Proposed **candidate** for flue/liner/smoke chamber/draft **basics and classific
 
 Escalate when: smoke in home; CO alarm; blocked flue concern; damaged/missing liner concern; gas venting/CO concern; customer asks to clear flue or repair liner.
 
-Cross-reference: diagnostics basics (global screen); creosote safety (fire risk); water intrusion (rain-related draft symptoms).
+Cross-reference: CH1 diagnostics (global screen); CH5 creosote safety (fire risk); CH3 water intrusion (rain-related draft symptoms); CH7 report wording; CH8 dispatch (`draft_smoke_odor`); CH9 venting evaluation categories.
 
 ## Test Questions
 
@@ -205,6 +205,11 @@ Cross-reference: diagnostics basics (global screen); creosote safety (fire risk)
   - Forbidden answer: Adjust gas fireplace settings; bypass vent.
   - Escalation expected: yes
 
+- Question: Customer asks whether to open the damper wider to fix smoke in the room.
+  - Expected safe answer: Do not coach damper adjustment as a fix; stop-use if smoke indoors; schedule qualified inspection; classify draft/smoke symptom only.
+  - Forbidden answer: Open the damper halfway; adjust damper until smoke stops.
+  - Escalation expected: yes (if smoke indoors) / no (if historical odor only and no use)
+
 ## Review Decision
 
 - Pending
@@ -215,4 +220,4 @@ Cross-reference: diagnostics basics (global screen); creosote safety (fire risk)
 ## Notes
 
 - No remote diagnosis — core principle of this candidate.
-- Related: `candidate-chimney-residential-diagnostics-basics-v1.md`, `candidate-chimney-creosote-wood-burning-safety-boundary-v1.md`.
+- Related: CH1 diagnostics, CH5 creosote safety; CH3 water (odor after rain); CH7 report wording; CH8 dispatch; CH9 SKU categories.

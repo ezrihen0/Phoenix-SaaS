@@ -219,6 +219,6 @@ Cross-reference: diagnostics basics for global safety screen; cleaning-sweep can
 
 ## Notes
 
-- Dedicated **safety-boundary** candidate; overlaps diagnostics and cleaning candidates — use this file for fire-risk and “burn it out” refusal.
+- Dedicated **safety-boundary** candidate; overlaps CH1 diagnostics and CH2 cleaning — use this file for fire-risk and “burn it out” refusal. Cross-ref CH7 wording, CH8 safety screen, CH9 (no cleaning-only downgrade), CH10 shoulder-season context.
 - WETT-style inspection: **Needs source verification** before any marketed requirement.
 - **not_runtime_safe** until approved with surface/role gates.

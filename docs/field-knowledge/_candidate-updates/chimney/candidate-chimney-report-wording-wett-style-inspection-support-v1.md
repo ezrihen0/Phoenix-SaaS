@@ -165,7 +165,7 @@ Escalate to owner/qualified reviewer when:
 - Report would state pass/fail outside company SOP
 - High-risk finding documented without safety stop-use language
 
-Cross-reference: all CH1–CH6 candidates; CH9 estimate line wording.
+Cross-reference: CH1–CH10 candidates; CH8 dispatch booking summaries; CH9 estimate line wording; CH10 climate limitation wording for Alberta reports.
 
 ## Test Questions
 

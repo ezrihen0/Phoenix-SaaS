@@ -214,6 +214,6 @@ Default: unknown last cleaned → recommend inspection/evaluation per company SO
 
 ## Notes
 
-- Depends on: `candidate-chimney-residential-diagnostics-basics-v1.md`, `candidate-chimney-creosote-wood-burning-safety-boundary-v1.md`.
-- Company pricebook/SOP required before R8-style estimate language in future packs.
+- Depends on: CH1 diagnostics, CH5 creosote safety; cross-ref CH7 report wording, CH8 dispatch, CH9 service packages/SKU.
+- Company pricebook/SOP required before CH7/CH9 estimate and report wording are approved for runtime.
 - **not_runtime_safe** until approved.
