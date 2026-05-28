@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Loader2, Save } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Camera, CheckCircle2, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Image, Loader2, Save } from "lucide-react";
 
 import {
+  assignInspectionPhoto,
   generateInspection,
   getInspectionWorkspace,
   patchInspectionItem,
   patchInspectionMeta,
   patchRequiredField,
   sendInspection,
+  uploadInspectionPhotos,
   type InspectionWorkspacePayload,
 } from "@/lib/inspections/browser-api";
 import { formatSectionLabel } from "@/components/inspections/inspection-labels";
@@ -54,6 +56,11 @@ export default function MobileWorkspaceClient({
   const [gasLicenseNumber, setGasLicenseNumber] = useState("");
   const [gasLicenseHolder, setGasLicenseHolder] = useState("");
   const [savingGasMeta, setSavingGasMeta] = useState(false);
+
+  // Photos
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadPhotoError, setUploadPhotoError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     setBusy(true);
@@ -166,6 +173,34 @@ export default function MobileWorkspaceClient({
       setActionMessage({ type: "error", text: err instanceof Error ? err.message : "Generate failed." });
     } finally {
       setActionBusy(null);
+    }
+  }
+
+  async function handlePhotoUpload(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploadingPhotos(true);
+    setUploadPhotoError(null);
+    try {
+      const updated = await uploadInspectionPhotos(inspectionId, Array.from(files));
+      setWorkspace(updated);
+    } catch (err) {
+      setUploadPhotoError(err instanceof Error ? err.message : "Photo upload failed.");
+    } finally {
+      setUploadingPhotos(false);
+      // Reset input so same file can be re-selected
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  }
+
+  async function handleAssignPhoto(photoId: string, itemId: string) {
+    try {
+      const updated = await assignInspectionPhoto(inspectionId, {
+        photo_id: photoId,
+        item_id: itemId,
+      });
+      setWorkspace(updated);
+    } catch (err) {
+      setUploadPhotoError(err instanceof Error ? err.message : "Photo assignment failed.");
     }
   }
 
@@ -521,6 +556,64 @@ export default function MobileWorkspaceClient({
             </div>
           </div>
         ) : null}
+
+        {/* Photos */}
+        <div className={`${cardClass} p-4`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className={labelClass}>Report Photos</p>
+              <p className="mt-0.5 text-xs text-[color:var(--sem-text-muted)]">
+                {workspace.photoPool.length} photo{workspace.photoPool.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[color:var(--sem-accent-primary)] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90">
+              <Camera className="h-4 w-4" />
+              {uploadingPhotos ? "Uploading..." : "Add Photo"}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                disabled={!canManage || uploadingPhotos}
+                onChange={(e) => handlePhotoUpload(e.target.files)}
+              />
+            </label>
+          </div>
+
+          {uploadPhotoError ? (
+            <p className="mt-2 text-xs text-[color:var(--sem-state-error)]">{uploadPhotoError}</p>
+          ) : null}
+
+          {workspace.photoPool.length > 0 ? (
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {workspace.photoPool.map((photo) => (
+                <div key={photo.id} className="group relative overflow-hidden rounded-lg border border-[color:var(--cmp-border-subtle)]">
+                  {photo.thumbnail_url ? (
+                    <img
+                      src={photo.thumbnail_url}
+                      alt={photo.caption ?? "Inspection photo"}
+                      className="aspect-square w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex aspect-square w-full items-center justify-center bg-[color:var(--cmp-surface-soft)]">
+                      <Image className="h-6 w-6 text-[color:var(--sem-text-muted)]" />
+                    </div>
+                  )}
+                  {photo.assignment_label ? (
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5 text-[9px] text-white truncate">
+                      {photo.assignment_label}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-[color:var(--sem-text-muted)]">
+              No photos yet. Add photos from your device to include in the report.
+            </p>
+          )}
+        </div>
 
         {/* Actions */}
         {actionMessage ? (
