@@ -37,6 +37,29 @@
 | `/customers/new` | New Customer form |
 | `/invoices/new` | Invoice Job picker |
 | `/inspections/new` | Mobile inspection creation entry |
+| `/inspections/[id]/mobile` | Mobile inspection report workspace |
+
+---
+
+## Inspection Scope
+
+### Mobile (Phase 14)
+- `/inspections/new` — create inspection from customer/job/new customer
+- `/inspections/[id]/mobile` — mobile-safe workspace
+  - View report sections and items
+  - Edit item status (satisfactory/unsatisfactory/na)
+  - Edit recommendation text
+  - Edit required fields
+  - Save via `PATCH /api/inspections/:id/items/:itemId`
+  - Generate report, preview PDF, send to customer
+
+### Desktop-Only (unchanged)
+- `/inspections` list page
+- `/inspections/[id]/workspace` — full desktop workspace
+  - Photo upload/assign
+  - Archive/restore
+  - Full compliance gate checking
+  - Complex report editing
 
 ---
 
@@ -53,6 +76,8 @@
 | Phase 12 | Mobile inspection creation entry (`/inspections/new`) | `552e495` |
 | Phase 12B | Hide inspection action for unauthorized roles | `ed26a56` |
 | Phase 12C | Align inspection shortcut with backend permissions | `e4a1977` |
+| Phase 13 | Fix inspection field entry on mobile | `e56aae1` |
+| Phase 14 | Mobile inspection report workspace | `90bd986` |
 
 ---
 

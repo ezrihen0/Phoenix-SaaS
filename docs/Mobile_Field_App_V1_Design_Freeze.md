@@ -20,6 +20,8 @@
 | 12 | `552e495` | `feat(mobile): add safe inspection entry flow` |
 | 12B | `ed26a56` | `fix(mobile): hide inspection action for unauthorized roles` |
 | 12C | `e4a1977` | `fix(mobile): align inspection shortcut with permissions` |
+| 13 | `e56aae1` | `fix(mobile): allow inspection field entry on mobile` |
+| 14 | `90bd986` | `feat(inspections): add mobile report workspace` |
 
 ---
 
@@ -53,17 +55,26 @@
 | `/invoices/new` | ✅ Customer picker + job list | Responsive tables, `overflow-x-auto` | Contact/Location columns hidden on mobile (`sm:table-cell`, `md:table-cell`) |
 | `/schedule` | ✅ Mobile day view with job cards | BoardShell | Already had mobile-specific view, no changes needed |
 | `/calls` | ✅ Recovery command desk | `pb-24 lg:pb-8` | Added bottom padding for dock clearance |
-| `/inspections/new` | ✅ Mobile creation entry | N/A (standalone page) | Source cards (Customer/Job/New Customer), report type selector, inline success |
+| `/inspections/new` | ✅ Mobile creation entry | N/A (standalone page) | Source cards, report type selector, "Open report" CTA |
+| `/inspections/[id]/mobile` | ✅ Mobile report workspace | N/A (standalone route) | Section cards, item editing, save, generate/send/PDF |
+| `/inspections/[id]/workspace` | ❌ Desktop-only | UA block | Full desktop workspace preserved |
 | `/messaging` | ✅ Conversation inbox + thread | `pb-24 lg:pb-0` | Added bottom padding; dual-pane mobile refactor deferred |
 
 ---
 
-## Inspection Constraints
-- `/inspections` workspace remains **desktop-only** (mobile UA block preserved).
-- `/inspections/new` is the mobile creation entry point — creates inspection, shows success inline.
-- Inspection workspace, report editing, and PDF generation remain **desktop-required**.
-- Backend `inspections.admin` permission controls creation — no backend changes needed.
-- `new_customer` source creates customer inline via existing inspection service (same as desktop modal).
+## Inspection Constraints (Updated)
+
+### Mobile (Phase 14)
+- `/inspections/[id]/mobile` — mobile-safe workspace for report editing
+- Editable: item status, recommendation text, required fields
+- Actions: generate report, preview PDF, send to customer
+- No photo upload, no archive/restore, no compliance finalization on mobile
+
+### Desktop-Only
+- `/inspections` list page (mobile UA block preserved)
+- `/inspections/[id]/workspace` — full desktop workspace (UA block preserved)
+- Photo upload/assign, archive/restore, full compliance gate checking
+- PDF/report rendering engine unchanged
 
 ---
 
