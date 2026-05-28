@@ -8,10 +8,12 @@ import {
   generateInspection,
   getInspectionWorkspace,
   patchInspectionItem,
+  patchInspectionMeta,
   patchRequiredField,
   sendInspection,
   type InspectionWorkspacePayload,
 } from "@/lib/inspections/browser-api";
+import { formatSectionLabel } from "@/components/inspections/inspection-labels";
 
 const reportTypeLabels: Record<string, string> = {
   wood_burning_fireplace: "Standard",
@@ -48,6 +50,11 @@ export default function MobileWorkspaceClient({
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Gas license (gas_fireplace only)
+  const [gasLicenseNumber, setGasLicenseNumber] = useState("");
+  const [gasLicenseHolder, setGasLicenseHolder] = useState("");
+  const [savingGasMeta, setSavingGasMeta] = useState(false);
+
   async function load() {
     setBusy(true);
     setError(null);
@@ -71,6 +78,13 @@ export default function MobileWorkspaceClient({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inspectionId]);
+
+  useEffect(() => {
+    if (workspace?.inspectionMeta) {
+      setGasLicenseNumber(workspace.inspectionMeta.gas_license_number ?? "");
+      setGasLicenseHolder(workspace.inspectionMeta.gas_license_holder_name ?? "");
+    }
+  }, [workspace?.inspectionMeta.gas_license_number, workspace?.inspectionMeta.gas_license_holder_name]);
 
   // Group items by section
   const sectionGroups = useMemo(() => {
@@ -152,6 +166,23 @@ export default function MobileWorkspaceClient({
       setActionMessage({ type: "error", text: err instanceof Error ? err.message : "Generate failed." });
     } finally {
       setActionBusy(null);
+    }
+  }
+
+  async function saveGasMeta() {
+    setSavingGasMeta(true);
+    try {
+      const updated = await patchInspectionMeta(inspectionId, {
+        gas_license_number: gasLicenseNumber.trim() || null,
+        gas_license_holder_name: gasLicenseHolder.trim() || null,
+      });
+      setWorkspace(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed.");
+    } finally {
+      setSavingGasMeta(false);
     }
   }
 
@@ -295,7 +326,7 @@ export default function MobileWorkspaceClient({
                 className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold">{section.key.replace(/_/g, " ")}</p>
+                  <p className="text-sm font-semibold">{formatSectionLabel(section.key)}</p>
                   <p className="mt-0.5 text-xs text-[color:var(--sem-text-muted)]">
                     {completedLabel} complete · {Math.round(section.completion_ratio * 100)}%
                   </p>
@@ -447,6 +478,46 @@ export default function MobileWorkspaceClient({
                   </div>
                 );
               })}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Gas license (gas_fireplace only) */}
+        {meta.report_type === "gas_fireplace" ? (
+          <div className={`${cardClass} p-4`}>
+            <p className={`${labelClass} mb-3`}>Gas License</p>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <p className="text-xs text-[color:var(--sem-text-muted)]">License number</p>
+                <input
+                  type="text"
+                  className="theme-input-control h-10 w-full rounded-xl border px-3 text-sm"
+                  value={gasLicenseNumber}
+                  onChange={(e) => setGasLicenseNumber(e.target.value)}
+                  disabled={!canManage || savingGasMeta}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs text-[color:var(--sem-text-muted)]">License holder name</p>
+                <input
+                  type="text"
+                  className="theme-input-control h-10 w-full rounded-xl border px-3 text-sm"
+                  value={gasLicenseHolder}
+                  onChange={(e) => setGasLicenseHolder(e.target.value)}
+                  disabled={!canManage || savingGasMeta}
+                />
+              </div>
+              {gasLicenseNumber !== (meta.gas_license_number ?? "") || gasLicenseHolder !== (meta.gas_license_holder_name ?? "") ? (
+                <button
+                  type="button"
+                  disabled={savingGasMeta}
+                  onClick={saveGasMeta}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[color:var(--sem-accent-primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {savingGasMeta ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                  Save
+                </button>
+              ) : null}
             </div>
           </div>
         ) : null}
