@@ -6,10 +6,8 @@ import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   Briefcase,
-  FileText,
   LogOut,
   Plus,
-  Receipt,
   type LucideProps,
 } from "lucide-react";
 
@@ -195,8 +193,6 @@ export function MobileShellNav({
 
   const visibleSecondaryMoreLinkCount = visibleSecondaryMoreHrefs.length;
 
-  const canCreateEstimate = navByHref.has("/estimates");
-  const canCreateInvoice = navByHref.has("/invoices");
   const canCreateJob = navByHref.has("/jobs");
   const homeItem = navByHref.get("/home");
   const scheduleItem = navByHref.get("/schedule");
@@ -204,22 +200,6 @@ export function MobileShellNav({
   const messagingItem = navByHref.get("/messaging");
   const quickActions = useMemo(() => {
     const actions: Array<{ href: string; label: string; icon: ShellNavIcon }> = [];
-
-    if (canCreateInvoice) {
-      actions.push({
-        href: "/invoices/new",
-        label: t("invoicesPage.newInvoice"),
-        icon: Receipt,
-      });
-    }
-
-    if (canCreateEstimate) {
-      actions.push({
-        href: "/estimates/new",
-        label: t("estimatesPage.newEstimate"),
-        icon: FileText,
-      });
-    }
 
     if (canCreateJob) {
       actions.push({
@@ -230,7 +210,7 @@ export function MobileShellNav({
     }
 
     return actions;
-  }, [canCreateEstimate, canCreateInvoice, canCreateJob, t]);
+  }, [canCreateJob]);
   const canShowQuickActions = quickActions.length > 0;
 
   useEffect(() => {
