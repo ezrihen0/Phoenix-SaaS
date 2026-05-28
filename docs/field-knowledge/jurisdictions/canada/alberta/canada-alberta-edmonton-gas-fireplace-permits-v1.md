@@ -44,11 +44,16 @@ Per City of Edmonton pages at verification:
 - Inspection may request photos/documentation (e.g. piping under test, connections, exterior vent terminations, clearances to combustibles for fireplaces)—per City new gas appliance PDF; field staff should not invent clearance values.
 - Work on **detached garages/sheds** with gas may require trade permits as part of home improvement permitting (see Detached Garage guide cross-reference).
 
-This pack does **not** state fees, approval timelines, or inspection outcomes.
+Limitations / guardrails:
+
+- This pack does **not** determine whether **routine service, maintenance, or diagnostic work** requires a permit.
+- Permit requirements are **scope-dependent** and must be verified with the **City of Edmonton / AHJ** before advising the customer.
+- This pack does **not** state fees, approval timelines, or inspection outcomes.
 
 ## What AI may say
 
 - **Edmonton** treats gas fireplace **installation, alteration, or relocation** as **gas equipment work** that typically requires a **gas permit** under the Safety Codes Act framework described by the City.
+- For routine service or maintenance, this pack does **not** provide a permit exemption; verify with **City of Edmonton / AHJ**.
 - Permit and inspection requirements depend on **scope**, **housing type** (single detached vs. other), **owner-occupier** status, and whether work is bundled with a building/home improvement permit.
 - **Verify** with **City of Edmonton** and the **AHJ** before work; use licensed contractors when City pages require it.
 - For inspection documentation, refer to City forms/PDF—not improvised clearance rules.
@@ -56,6 +61,10 @@ This pack does **not** state fees, approval timelines, or inspection outcomes.
 ## What AI must not say
 
 - “No permit is needed in Edmonton.”
+- “Routine service does not require a permit.”
+- “Service alone may not require a permit.”
+- “Maintenance work is exempt from permit requirements.”
+- “No permit is required unless the official source explicitly says so.”
 - “This is automatically legal” or “compliance confirmed.”
 - “Homeowner or field technician can perform all gas work regardless of qualification or housing type.”
 - Final compliance sign-off or exact clearances without manual/code/City source in context.
