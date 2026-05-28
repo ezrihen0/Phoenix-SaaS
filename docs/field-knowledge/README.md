@@ -14,6 +14,14 @@ This directory holds the **North America-ready approved field knowledge architec
 
 Geographic folders use stable slugs (e.g. `canada/alberta`, `usa/colorado`). Trade folders mirror the same Canada province/territory and USA state layout under each trade and country.
 
+### Future trade domains (skeleton only)
+
+The following trade domains are present as **folder skeletons only** (no approved knowledge packs yet):
+
+- `doors-windows`
+- `locksmith`
+- `roofing`
+
 ### Legacy V1 packs
 
 Approved gas-fireplace topic packs from early Field Copilot V1 remain at `gas-fireplace/` (flat layout). They stay on the backend allowlist until a future migration moves them under `trades/gas-fireplace/` and updates loader paths explicitly.

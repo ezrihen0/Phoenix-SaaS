@@ -53,7 +53,7 @@
     }
   ],
   "countries": ["canada", "usa"],
-  "trades": ["gas-fireplace", "chimney", "garage-door", "hvac"],
+  "trades": ["gas-fireplace", "chimney", "garage-door", "hvac", "doors-windows", "locksmith", "roofing"],
   "rules": {
     "allowlist_only": true,
     "model_browsing": false,
