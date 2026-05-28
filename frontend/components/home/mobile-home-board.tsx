@@ -348,7 +348,7 @@ export default async function MobileHomeBoard({
               <Link
                 key={entry.id}
                 href={entry.href}
-                className="flex items-center justify-between gap-3 border-l-2 border-l-transparent px-4 py-3.5 transition hover:border-l-[color:var(--sem-accent-primary)] hover:bg-[color:var(--cmp-hover-surface)]"
+                className="flex items-center justify-between gap-3 border-l-2 border-l-[color:var(--cmp-border-subtle)] px-4 py-3.5 transition hover:border-l-[color:var(--sem-accent-primary)] hover:bg-[color:var(--cmp-hover-surface)]"
               >
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--sem-text-muted)]">

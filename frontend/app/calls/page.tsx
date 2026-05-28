@@ -865,7 +865,7 @@ export default async function CallsPage({ searchParams }: CallsPageContext) {
 
   return (
     <BoardShell gridOpacity="subtle">
-      <main className="mx-auto max-w-[1760px] px-5 py-6 lg:px-8">
+      <main className="mx-auto max-w-[1760px] px-5 py-6 pb-24 lg:px-8 lg:pb-8">
         <header className={`${callsPanelClass} px-6 py-5`}>
           <div className="flex flex-wrap items-start justify-between gap-5">
             <div>

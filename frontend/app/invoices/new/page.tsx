@@ -216,8 +216,8 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
                 <thead className="bg-[color:var(--cmp-surface-card)] text-xs uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                   <tr>
                     <th className="px-5 py-4">Customer</th>
-                    <th className="px-5 py-4">Contact</th>
-                    <th className="px-5 py-4">Location</th>
+                    <th className="hidden px-5 py-4 sm:table-cell">Contact</th>
+                    <th className="hidden px-5 py-4 md:table-cell">Location</th>
                     <th className="px-5 py-4">Jobs</th>
                     <th className="px-5 py-4 text-right">Select</th>
                   </tr>
@@ -228,12 +228,13 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
                       <td className="px-5 py-4">
                         <p className="font-semibold text-[color:var(--sem-text-primary)]">{customer.full_name}</p>
                         <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">#{customer.id.slice(0, 8)}</p>
+                        <p className="mt-0.5 text-xs text-[color:var(--sem-text-secondary)] sm:hidden">{customer.phone}</p>
                       </td>
-                      <td className="px-5 py-4 text-[color:var(--sem-text-secondary)]">
+                      <td className="hidden px-5 py-4 text-[color:var(--sem-text-secondary)] sm:table-cell">
                         <p>{customer.phone}</p>
                         <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{customer.email ?? "No email"}</p>
                       </td>
-                      <td className="px-5 py-4 text-[color:var(--sem-text-secondary)]">
+                      <td className="hidden px-5 py-4 text-[color:var(--sem-text-secondary)] md:table-cell">
                         {[customer.service_city, customer.service_state_or_region].filter(Boolean).join(", ") || "Address pending"}
                       </td>
                       <td className="px-5 py-4 text-[color:var(--sem-text-secondary)]">{customer.relatedJobCount}</td>
@@ -347,8 +348,8 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
               <thead className="bg-[color:var(--cmp-surface-card)] text-xs uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                 <tr>
                   <th className="px-5 py-4">Job</th>
-                  <th className="px-5 py-4">Status</th>
-                  <th className="px-5 py-4">Scheduled</th>
+                  <th className="hidden px-5 py-4 sm:table-cell">Status</th>
+                  <th className="hidden px-5 py-4 md:table-cell">Scheduled</th>
                   <th className="px-5 py-4">Invoice</th>
                   <th className="px-5 py-4">Balance</th>
                   <th className="px-5 py-4 text-right">Action</th>
@@ -364,13 +365,14 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
                       <td className="px-5 py-4">
                         <p className="font-semibold text-[color:var(--sem-text-primary)]">{job.title}</p>
                         <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">#{job.id.slice(0, 8)}{job.technician?.display_name ? ` · ${job.technician.display_name}` : ""}</p>
+                        <p className="mt-0.5 text-xs text-[color:var(--sem-text-secondary)] sm:hidden">{getJobStatusLabel(jobStatus)}</p>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="hidden px-5 py-4 sm:table-cell">
                         <span className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-secondary)]">
                           {getJobStatusLabel(jobStatus)}
                         </span>
                       </td>
-                      <td className="px-5 py-4 text-[color:var(--sem-text-secondary)]">{formatDateTime(job.scheduled_for)}</td>
+                      <td className="hidden px-5 py-4 text-[color:var(--sem-text-secondary)] md:table-cell">{formatDateTime(job.scheduled_for)}</td>
                       <td className="px-5 py-4">
                         {jobInvoice ? (
                           <div className="space-y-2">
