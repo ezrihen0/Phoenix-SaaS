@@ -22,6 +22,8 @@
     "document-snapshot:isolation:smoke": "node -r ts-node/register src/database/document-snapshot-org-isolation-smoke.ts",
     "telephony-messaging:isolation:smoke": "node -r ts-node/register src/database/telephony-messaging-org-isolation-smoke.ts",
     "operator-copilot:contract-check": "node -r ts-node/register src/ai/operator-copilot-contract-check.ts",
+    "field-knowledge:contract-check": "node -r ts-node/register src/ai/field-knowledge/field-knowledge-contract-check.ts",
+    "field-knowledge:unit-check": "node -r ts-node/register src/ai/field-knowledge/field-knowledge-unit-check.ts",
     "operator-copilot:isolation:smoke": "node -r ts-node/register src/database/operator-copilot-org-isolation-smoke.ts",
     "public-booking:isolation:smoke": "node -r ts-node/register src/database/public-booking-org-isolation-smoke.ts",
     "portal:scope-check": "node -r ts-node/register src/customer-portal/portal-scope-unit-check.ts"

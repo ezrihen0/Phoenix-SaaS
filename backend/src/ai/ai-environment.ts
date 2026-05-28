@@ -109,3 +109,42 @@ export function resolveAiCopilotCustomerSmsOutcomeTrackingEnabled(raw: string | 
   const normalized = raw.trim().toLowerCase();
   return ["true", "1", "yes", "on"].includes(normalized);
 }
+
+/**
+ * AI Actions V1 — unified `/api/ai/actions/:actionKey/run` + planned registry visibility.
+ * Requires `AI_FOUNDATION_ENABLED` first in callers.
+ */
+export function resolveAiActionsV1Enabled(raw: string | undefined): boolean {
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(normalized);
+}
+
+/**
+ * WizField AI Chat agent (`POST /api/ai/chat`).
+ * Requires `AI_FOUNDATION_ENABLED` first in callers.
+ */
+export function resolveAiChatEnabled(raw: string | undefined): boolean {
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(normalized);
+}
+
+/**
+ * Field Copilot — gas fireplace field knowledge (`POST /api/ai/field-copilot`).
+ * Requires `AI_FOUNDATION_ENABLED` first in callers.
+ */
+export function resolveAiFieldCopilotEnabled(raw: string | undefined): boolean {
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(normalized);
+}

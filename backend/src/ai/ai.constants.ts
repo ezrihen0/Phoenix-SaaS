@@ -59,8 +59,49 @@ export const AI_SOURCE_CHANNEL_TELNYX_AI_VOICE_WEBHOOK = "telnyx_ai_voice_webhoo
 /** Staff-triggered AI features (UI / authenticated API). */
 export const AI_SOURCE_CHANNEL_UI = "ui";
 
+/** AI Actions V1 — unified action run trace envelope revision. */
+export const AI_ACTIONS_TRACE_SCHEMA_VERSION = "1";
+
+/** Active LLM provider name persisted on audit rows. */
+export const AI_DEEPSEEK_PROVIDER_NAME = "deepseek";
+
+/** First WizField AI Agent — owner/admin general chat (`POST /api/ai/chat`). */
+export const AI_AGENT_KEY_GENERAL_AI_CHAT = "general_ai_chat";
+
+export const AI_FEATURE_GENERAL_AI_CHAT_V1 = "general_ai_chat_v1";
+
+export const AI_PROMPT_VERSION_GENERAL_AI_CHAT_V1 = "general_ai_chat_v1";
+
+export const AI_AGENT_DISPLAY_NAME_GENERAL_AI_CHAT = "WizField AI Chat";
+
+/** Field Copilot — technician field knowledge assistant (`POST /api/ai/field-copilot`). */
+export const AI_AGENT_KEY_FIELD_COPILOT = "field_copilot";
+
+export const AI_FEATURE_FIELD_COPILOT_V1 = "field_copilot_v1";
+
+export const AI_PROMPT_VERSION_FIELD_COPILOT_V1 = "field_copilot_v1";
+
+/** Canonical AI Actions V1 action keys (registry + telemetry). */
+export const AI_ACTION_KEY_HOME_BRAIN_BRIEF = "home_brain_brief";
+export const AI_ACTION_KEY_SMS_FOLLOWUP_DRAFT = "sms_followup_draft";
+export const AI_ACTION_KEY_UNPAID_INVOICE_RECOVERY = "unpaid_invoice_recovery";
+export const AI_ACTION_KEY_STALE_ESTIMATE_FOLLOWUP = "stale_estimate_followup";
+export const AI_ACTION_KEY_CUSTOMER_HISTORY_SUMMARY = "customer_history_summary";
+export const AI_ACTION_KEY_MISSED_CALL_SUMMARY = "missed_call_summary";
+export const AI_ACTION_KEY_JOB_NEXT_STEP = "job_next_step";
+export const AI_ACTION_KEY_GROWTH_OPPORTUNITY_DRAFT = "growth_opportunity_draft";
+
 /** Phase 2 — Operator Copilot: SMS follow-up draft from recent call context. */
 export const AI_FEATURE_OPERATOR_COPILOT_CALLS_SMS_V1 = "operator_copilot_calls_sms_v1";
+
+/** Maps legacy `feature_key` values to AI Actions V1 keys for usage aggregates. */
+export const AI_LEGACY_FEATURE_KEY_TO_ACTION_KEY: Record<string, string> = {
+  [AI_FEATURE_BRAIN_V1_HOME]: AI_ACTION_KEY_HOME_BRAIN_BRIEF,
+  [AI_FEATURE_OPERATOR_COPILOT_CALLS_SMS_V1]: AI_ACTION_KEY_SMS_FOLLOWUP_DRAFT,
+  [AI_FEATURE_CALL_INTAKE_ENVELOPE_V0]: AI_ACTION_KEY_MISSED_CALL_SUMMARY,
+  [AI_FEATURE_GENERAL_AI_CHAT_V1]: AI_AGENT_KEY_GENERAL_AI_CHAT,
+  [AI_FEATURE_FIELD_COPILOT_V1]: AI_AGENT_KEY_FIELD_COPILOT,
+};
 
 export const AI_DRAFT_TYPE_CUSTOMER_SMS_FOLLOWUP_V1 = "customer_sms_followup_v1";
 

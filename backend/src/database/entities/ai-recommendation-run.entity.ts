@@ -39,6 +39,32 @@ export class AiRecommendationRunEntity {
   @Column({ type: "varchar", length: 64, nullable: true })
   error_code!: string | null;
 
+  /** AI Actions V1 unified action identifier (nullable for legacy Phase 0–4 rows). */
+  @Column({ type: "varchar", length: 64, nullable: true })
+  action_key!: string | null;
+
+  /** Provider boundary: `deterministic`, `deepseek`, etc. */
+  @Column({ type: "varchar", length: 32, nullable: true })
+  provider!: string | null;
+
+  @Column({ type: "int", nullable: true })
+  input_tokens!: number | null;
+
+  @Column({ type: "int", nullable: true })
+  output_tokens!: number | null;
+
+  @Column({ type: "decimal", precision: 12, scale: 6, nullable: true })
+  estimated_cost_usd!: string | null;
+
+  @Column({ type: "int", nullable: true })
+  latency_ms!: number | null;
+
+  @Column({ type: "boolean", nullable: true })
+  clicked_action!: boolean | null;
+
+  @Column({ type: "varchar", length: 64, nullable: true })
+  outcome_key!: string | null;
+
   @CreateDateColumn({ type: runtimeTimestampColumnType, precision: 6 })
   created_at!: Date;
 
