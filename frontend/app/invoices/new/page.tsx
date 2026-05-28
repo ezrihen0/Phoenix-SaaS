@@ -165,7 +165,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div>
               <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Invoice Job</p>
-              <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
+              <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-2xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-3xl lg:text-4xl xl:text-5xl">
                 Choose a customer first.
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
@@ -182,7 +182,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
             </div>
           </section>
 
-          <section className="theme-surface-modal mt-6 rounded-[32px] p-6">
+          <section className="theme-surface-modal mt-6 rounded-[32px] p-4 sm:p-6 overflow-x-auto">
             <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end" method="get">
               <label className="space-y-2">
                 <span className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Search customer</span>
@@ -211,7 +211,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
               </div>
             ) : null}
 
-            <div className="crm-table-frame mt-6">
+            <div className="crm-table-frame mt-6 overflow-x-auto">
               <table className="crm-table text-left text-sm">
                 <thead className="bg-[color:var(--cmp-surface-card)] text-xs uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                   <tr>
@@ -293,7 +293,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Invoice Job</p>
-              <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
+              <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-2xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-3xl lg:text-4xl xl:text-5xl">
                 {customer ? customer.full_name : "Select a customer"}
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
@@ -335,14 +335,14 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
           ) : null}
         </section>
 
-        <section className="theme-surface-modal mt-6 rounded-[32px] p-6">
+        <section className="theme-surface-modal mt-6 rounded-[32px] p-4 sm:p-6 overflow-x-auto">
           {loadError ? (
             <div className="theme-alert-error rounded-[22px] px-4 py-3 text-sm">
               {loadError}
             </div>
           ) : null}
 
-          <div className="crm-table-frame">
+          <div className="crm-table-frame overflow-x-auto">
             <table className="crm-table text-left text-sm">
               <thead className="bg-[color:var(--cmp-surface-card)] text-xs uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                 <tr>

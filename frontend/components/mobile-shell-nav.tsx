@@ -148,7 +148,7 @@ function QuickActionLink({
     <Link
       href={href}
       onClick={onNavigate}
-      className="theme-control-surface group flex items-center gap-2 rounded-[14px] border px-3 py-2 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+      className="theme-control-surface group flex min-h-[44px] items-center gap-2 rounded-[14px] border px-3 py-2.5 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
     >
       <span className="theme-control-surface-soft inline-flex h-7 w-7 items-center justify-center rounded-lg border">
         <Icon className="h-4 w-4" />

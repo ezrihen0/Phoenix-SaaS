@@ -95,20 +95,20 @@ function NoContextPanel({
   canBrowseLeads: boolean;
 }) {
   return (
-    <main className="min-h-screen bg-[color:var(--flat-canvas)] px-6 py-10 text-white lg:px-10">
-      <section className="mx-auto max-w-5xl rounded-[32px] border border-white/10 bg-black/20 p-8 backdrop-blur-xl">
-        <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--flat-gold)]">Create Job</p>
-        <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[#f5ecd2]">
+    <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
+      <section className="mx-auto max-w-5xl rounded-[32px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-8">
+        <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Create Job</p>
+        <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)]">
           Start a new job
         </h1>
-        <p className="mt-4 max-w-2xl text-sm leading-7 text-white/64">
+        <p className="mt-4 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)]">
           Choose a customer or lead to continue. A job must be created from exactly one source record.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           {canBrowseCustomers ? (
             <Link
               href="/customers"
-              className="inline-flex items-center gap-2 rounded-full border border-white/12 px-4 py-2 text-sm text-white/72 transition hover:border-white/24 hover:text-white"
+              className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
             >
               Browse Customers
             </Link>
@@ -116,14 +116,14 @@ function NoContextPanel({
           {canBrowseLeads ? (
             <Link
               href="/leads"
-              className="inline-flex items-center gap-2 rounded-full border border-white/12 px-4 py-2 text-sm text-white/72 transition hover:border-white/24 hover:text-white"
+              className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
             >
               Browse Leads
             </Link>
           ) : null}
           <Link
             href="/jobs"
-            className="inline-flex items-center gap-2 rounded-full border border-white/12 px-4 py-2 text-sm text-white/72 transition hover:border-white/24 hover:text-white"
+            className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to jobs

@@ -50,7 +50,7 @@ function FieldInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/28 focus:border-[color:rgba(212,175,55,0.28)] focus:bg-black/30 ${props.className ?? ""}`.trim()}
+      className={`theme-input-control h-11 w-full rounded-xl border px-3 text-sm transition focus:outline-none focus:ring-2 focus:ring-[color:var(--cmp-focus-ring)] ${props.className ?? ""}`.trim()}
     />
   );
 }
@@ -59,7 +59,7 @@ function FieldSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-[color:rgba(212,175,55,0.28)] focus:bg-black/30 ${props.className ?? ""}`.trim()}
+      className={`theme-input-control h-11 w-full rounded-xl border px-3 text-sm transition focus:outline-none focus:ring-2 focus:ring-[color:var(--cmp-focus-ring)] ${props.className ?? ""}`.trim()}
     />
   );
 }
@@ -68,7 +68,7 @@ function FieldTextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>)
   return (
     <textarea
       {...props}
-      className={`min-h-[140px] w-full rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/28 focus:border-[color:rgba(212,175,55,0.28)] focus:bg-black/30 ${props.className ?? ""}`.trim()}
+      className={`theme-input-control min-h-[140px] w-full rounded-xl border px-3 py-3 text-sm transition focus:outline-none focus:ring-2 focus:ring-[color:var(--cmp-focus-ring)] ${props.className ?? ""}`.trim()}
     />
   );
 }

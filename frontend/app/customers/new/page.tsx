@@ -126,7 +126,7 @@ export default function NewCustomerPage() {
             {t("backToCustomers")}
           </Link>
           <h1 className="text-2xl font-bold text-[color:var(--sem-text-primary)]">{t("title")}</h1>
-          <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">{t("description")}</p>
+          <p className="mt-1 text-sm leading-relaxed text-[color:var(--sem-text-secondary)]">{t("description")}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -308,7 +308,7 @@ export default function NewCustomerPage() {
             <button
               type="submit"
               disabled={busy}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--sem-accent-primary)] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--sem-accent-primary)] px-6 py-3.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 min-h-12"
             >
               {busy ? (
                 <>

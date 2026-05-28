@@ -234,7 +234,7 @@ export default async function MobileHomeBoard({
     .slice(0, 6);
 
   return (
-    <main className="space-y-3 px-4 pb-24 pt-4 text-[color:var(--sem-text-primary)]">
+    <main className="space-y-3 px-4 pb-28 pt-4 text-[color:var(--sem-text-primary)]">
       <header className={`${panelClass} p-4`}>
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
@@ -287,8 +287,8 @@ export default async function MobileHomeBoard({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 px-4 py-3">
-          <div className="rounded-[14px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+        <div className="grid grid-cols-2 gap-3 px-4 py-4">
+          <div className="rounded-[14px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
             <div className="flex items-center gap-2 text-[color:var(--sem-state-error)]">
               <CircleDollarSign className="h-4 w-4" />
               <span className="text-[10px] uppercase tracking-[0.16em]">{t("openAr")}</span>
@@ -303,7 +303,7 @@ export default async function MobileHomeBoard({
                 : t("openArHelper", { count: summary.unpaidInvoices })}
             </p>
           </div>
-          <div className="rounded-[14px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+          <div className="rounded-[14px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
             <div className="flex items-center gap-2 text-[color:var(--sem-state-info)]">
               <CalendarDays className="h-4 w-4" />
               <span className="text-[10px] uppercase tracking-[0.16em]">{t("jobsToday")}</span>
@@ -318,7 +318,7 @@ export default async function MobileHomeBoard({
         <div className="border-t border-[color:var(--cmp-border-subtle)] px-4 pb-4 pt-3">
           <Link
             href={nextActionHref}
-            className="theme-btn-primary inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[14px] px-3 py-2 text-sm font-semibold"
+            className="theme-btn-primary inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-[14px] px-4 py-3 text-sm font-semibold shadow-[0_4px_20px_color-mix(in_srgb,var(--sem-accent-primary)_18%,transparent)]"
           >
             {nextAction ? t("openRecord") : t("openJobsFallback")}
             <ArrowRight className="h-4 w-4" />
@@ -348,7 +348,7 @@ export default async function MobileHomeBoard({
               <Link
                 key={entry.id}
                 href={entry.href}
-                className="flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-[color:var(--cmp-hover-surface)]"
+                className="flex items-center justify-between gap-3 border-l-2 border-l-transparent px-4 py-3.5 transition hover:border-l-[color:var(--sem-accent-primary)] hover:bg-[color:var(--cmp-hover-surface)]"
               >
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--sem-text-muted)]">
