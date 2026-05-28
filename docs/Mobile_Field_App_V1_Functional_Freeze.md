@@ -38,12 +38,14 @@
 | `/invoices/new` | Invoice Job picker |
 | `/inspections/new` | Mobile inspection creation entry |
 | `/inspections/[id]/mobile` | Mobile inspection report workspace |
+| Phase 14D | Mobile gas metadata + section labels | `ef824bb` |
+| Phase 15 | Mobile inspection photos | `847caf7` |
 
 ---
 
 ## Inspection Scope
 
-### Mobile (Phase 14)
+### Mobile (Final)
 - `/inspections/new` — create inspection from customer/job/new customer
 - `/inspections/[id]/mobile` — mobile-safe workspace
   - View report sections and items
@@ -52,6 +54,15 @@
   - Edit required fields
   - Save via `PATCH /api/inspections/:id/items/:itemId`
   - Generate report, preview PDF, send to customer
+  - Gas license metadata for gas_fireplace reports
+  - Photo upload (camera/gallery), thumbnail grid, assign to items
+
+### Photo Support
+- Upload from camera/gallery via `POST /api/inspections/:id/photos/upload`
+- Thumbnail grid display from `photoPool`
+- Assign photos to items via `POST /api/inspections/:id/photos/assign`
+- Photos included in generated reports via existing renderer
+- Not supported: photo delete, caption editing, offline upload queue
 
 ### Desktop-Only (unchanged)
 - `/inspections` list page

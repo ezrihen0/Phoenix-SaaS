@@ -22,6 +22,8 @@
 | 12C | `e4a1977` | `fix(mobile): align inspection shortcut with permissions` |
 | 13 | `e56aae1` | `fix(mobile): allow inspection field entry on mobile` |
 | 14 | `90bd986` | `feat(inspections): add mobile report workspace` |
+| 14D | `ef824bb` | `feat(inspections): support mobile gas report metadata and section labels` |
+| 15 | `847caf7` | `feat(inspections): add mobile inspection photos` |
 
 ---
 

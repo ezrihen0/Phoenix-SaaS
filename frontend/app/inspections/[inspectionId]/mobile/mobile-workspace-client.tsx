@@ -60,6 +60,7 @@ export default function MobileWorkspaceClient({
   // Photos
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [uploadPhotoError, setUploadPhotoError] = useState<string | null>(null);
+  const [assigningPhotoId, setAssigningPhotoId] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -603,6 +604,37 @@ export default function MobileWorkspaceClient({
                   {photo.assignment_label ? (
                     <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5 text-[9px] text-white truncate">
                       {photo.assignment_label}
+                    </div>
+                  ) : canManage ? (
+                    <button
+                      type="button"
+                      onClick={() => setAssigningPhotoId(assigningPhotoId === photo.id ? null : photo.id)}
+                      className="absolute bottom-0 left-0 right-0 bg-[color:var(--sem-accent-primary)]/90 px-1 py-0.5 text-[9px] font-semibold text-white opacity-0 transition group-hover:opacity-100"
+                    >
+                      Assign
+                    </button>
+                  ) : null}
+                  {assigningPhotoId === photo.id ? (
+                    <div className="absolute inset-0 flex flex-col justify-end bg-black/70 p-2">
+                      <div className="max-h-full overflow-y-auto space-y-1">
+                        {workspace.items.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => { handleAssignPhoto(photo.id, item.id); setAssigningPhotoId(null); }}
+                            className="w-full rounded bg-white/10 px-2 py-1 text-left text-[9px] text-white hover:bg-white/20"
+                          >
+                            {item.item_label}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAssigningPhotoId(null)}
+                        className="mt-1 w-full rounded bg-white/5 py-0.5 text-[9px] text-white/60"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   ) : null}
                 </div>
