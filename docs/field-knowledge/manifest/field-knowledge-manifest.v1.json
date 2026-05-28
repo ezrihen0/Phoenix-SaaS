@@ -1,0 +1,64 @@
+{
+  "schema_version": "field_knowledge_manifest_v1",
+  "status": "alberta_v1_seeded",
+  "scope": "north_america_ready",
+  "approved_knowledge_packs": [
+    {
+      "knowledge_key": "canada_alberta_gas_fireplace_basics",
+      "path": "trades/gas-fireplace/canada/alberta/canada-alberta-gas-fireplace-basics-v1.md",
+      "country": "canada",
+      "province_or_state": "alberta",
+      "city_or_ahj": null,
+      "trade": "gas-fireplace",
+      "topic": "field_basics",
+      "version": "v1",
+      "source_level": "approved_field_practice",
+      "last_verified": "2026-05-27"
+    },
+    {
+      "knowledge_key": "canada_alberta_gas",
+      "path": "jurisdictions/canada/alberta/canada-alberta-gas-v1.md",
+      "country": "canada",
+      "province_or_state": "alberta",
+      "city_or_ahj": null,
+      "trade": null,
+      "topic": "gas_jurisdiction_baseline",
+      "version": "v1",
+      "source_level": "official_provincial",
+      "last_verified": "2026-05-27"
+    },
+    {
+      "knowledge_key": "canada_alberta_calgary_gas_fireplace_permits",
+      "path": "jurisdictions/canada/alberta/canada-alberta-calgary-gas-fireplace-permits-v1.md",
+      "country": "canada",
+      "province_or_state": "alberta",
+      "city_or_ahj": "calgary",
+      "trade": "gas-fireplace",
+      "topic": "gas_fireplace_permits",
+      "version": "v1",
+      "source_level": "official_municipal",
+      "last_verified": "2026-05-27"
+    },
+    {
+      "knowledge_key": "canada_alberta_edmonton_gas_fireplace_permits",
+      "path": "jurisdictions/canada/alberta/canada-alberta-edmonton-gas-fireplace-permits-v1.md",
+      "country": "canada",
+      "province_or_state": "alberta",
+      "city_or_ahj": "edmonton",
+      "trade": "gas-fireplace",
+      "topic": "gas_fireplace_permits",
+      "version": "v1",
+      "source_level": "official_municipal",
+      "last_verified": "2026-05-27"
+    }
+  ],
+  "countries": ["canada", "usa"],
+  "trades": ["gas-fireplace", "chimney", "garage-door", "hvac"],
+  "rules": {
+    "allowlist_only": true,
+    "model_browsing": false,
+    "arbitrary_file_reads": false,
+    "unknown_jurisdiction": "no_verified_guidance"
+  },
+  "next_phase": "wire_alberta_v1_loader"
+}
