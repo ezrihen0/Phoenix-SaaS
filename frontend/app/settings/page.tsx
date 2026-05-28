@@ -7,6 +7,7 @@ import { requireServerSession } from "@/lib/auth/server-session";
 import type { SessionRole } from "@/lib/auth/server-session";
 
 import type { BillingSummaryPayload } from "./billing-panel";
+import type { AiUsageSummaryPayload } from "./ai-usage-panel";
 import type { OrganizationSettings } from "./organization-profile-panel";
 import { isSettingsTopic } from "./settings-sections";
 import { SettingsWorkspace } from "./settings-workspace";
@@ -59,6 +60,7 @@ export default async function SettingsPage({
   const t = await getTranslations("settings");
   const role = session.profile?.role ?? "technician";
   const ownerMode = role === "owner" && Boolean(session.profile?.id);
+  const canViewAiUsage = role === "owner" || role === "admin";
   let staffProfiles: StaffProfile[] = [];
   let staffLoadError: string | null = null;
   let organizationSettings = defaultOrganizationSettings;
@@ -79,12 +81,22 @@ export default async function SettingsPage({
 
   let billingSummary: BillingSummaryPayload | null = null;
   let billingLoadError: string | null = null;
+  let aiUsageSummary: AiUsageSummaryPayload | null = null;
+  let aiUsageLoadError: string | null = null;
 
   if (ownerMode) {
     try {
       billingSummary = await serverApiFetch<BillingSummaryPayload>("/api/billing/summary");
     } catch (error) {
       billingLoadError = error instanceof Error ? error.message : t("billing.loadError");
+    }
+  }
+
+  if (canViewAiUsage) {
+    try {
+      aiUsageSummary = await serverApiFetch<AiUsageSummaryPayload>("/api/ai/usage/summary");
+    } catch (error) {
+      aiUsageLoadError = error instanceof Error ? error.message : t("aiUsage.loadError");
     }
   }
 
@@ -99,6 +111,8 @@ export default async function SettingsPage({
         organizationSettings={organizationSettings}
         billingSummary={billingSummary}
         billingLoadError={billingLoadError}
+        aiUsageSummary={aiUsageSummary}
+        aiUsageLoadError={aiUsageLoadError}
         profileFullName={session.profile?.full_name ?? null}
         profileEmail={session.user.email}
         activeOrganizationName={session.active_organization?.name ?? null}

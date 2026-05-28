@@ -22,6 +22,7 @@ import { BoardShell } from "@/components/board/board-shell";
 import MobileHomeBoard from "@/components/home/mobile-home-board";
 import TechnicianHomeBoard from "@/components/home/technician-home-board";
 import HomeIntelligenceStrip from "@/components/home/intelligence/home-intelligence-strip";
+import { AiChatPanel } from "@/components/home/ai-chat-panel";
 import type { AiBrainHomeBriefResponse } from "@/lib/ai/brain-brief-types";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { fetchBrainHomeBriefSilent } from "@/lib/api/server-brain-home-brief";
@@ -42,6 +43,10 @@ function isOfficeRole(role: SessionRole | null) {
     || role === "dispatcher"
     || role === "viewer"
     || role === "csr";
+}
+
+function canUseAiChat(role: SessionRole | null) {
+  return role === "owner" || role === "admin";
 }
 
 const executivePanelClass =
@@ -374,12 +379,14 @@ function OwnerExecutiveDesk({
   officeDashboard,
   brainHomeBrief,
   loadError,
+  showAiChat,
   t,
 }: {
   role: SessionRole | null;
   officeDashboard: OfficeDashboardResponse | null;
   brainHomeBrief: AiBrainHomeBriefResponse | null;
   loadError: string | null;
+  showAiChat: boolean;
   t: Awaited<ReturnType<typeof getTranslations>>;
 }) {
   const businessTape = officeDashboard ? buildBusinessTape(officeDashboard) : [];
@@ -526,6 +533,7 @@ function OwnerExecutiveDesk({
               </div>
               <div className="space-y-6">
                 <HomeIntelligenceStrip brief={brainHomeBrief} variant="executive" />
+                {showAiChat ? <AiChatPanel /> : null}
                 <PressureIndexPanel
                   title={t("pressureIndex.title")}
                   subtitle={t("pressureIndex.subtitle")}
@@ -573,6 +581,7 @@ export default async function HomePage() {
   const t = await getTranslations("home");
   const technicianRole = role === "technician";
   const officeRole = isOfficeRole(role);
+  const showAiChat = canUseAiChat(role);
 
   let officeDashboard: OfficeDashboardResponse | null = null;
   let brainHomeBrief: AiBrainHomeBriefResponse | null = null;
@@ -643,6 +652,7 @@ export default async function HomePage() {
           role={role}
           dashboard={officeDashboard}
           loadError={loadError}
+          showAiChat={showAiChat}
         />
       </div>
       <div className="hidden lg:block">
@@ -651,6 +661,7 @@ export default async function HomePage() {
           officeDashboard={officeDashboard}
           brainHomeBrief={brainHomeBrief}
           loadError={loadError}
+          showAiChat={showAiChat}
           t={t}
         />
       </div>

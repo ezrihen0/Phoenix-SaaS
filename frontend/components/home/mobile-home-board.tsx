@@ -1,38 +1,28 @@
 import Link from "next/link";
 import {
   ArrowRight,
+  BriefcaseBusiness,
   CalendarDays,
   CircleDollarSign,
   ClipboardList,
-  CloudSun,
+  Flame,
+  Hammer,
+  PhoneCall,
 } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
-import type { SessionRole } from "@/lib/auth/server-session";
-import { formatDateTime } from "@/lib/crm/display";
+import { formatCurrencyFromCents } from "@/lib/crm/invoice-line-model";
 import type {
   DashboardControlItem,
   OfficeDashboardResponse,
 } from "@/lib/crm/home-dashboard-types";
-import { formatCurrencyFromCents } from "@/lib/crm/invoice-line-model";
 import { canAccessShellHref } from "@/lib/navigation/shell-nav-policy";
+import type { SessionRole } from "@/lib/auth/server-session";
+import { formatDateTime } from "@/lib/crm/display";
+import { AiChatPanel } from "@/components/home/ai-chat-panel";
 
 const panelClass =
   "theme-surface-card rounded-[20px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] shadow-[0_12px_40px_color-mix(in_srgb,var(--bg-canvas)_72%,transparent)] backdrop-blur-md";
-
-type QueueConfig = {
-  id: "followUps" | "quotes" | "unpaid" | "todayJobs";
-  label: string;
-  items: DashboardControlItem[];
-  fallbackHref: string;
-};
-
-type QueueEntry = {
-  id: string;
-  label: string;
-  item: DashboardControlItem;
-  href: string;
-};
 
 function sumAmountCents(items: DashboardControlItem[]) {
   return items.reduce((total, item) => total + (item.amountCents ?? 0), 0);
@@ -43,117 +33,23 @@ function formatControlPreview(item: DashboardControlItem) {
     item.customerName || item.title,
     item.amountCents !== null ? formatCurrencyFromCents(item.amountCents) : null,
     item.scheduledFor ? formatDateTime(item.scheduledFor) : null,
-    item.statusLabel || null,
   ].filter(Boolean);
 
-  return parts.join(" | ");
-}
-
-function formatQueueMeta(item: DashboardControlItem) {
-  const parts = [
-    item.scheduledFor ? formatDateTime(item.scheduledFor) : null,
-    item.statusLabel || null,
-    item.amountCents !== null ? formatCurrencyFromCents(item.amountCents) : null,
-  ].filter(Boolean);
-
-  return parts.join(" | ");
-}
-
-function getScheduledTimestamp(item: DashboardControlItem) {
-  if (!item.scheduledFor) {
-    return null;
-  }
-
-  const timestamp = Date.parse(item.scheduledFor);
-  return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function sortScheduledJobs(items: DashboardControlItem[]) {
-  return [...items].sort((left, right) => {
-    const leftTimestamp = getScheduledTimestamp(left);
-    const rightTimestamp = getScheduledTimestamp(right);
-
-    if (leftTimestamp !== null && rightTimestamp !== null) {
-      return leftTimestamp - rightTimestamp;
-    }
-
-    if (leftTimestamp !== null) {
-      return -1;
-    }
-
-    if (rightTimestamp !== null) {
-      return 1;
-    }
-
-    return (left.scheduledFor || "").localeCompare(right.scheduledFor || "");
-  });
-}
-
-function pickClosestScheduledJob(items: DashboardControlItem[], nowTimestamp: number) {
-  if (items.length === 0) {
-    return null;
-  }
-
-  const withTimestamp = items
-    .map((item) => ({
-      item,
-      timestamp: getScheduledTimestamp(item),
-    }))
-    .filter(
-      (entry): entry is { item: DashboardControlItem; timestamp: number } => entry.timestamp !== null,
-    );
-
-  if (withTimestamp.length === 0) {
-    return items[0] ?? null;
-  }
-
-  const upcoming = withTimestamp.find((entry) => entry.timestamp >= nowTimestamp);
-  if (upcoming) {
-    return upcoming.item;
-  }
-
-  return withTimestamp[withTimestamp.length - 1]?.item ?? null;
-}
-
-function resolveQueueItemHref(item: DashboardControlItem, fallbackHref: string) {
-  if (item.jobId) {
-    return `/jobs/${item.jobId}`;
-  }
-
-  return fallbackHref;
-}
-
-function resolveSafeFallbackHref(role: SessionRole | null, preferredHref: string) {
-  if (canAccessShellHref(preferredHref, role)) {
-    return preferredHref;
-  }
-
-  if (canAccessShellHref("/jobs", role)) {
-    return "/jobs";
-  }
-
-  return "/home";
-}
-
-function buildQueueEntries(config: QueueConfig, limit: number): QueueEntry[] {
-  return config.items.slice(0, limit).map((item) => ({
-    id: `${config.id}-${item.id}`,
-    label: config.label,
-    item,
-    href: resolveQueueItemHref(item, config.fallbackHref),
-  }));
+  return parts.join(" · ");
 }
 
 type MobileHomeBoardProps = {
   role: SessionRole | null;
   dashboard: OfficeDashboardResponse | null;
   loadError: string | null;
+  showAiChat?: boolean;
 };
 
 export default async function MobileHomeBoard({
   role,
   dashboard,
   loadError,
+  showAiChat = false,
 }: MobileHomeBoardProps) {
   const t = await getTranslations("home.mobile");
 
@@ -171,160 +67,128 @@ export default async function MobileHomeBoard({
 
   const { summary, controls } = dashboard;
   const arExposure = sumAmountCents(controls.unpaidInvoices);
-  const sortedTodayJobs = sortScheduledJobs(controls.todaysScheduledJobs);
-
-  const queueConfigs: QueueConfig[] = [
-    {
-      id: "todayJobs",
-      label: t("todayJobsQueue"),
-      items: sortedTodayJobs,
-      fallbackHref: resolveSafeFallbackHref(role, "/jobs"),
-    },
-    {
-      id: "followUps",
-      label: t("followUps"),
-      items: controls.followUpsNeeded,
-      fallbackHref: resolveSafeFallbackHref(role, "/calls"),
-    },
-    {
-      id: "quotes",
-      label: t("salesQueue"),
-      items: controls.quotesWaitingApproval,
-      fallbackHref: resolveSafeFallbackHref(role, "/estimates"),
-    },
-    {
-      id: "unpaid",
-      label: t("collectionsQueue"),
-      items: controls.unpaidInvoices,
-      fallbackHref: resolveSafeFallbackHref(role, "/invoices"),
-    },
-  ];
-
-  const closestScheduledJob = pickClosestScheduledJob(sortedTodayJobs, Date.now());
-
-  const nextActionSelection = closestScheduledJob
-    ? {
-      item: closestScheduledJob,
-      fallbackHref: resolveSafeFallbackHref(role, "/jobs"),
-    }
-    : controls.followUpsNeeded[0]
-      ? {
-        item: controls.followUpsNeeded[0],
-        fallbackHref: resolveSafeFallbackHref(role, "/calls"),
-      }
-      : controls.quotesWaitingApproval[0]
-        ? {
-          item: controls.quotesWaitingApproval[0],
-          fallbackHref: resolveSafeFallbackHref(role, "/estimates"),
-        }
-        : controls.unpaidInvoices[0]
-          ? {
-            item: controls.unpaidInvoices[0],
-            fallbackHref: resolveSafeFallbackHref(role, "/invoices"),
-          }
-          : null;
-
-  const nextAction = nextActionSelection?.item ?? null;
-  const nextActionHref = nextActionSelection
-    ? resolveQueueItemHref(nextActionSelection.item, nextActionSelection.fallbackHref)
-    : resolveSafeFallbackHref(role, "/jobs");
-
-  const upcomingQueueItems = queueConfigs
-    .flatMap((queue) => buildQueueEntries(queue, 2))
-    .slice(0, 6);
+  const followUps = controls.followUpsNeeded.slice(0, 3);
+  const canLeads = canAccessShellHref("/leads", role);
+  const canCalls = canAccessShellHref("/calls", role);
+  const canInvoices = canAccessShellHref("/invoices", role);
+  const canJobs = canAccessShellHref("/jobs", role);
 
   return (
-    <main className="space-y-3 px-4 pb-28 pt-4 text-[color:var(--sem-text-primary)]">
+    <main className="space-y-4 px-4 py-4 text-[color:var(--sem-text-primary)]">
       <header className={`${panelClass} p-4`}>
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
-            {t("eyebrow")}
-          </p>
-          <span className="theme-status-success inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]">
-            {t("ready")}
-          </span>
-        </div>
-        <h1 className="mt-2 text-xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">
-          {t("terminalTitle")}
+        <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
+          {t("eyebrow")}
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">
+          {t("title")}
         </h1>
-        <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">{t("subtitle")}</p>
+        <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">{t("subtitle")}</p>
       </header>
 
-      <section className={`${panelClass} p-3`}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="theme-status-info flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border">
-              <CloudSun className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
-                {t("fieldConditions")}
-              </p>
-              <p className="text-xs text-[color:var(--sem-text-secondary)]">{t("routePlanningReady")}</p>
-            </div>
-          </div>
-          <span className="theme-badge shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]">
-            {t("weatherNotConnected")}
-          </span>
-        </div>
-      </section>
-
-      <section className={`${panelClass} overflow-hidden`}>
-        <div className="border-b border-[color:var(--cmp-border-subtle)] px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--sem-accent-primary)]">
-              {t("urgentRuntimeContract")}
-            </p>
-            <span className="theme-badge rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]">
-              {t("nextAction")}
-            </span>
-          </div>
-          <h2 className="mt-2 text-base font-semibold text-[color:var(--sem-display-headline)]">
-            {nextAction ? (nextAction.title || nextAction.customerName) : t("noUrgentQueueTitle")}
-          </h2>
-          <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">
-            {nextAction ? formatControlPreview(nextAction) : t("noUrgentQueueSubtitle")}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 px-4 py-4">
-          <div className="rounded-[14px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
-            <div className="flex items-center gap-2 text-[color:var(--sem-state-error)]">
-              <CircleDollarSign className="h-4 w-4" />
-              <span className="text-[10px] uppercase tracking-[0.16em]">{t("openAr")}</span>
-            </div>
-            <p className="mt-2 text-xl font-semibold tabular-nums">{summary.unpaidInvoices}</p>
-            <p className="mt-1 text-[11px] text-[color:var(--sem-text-secondary)]">
-              {arExposure > 0
-                ? t("openArHelperAmount", {
-                  count: summary.unpaidInvoices,
-                  amount: formatCurrencyFromCents(arExposure),
-                })
-                : t("openArHelper", { count: summary.unpaidInvoices })}
-            </p>
-          </div>
-          <div className="rounded-[14px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
+      <section className={`${panelClass} p-4`}>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">
+          {t("todaySummary")}
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="rounded-[16px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
             <div className="flex items-center gap-2 text-[color:var(--sem-state-info)]">
               <CalendarDays className="h-4 w-4" />
               <span className="text-[10px] uppercase tracking-[0.16em]">{t("jobsToday")}</span>
             </div>
-            <p className="mt-2 text-xl font-semibold tabular-nums">{summary.jobsScheduledToday}</p>
-            <p className="mt-1 text-[11px] text-[color:var(--sem-text-secondary)]">
-              {t("activeJobs")}: {summary.activeJobs}
-            </p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{summary.jobsScheduledToday}</p>
+          </div>
+          <div className="rounded-[16px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+            <div className="flex items-center gap-2 text-[color:var(--sem-state-success)]">
+              <Hammer className="h-4 w-4" />
+              <span className="text-[10px] uppercase tracking-[0.16em]">{t("activeJobs")}</span>
+            </div>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{summary.activeJobs}</p>
           </div>
         </div>
-
-        <div className="border-t border-[color:var(--cmp-border-subtle)] px-4 pb-4 pt-3">
-          <Link
-            href={nextActionHref}
-            className="theme-btn-primary inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-[14px] px-4 py-3 text-sm font-semibold shadow-[0_4px_20px_color-mix(in_srgb,var(--sem-accent-primary)_18%,transparent)]"
-          >
-            {nextAction ? t("openRecord") : t("openJobsFallback")}
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
       </section>
+
+      <div className="grid gap-3">
+        {canLeads ? (
+          <Link
+            href="/leads"
+            className={`${panelClass} flex items-center justify-between gap-3 p-4 transition hover:border-[color:var(--cmp-border-accent)]`}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="theme-status-warning flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border">
+                <Flame className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{t("newLeads")}</p>
+                <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">
+                  {t("newLeadsHelper", { count: summary.newLeads })}
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
+          </Link>
+        ) : null}
+
+        {canCalls ? (
+          <Link
+            href="/calls"
+            className={`${panelClass} flex items-center justify-between gap-3 p-4 transition hover:border-[color:var(--cmp-border-accent)]`}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="theme-status-info flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border">
+                <PhoneCall className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{t("callsDesk")}</p>
+                <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">{t("callsDeskHelper")}</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
+          </Link>
+        ) : null}
+
+        {canJobs ? (
+          <Link
+            href="/jobs"
+            className={`${panelClass} flex items-center justify-between gap-3 p-4 transition hover:border-[color:var(--cmp-border-accent)]`}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="theme-status-info flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border">
+                <BriefcaseBusiness className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{t("operationsDesk")}</p>
+                <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">{t("operationsDeskHelper")}</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
+          </Link>
+        ) : null}
+
+        {canInvoices ? (
+          <Link
+            href="/invoices"
+            className={`${panelClass} flex items-center justify-between gap-3 p-4 transition hover:border-[color:var(--cmp-border-accent)]`}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="theme-status-error flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border">
+                <CircleDollarSign className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{t("openAr")}</p>
+                <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">
+                  {arExposure > 0
+                    ? t("openArHelperAmount", {
+                        count: summary.unpaidInvoices,
+                        amount: formatCurrencyFromCents(arExposure),
+                      })
+                    : t("openArHelper", { count: summary.unpaidInvoices })}
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
+          </Link>
+        ) : null}
+      </div>
 
       <section className={`${panelClass} overflow-hidden`}>
         <div className="flex items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-3">
@@ -332,50 +196,32 @@ export default async function MobileHomeBoard({
             <ClipboardList className="h-4 w-4 text-[color:var(--sem-accent-primary)]" />
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
-                {t("upcomingQueue")}
+                {t("followUps")}
               </p>
-              <h2 className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{t("pipelineTitle")}</h2>
+              <h2 className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{t("followUpsTitle")}</h2>
             </div>
           </div>
           <span className="theme-badge rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]">
-            {upcomingQueueItems.length}
+            {controls.followUpsNeeded.length}
           </span>
         </div>
-
-        {upcomingQueueItems.length > 0 ? (
+        {followUps.length > 0 ? (
           <div className="divide-y divide-[color:var(--cmp-border-subtle)]">
-            {upcomingQueueItems.map((entry) => (
-              <Link
-                key={entry.id}
-                href={entry.href}
-                className="flex items-center justify-between gap-3 border-l-2 border-l-[color:var(--cmp-border-subtle)] px-4 py-3.5 transition hover:border-l-[color:var(--sem-accent-primary)] hover:bg-[color:var(--cmp-hover-surface)]"
-              >
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--sem-text-muted)]">
-                    {entry.label}
-                  </p>
-                  <p className="truncate text-sm font-medium text-[color:var(--sem-text-primary)]">
-                    {entry.item.title || entry.item.customerName}
-                  </p>
-                  {entry.item.customerName && entry.item.customerName !== entry.item.title ? (
-                    <p className="mt-1 truncate text-xs text-[color:var(--sem-text-muted)]">
-                      {entry.item.customerName}
-                    </p>
-                  ) : null}
-                  {formatQueueMeta(entry.item) ? (
-                    <p className="mt-1 truncate text-xs text-[color:var(--sem-text-secondary)]">
-                      {formatQueueMeta(entry.item)}
-                    </p>
-                  ) : null}
-                </div>
-                <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
-              </Link>
+            {followUps.map((item) => (
+              <div key={item.id} className="px-4 py-3">
+                <p className="truncate text-sm font-medium text-[color:var(--sem-text-primary)]">
+                  {item.title || item.customerName}
+                </p>
+                <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">{formatControlPreview(item)}</p>
+              </div>
             ))}
           </div>
         ) : (
-          <p className="px-4 py-6 text-sm text-[color:var(--sem-text-secondary)]">{t("upcomingQueueEmpty")}</p>
+          <p className="px-4 py-6 text-sm text-[color:var(--sem-text-secondary)]">{t("followUpsEmpty")}</p>
         )}
       </section>
+
+      {showAiChat ? <AiChatPanel /> : null}
     </main>
   );
 }

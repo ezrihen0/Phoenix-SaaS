@@ -4,12 +4,19 @@ import { SessionGuard } from "../auth/session.guard";
 import { apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { AiBrainBriefService } from "./ai-brain-brief.service";
+import type { RunAiActionBody } from "./ai-actions.service";
+import { AiActionsService } from "./ai-actions.service";
 import type { AiCallIntakeDryRunDto } from "./ai-call-intake.service";
 import { AiCallIntakeService } from "./ai-call-intake.service";
 import type { GenerateSmsDraftBody, PatchSmsDraftBody } from "./ai-operator-copilot.service";
 import { AiOperatorCopilotService } from "./ai-operator-copilot.service";
 import type { AiDryRunDto } from "./ai-orchestration.service";
 import { AiOrchestrationService } from "./ai-orchestration.service";
+import { AiUsageService } from "./ai-usage.service";
+import type { AiChatFeedbackRequestBody, AiChatRequestBody } from "./ai-chat.service";
+import { AiChatService } from "./ai-chat.service";
+import type { FieldCopilotRequestBody } from "./ai-field-copilot.service";
+import { AiFieldCopilotService } from "./ai-field-copilot.service";
 
 @Controller("api/ai")
 @UseGuards(SessionGuard)
@@ -19,6 +26,10 @@ export class AiController {
     private readonly aiBrainBriefService: AiBrainBriefService,
     private readonly aiCallIntakeService: AiCallIntakeService,
     private readonly aiOperatorCopilotService: AiOperatorCopilotService,
+    private readonly aiActionsService: AiActionsService,
+    private readonly aiUsageService: AiUsageService,
+    private readonly aiChatService: AiChatService,
+    private readonly aiFieldCopilotService: AiFieldCopilotService,
   ) {}
 
   /**
@@ -57,7 +68,7 @@ export class AiController {
   /**
    * Phase 2 — Operator Copilot SMS follow-up draft (calls surface).
    * Gates: `AI_FOUNDATION_ENABLED`, `AI_OPERATOR_COPILOT_ENABLED`, `AI_COPILOT_CALLS_SURFACE_ENABLED`, `AI_COPILOT_CUSTOMER_SMS_DRAFT_ENABLED`.
-   * Optional LLM: `AI_COPILOT_LLM_ENABLED` + `OPENAI_API_KEY`.
+   * Optional LLM: `AI_COPILOT_LLM_ENABLED` + `DEEPSEEK_API_KEY`.
    */
   @Post("copilot/calls/sms-draft/generate")
   async copilotGenerateSmsDraft(@Req() request: RequestWithActor, @Body() body: GenerateSmsDraftBody) {
@@ -99,6 +110,63 @@ export class AiController {
   @Post("copilot/calls/sms-draft/:draftId/send")
   async copilotSendSmsDraft(@Req() request: RequestWithActor, @Param("draftId") draftId: string) {
     const payload = await this.aiOperatorCopilotService.executeGuardedSmsSend(request, draftId);
+    return apiSuccess(payload);
+  }
+
+  /**
+   * AI Actions V1 — unified action runner (wrap-only; existing endpoints unchanged).
+   * Gate: `AI_ACTIONS_V1_ENABLED` (+ per-action flags in registry).
+   */
+  @Post("actions/:actionKey/run")
+  async runAiAction(
+    @Req() request: RequestWithActor,
+    @Param("actionKey") actionKey: string,
+    @Body() body: RunAiActionBody,
+  ) {
+    const payload = await this.aiActionsService.runAction(request, actionKey, body ?? {});
+    return apiSuccess(payload);
+  }
+
+  /**
+   * AI Actions V1 — owner-only month-to-date usage aggregates for Settings panel.
+   */
+  @Get("usage/summary")
+  async aiUsageSummary(@Req() request: RequestWithActor) {
+    const payload = await this.aiUsageService.getUsageSummary(request);
+    return apiSuccess(payload);
+  }
+
+  /**
+   * WizField AI Chat — owner/admin general Q&A via DeepSeek. No CRM mutation or outbound side effects.
+   * Gates: `AI_FOUNDATION_ENABLED`, `AI_CHAT_ENABLED`, `DEEPSEEK_API_KEY`.
+   */
+  @Post("chat")
+  async aiChat(@Req() request: RequestWithActor, @Body() body: AiChatRequestBody) {
+    const payload = await this.aiChatService.postChat(request, body ?? {});
+    return apiSuccess(payload);
+  }
+
+  /**
+   * Product telemetry only — records useful / not_useful on a prior chat run (org-scoped).
+   */
+  @Post("chat/:runId/feedback")
+  async aiChatFeedback(
+    @Req() request: RequestWithActor,
+    @Param("runId") runId: string,
+    @Body() body: AiChatFeedbackRequestBody,
+  ) {
+    const payload = await this.aiChatService.postChatFeedback(request, runId, body ?? {});
+    return apiSuccess(payload);
+  }
+
+  /**
+   * Field Copilot — gas fireplace trade knowledge via DeepSeek (allowlisted packs only).
+   * Gates: `AI_FOUNDATION_ENABLED`, `AI_FIELD_COPILOT_ENABLED`, `DEEPSEEK_API_KEY`.
+   * Body: `{ message, jobId?, knowledgeDomain? }` — domain defaults to `gas_fireplace`.
+   */
+  @Post("field-copilot")
+  async fieldCopilot(@Req() request: RequestWithActor, @Body() body: FieldCopilotRequestBody) {
+    const payload = await this.aiFieldCopilotService.postFieldCopilot(request, body ?? {});
     return apiSuccess(payload);
   }
 }

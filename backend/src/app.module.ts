@@ -2,6 +2,7 @@ import { Module, OnModuleInit } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { join } from "node:path";
 
 import { AiModule } from "./ai/ai.module";
 import { AutomationsModule } from "./automations/automations.module";
@@ -27,6 +28,7 @@ import { WarrantyModule } from "./warranty/warranty.module";
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: join(__dirname, "..", ".env"),
     }),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({

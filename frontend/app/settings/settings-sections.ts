@@ -6,6 +6,7 @@ import {
   Languages,
   Palette,
   ShieldCheck,
+  Sparkles,
   UserCog,
   UsersRound,
 } from "lucide-react";
@@ -16,6 +17,7 @@ export type SettingsTopicId =
   | "appearance"
   | "roles"
   | "billing"
+  | "ai-usage"
   | "languages";
 
 export type SettingsSectionKind = "panel" | "external-link";
@@ -34,6 +36,7 @@ export type SettingsSectionConfig = {
   helperKey: string;
   icon: LucideIcon;
   ownerOnlyNav?: boolean;
+  ownerOrAdminNav?: boolean;
   ownerOnlyPanel?: boolean;
   externalHref?: string;
   metricKey?: SettingsMetricKey;
@@ -45,6 +48,7 @@ const SETTINGS_TOPIC_IDS: SettingsTopicId[] = [
   "appearance",
   "roles",
   "billing",
+  "ai-usage",
   "languages",
 ];
 
@@ -94,6 +98,15 @@ export const SETTINGS_SECTIONS: SettingsSectionConfig[] = [
     ownerOnlyNav: true,
   },
   {
+    id: "ai-usage",
+    kind: "panel",
+    labelKey: "aiUsage.label",
+    titleKey: "aiUsage.title",
+    helperKey: "aiUsage.helper",
+    icon: Sparkles,
+    ownerOrAdminNav: true,
+  },
+  {
     id: "languages",
     kind: "external-link",
     labelKey: "languages.label",
@@ -112,8 +125,17 @@ export function isSettingsTopic(value: string | null | undefined): value is Sett
 export function getVisibleSections(
   sections: SettingsSectionConfig[],
   ownerMode: boolean,
+  role?: string,
 ): SettingsSectionConfig[] {
-  return sections.filter((section) => !section.ownerOnlyNav || ownerMode);
+  return sections.filter((section) => {
+    if (section.ownerOnlyNav && !ownerMode) {
+      return false;
+    }
+    if (section.ownerOrAdminNav && !ownerMode && role !== "admin") {
+      return false;
+    }
+    return true;
+  });
 }
 
 type TranslateFn = (key: string, values?: Record<string, string | number>) => string;

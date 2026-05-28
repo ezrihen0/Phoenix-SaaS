@@ -24,6 +24,8 @@ import { MetricTile } from "@/components/board/metric-tile";
 import { ThemeAppearanceSelector } from "@/components/theme-appearance-selector";
 import type { SessionRole } from "@/lib/auth/server-session";
 
+import type { AiUsageSummaryPayload } from "./ai-usage-panel";
+import { AiUsagePanel } from "./ai-usage-panel";
 import type { BillingSummaryPayload } from "./billing-panel";
 import { BillingPanel } from "./billing-panel";
 import { OrganizationProfilePanel, type OrganizationSettings } from "./organization-profile-panel";
@@ -64,6 +66,8 @@ type SettingsWorkspaceProps = {
   organizationSettings: OrganizationSettings;
   billingSummary: BillingSummaryPayload | null;
   billingLoadError: string | null;
+  aiUsageSummary: AiUsageSummaryPayload | null;
+  aiUsageLoadError: string | null;
   profileFullName: string | null;
   profileEmail: string | null;
   activeOrganizationName: string | null;
@@ -105,6 +109,8 @@ type SettingsPanelContext = {
   organizationSettings: OrganizationSettings;
   billingSummary: BillingSummaryPayload | null;
   billingLoadError: string | null;
+  aiUsageSummary: AiUsageSummaryPayload | null;
+  aiUsageLoadError: string | null;
   profileFullName: string | null;
   profileEmail: string | null;
   activeOrganizationName: string | null;
@@ -240,7 +246,7 @@ function SettingsAppearancePanel({ ctx }: { ctx: SettingsPanelContext }) {
 }
 
 function renderSettingsPanel(sectionId: SettingsTopicId, ctx: SettingsPanelContext): ReactNode {
-  const { ownerMode, currentProfileId, staffLoadError, staffProfiles, organizationSettings, billingSummary, billingLoadError, role, t } = ctx;
+  const { ownerMode, currentProfileId, staffLoadError, staffProfiles, organizationSettings, billingSummary, billingLoadError, aiUsageSummary, aiUsageLoadError, role, t } = ctx;
 
   switch (sectionId) {
     case "business":
@@ -257,6 +263,8 @@ function renderSettingsPanel(sectionId: SettingsTopicId, ctx: SettingsPanelConte
       return <SettingsAppearancePanel ctx={ctx} />;
     case "billing":
       return <BillingPanel initial={billingSummary} loadError={billingLoadError} />;
+    case "ai-usage":
+      return <AiUsagePanel usage={aiUsageSummary} usageLoadError={aiUsageLoadError} />;
     case "languages":
       return (
         <SettingsExternalLinkPanel
@@ -354,6 +362,8 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
     organizationSettings,
     billingSummary,
     billingLoadError,
+    aiUsageSummary,
+    aiUsageLoadError,
     profileFullName,
     profileEmail,
     activeOrganizationName,
@@ -372,14 +382,14 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
       : null;
 
   const visibleSections = useMemo(
-    () => getVisibleSections(SETTINGS_SECTIONS, ownerMode),
-    [ownerMode],
+    () => getVisibleSections(SETTINGS_SECTIONS, ownerMode, role),
+    [ownerMode, role],
   );
 
   const activeSection = visibleSections.find((section) => section.id === selectedTopic) ?? null;
   const activeLabels = activeSection ? resolveSectionLabels(activeSection, t) : null;
-  const lockedDeepLinkSection = selectedTopic && !ownerMode
-    ? SETTINGS_SECTIONS.find((section) => section.id === selectedTopic && section.ownerOnlyNav) ?? null
+  const lockedDeepLinkSection = selectedTopic && !visibleSections.some((section) => section.id === selectedTopic)
+    ? SETTINGS_SECTIONS.find((section) => section.id === selectedTopic) ?? null
     : null;
   const lockedDeepLinkLabels = lockedDeepLinkSection
     ? resolveSectionLabels(lockedDeepLinkSection, t)
@@ -413,6 +423,8 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
     organizationSettings,
     billingSummary,
     billingLoadError,
+    aiUsageSummary,
+    aiUsageLoadError,
     profileFullName,
     profileEmail,
     activeOrganizationName,

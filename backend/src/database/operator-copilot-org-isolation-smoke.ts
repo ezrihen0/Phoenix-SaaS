@@ -10,7 +10,8 @@ import { DataSource, Repository } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
 import { AiAuditService } from "../ai/ai-audit.service";
-import { AiCopilotOpenAiClient } from "../ai/ai-copilot-openai-client.service";
+import { AiCopilotDeepSeekClient } from "../ai/ai-copilot-deepseek-client.service";
+import { AiDeepSeekProviderService } from "../ai/ai-deepseek-provider.service";
 import { AiOperatorCopilotService } from "../ai/ai-operator-copilot.service";
 import { listPermissionsForRole } from "../auth/permissions";
 import type { ActorContext, RequestWithActor } from "../common/request-types";
@@ -219,7 +220,7 @@ function buildCopilotStack(dataSource: DataSource) {
     dataSource.getRepository(AiOperatorDraftEntity),
     customersRepo,
     new AiAuditService(dataSource.getRepository(AiRecommendationRunEntity)),
-    new AiCopilotOpenAiClient(stubConfig),
+    new AiCopilotDeepSeekClient(new AiDeepSeekProviderService(stubConfig)),
     new MessagingAccessService(),
     smokeTxt as unknown as TxtService,
   );

@@ -14,7 +14,7 @@ import { MessagingAccessService } from "../messaging/messaging-access.service";
 import { TxtService } from "../messaging/txt/txt.service";
 import { recentCallBelongsToOrgParams, recentCallBelongsToOrgSql } from "../telephony/telephony-org-scope";
 import { AiAuditService } from "./ai-audit.service";
-import { AiCopilotOpenAiClient } from "./ai-copilot-openai-client.service";
+import { AiCopilotDeepSeekClient } from "./ai-copilot-deepseek-client.service";
 import {
   AI_DRAFT_TYPE_CUSTOMER_SMS_FOLLOWUP_V1,
   AI_FEATURE_CALL_INTAKE_VOICE_TELNYX_V1,
@@ -97,7 +97,7 @@ export class AiOperatorCopilotService {
     @InjectRepository(CustomerEntity)
     private readonly customersRepo: Repository<CustomerEntity>,
     private readonly audit: AiAuditService,
-    private readonly openAiClient: AiCopilotOpenAiClient,
+    private readonly deepSeekClient: AiCopilotDeepSeekClient,
     private readonly messagingAccess: MessagingAccessService,
     private readonly txtService: TxtService,
   ) {}
@@ -654,7 +654,7 @@ export class AiOperatorCopilotService {
         sections,
         limitations,
       });
-      const llmOutcome = await this.openAiClient.tryCompleteUserPrompt({
+      const llmOutcome = await this.deepSeekClient.tryCompleteUserPrompt({
         userPrompt,
         featureKey: AI_FEATURE_OPERATOR_COPILOT_CALLS_SMS_V1,
       });
