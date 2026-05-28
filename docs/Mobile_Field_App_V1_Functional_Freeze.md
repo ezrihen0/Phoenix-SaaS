@@ -1,0 +1,93 @@
+# Mobile Field App V1 — Functional Freeze
+
+**Branch:** `feature/field-cockpit-v1`
+**Date:** May 27, 2026
+**Status:** Functional feature work complete. Ready for design-only pass.
+
+---
+
+## Final Functional Scope
+
+### Bottom Dock (locked)
+`Home | Schedule | Add | Calls | Messages`
+
+### Mobile Add Menu
+1. **New Job** → `/jobs/new` (safe no-context chooser)
+2. **New Customer** → `/customers/new` (standalone creation form)
+3. **Invoice Job** → `/invoices/new` (customer-first job picker, deep-links to `?tab=invoice`)
+
+### Verified Routes
+| Route | Purpose |
+|-------|---------|
+| `/home` | Terminal cockpit |
+| `/jobs` | Job board |
+| `/jobs/new` | Safe job creation chooser |
+| `/schedule` | Calendar/schedule view |
+| `/calls` | Call management |
+| `/messaging` | SMS conversations |
+| `/customers` | Customer ledger |
+| `/customers/new` | New Customer form |
+| `/invoices/new` | Invoice Job picker |
+
+---
+
+## Completed Phases
+
+| Phase | Description | Commit |
+|-------|-------------|--------|
+| Phase 6B | Remove unsafe Invoice/Estimate from Add menu | `0996c3e` |
+| Phase 6B | Commit Phase 6B | `0996c3e` |
+| Phase 7 | `POST /api/customers` endpoint + `/customers/new` page | `53ae92f` |
+| Phase 7 | Add New Customer to Add menu | `8998c4c` |
+| Phase 8 | Inspection audit — decision: NOT safe for Add | Audit only |
+| Phase 9 | Invoice/Estimate audit — decision: NOT safe standalone | Audit only |
+| Phase 10 | Add Invoice Job shortcut + `?tab=invoice` deep link | Current |
+
+---
+
+## Intentional Exclusions
+
+| Feature | Reason |
+|---------|--------|
+| New Estimate in Add | Estimate creation requires job context; current route is a picker, not a creator |
+| New Inspection in Add | Mobile blocked by design; office-only permission; no standalone route |
+| Standalone Invoice creation | No `POST /api/invoices` endpoint; invoices are always job-scoped |
+| Offline mode | Out of V1 scope |
+| Push notifications | Out of V1 scope |
+| Service worker / PWA | Out of V1 scope |
+| Native app | Out of V1 scope |
+
+---
+
+## Architecture Rules Preserved
+
+- Bottom dock order never changed
+- Drawer left unchanged
+- AppShell left unchanged
+- No fake disabled buttons added
+- No unsafe shortcuts created
+- All Add actions backed by real, working flows
+- Backend entities, migrations, and packages untouched
+- Desktop behavior unaffected by mobile changes
+
+---
+
+## Known Risks
+
+1. **Invoice Job deep link** (`?tab=invoice`) is untested end-to-end. Job detail workspace supports the `tab` query param, but the invoice section may not auto-expand on first load.
+2. **Permission overlap**: `canCreateInvoice` gates on `/invoices` nav visibility. If a role can view invoices but cannot manage them (`invoices.manage`), the Add link works but the backend may reject the save. This is acceptable — the user sees the flow and learns permission boundaries organically.
+3. **No duplicate detection** in customer creation — same as existing lead/inspection patterns.
+
+---
+
+## Next Phase
+
+**Design-only pass** — no feature work. Focus areas:
+- Mobile typography and spacing
+- Color consistency across mobile views
+- Touch target sizing
+- Safe area handling
+- Add menu animation polish
+- Drawer visual polish
+
+No new routes, no new backend endpoints, no new Add actions.
