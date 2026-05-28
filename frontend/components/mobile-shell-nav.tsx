@@ -23,7 +23,13 @@ import {
 import {
   isRouteActive,
 } from "@/lib/navigation/mobile-shell-nav";
-import { isOfficeCrmNavRole, type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
+import { type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
+
+const INSPECTION_CREATE_ROLES: ReadonlySet<ShellNavRole> = new Set([
+  "owner",
+  "admin",
+  "office_admin",
+]);
 
 type ShellNavIcon = ComponentType<LucideProps>;
 
@@ -202,7 +208,7 @@ export function MobileShellNav({
   const canCreateCustomer = navByHref.has("/customers");
   const canCreateJob = navByHref.has("/jobs");
   const canCreateInvoice = navByHref.has("/invoices");
-  const canCreateInspection = navByHref.has("/inspections") && isOfficeCrmNavRole(userRole);
+  const canCreateInspection = navByHref.has("/inspections") && userRole !== null && INSPECTION_CREATE_ROLES.has(userRole);
   const homeItem = navByHref.get("/home");
   const scheduleItem = navByHref.get("/schedule");
   const callsItem = navByHref.get("/calls");
