@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { ArrowLeft, ClipboardList, Loader2, Search, UserRound, Wrench } from "lucide-react";
+import { ArrowLeft, ClipboardList, ExternalLink, Loader2, Search, UserRound, Wrench } from "lucide-react";
 
 import { BoardShell } from "@/components/board/board-shell";
 import {
@@ -181,7 +181,7 @@ export default function NewInspectionPage() {
               ID: {success.id.slice(0, 8)}
             </p>
             <p className="mt-4 text-xs text-[color:var(--sem-text-muted)]">
-              The inspection workspace requires a desktop browser. Open it from your computer to complete the report.
+              Inspection created. Full report editing requires a desktop browser.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <button
@@ -198,6 +198,15 @@ export default function NewInspectionPage() {
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back to home
+              </Link>
+            </div>
+            <div className="mt-4">
+              <Link
+                href={`/inspections/${success.id}/workspace`}
+                className="inline-flex items-center gap-1.5 text-xs text-[color:var(--sem-text-muted)] transition hover:text-[color:var(--sem-accent-primary)]"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Open workspace (desktop browser recommended)
               </Link>
             </div>
           </div>
