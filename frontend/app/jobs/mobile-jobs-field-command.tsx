@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { ChevronLeft, ChevronRight, Filter, LoaderCircle, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardList, Filter, LoaderCircle, RefreshCw } from "lucide-react";
 
 import { MobileJobCard } from "@/components/jobs/mobile-job-card";
 import { MobileJobDetailPane } from "@/components/jobs/mobile-job-detail-pane";
@@ -196,6 +197,14 @@ export function MobileJobsFieldCommand({
         </div>
       ) : null}
 
+      <Link
+        href="/jobs/new"
+        className="mt-4 flex items-center justify-center gap-2 rounded-2xl bg-[color:var(--sem-accent-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 active:scale-[0.99]"
+      >
+        <ClipboardList className="h-4 w-4" />
+        New Job
+      </Link>
+
       <div className="mt-4 grid gap-3">
         <label className="block space-y-1.5 text-sm text-[color:var(--sem-text-secondary)]">
           <span className="text-xs uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">{t("technicianFilter")}</span>
@@ -263,6 +272,10 @@ export function MobileJobsFieldCommand({
                 paymentSignal={getJobPaymentSignal({ invoice, quote, service })}
                 selected={selectedJobId === job.id}
                 onSelect={() => onSelectJob(job.id)}
+                phone={customer?.phone ?? null}
+                mapsUrl={buildMapsUrl(job)}
+                jobId={job.id}
+                openJobLabel={t("openJob")}
               />
             );
           })}
