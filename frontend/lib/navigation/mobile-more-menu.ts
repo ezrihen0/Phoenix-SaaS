@@ -39,7 +39,7 @@ export const MOBILE_MORE_MENU_SECTIONS: MobileMoreMenuSection[] = [
   {
     id: "admin",
     links: [
-      { href: "/inspections" },
+      { href: "/inspections/new" },
       { href: "/customers" },
       { href: "/settings" },
     ],
