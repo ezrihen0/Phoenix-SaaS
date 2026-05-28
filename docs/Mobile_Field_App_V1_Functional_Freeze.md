@@ -2,7 +2,7 @@
 
 **Branch:** `feature/field-cockpit-v1`
 **Date:** May 27, 2026
-**Status:** Functional feature work complete. Ready for design-only pass.
+**Status:** Release candidate — all phases complete.
 
 ---
 
@@ -11,10 +11,18 @@
 ### Bottom Dock (locked)
 `Home | Schedule | Add | Calls | Messages`
 
-### Mobile Add Menu
+### Mobile Add Menu (by role)
+
+**Owner / Admin / Office Admin:**
 1. **New Job** → `/jobs/new` (safe no-context chooser)
 2. **New Customer** → `/customers/new` (standalone creation form)
 3. **Invoice Job** → `/invoices/new` (customer-first job picker, deep-links to `?tab=invoice`)
+4. **New Inspection** → `/inspections/new` (mobile-safe creation entry)
+
+**Technician / Dispatcher / CSR / Viewer:**
+1. **New Job** → `/jobs/new`
+2. **New Customer** → `/customers/new`
+3. **Invoice Job** → `/invoices/new`
 
 ### Verified Routes
 | Route | Purpose |
@@ -28,6 +36,7 @@
 | `/customers` | Customer ledger |
 | `/customers/new` | New Customer form |
 | `/invoices/new` | Invoice Job picker |
+| `/inspections/new` | Mobile inspection creation entry |
 
 ---
 
@@ -36,12 +45,14 @@
 | Phase | Description | Commit |
 |-------|-------------|--------|
 | Phase 6B | Remove unsafe Invoice/Estimate from Add menu | `0996c3e` |
-| Phase 6B | Commit Phase 6B | `0996c3e` |
 | Phase 7 | `POST /api/customers` endpoint + `/customers/new` page | `53ae92f` |
 | Phase 7 | Add New Customer to Add menu | `8998c4c` |
-| Phase 8 | Inspection audit — decision: NOT safe for Add | Audit only |
+| Phase 8 | Inspection audit — decision: NOT safe for Add (blocked at time) | Audit only |
 | Phase 9 | Invoice/Estimate audit — decision: NOT safe standalone | Audit only |
-| Phase 10 | Add Invoice Job shortcut + `?tab=invoice` deep link | Current |
+| Phase 10 | Add Invoice Job shortcut + `?tab=invoice` deep link | `85d70a5` |
+| Phase 12 | Mobile inspection creation entry (`/inspections/new`) | `552e495` |
+| Phase 12B | Hide inspection action for unauthorized roles | `ed26a56` |
+| Phase 12C | Align inspection shortcut with backend permissions | `e4a1977` |
 
 ---
 
@@ -50,7 +61,8 @@
 | Feature | Reason |
 |---------|--------|
 | New Estimate in Add | Estimate creation requires job context; current route is a picker, not a creator |
-| New Inspection in Add | Mobile blocked by design; office-only permission; no standalone route |
+| New Inspection in Add | Now included for owner/admin/office_admin (Phase 12) — gated by `inspections.admin` backend permission |
+| Inspection workspace on mobile | Remains desktop-only; `/inspections/new` is creation entry only |
 | Standalone Invoice creation | No `POST /api/invoices` endpoint; invoices are always job-scoped |
 | Offline mode | Out of V1 scope |
 | Push notifications | Out of V1 scope |

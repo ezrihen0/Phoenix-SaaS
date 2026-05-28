@@ -17,13 +17,26 @@
 | 11 | `06b7312` | `docs(mobile): record field app v1 functional freeze` |
 | DP1 | `7414dfd` | `style(mobile): polish field app v1 experience` |
 | DP2 | `ea38260` | `style(mobile): polish operational screens` |
+| 12 | `552e495` | `feat(mobile): add safe inspection entry flow` |
+| 12B | `ed26a56` | `fix(mobile): hide inspection action for unauthorized roles` |
+| 12C | `e4a1977` | `fix(mobile): align inspection shortcut with permissions` |
 
 ---
 
-## Final Add Menu (Locked)
+## Final Add Menu (by Role)
+
+### Owner / Admin / Office Admin
 1. **New Job** → `/jobs/new`
 2. **New Customer** → `/customers/new`
 3. **Invoice Job** → `/invoices/new`
+4. **New Inspection** → `/inspections/new`
+
+### Technician / Dispatcher / CSR / Viewer
+1. **New Job** → `/jobs/new`
+2. **New Customer** → `/customers/new`
+3. **Invoice Job** → `/invoices/new`
+
+> New Inspection is gated by `INSPECTION_CREATE_ROLES = { owner, admin, office_admin }`, matching the backend `inspections.admin` permission exactly.
 
 ## Final Dock Order (Locked)
 `Home | Schedule | Add | Calls | Messages`
@@ -40,7 +53,17 @@
 | `/invoices/new` | ✅ Customer picker + job list | Responsive tables, `overflow-x-auto` | Contact/Location columns hidden on mobile (`sm:table-cell`, `md:table-cell`) |
 | `/schedule` | ✅ Mobile day view with job cards | BoardShell | Already had mobile-specific view, no changes needed |
 | `/calls` | ✅ Recovery command desk | `pb-24 lg:pb-8` | Added bottom padding for dock clearance |
+| `/inspections/new` | ✅ Mobile creation entry | N/A (standalone page) | Source cards (Customer/Job/New Customer), report type selector, inline success |
 | `/messaging` | ✅ Conversation inbox + thread | `pb-24 lg:pb-0` | Added bottom padding; dual-pane mobile refactor deferred |
+
+---
+
+## Inspection Constraints
+- `/inspections` workspace remains **desktop-only** (mobile UA block preserved).
+- `/inspections/new` is the mobile creation entry point — creates inspection, shows success inline.
+- Inspection workspace, report editing, and PDF generation remain **desktop-required**.
+- Backend `inspections.admin` permission controls creation — no backend changes needed.
+- `new_customer` source creates customer inline via existing inspection service (same as desktop modal).
 
 ---
 
