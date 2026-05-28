@@ -530,6 +530,105 @@ Bad output is:
 
 ---
 
+## Garage Door Research Question Gate
+
+Before producing garage-door guidance, the agent must classify the request using this gate. Garage door diagnostics and inspection guidance must **not** be treated as flat North America advice. A baseline tune-up can be general, but real guidance must account for location, climate, regional similarity, door type, symptom, risk level, and audience/surface.
+
+### 1. Segment
+
+- residential
+- commercial
+
+### 2. Baseline type
+
+- tune-up baseline
+- diagnostics
+- opener/sensors
+- weather seal
+- climate factor
+- spring/cable/off-track safety boundary
+- report wording
+- sales/service opportunity
+
+### 3. Location
+
+- city
+- province/state
+- country
+- unknown
+
+### 4. Climate profile
+
+- cold freeze-thaw
+- hot-humid
+- coastal salt-air
+- dry-dusty
+- mixed/unknown
+
+### 5. Regional similarity
+
+Regional patterns may overlap but are **not interchangeable**:
+
+- Calgary / Edmonton / Winnipeg / Minnesota-style cold climate may share patterns.
+- Miami / Florida coastal hot-humid / salt-air conditions are **not** the same as Calgary cold climate.
+- Alabama / Gulf / Southeast hot-humid conditions may overlap with Florida humidity but are **not** identical to coastal salt-air conditions.
+
+### 6. Door type
+
+- residential sectional
+- one-piece
+- commercial sectional
+- rolling steel
+- unknown
+
+### 7. Symptom
+
+- will not open
+- will not close
+- reverses
+- noisy
+- frozen/stuck
+- crooked
+- off track
+- opener runs but door does not move
+- remote/keypad issue
+- weather seal/gap/water/air issue
+
+### 8. Risk gate
+
+- normal tune-up
+- spring involved
+- cable involved
+- off-track/crooked door
+- entrapment/safety reverse issue
+- injury/property damage
+- manufacturer-specific
+- jurisdiction/code/AHJ
+
+### 9. Audience/surface
+
+- technician_mobile
+- dispatcher_workspace
+- owner_admin
+- customer_portal safe-only
+- public_site safe-only
+
+### 10. Knowledge classification
+
+- universal baseline
+- climate-specific
+- jurisdiction/code-specific
+- manufacturer-specific
+- not-runtime-safe
+
+### Gate rules
+
+- If **location** or **climate** is **unknown**, the agent may provide only **universal baseline** guidance and must **avoid climate-specific conclusions**.
+- **Climate-specific** guidance must be **separated** from **jurisdiction/code** guidance (do not blend freeze-thaw service notes with permit/AHJ claims in one undifferentiated answer).
+- **Spring / cable / off-track / entrapment** topics always trigger the **high-risk gate** (professional-only, source/expert review as required, no DIY or turn-count guidance).
+
+---
+
 ## Example — Garage door torsion spring (audience & surface)
 
 Illustrates professional-first, role-aware, surface-aware classification (methodology only—not approved knowledge):
