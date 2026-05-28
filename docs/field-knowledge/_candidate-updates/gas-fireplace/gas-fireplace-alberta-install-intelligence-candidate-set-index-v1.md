@@ -90,22 +90,27 @@ Before any GA pack may be considered for approved/runtime use:
 
 1. **Source verification required** — Re-verify all permit/code claims against official sources (approved packs are drafting input only).
 2. **Expert review required** — Legal/compliance and gas-trade reviewers for AHJ content.
-3. **Runtime location guard / location resolver required** — GA2/GA3 must not activate without confirmed job/property city/AHJ match; GA1–GA3 blocked from runtime until guard exists.
+3. **Runtime location guard / location resolver required** — GA2/GA3 must not activate without confirmed job/property city/AHJ match; **GA1–GA5** (AHJ / install-readiness) blocked from runtime until guard exists.
 
 Promotion also requires: test pass, manifest entry, loader allowlist update, and role/surface gates — **not** implied by this index.
 
 ---
 
-## Deferred Future Gaps (GFO sprint — not in GA1–GA5)
+## Follow-On Operations Layer (GFO1–GFO5)
 
-| Gap | Future candidate (planned) |
-|-----|---------------------------|
-| Runtime location guard | Engineering — resolver before AHJ runtime |
-| Manufacturer / model / manual | GFO1 |
-| Report wording / inspection support | GFO2 |
-| Maintenance / service SOP boundary | GFO3 |
-| Customer portal safe FAQ | GFO4 |
-| Approved conversion plan | GFO5 |
+GFO1–GFO5 now exist as **candidate** follow-on files under `_candidate-updates/gas-fireplace/`. They are **not approved** and **not runtime**.
+
+| GFO# | Candidate file | Topic |
+|------|----------------|-------|
+| GFO1 | `candidate-gas-fireplace-manufacturer-model-manual-boundary-v1.md` | Manufacturer / model / manual boundary |
+| GFO2 | `candidate-gas-fireplace-report-wording-inspection-support-v1.md` | Report wording / inspection support |
+| GFO3 | `candidate-gas-fireplace-maintenance-service-sop-boundary-v1.md` | Maintenance / service SOP boundary |
+| GFO4 | `candidate-gas-fireplace-customer-portal-safe-faq-v1.md` | Customer portal safe FAQ |
+| GFO5 | `candidate-gas-fireplace-approved-conversion-plan-v1.md` | Candidate conversion plan (planning only) |
+
+**Still deferred:** runtime location guard / job-property location resolver (engineering work). Manufacturer/manual policy, report wording, maintenance SOP, customer portal QA, and conversion planning are covered by GFO candidate files but remain **not approved** until explicit promotion.
+
+**GA/AHJ runtime promotion** (GA1–GA5) remains blocked until runtime location guard / job-property location resolver exists.
 
 ---
 

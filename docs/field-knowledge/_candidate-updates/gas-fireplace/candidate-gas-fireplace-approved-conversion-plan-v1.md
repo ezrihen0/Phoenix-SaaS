@@ -75,7 +75,7 @@ Protect WizField from unsafe runtime activation by separating:
 6. No gas repair procedures, pilot relight, valve operation, pressure/combustion tuning, vent disassembly, or safety bypass — ever on customer/public surfaces.
 7. No code/AHJ/permit/insurance/compliance claims without approved jurisdiction-specific source and expert review.
 8. No pricing/warranty/stock/same-day promises without business systems.
-9. **AHJ packs (GA1–GA3) blocked until runtime location guard exists.**
+9. **AHJ / install-readiness packs (GA1–GA3 and GA5) blocked until runtime location guard / job-property location resolver exists.**
 10. **GFO1 blocked until source/manual policy exists.**
 11. **GFO3 blocked until company maintenance SOP exists.**
 12. **GFO4 blocked until customer_portal surface-specific QA exists.**

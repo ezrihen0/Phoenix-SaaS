@@ -18,7 +18,7 @@ This file summarizes and organizes the residential **gas-fireplace** **candidate
 | Wood-burning fireplaces | **Out of scope** — see chimney candidates (e.g. wood-burning fireplace safety follow-on) |
 | Electric fireplaces | **Out of scope** |
 | Generic `_candidate-updates/fireplace/` | **Do not use** |
-| Jurisdiction / code / AHJ | **Out of scope** in GF1–GF5 (future Alberta/code pack deferred) |
+| Jurisdiction / code / AHJ | **Out of scope** in GF1–GF5 — see follow-on **GA1–GA5** Alberta install intelligence layer (candidate only) |
 | Approved runtime domain | `gas_fireplace` loader allowlist unchanged until explicit promotion |
 
 ---
@@ -95,15 +95,24 @@ Promotion requires: expert review, test pass, manifest entry, loader allowlist u
 
 ---
 
-## Deferred Future Gaps (not in GF1–GF5)
+## Follow-On Candidate Layers (not in GF1–GF5)
 
-| Gap | Description |
-|-----|-------------|
-| Manufacturer / listed appliance pack | Model-specific clearances, manuals, parts — source-required |
-| Alberta gas code / source pack | Jurisdictional permit/code claims with verified sources |
-| Inspection / report wording pack | Observed/reported/limitations; align with approved report packs |
-| Maintenance / SOP pack | Company procedures within licensed scope |
-| Customer portal safe FAQ | Surface-specific safe snippets after approval |
+GF1–GF5 is the **North America general foundation** layer. Additional candidate layers exist as follow-ons — **candidate only, not approved, not runtime**:
+
+| Layer | Set | Index / reference | Status |
+|-------|-----|-------------------|--------|
+| Alberta install intelligence / AHJ / permit-readiness | GA1–GA5 | [`gas-fireplace-alberta-install-intelligence-candidate-set-index-v1.md`](gas-fireplace-alberta-install-intelligence-candidate-set-index-v1.md) | Candidate only |
+| Operations / documentation | GFO1–GFO5 | `candidate-gas-fireplace-approved-conversion-plan-v1.md` (GFO5 planning index) | Candidate only |
+
+**GFO coverage (candidate files exist; not approved):**
+
+- GFO1 — manufacturer / model / manual boundary
+- GFO2 — report wording / inspection support
+- GFO3 — maintenance / service SOP boundary
+- GFO4 — customer portal safe FAQ
+- GFO5 — approved-pack conversion planning (planning document only)
+
+**Still deferred (engineering / promotion):** runtime location guard / job-property location resolver; approved conversion; manifest registration; loader allowlist updates; surface/role gates.
 
 Wood-burning fireplace safety remains in the **chimney** candidate track, not this set.
 
