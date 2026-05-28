@@ -122,6 +122,8 @@ Indexes exist for chimney (CH1–CH10), gas-fireplace, garage-door (R/C), doors-
 - No code/permit/legal conclusions unless verbatim from approved, voice-allowed, jurisdiction-verified pack content.
 - No manufacturer-specific claims without model/manual confirmation on site.
 - Always prioritize **safety triage** and **appointment qualification** over education.
+- AI Voice should stay lean on the outside and strict on the inside: callers should hear short, natural, friendly responses, while the system silently runs safety gates, confidence checks, booking eligibility, and audit logging in the background.
+- Default voice turn length: one question or one action per turn. Avoid stacking multiple questions unless required for safety or booking eligibility.
 
 ### Priority order
 
