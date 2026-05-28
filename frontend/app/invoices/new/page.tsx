@@ -164,12 +164,12 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
           <section className="theme-surface-modal rounded-[36px] p-7 sm:p-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Create Invoice</p>
-                <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
-                  Choose a customer first.
-                </h1>
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-                  Select a customer, then choose the job where you want to create or update an invoice.
+              <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Invoice Job</p>
+              <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
+                Choose a customer first.
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
+                Invoices are created from jobs. Select a customer, then choose the job you want to invoice.
                 </p>
               </div>
               <Link
@@ -292,7 +292,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
         <section className="theme-surface-modal rounded-[36px] p-7 sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Create Invoice</p>
+              <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Invoice Job</p>
               <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
                 {customer ? customer.full_name : "Select a customer"}
               </h1>
@@ -391,10 +391,10 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
                       </td>
                       <td className="px-5 py-4 text-right">
                         <Link
-                          href={jobInvoice ? `/invoices/${jobInvoice.id}` : `/jobs/${job.id}`}
+                          href={jobInvoice ? `/invoices/${jobInvoice.id}` : `/jobs/${job.id}?tab=invoice`}
                           className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs uppercase tracking-[0.18em] transition"
                         >
-                          {jobInvoice ? "Open Invoice" : "Create Invoice"}
+                          {jobInvoice ? "Open Invoice" : "Open job to invoice"}
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
                       </td>

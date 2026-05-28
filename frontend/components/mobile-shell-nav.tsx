@@ -8,6 +8,7 @@ import {
   Briefcase,
   LogOut,
   Plus,
+  Receipt,
   UserRound,
   type LucideProps,
 } from "lucide-react";
@@ -196,6 +197,7 @@ export function MobileShellNav({
 
   const canCreateCustomer = navByHref.has("/customers");
   const canCreateJob = navByHref.has("/jobs");
+  const canCreateInvoice = navByHref.has("/invoices");
   const homeItem = navByHref.get("/home");
   const scheduleItem = navByHref.get("/schedule");
   const callsItem = navByHref.get("/calls");
@@ -219,8 +221,16 @@ export function MobileShellNav({
       });
     }
 
+    if (canCreateInvoice) {
+      actions.push({
+        href: "/invoices/new",
+        label: "Invoice Job",
+        icon: Receipt,
+      });
+    }
+
     return actions;
-  }, [canCreateCustomer, canCreateJob]);
+  }, [canCreateCustomer, canCreateInvoice, canCreateJob]);
   const canShowQuickActions = quickActions.length > 0;
 
   useEffect(() => {
