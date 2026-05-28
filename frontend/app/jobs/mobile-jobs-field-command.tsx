@@ -112,6 +112,11 @@ export function MobileJobsFieldCommand({
   const t = useTranslations("jobs.fieldCommand");
   const locale = useLocale();
 
+  const activeCount = jobs.filter(j => {
+    const status = j.status;
+    return status === "on_the_way" || status === "in_progress";
+  }).length;
+
   if (isBooting) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center px-5">
@@ -170,21 +175,18 @@ export function MobileJobsFieldCommand({
   }
 
   return (
-    <div className="px-4 py-4 lg:hidden">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">
-            {t("eyebrow")}
-          </p>
-          <h1 className="mt-1 font-[family:var(--font-flat-display)] text-2xl tracking-tight text-[color:var(--sem-display-headline)]">
-            {t("title")}
-          </h1>
+    <div className="px-4 py-4 pb-28 lg:hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">{t("eyebrow")}</p>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight text-[color:var(--sem-text-primary)]">{t("title")}</h1>
         </div>
         <button
           type="button"
           onClick={onRefresh}
           disabled={isRefreshing}
-          className="theme-control-surface-soft inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] text-[color:var(--sem-text-secondary)]"
           aria-label={t("refresh")}
         >
           <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
@@ -192,26 +194,45 @@ export function MobileJobsFieldCommand({
       </div>
 
       {errorMessage || statusMessage ? (
-        <div className={`mt-4 rounded-[18px] border px-3 py-2.5 text-sm ${errorMessage ? "theme-alert-error" : "theme-alert-info"}`}>
+        <div className={`mt-3 rounded-[18px] border px-3 py-2.5 text-sm ${errorMessage ? "theme-alert-error" : "theme-alert-info"}`}>
           {errorMessage ?? statusMessage}
         </div>
       ) : null}
 
+      {/* Snapshot */}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">Queue</p>
+          <p className="mt-1 text-lg font-semibold text-[color:var(--sem-text-primary)]">{jobs.length}</p>
+        </div>
+        <div className="rounded-2xl border border-[color:var(--sem-state-info)]/30 bg-[color:var(--cmp-surface-card)] px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--sem-state-info)]">Active</p>
+          <p className="mt-1 text-lg font-semibold text-[color:var(--sem-text-primary)]">{activeCount}</p>
+        </div>
+      </div>
+
+      {/* New Job CTA */}
       <Link
         href="/jobs/new"
-        className="mt-4 flex items-center justify-center gap-2 rounded-2xl bg-[color:var(--sem-accent-primary)] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 active:scale-[0.99]"
+        className="mt-3 flex w-full items-center justify-between rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--sem-accent-primary)] px-4 py-3.5 text-white active:scale-[0.99]"
       >
-        <ClipboardList className="h-4 w-4" />
-        New Job
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/12">
+            <ClipboardList className="h-4 w-4" />
+          </div>
+          <span className="text-sm font-semibold">New Job</span>
+        </div>
+        <ChevronRight className="h-4 w-4" />
       </Link>
 
-      <div className="mt-4 grid gap-3">
-        <label className="block space-y-1.5 text-sm text-[color:var(--sem-text-secondary)]">
-          <span className="text-xs uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">{t("technicianFilter")}</span>
+      {/* Filters */}
+      <div className="mt-3 space-y-2 rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
+        <label className="block space-y-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--sem-text-muted)]">{t("technicianFilter")}</span>
           <select
             value={queueTechnicianFilter}
             onChange={(event) => onTechnicianFilterChange(event.target.value)}
-            className="theme-control-surface w-full rounded-xl border px-3 py-2.5 text-sm"
+            className="theme-control-surface h-10 w-full rounded-xl border px-3 text-sm"
           >
             <option value="all">{t("allTechnicians")}</option>
             {technicians.map((technician) => (
@@ -219,39 +240,41 @@ export function MobileJobsFieldCommand({
             ))}
           </select>
         </label>
-        <label className="block space-y-1.5 text-sm text-[color:var(--sem-text-secondary)]">
-          <span className="text-xs uppercase tracking-[0.16em] text-[color:var(--sem-text-muted)]">{t("dateFilter")}</span>
-          <input
-            type="date"
-            value={queueDateFilter}
-            onChange={(event) => onDateFilterChange(event.target.value)}
-            className="theme-control-surface w-full rounded-xl border px-3 py-2.5 text-sm"
-          />
-        </label>
-        {queueFilterActive ? (
-          <button
-            type="button"
-            onClick={onClearFilters}
-            className="rounded-xl border border-[color:var(--cmp-border-subtle)] px-3 py-2 text-sm text-[color:var(--sem-text-secondary)]"
-          >
-            {t("clearFilters")}
-          </button>
-        ) : null}
+        <div className="flex gap-2">
+          <label className="block flex-1 space-y-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--sem-text-muted)]">{t("dateFilter")}</span>
+            <input
+              type="date"
+              value={queueDateFilter}
+              onChange={(event) => onDateFilterChange(event.target.value)}
+              className="theme-control-surface h-10 w-full rounded-xl border px-3 text-sm"
+            />
+          </label>
+          {queueFilterActive ? (
+            <button
+              type="button"
+              onClick={onClearFilters}
+              className="mt-auto h-10 shrink-0 rounded-xl border border-[color:var(--cmp-border-subtle)] px-3 text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--sem-text-secondary)]"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2 text-xs text-[color:var(--sem-text-muted)]">
-          <Filter className="h-3.5 w-3.5" />
-          {t("jobCount", { count: jobs.length })}
-        </span>
+      {/* Job count */}
+      <div className="mt-4 flex items-center justify-between px-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">Live queue</p>
+        <p className="text-[10px] font-semibold text-[color:var(--sem-text-secondary)]">{jobs.length} jobs</p>
       </div>
 
+      {/* Job cards */}
       {jobs.length === 0 ? (
-        <div className="theme-control-surface-soft mt-4 rounded-[20px] border border-dashed px-4 py-10 text-center text-sm text-[color:var(--sem-text-muted)]">
+        <div className="mt-3 rounded-[20px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)]/50 px-4 py-10 text-center text-sm text-[color:var(--sem-text-muted)]">
           {queueFilterActive ? t("emptyFiltered") : t("empty")}
         </div>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-3 space-y-3">
           {jobs.map((job) => {
             const customer = relationValue(job.customer);
             const service = relationValue(job.service);
@@ -282,11 +305,10 @@ export function MobileJobsFieldCommand({
         </div>
       )}
 
+      {/* Pagination */}
       {jobs.length > 0 && queueTotalPages > 1 ? (
         <div className="mt-4 flex items-center justify-between gap-3 text-xs text-[color:var(--sem-text-muted)]">
-          <span>
-            {queueStartIndex + 1}-{Math.min(queueStartIndex + jobs.length, queueStartIndex + jobs.length)} · {t("pageOf", { page: queuePage, total: queueTotalPages })}
-          </span>
+          <span>{t("pageOf", { page: queuePage, total: queueTotalPages })}</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
