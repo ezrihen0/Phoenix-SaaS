@@ -507,6 +507,7 @@ export function AppShell({ children }: AppShellProps) {
             roleNavCatalog={visiblePrimaryNav}
             userLabel={userLabel}
             userInitials={buildInitials(userLabel)}
+            userRole={shellNavRole}
             moreOpen={moreMenuOpen}
             onMoreOpen={() => setMoreMenuOpen(true)}
             onMoreClose={() => setMoreMenuOpen(false)}
