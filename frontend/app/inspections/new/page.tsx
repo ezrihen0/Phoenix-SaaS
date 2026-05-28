@@ -184,29 +184,35 @@ export default function NewInspectionPage() {
               Inspection created. Full report editing requires a desktop browser.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <button
-                type="button"
-                onClick={resetForm}
+              <Link
+                href={`/inspections/${success.id}/mobile`}
                 className="theme-btn-primary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold"
               >
                 <ClipboardList className="h-4 w-4" />
-                Create another
-              </button>
-              <Link
-                href="/home"
+                Open report
+              </Link>
+              <button
+                type="button"
+                onClick={resetForm}
                 className="theme-btn-secondary inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm"
               >
-                <ArrowLeft className="h-4 w-4" />
+                Create another
+              </button>
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
+              <Link
+                href="/home"
+                className="flex items-center justify-center gap-1.5 py-1 text-xs text-[color:var(--sem-text-muted)] transition hover:text-[color:var(--sem-accent-primary)]"
+              >
+                <ArrowLeft className="h-3 w-3" />
                 Back to home
               </Link>
-            </div>
-            <div className="mt-4">
               <Link
                 href={`/inspections/${success.id}/workspace`}
-                className="inline-flex items-center gap-1.5 text-xs text-[color:var(--sem-text-muted)] transition hover:text-[color:var(--sem-accent-primary)]"
+                className="flex items-center justify-center gap-1.5 py-1 text-xs text-[color:var(--sem-text-muted)] transition hover:text-[color:var(--sem-accent-primary)]"
               >
                 <ExternalLink className="h-3 w-3" />
-                Open workspace (desktop browser recommended)
+                Open desktop workspace
               </Link>
             </div>
           </div>
