@@ -5,6 +5,7 @@ import { ArrowLeft, ClipboardList, MapPin, UserRound } from "lucide-react";
 import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { formatAddress } from "@/lib/crm/display";
+import { canAccessShellHref, type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
 import type { Database } from "@/lib/types/database";
 
 import CreateJobForm from "./create-job-form";
@@ -86,6 +87,53 @@ function ErrorPanel({
   );
 }
 
+function NoContextPanel({
+  canBrowseCustomers,
+  canBrowseLeads,
+}: {
+  canBrowseCustomers: boolean;
+  canBrowseLeads: boolean;
+}) {
+  return (
+    <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] px-6 py-10 text-[color:var(--sem-text-primary)] lg:px-10">
+      <section className="mx-auto max-w-5xl rounded-[32px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-8">
+        <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Create Job</p>
+        <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)]">
+          Start a new job
+        </h1>
+        <p className="mt-4 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)]">
+          Choose a customer or lead to continue. A job must be created from exactly one source record.
+        </p>
+        <div className="mt-8 flex flex-wrap gap-3">
+          {canBrowseCustomers ? (
+            <Link
+              href="/customers"
+              className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
+            >
+              Browse Customers
+            </Link>
+          ) : null}
+          {canBrowseLeads ? (
+            <Link
+              href="/leads"
+              className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
+            >
+              Browse Leads
+            </Link>
+          ) : null}
+          <Link
+            href="/jobs"
+            className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to jobs
+          </Link>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default async function NewJobPage({ searchParams }: NewJobPageContext) {
   const resolvedSearchParams = await searchParams;
   const customerId = firstSearchValue(resolvedSearchParams.customerId);
@@ -96,14 +144,26 @@ export default async function NewJobPage({ searchParams }: NewJobPageContext) {
       ? `/jobs/new?leadId=${encodeURIComponent(leadId)}`
       : "/jobs/new";
 
-  await requireOfficeCrmRoute(nextPath);
+  const session = await requireOfficeCrmRoute(nextPath);
+  const role = (session.profile?.role ?? session.active_membership?.role ?? null) as ShellNavRole | null;
 
-  if ((customerId && leadId) || (!customerId && !leadId)) {
+  if (!customerId && !leadId) {
+    const canBrowseCustomers = canAccessShellHref("/customers", role);
+    const canBrowseLeads = canAccessShellHref("/leads", role);
+    return (
+      <NoContextPanel
+        canBrowseCustomers={canBrowseCustomers}
+        canBrowseLeads={canBrowseLeads}
+      />
+    );
+  }
+
+  if (customerId && leadId) {
     return (
       <ErrorPanel
         eyebrow="Create Job"
-        title="Open this flow from a customer or a lead."
-        message="The MVP create-job page expects either a customerId or a leadId. Start from the customer module or from the lead panel in the jobs board."
+        title="Choose only one source."
+        message="This route accepts either customerId or leadId. Open the flow from one source record, not both."
       />
     );
   }

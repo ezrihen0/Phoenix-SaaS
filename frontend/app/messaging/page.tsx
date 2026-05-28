@@ -41,7 +41,7 @@ export default async function MessagingPage({ searchParams }: MessagingPageConte
   }
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
+    <main className="flex min-h-0 flex-1 flex-col bg-[color:var(--cmp-surface-canvas)] pb-24 text-[color:var(--sem-text-primary)] lg:pb-0">
       <MessagingDashboard
         initialLane={initialLane}
         initialCustomerId={initialCustomerId}

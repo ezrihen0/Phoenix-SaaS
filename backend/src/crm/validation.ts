@@ -41,6 +41,19 @@ export type UpdateLeadPayload = {
   status?: LeadStatus;
 };
 
+export type CreateCustomerPayload = {
+  fullName: string;
+  phone: string;
+  email: string | null;
+  companyName: string | null;
+  serviceAddressLine1: string;
+  serviceAddressLine2: string | null;
+  serviceCity: string;
+  serviceStateOrRegion: string | null;
+  servicePostalCode: string;
+  notes: string | null;
+};
+
 export type UpdateCustomerPayload = {
   fullName?: string;
   phone?: string;
@@ -462,6 +475,33 @@ export function parseUpdateLeadPayload(jsonBody: unknown): UpdateLeadPayload {
         ? undefined
         : optionalTrimmedString(payload.description, "description", 3000),
     status: optionalEnumValue(payload.status, "status", leadStatuses),
+  };
+}
+
+export function parseCreateCustomerPayload(jsonBody: unknown): CreateCustomerPayload {
+  const payload = requireRecord(jsonBody, "Customer");
+
+  return {
+    fullName: requireTrimmedString(payload.fullName, "fullName"),
+    phone: requireTrimmedString(payload.phone, "phone", 64),
+    email: optionalEmail(payload.email, "email"),
+    companyName: optionalTrimmedString(payload.companyName, "companyName"),
+    serviceAddressLine1: requireTrimmedString(
+      payload.serviceAddressLine1,
+      "serviceAddressLine1",
+    ),
+    serviceAddressLine2: optionalTrimmedString(
+      payload.serviceAddressLine2,
+      "serviceAddressLine2",
+    ),
+    serviceCity: optionalTrimmedString(payload.serviceCity, "serviceCity", 120) ?? "",
+    serviceStateOrRegion: optionalTrimmedString(
+      payload.serviceStateOrRegion,
+      "serviceStateOrRegion",
+      120,
+    ),
+    servicePostalCode: optionalTrimmedString(payload.servicePostalCode, "servicePostalCode", 20) ?? "",
+    notes: optionalTrimmedString(payload.notes, "notes", 3000),
   };
 }
 

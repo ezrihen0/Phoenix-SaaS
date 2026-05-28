@@ -25,27 +25,23 @@ export const MOBILE_MORE_MENU_SECTIONS: MobileMoreMenuSection[] = [
   {
     id: "operations",
     links: [
-      { href: "/calls" },
-      { href: "/messaging" },
-      { href: "/customers" },
-      { href: "/inspections" },
+      { href: "/home" },
+      { href: "/jobs" },
     ],
   },
   {
     id: "money",
     links: [
-      { href: "/estimates" },
       { href: "/invoices" },
-      { href: "/pricebook" },
-      { href: "/billing" },
+      { href: "/estimates" },
     ],
   },
   {
     id: "admin",
     links: [
-      { href: "/inventory" },
-      { href: "/automations" },
-      { href: "/marketing" },
+      { href: "/inspections" },
+      { href: "/customers" },
+      { href: "/settings" },
     ],
   },
 ];

@@ -39,8 +39,8 @@ const serviceTypes: ServiceType[] = ["inspection", "cleaning", "repair", "rebuil
 
 function FieldLabel({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block space-y-2 text-sm text-white/70">
-      <span className="text-[11px] uppercase tracking-[0.26em] text-white/42">{label}</span>
+    <label className="block space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
+      <span className="text-[11px] uppercase tracking-[0.26em] text-[color:var(--sem-text-muted)]">{label}</span>
       {children}
     </label>
   );
@@ -50,7 +50,7 @@ function FieldInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/28 focus:border-[color:rgba(212,175,55,0.28)] focus:bg-black/30 ${props.className ?? ""}`.trim()}
+      className={`theme-input-control h-11 w-full rounded-xl border px-3 text-sm transition focus:outline-none focus:ring-2 focus:ring-[color:var(--cmp-focus-ring)] ${props.className ?? ""}`.trim()}
     />
   );
 }
@@ -59,7 +59,7 @@ function FieldSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-[color:rgba(212,175,55,0.28)] focus:bg-black/30 ${props.className ?? ""}`.trim()}
+      className={`theme-input-control h-11 w-full rounded-xl border px-3 text-sm transition focus:outline-none focus:ring-2 focus:ring-[color:var(--cmp-focus-ring)] ${props.className ?? ""}`.trim()}
     />
   );
 }
@@ -68,7 +68,7 @@ function FieldTextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>)
   return (
     <textarea
       {...props}
-      className={`min-h-[140px] w-full rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/28 focus:border-[color:rgba(212,175,55,0.28)] focus:bg-black/30 ${props.className ?? ""}`.trim()}
+      className={`theme-input-control min-h-[140px] w-full rounded-xl border px-3 py-3 text-sm transition focus:outline-none focus:ring-2 focus:ring-[color:var(--cmp-focus-ring)] ${props.className ?? ""}`.trim()}
     />
   );
 }
@@ -150,12 +150,12 @@ export default function CreateJobForm({
       <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <section className="rounded-[24px] border border-white/10 bg-black/20 p-5">
           <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">Source</p>
-          <div className="mt-5 space-y-4 text-sm text-white/70">
+          <div className="mt-5 space-y-4 text-sm text-[color:var(--sem-text-secondary)]">
             <div className="flex items-start gap-3">
               <UserRound className="mt-0.5 h-4 w-4 text-[color:var(--flat-gold)]" />
               <div>
-                <p className="text-white">{source.customerLabel}</p>
-                <p className="mt-1 text-white/42">{source.kind === "lead" ? "Customer will be created from this lead." : "Existing customer record."}</p>
+              <p className="text-[color:var(--sem-text-primary)]">{source.customerLabel}</p>
+              <p className="mt-1 text-[color:var(--sem-text-muted)]">{source.kind === "lead" ? "Customer will be created from this lead." : "Existing customer record."}</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -174,7 +174,7 @@ export default function CreateJobForm({
           <div className="mt-6">
             <Link
               href={source.backHref}
-              className="inline-flex items-center gap-2 rounded-full border border-white/12 px-4 py-2 text-sm text-white/70 transition hover:border-white/24 hover:text-white"
+              className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm"
             >
               {source.backLabel}
             </Link>
@@ -238,12 +238,12 @@ export default function CreateJobForm({
                 ))}
               </FieldSelect>
             </FieldLabel>
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/56">
-              <div className="flex items-center gap-2 text-white/72">
+          <div className="rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-4 py-3 text-sm text-[color:var(--sem-text-secondary)]">
+            <div className="flex items-center gap-2 text-[color:var(--sem-text-primary)]">
                 <CalendarDays className="h-4 w-4 text-[color:var(--flat-gold)]" />
                 <span>Jobs are created as scheduled items.</span>
               </div>
-              <div className="mt-3 flex items-center gap-2 text-white/48">
+              <div className="mt-3 flex items-center gap-2 text-[color:var(--sem-text-muted)]">
                 <Wrench className="h-4 w-4 text-[color:var(--flat-gold)]" />
                 <span>The new job will use the selected service type and assigned technician.</span>
               </div>
@@ -279,7 +279,7 @@ export default function CreateJobForm({
             </button>
             <Link
               href="/jobs"
-              className="inline-flex items-center gap-2 rounded-full border border-white/12 px-5 py-3 text-sm text-white/70 transition hover:border-white/24 hover:text-white"
+              className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm"
             >
               <ShieldCheck className="h-4 w-4" />
               Cancel

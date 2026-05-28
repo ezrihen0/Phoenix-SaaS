@@ -55,6 +55,7 @@ import { formatAddress } from "./display";
 import {
   type DocumentLineItemInput,
   parseConvertLeadPayload,
+  parseCreateCustomerPayload,
   parseCreateJobNotePayload,
   parseCreateJobPayload,
   parseCreateLeadPayload,
@@ -2881,6 +2882,48 @@ export class CrmController {
       return apiSuccess(technicians);
     } catch (error) {
       apiError(500, "technician_list_failed", "The technician roster could not be loaded.", error);
+    }
+  }
+
+  @Post("customers")
+  async createCustomer(
+    @Req() request: RequestWithActor,
+    @Body() body: unknown,
+  ) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "customers.manage",
+      "customer_manage_forbidden",
+      "This account cannot create customers.",
+    );
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    try {
+      const payload = parseCreateCustomerPayload(body);
+      const customer = await this.customersRepository.save(
+        this.customersRepository.create({
+          organization_id: organizationId,
+          full_name: payload.fullName,
+          phone: payload.phone,
+          email: payload.email,
+          company_name: payload.companyName,
+          service_address_line_1: payload.serviceAddressLine1,
+          service_address_line_2: payload.serviceAddressLine2,
+          service_city: payload.serviceCity,
+          service_state_or_region: payload.serviceStateOrRegion,
+          service_postal_code: payload.servicePostalCode,
+          source: "website",
+          notes: payload.notes,
+          lifecycle_status: "prospect",
+        }),
+      );
+
+      return apiSuccess({ id: customer.id });
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      apiError(400, "invalid_customer_payload", "The customer payload is invalid.", error);
     }
   }
 

@@ -164,12 +164,12 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
           <section className="theme-surface-modal rounded-[36px] p-7 sm:p-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Create Invoice</p>
-                <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
-                  Choose a customer first.
-                </h1>
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-                  Select a customer, then choose the job where you want to create or update an invoice.
+              <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Invoice Job</p>
+              <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-2xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-3xl lg:text-4xl xl:text-5xl">
+                Choose a customer first.
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
+                Invoices are created from jobs. Select a customer, then choose the job you want to invoice.
                 </p>
               </div>
               <Link
@@ -182,7 +182,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
             </div>
           </section>
 
-          <section className="theme-surface-modal mt-6 rounded-[32px] p-6">
+          <section className="theme-surface-modal mt-6 rounded-[32px] p-4 sm:p-6 overflow-x-auto">
             <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end" method="get">
               <label className="space-y-2">
                 <span className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Search customer</span>
@@ -211,13 +211,13 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
               </div>
             ) : null}
 
-            <div className="crm-table-frame mt-6">
+            <div className="crm-table-frame mt-6 overflow-x-auto">
               <table className="crm-table text-left text-sm">
                 <thead className="bg-[color:var(--cmp-surface-card)] text-xs uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                   <tr>
                     <th className="px-5 py-4">Customer</th>
-                    <th className="px-5 py-4">Contact</th>
-                    <th className="px-5 py-4">Location</th>
+                    <th className="hidden px-5 py-4 sm:table-cell">Contact</th>
+                    <th className="hidden px-5 py-4 md:table-cell">Location</th>
                     <th className="px-5 py-4">Jobs</th>
                     <th className="px-5 py-4 text-right">Select</th>
                   </tr>
@@ -228,12 +228,13 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
                       <td className="px-5 py-4">
                         <p className="font-semibold text-[color:var(--sem-text-primary)]">{customer.full_name}</p>
                         <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">#{customer.id.slice(0, 8)}</p>
+                        <p className="mt-0.5 text-xs text-[color:var(--sem-text-secondary)] sm:hidden">{customer.phone}</p>
                       </td>
-                      <td className="px-5 py-4 text-[color:var(--sem-text-secondary)]">
+                      <td className="hidden px-5 py-4 text-[color:var(--sem-text-secondary)] sm:table-cell">
                         <p>{customer.phone}</p>
                         <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{customer.email ?? "No email"}</p>
                       </td>
-                      <td className="px-5 py-4 text-[color:var(--sem-text-secondary)]">
+                      <td className="hidden px-5 py-4 text-[color:var(--sem-text-secondary)] md:table-cell">
                         {[customer.service_city, customer.service_state_or_region].filter(Boolean).join(", ") || "Address pending"}
                       </td>
                       <td className="px-5 py-4 text-[color:var(--sem-text-secondary)]">{customer.relatedJobCount}</td>
@@ -292,8 +293,8 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
         <section className="theme-surface-modal rounded-[36px] p-7 sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Create Invoice</p>
-              <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
+              <p className="text-[11px] uppercase tracking-[0.36em] text-[color:var(--sem-accent-primary)]">Invoice Job</p>
+              <h1 className="mt-4 max-w-3xl font-[family:var(--font-flat-display)] text-2xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-3xl lg:text-4xl xl:text-5xl">
                 {customer ? customer.full_name : "Select a customer"}
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
@@ -335,20 +336,20 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
           ) : null}
         </section>
 
-        <section className="theme-surface-modal mt-6 rounded-[32px] p-6">
+        <section className="theme-surface-modal mt-6 rounded-[32px] p-4 sm:p-6 overflow-x-auto">
           {loadError ? (
             <div className="theme-alert-error rounded-[22px] px-4 py-3 text-sm">
               {loadError}
             </div>
           ) : null}
 
-          <div className="crm-table-frame">
+          <div className="crm-table-frame overflow-x-auto">
             <table className="crm-table text-left text-sm">
               <thead className="bg-[color:var(--cmp-surface-card)] text-xs uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                 <tr>
                   <th className="px-5 py-4">Job</th>
-                  <th className="px-5 py-4">Status</th>
-                  <th className="px-5 py-4">Scheduled</th>
+                  <th className="hidden px-5 py-4 sm:table-cell">Status</th>
+                  <th className="hidden px-5 py-4 md:table-cell">Scheduled</th>
                   <th className="px-5 py-4">Invoice</th>
                   <th className="px-5 py-4">Balance</th>
                   <th className="px-5 py-4 text-right">Action</th>
@@ -364,13 +365,14 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
                       <td className="px-5 py-4">
                         <p className="font-semibold text-[color:var(--sem-text-primary)]">{job.title}</p>
                         <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">#{job.id.slice(0, 8)}{job.technician?.display_name ? ` · ${job.technician.display_name}` : ""}</p>
+                        <p className="mt-0.5 text-xs text-[color:var(--sem-text-secondary)] sm:hidden">{getJobStatusLabel(jobStatus)}</p>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="hidden px-5 py-4 sm:table-cell">
                         <span className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-secondary)]">
                           {getJobStatusLabel(jobStatus)}
                         </span>
                       </td>
-                      <td className="px-5 py-4 text-[color:var(--sem-text-secondary)]">{formatDateTime(job.scheduled_for)}</td>
+                      <td className="hidden px-5 py-4 text-[color:var(--sem-text-secondary)] md:table-cell">{formatDateTime(job.scheduled_for)}</td>
                       <td className="px-5 py-4">
                         {jobInvoice ? (
                           <div className="space-y-2">
@@ -391,10 +393,10 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePageCon
                       </td>
                       <td className="px-5 py-4 text-right">
                         <Link
-                          href={jobInvoice ? `/invoices/${jobInvoice.id}` : `/jobs/${job.id}`}
+                          href={jobInvoice ? `/invoices/${jobInvoice.id}` : `/jobs/${job.id}?tab=invoice`}
                           className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs uppercase tracking-[0.18em] transition"
                         >
-                          {jobInvoice ? "Open Invoice" : "Create Invoice"}
+                          {jobInvoice ? "Open Invoice" : "Open job to invoice"}
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
                       </td>

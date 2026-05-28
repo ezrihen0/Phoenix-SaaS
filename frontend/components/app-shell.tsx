@@ -388,34 +388,41 @@ export function AppShell({ children }: AppShellProps) {
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-40 border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/95 px-4 py-3 backdrop-blur-md lg:hidden">
-            <div className="flex min-h-11 flex-col gap-2 pt-[env(safe-area-inset-top)]">
-              <div className="flex items-center justify-between gap-2">
+            <div className="flex min-h-11 items-center justify-between gap-2 pt-[env(safe-area-inset-top)]">
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  aria-label={t("shell.mobile.more")}
+                  aria-expanded={moreMenuOpen}
+                  onClick={() => {
+                    setSearchOpen(false);
+                    setMoreMenuOpen(true);
+                  }}
+                  className="theme-control-surface-soft inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+                >
+                  <Menu className="h-4 w-4" />
+                </button>
                 <Link href="/home" className="inline-flex min-w-0 shrink-0 items-center gap-1">
                   <span className="truncate font-[family:var(--font-flat-display)] text-lg text-[color:var(--sem-text-primary)]">
                     WizField
                   </span>
                   <span className="text-[color:var(--sem-accent-primary)]">.</span>
                 </Link>
-                <div className="flex shrink-0 items-center gap-2">
-                  <LanguageSwitcher variant="compact" />
-                  {searchEnabled ? (
-                    <button
-                      type="button"
-                      aria-label={t("shell.searchAria")}
-                      aria-expanded={searchOpen}
-                      onClick={() => setSearchOpen(true)}
-                      className="theme-control-surface-soft inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
-                    >
-                      <Search className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
               </div>
-              <OrganizationSwitcher
-                variant="compact"
-                menuPlacement="bottom"
-                onOpenMore={() => setMoreMenuOpen(true)}
-              />
+              <div className="flex shrink-0 items-center gap-2">
+                <LanguageSwitcher variant="compact" />
+                {searchEnabled ? (
+                  <button
+                    type="button"
+                    aria-label={t("shell.searchAria")}
+                    aria-expanded={searchOpen}
+                    onClick={() => setSearchOpen(true)}
+                    className="theme-control-surface-soft inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+                  >
+                    <Search className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
             </div>
           </header>
 
@@ -500,6 +507,7 @@ export function AppShell({ children }: AppShellProps) {
             roleNavCatalog={visiblePrimaryNav}
             userLabel={userLabel}
             userInitials={buildInitials(userLabel)}
+            userRole={shellNavRole}
             moreOpen={moreMenuOpen}
             onMoreOpen={() => setMoreMenuOpen(true)}
             onMoreClose={() => setMoreMenuOpen(false)}

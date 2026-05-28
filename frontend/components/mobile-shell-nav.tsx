@@ -3,10 +3,17 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, type ComponentType } from "react";
-import { Ellipsis, LogOut, Settings, type LucideProps } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import {
+  Briefcase,
+  ClipboardList,
+  LogOut,
+  Plus,
+  Receipt,
+  UserRound,
+  type LucideProps,
+} from "lucide-react";
 
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
 import { handleLogout } from "@/lib/auth/logout";
 import {
@@ -14,13 +21,15 @@ import {
   type MobileMoreMenuSectionId,
 } from "@/lib/navigation/mobile-more-menu";
 import {
-  getMobileModulePolicyBadge,
-  getMobileModulePolicy,
-} from "@/lib/navigation/mobile-module-policy";
-import {
-  isMobileMoreTabActive,
   isRouteActive,
 } from "@/lib/navigation/mobile-shell-nav";
+import { type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
+
+const INSPECTION_CREATE_ROLES: ReadonlySet<ShellNavRole> = new Set([
+  "owner",
+  "admin",
+  "office_admin",
+]);
 
 type ShellNavIcon = ComponentType<LucideProps>;
 
@@ -37,6 +46,7 @@ type MobileShellNavProps = {
   roleNavCatalog: MobileShellNavItem[];
   userLabel: string;
   userInitials: string;
+  userRole: ShellNavRole | null;
   moreOpen: boolean;
   onMoreOpen: () => void;
   onMoreClose: () => void;
@@ -92,8 +102,6 @@ function MoreNavLink({
   onNavigate: () => void;
 }) {
   const Icon = item.icon;
-  const policy = getMobileModulePolicy(item.href);
-  const badge = getMobileModulePolicyBadge(policy);
 
   return (
     <Link
@@ -102,16 +110,13 @@ function MoreNavLink({
       onClick={onNavigate}
       className={[
         active ? "theme-selected-card" : "theme-control-surface",
-        "relative flex min-h-11 flex-col items-center justify-center rounded-[18px] border p-3 text-center transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
+        "relative flex min-h-11 items-center gap-2.5 rounded-[14px] border px-3 py-2 text-left transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
       ].join(" ")}
     >
-      {badge ? (
-        <span className="absolute right-1.5 top-1.5 rounded-full border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-[color:var(--sem-text-muted)]">
-          {badge}
-        </span>
-      ) : null}
-      <Icon className="h-5 w-5 shrink-0" />
-      <span className="mt-1 w-full truncate text-[10px] font-medium">{item.label}</span>
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)]">
+        <Icon className="h-4 w-4 shrink-0" />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.label}</span>
     </Link>
   );
 }
@@ -120,20 +125,62 @@ function sectionLabelKey(sectionId: MobileMoreMenuSectionId) {
   return `shell.mobile.moreSections.${sectionId}` as const;
 }
 
+function resolveMoreMenuLabel(href: string, fallbackLabel: string) {
+  switch (href) {
+    case "/jobs":
+      return "Jobs";
+    case "/invoices":
+      return "Invoices";
+    case "/estimates":
+      return "Estimates";
+    case "/inspections":
+      return "Inspections";
+    case "/customers":
+      return "Customers";
+    default:
+      return fallbackLabel;
+  }
+}
+
+function QuickActionLink({
+  href,
+  label,
+  icon: Icon,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  icon: ShellNavIcon;
+  onNavigate: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className="theme-control-surface group flex min-h-[44px] items-center gap-2 rounded-[14px] border px-3 py-2.5 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
+    >
+      <span className="theme-control-surface-soft inline-flex h-7 w-7 items-center justify-center rounded-lg border">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="truncate">{label}</span>
+    </Link>
+  );
+}
+
 export function MobileShellNav({
-  primaryItems,
   navCatalog,
   roleNavCatalog,
   userLabel,
   userInitials,
+  userRole,
   moreOpen,
-  onMoreOpen,
   onMoreClose,
 }: MobileShellNavProps) {
   const t = useTranslations();
   const pathname = usePathname();
   const router = useRouter();
   const workspaceSectionRef = useRef<HTMLDivElement | null>(null);
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
 
   const navByHref = useMemo(
     () => new Map(navCatalog.map((item) => [item.href, item])),
@@ -143,15 +190,6 @@ export function MobileShellNav({
   const roleNavByHref = useMemo(
     () => new Map(roleNavCatalog.map((item) => [item.href, item])),
     [roleNavCatalog],
-  );
-
-  const visibleMoreHrefs = useMemo(
-    () => MOBILE_MORE_MENU_SECTIONS.flatMap((section) =>
-      section.links
-        .map((link) => link.href)
-        .filter((href) => navByHref.has(href)),
-    ),
-    [navByHref],
   );
 
   const visibleSecondaryMoreHrefs = useMemo(
@@ -167,8 +205,52 @@ export function MobileShellNav({
 
   const visibleSecondaryMoreLinkCount = visibleSecondaryMoreHrefs.length;
 
-  const moreActive = isMobileMoreTabActive(pathname, primaryItems, visibleMoreHrefs);
-  const settingsActive = Boolean(pathname && isRouteActive(pathname, "/settings"));
+  const canCreateCustomer = navByHref.has("/customers");
+  const canCreateJob = navByHref.has("/jobs");
+  const canCreateInvoice = navByHref.has("/invoices");
+  const canCreateInspection = navByHref.has("/inspections") && userRole !== null && INSPECTION_CREATE_ROLES.has(userRole);
+  const homeItem = navByHref.get("/home");
+  const scheduleItem = navByHref.get("/schedule");
+  const callsItem = navByHref.get("/calls");
+  const messagingItem = navByHref.get("/messaging");
+  const quickActions = useMemo(() => {
+    const actions: Array<{ href: string; label: string; icon: ShellNavIcon }> = [];
+
+    if (canCreateJob) {
+      actions.push({
+        href: "/jobs/new",
+        label: "New Job",
+        icon: Briefcase,
+      });
+    }
+
+    if (canCreateCustomer) {
+      actions.push({
+        href: "/customers/new",
+        label: "New Customer",
+        icon: UserRound,
+      });
+    }
+
+    if (canCreateInvoice) {
+      actions.push({
+        href: "/invoices/new",
+        label: "Invoice Job",
+        icon: Receipt,
+      });
+    }
+
+    if (canCreateInspection) {
+      actions.push({
+        href: "/inspections/new",
+        label: "New Inspection",
+        icon: ClipboardList,
+      });
+    }
+
+    return actions;
+  }, [canCreateCustomer, canCreateInvoice, canCreateInspection, canCreateJob]);
+  const canShowQuickActions = quickActions.length > 0;
 
   useEffect(() => {
     if (!moreOpen || typeof document === "undefined") {
@@ -183,60 +265,127 @@ export function MobileShellNav({
     };
   }, [moreOpen]);
 
+  useEffect(() => {
+    setQuickActionsOpen(false);
+  }, [pathname, moreOpen]);
+
   return (
     <>
+      {quickActionsOpen ? (
+        <button
+          type="button"
+          aria-label={t("common.actions.close")}
+          className="fixed inset-0 z-40 bg-transparent lg:hidden"
+          onClick={() => setQuickActionsOpen(false)}
+        />
+      ) : null}
+
       <nav
         aria-label={t("shell.mobile.bottomNavigation")}
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/95 px-1 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-12px_40px_color-mix(in_srgb,var(--bg-canvas)_40%,transparent)] backdrop-blur-md lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 px-2 pb-[calc(0.6rem+env(safe-area-inset-bottom))] lg:hidden"
       >
-        <div className="mx-auto flex max-w-lg items-end justify-around">
-          {primaryItems.map((item) => (
-            <MobileNavTab
-              key={item.href}
-              {...item}
-              active={Boolean(pathname && isRouteActive(pathname, item.href))}
-            />
-          ))}
-          <button
-            type="button"
-            aria-expanded={moreOpen}
-            aria-haspopup="dialog"
-            aria-label={t("shell.mobile.more")}
-            onClick={() => {
-              if (moreOpen) {
-                onMoreClose();
-              } else {
-                onMoreOpen();
-              }
-            }}
-            className="relative flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center px-0.5 py-1"
-          >
-            {moreActive ? (
-              <span
-                aria-hidden="true"
-                className="absolute -top-1 h-1 w-5 rounded-full bg-[color:var(--sem-accent-primary)]"
+        <div className="relative mx-auto max-w-lg rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--sem-board-glass)] shadow-[0_-18px_48px_color-mix(in_srgb,var(--bg-canvas)_52%,transparent)] backdrop-blur-xl">
+          {canShowQuickActions ? (
+            <>
+              {quickActionsOpen ? (
+                <div className="absolute inset-x-4 bottom-[calc(100%+0.75rem)] z-50 space-y-2 rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-modal)] p-3 shadow-[0_20px_50px_color-mix(in_srgb,var(--bg-canvas)_65%,transparent)]">
+                  {quickActions.map((action) => (
+                    <QuickActionLink
+                      key={action.href}
+                      href={action.href}
+                      label={action.label}
+                      icon={action.icon}
+                      onNavigate={() => setQuickActionsOpen(false)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
+          <div className="mx-auto grid max-w-lg grid-cols-5 items-end gap-0.5 px-1 pb-1 pt-3">
+            {homeItem ? (
+              <MobileNavTab
+                {...homeItem}
+                active={Boolean(pathname && isRouteActive(pathname, homeItem.href))}
               />
-            ) : null}
-            <Ellipsis
-              aria-hidden="true"
-              className={[
-                "h-5 w-5 shrink-0",
-                moreActive || moreOpen
-                  ? "text-[color:var(--sem-text-primary)]"
-                  : "text-[color:var(--sem-text-muted)]",
-              ].join(" ")}
-            />
-            <span
-              className={[
-                "mt-1 max-w-full truncate text-[10px] font-medium tracking-wide max-[380px]:text-[9px]",
-                moreActive || moreOpen
-                  ? "font-semibold text-[color:var(--sem-text-primary)]"
-                  : "text-[color:var(--sem-text-muted)]",
-              ].join(" ")}
+            ) : (
+              <div className="min-h-11 min-w-11" />
+            )}
+            {scheduleItem ? (
+              <MobileNavTab
+                {...scheduleItem}
+                active={Boolean(pathname && isRouteActive(pathname, scheduleItem.href))}
+              />
+            ) : (
+              <div className="min-h-11 min-w-11" />
+            )}
+
+            <button
+              type="button"
+              disabled={!canShowQuickActions}
+              aria-expanded={quickActionsOpen}
+              aria-haspopup="menu"
+              aria-label="Add"
+              onClick={() => {
+                if (!canShowQuickActions) {
+                  return;
+                }
+                onMoreClose();
+                setQuickActionsOpen((current) => !current);
+              }}
+              className="relative flex min-h-11 min-w-11 flex-col items-center justify-end px-0.5 py-1"
             >
-              {t("shell.mobile.more")}
-            </span>
-          </button>
+              {quickActionsOpen ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-1 h-1 w-5 rounded-full bg-[color:var(--sem-accent-primary)]"
+                />
+              ) : null}
+              <span
+                className={[
+                  "mb-0.5 inline-flex h-9 w-9 items-center justify-center rounded-2xl border shadow-[0_12px_26px_color-mix(in_srgb,var(--bg-canvas)_62%,transparent)] transition",
+                  quickActionsOpen
+                    ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-card)] text-[color:var(--sem-accent-primary)]"
+                    : canShowQuickActions
+                      ? "theme-control-surface text-[color:var(--sem-text-primary)] hover:border-[color:var(--cmp-border-accent)]"
+                      : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-muted)] opacity-70",
+                ].join(" ")}
+              >
+                <Plus
+                  aria-hidden="true"
+                  className={["h-5 w-5 shrink-0 transition-transform", quickActionsOpen ? "rotate-45" : ""].join(" ")}
+                />
+              </span>
+              <span
+                className={[
+                  "mt-1 max-w-full truncate text-[10px] font-medium tracking-wide max-[380px]:text-[9px]",
+                  quickActionsOpen
+                    ? "font-semibold text-[color:var(--sem-text-primary)]"
+                    : "text-[color:var(--sem-text-muted)]",
+                ].join(" ")}
+              >
+                Add
+              </span>
+            </button>
+
+            {callsItem ? (
+              <MobileNavTab
+                {...callsItem}
+                active={Boolean(pathname && isRouteActive(pathname, callsItem.href))}
+              />
+            ) : (
+              <div className="min-h-11 min-w-11" />
+            )}
+            {messagingItem ? (
+              <MobileNavTab
+                {...messagingItem}
+                active={Boolean(pathname && isRouteActive(pathname, messagingItem.href))}
+              />
+            ) : (
+              <div className="min-h-11 min-w-11" />
+            )}
+          </div>
         </div>
       </nav>
 
@@ -252,11 +401,9 @@ export function MobileShellNav({
             role="dialog"
             aria-modal="true"
             aria-label={t("shell.mobile.more")}
-            className="fixed inset-x-0 bottom-0 z-[60] flex max-h-[75vh] flex-col rounded-t-[32px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-modal)] pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-24px_80px_color-mix(in_srgb,var(--bg-canvas)_65%,transparent)] backdrop-blur-xl lg:hidden"
+            className="fixed inset-y-0 left-0 z-[60] flex h-full w-[80vw] max-w-[320px] flex-col border-r border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-modal)] pb-[calc(1rem+env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+0.4rem)] shadow-[24px_0_80px_color-mix(in_srgb,var(--bg-canvas)_65%,transparent)] backdrop-blur-xl lg:hidden"
           >
-            <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-[color:var(--cmp-border-subtle)]" />
-
-            <div className="flex items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] px-5 py-4">
+            <div className="flex items-center justify-between gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--sem-accent-primary),var(--sem-action-secondary))] text-sm font-semibold text-[color:var(--sem-text-inverse)]">
                   {userInitials}
@@ -277,7 +424,7 @@ export function MobileShellNav({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
               {MOBILE_MORE_MENU_SECTIONS.map((section) => {
                 const sectionLinks = section.links
                   .map((link) => navByHref.get(link.href))
@@ -288,26 +435,15 @@ export function MobileShellNav({
                     <div
                       key={section.id}
                       ref={workspaceSectionRef}
-                      className="mb-5 last:mb-0"
+                      className="mb-4 last:mb-0"
                     >
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                         {t(sectionLabelKey(section.id))}
                       </p>
-                      <div className="space-y-3 rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-3">
-                        <OrganizationSwitcher variant="compact" menuPlacement="bottom" />
-                        <LanguageSwitcher variant="compact" />
-                        <Link
-                          href="/settings"
-                          aria-current={settingsActive ? "page" : undefined}
-                          onClick={onMoreClose}
-                          className={[
-                            settingsActive ? "theme-selected-card" : "theme-control-surface",
-                            "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[18px] border px-3 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]",
-                          ].join(" ")}
-                        >
-                          <Settings className="h-4 w-4 shrink-0" />
-                          <span>{t("shell.nav.settings")}</span>
-                        </Link>
+                      <div className="space-y-2 rounded-[16px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-2.5">
+                        <div className="w-full">
+                          <OrganizationSwitcher variant="compact" menuPlacement="bottom" />
+                        </div>
                       </div>
                     </div>
                   );
@@ -318,15 +454,18 @@ export function MobileShellNav({
                 }
 
                 return (
-                  <div key={section.id} className="mb-5 last:mb-0">
+                  <div key={section.id} className="mb-4 last:mb-0">
                     <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">
                       {t(sectionLabelKey(section.id))}
                     </p>
-                    <div className="grid grid-cols-3 gap-2 max-[380px]:grid-cols-2">
+                    <div className="space-y-1.5">
                       {sectionLinks.map((item) => (
                         <MoreNavLink
                           key={item.href}
-                          item={item}
+                          item={{
+                            ...item,
+                            label: resolveMoreMenuLabel(item.href, item.label),
+                          }}
                           active={Boolean(pathname && isRouteActive(pathname, item.href))}
                           onNavigate={onMoreClose}
                         />
