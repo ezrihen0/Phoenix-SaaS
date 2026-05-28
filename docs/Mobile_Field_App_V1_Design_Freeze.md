@@ -24,6 +24,7 @@
 | 14 | `90bd986` | `feat(inspections): add mobile report workspace` |
 | 14D | `ef824bb` | `feat(inspections): support mobile gas report metadata and section labels` |
 | 15 | `847caf7` | `feat(inspections): add mobile inspection photos` |
+| 16 | `dd1f372` | `feat(inspections): add mobile inspections hub` |
 
 ---
 

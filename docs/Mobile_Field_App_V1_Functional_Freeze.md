@@ -40,12 +40,14 @@
 | `/inspections/[id]/mobile` | Mobile inspection report workspace |
 | Phase 14D | Mobile gas metadata + section labels | `ef824bb` |
 | Phase 15 | Mobile inspection photos | `847caf7` |
+| Phase 16 | Mobile inspections hub (/inspections mobile-safe) | `dd1f372` |
 
 ---
 
 ## Inspection Scope
 
 ### Mobile (Final)
+- `/inspections` — mobile-safe hub with New Inspection CTA + recent inspection cards
 - `/inspections/new` — create inspection from customer/job/new customer
 - `/inspections/[id]/mobile` — mobile-safe workspace
   - View report sections and items
