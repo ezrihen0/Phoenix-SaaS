@@ -4,6 +4,28 @@
 
 This directory holds the **North America-ready approved field knowledge architecture** for WizField Field Copilot. Knowledge packs here are curated, reviewed content—not ad-hoc notes or model training data.
 
+WizField is a **B2B professional trade CRM / Field OS**. Field Knowledge is designed primarily for **authenticated professional trade users inside business workspaces**, not for public DIY homeowner instruction. **Professional-first does not mean unrestricted:** high-risk topics must still be role-aware, surface-aware, source-aware, and safety-bounded.
+
+### Knowledge dimensions
+
+Every knowledge item is classified and reviewed across these dimensions:
+
+| Dimension | Examples |
+|-----------|----------|
+| **Trade** | gas-fireplace, garage-door, hvac, … |
+| **Region** | country, province/state, city/AHJ |
+| **Topic** | permits, diagnostics, measurement, safety boundary |
+| **Risk** | Low → Critical |
+| **Source requirement** | none / recommended / required / expert review |
+| **Audience** | professional_only, technician, dispatcher_safe, customer_safe, … |
+| **Runtime surface** | technician_mobile, office_crm, customer_portal, public_site, … |
+| **Tests** | question, expected safe answer, forbidden answer, escalation |
+| **Approval status** | candidate → reviewed → approved (manifest + allowlist when intentional) |
+
+**Core rule:** Professional workspace users may receive more technical answers than public or customer users, but **only** from approved, source-aware knowledge packs and **only** on allowed runtime surfaces declared in each pack.
+
+**Example (methodology only):** Garage-door torsion spring turn reference is typically `professional_only`, allowed on `technician_mobile` / `owner_admin`, blocked on `customer_portal` / `public_site`, minimum role `technician`, expert review required—the AI must never invent exact spring-turn values. See [`_protocols/general-trade-research-protocol.md`](_protocols/general-trade-research-protocol.md).
+
 ## Structure
 
 | Branch | Role |
@@ -11,7 +33,7 @@ This directory holds the **North America-ready approved field knowledge architec
 | `jurisdictions/` | Location-specific guidance: legal references, codes, permits, AHJ (authority having jurisdiction) context |
 | `trades/` | Trade-specific field knowledge: service logic, diagnostics, sales support, report wording |
 | `manifest/` | Machine-readable manifest of approved packs, scope, and loader rules (Phase 2+ wiring) |
-| `_protocols/` | **Methodology only** — how agents research and prepare candidate knowledge (not approved packs, not runtime AI) |
+| `_protocols/` | **Methodology only** — research protocol + candidate/approved templates (not approved packs, not runtime AI) |
 | `_candidate-updates/` | Unapproved field feedback, AI correction forms, technician notes, and proposed knowledge updates awaiting review |
 
 ## Research protocol (methodology only)
@@ -127,6 +149,10 @@ This workflow exists to keep WizField scalable under high-volume feedback while 
    - topic
    - risk level
    - source requirement
+   - intended audience
+   - runtime surface
+   - minimum user role
+   - professional context required
 
 4. Verify any **source-required** claims (especially permits/code/AHJ/manufacturer/safety).
 

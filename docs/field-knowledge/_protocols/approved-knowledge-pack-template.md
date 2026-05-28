@@ -21,6 +21,13 @@
 - loader_status: not_loaded / allowlisted / loaded
 - deprecated: false
 - replaced_by:
+- intended_audience:
+- allowed_runtime_surfaces:
+- blocked_runtime_surfaces:
+- minimum_user_role:
+- professional_context_required: true / false
+
+Approved knowledge must declare not only what the AI may say, but also **who may receive it** and **where it may appear** (allowed vs blocked runtime surfaces).
 
 ## AI-Safe Summary
 

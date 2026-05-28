@@ -1,7 +1,10 @@
 # Candidate Knowledge Update
 
 ## Status
-Candidate only. Not approved knowledge. Not runtime AI knowledge.
+
+**Candidate only. Not approved knowledge. Not runtime AI knowledge.**
+
+WizField is a B2B professional trade CRM / Field OS. This file does not authorize DIY homeowner instruction or public how-to content until reviewed, classified, and approved for the correct audience and surface.
 
 ## Source
 - candidate_id:
@@ -24,6 +27,24 @@ Candidate only. Not approved knowledge. Not runtime AI knowledge.
 - Scope type:
 - Risk level:
 - Source requirement:
+- Intended audience: professional_only / licensed_or_qualified_technician / owner_admin_safe / dispatcher_safe / customer_safe / public_marketing_safe
+- Runtime surface: technician_mobile / office_crm / dispatcher_workspace / owner_admin / customer_portal / public_site / not_runtime_safe
+- Minimum user role: owner / admin / technician / dispatcher / customer / public
+- Professional context required: true / false
+
+## Audience-Specific Drafts
+
+Draft separate wording per audience. Leave blank if not applicable for this candidate.
+
+### Professional / Technician Draft
+
+### Owner / Admin Draft
+
+### Dispatcher-Safe Draft
+
+### Customer-Safe Draft
+
+### Public-Safe Draft
 
 ## Candidate Claim
 What is being proposed?

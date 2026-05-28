@@ -20,17 +20,71 @@ docs/field-knowledge/_protocols/general-trade-research-protocol.md
 
 ## Purpose
 
-WizField is building a North America-ready Field Knowledge system.
+WizField is building a North America-ready Field Knowledge system for a **B2B professional trade CRM / Field OS**.
+
+Field Knowledge is designed primarily for **authenticated professional trade users inside business workspaces**—not for public DIY homeowner instruction or generic consumer how-to guides.
 
 The goal is **not** to create one AI that “knows everything.”
 
 The goal is to build a structured, safe, testable knowledge system:
 
 ```text
-Trade → Country → Province/State → City/AHJ → Topic → Knowledge Pack → Tests → Versioning
+Trade → Country → Province/State → City/AHJ → Topic → Audience → Runtime Surface → Knowledge Pack → Tests → Versioning
 ```
 
 Agents must follow this protocol whenever working on trade knowledge.
+
+---
+
+## Professional-first positioning
+
+WizField Field Copilot serves technicians, dispatchers, owners/admins, and—where explicitly allowed—customer-facing surfaces inside a **professional business context**.
+
+**Professional-first does not mean unrestricted.** High-risk topics must still be **role-aware**, **surface-aware**, **source-aware**, and **safety-bounded**.
+
+Every knowledge item must classify:
+
+- **Who** may receive it (intended audience, minimum user role)
+- **Where** it may appear (allowed and blocked runtime surfaces)
+- **Whether** professional workspace context is required
+
+Some information may be safe for qualified technicians on technician mobile but **unsafe** for dispatchers, customers, public pages, or customer portals—even inside the same organization.
+
+---
+
+## Audience & Runtime Safety classification
+
+Every topic must be classified with the following fields (in addition to trade, region, risk, and source rules).
+
+### Intended audience
+
+One or more of:
+
+- `professional_only`
+- `licensed_or_qualified_technician`
+- `owner_admin_safe`
+- `dispatcher_safe`
+- `customer_safe`
+- `public_marketing_safe`
+
+### Runtime surface
+
+One or more of:
+
+- `technician_mobile`
+- `office_crm`
+- `dispatcher_workspace`
+- `owner_admin`
+- `customer_portal`
+- `public_site`
+- `not_runtime_safe`
+
+### Additional fields
+
+- `professional_context_required`: `true` / `false`
+- `minimum_user_role`: `owner` / `admin` / `technician` / `dispatcher` / `customer` / `public`
+
+Approved packs must declare **allowed** and **blocked** runtime surfaces explicitly. Candidate research must propose both before approval.
 
 ---
 
@@ -83,10 +137,11 @@ When asked to collect, organize, or prepare trade knowledge, the agent must:
 4. Classify the type of knowledge.
 5. Assign a risk level.
 6. Decide whether a source is required.
-7. Separate general field knowledge from jurisdictional, legal, code, AHJ, manufacturer, and compliance knowledge.
-8. Produce candidate knowledge only unless explicitly instructed to create an approved pack.
-9. Add test questions for any proposed knowledge.
-10. Avoid unsafe, unsupported, or legally risky claims.
+7. Classify **intended audience**, **runtime surface**, **minimum user role**, and **professional context required**.
+8. Separate general field knowledge from jurisdictional, legal, code, AHJ, manufacturer, and compliance knowledge.
+9. Produce candidate knowledge only unless explicitly instructed to create an approved pack.
+10. Add test questions for any proposed knowledge (per audience/surface where they differ).
+11. Avoid unsafe, unsupported, or legally risky claims—and never treat WizField as a public DIY assistant.
 
 ---
 
@@ -217,6 +272,8 @@ The agent must not:
 - Create giant knowledge libraries without tests.
 - Mix different jurisdictions in one approved pack unless the pack is clearly marked as general and non-jurisdictional.
 - Modify loader logic, allowlists, manifests, or runtime AI behavior unless the task explicitly approves it.
+- Expose high-risk professional-only guidance on customer portal, public site, or other blocked surfaces.
+- Assume “professional-first” allows DIY or homeowner step-by-step instructions without explicit audience approval.
 
 ---
 
@@ -238,6 +295,12 @@ When researching any trade topic, the agent must output the following structure:
 - Scope type:
 - Risk level:
 - Source requirement:
+- Intended audience:
+- Runtime surface:
+- professional_context_required:
+- minimum_user_role:
+- Allowed runtime surfaces (proposed):
+- Blocked runtime surfaces (proposed):
 
 ## 2. Research Plan
 
@@ -359,13 +422,18 @@ Every approved knowledge pack must include:
 - source_level
 - source_urls if jurisdictional or official
 - last_verified
+- intended_audience
+- allowed_runtime_surfaces
+- blocked_runtime_surfaces
+- minimum_user_role
+- professional_context_required
 - AI-safe summary
 - what AI may say
 - what AI must not say
 - escalation rule
 - test questions
 
-Approved packs must be testable, conservative, and source-aware.
+Approved packs must be testable, conservative, source-aware, **role-aware**, and **surface-aware**. They must declare not only what the AI may say, but also **who may receive it** and **where it may appear**.
 
 ---
 
@@ -392,6 +460,10 @@ The weekly process:
    - knowledge type
    - risk level
    - source requirement
+   - intended audience
+   - runtime surface
+   - minimum user role
+   - professional context required
 
 4. Verify all source-required claims.
 
@@ -437,6 +509,8 @@ Good output is:
 - conservative
 - testable
 - region-aware
+- role-aware and surface-aware
+- professional-first (B2B workspace context)
 - safe
 - easy to convert into a knowledge pack later
 
@@ -449,8 +523,34 @@ Bad output is:
 - unsafe technical instructions
 - no tests
 - no escalation rules
+- no audience or runtime surface classification
+- DIY/homeowner instructions presented as universal WizField answers
 - no clear candidate/approved distinction
 - runtime behavior changes hidden inside documentation work
+
+---
+
+## Example — Garage door torsion spring (audience & surface)
+
+Illustrates professional-first, role-aware, surface-aware classification (methodology only—not approved knowledge):
+
+| Field | Value |
+|-------|--------|
+| Trade | `garage-door` |
+| Topic | torsion spring turn reference |
+| Risk level | High / Critical |
+| Intended audience | `professional_only` |
+| Allowed runtime surfaces | `technician_mobile`, `owner_admin` |
+| Blocked runtime surfaces | `customer_portal`, `public_site` |
+| Minimum user role | `technician` |
+| Professional context required | `true` |
+| Source requirement | expert review required |
+
+**Safe runtime principle:**
+
+- A verified technician may receive approved reference guidance **only if** an approved pack exists, surfaces allow it, and sources support the claim.
+- A customer or public user must **not** receive spring winding instructions or turn counts.
+- The AI must **never invent** exact spring-turn values.
 
 ---
 
