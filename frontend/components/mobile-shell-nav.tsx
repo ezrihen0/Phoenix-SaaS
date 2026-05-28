@@ -8,6 +8,7 @@ import {
   Briefcase,
   LogOut,
   Plus,
+  UserRound,
   type LucideProps,
 } from "lucide-react";
 
@@ -193,6 +194,7 @@ export function MobileShellNav({
 
   const visibleSecondaryMoreLinkCount = visibleSecondaryMoreHrefs.length;
 
+  const canCreateCustomer = navByHref.has("/customers");
   const canCreateJob = navByHref.has("/jobs");
   const homeItem = navByHref.get("/home");
   const scheduleItem = navByHref.get("/schedule");
@@ -209,8 +211,16 @@ export function MobileShellNav({
       });
     }
 
+    if (canCreateCustomer) {
+      actions.push({
+        href: "/customers/new",
+        label: "New Customer",
+        icon: UserRound,
+      });
+    }
+
     return actions;
-  }, [canCreateJob]);
+  }, [canCreateCustomer, canCreateJob]);
   const canShowQuickActions = quickActions.length > 0;
 
   useEffect(() => {
