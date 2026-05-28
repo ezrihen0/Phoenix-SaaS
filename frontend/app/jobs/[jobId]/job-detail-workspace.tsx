@@ -8,17 +8,20 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   ExternalLink,
   FileText,
   LoaderCircle,
   MapPin,
+  MessageSquare,
   Phone,
   Receipt,
   Save,
   ShieldCheck,
   UserRound,
   Wrench,
+  Zap,
 } from "lucide-react";
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
@@ -432,6 +435,27 @@ function PaginationFooter({
   );
 }
 
+function CollapsibleCard({ title, eyebrow, icon: Icon, children }: { title: string; eyebrow: string; icon: React.ElementType; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="overflow-hidden rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]">
+      <button type="button" onClick={() => setOpen(o => !o)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-card)] text-[color:var(--sem-accent-primary)]">
+            <Icon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">{eyebrow}</p>
+            <p className="mt-0.5 truncate text-sm font-semibold text-[color:var(--sem-text-primary)]">{title}</p>
+          </div>
+        </div>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)] transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? <div className="border-t border-[color:var(--cmp-border-subtle)] p-4">{children}</div> : null}
+    </div>
+  );
+}
+
 export default function JobDetailWorkspace({
   initialJob,
   assignmentTechnicians,
@@ -795,6 +819,287 @@ export default function JobDetailWorkspace({
   }
 
   return (
+    <>
+      {/* Mobile Trading Board — lg:hidden */}
+      <div className="lg:hidden min-h-screen bg-[color:var(--cmp-surface-canvas)] pb-28 text-[color:var(--sem-text-primary)]">
+        {toast ? (
+          <div className="fixed left-1/2 top-4 z-50 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-raised)] px-4 py-3 text-sm shadow-2xl backdrop-blur">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-[color:var(--sem-state-success)]" />
+              {toast.message}
+            </div>
+          </div>
+        ) : null}
+
+        <header className="sticky top-0 z-30 border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/95 px-4 py-3 backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3">
+            <Link href="/jobs" className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] text-[color:var(--sem-text-secondary)]">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Job Detail</p>
+              <p className="mt-0.5 truncate text-sm font-semibold text-[color:var(--sem-text-primary)]">#{job.id.slice(0, 8)}</p>
+            </div>
+            <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${statusBadgeClass(job.status)}`}>
+              {getJobStatusLabel(job.status)}
+            </span>
+          </div>
+        </header>
+
+        <div className="space-y-3 px-3 py-3">
+          {/* Active Job Instrument */}
+          <div className="relative overflow-hidden rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]">
+            <div className="absolute inset-x-0 top-0 h-[2px] bg-[linear-gradient(90deg,var(--sem-accent-primary),var(--sem-action-secondary))]" />
+            <div className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-card)] text-[color:var(--sem-accent-primary)]">
+                  <Wrench className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-accent-primary)]">Active Job Instrument</p>
+                  <h1 className="mt-1 text-lg font-semibold leading-tight text-[color:var(--sem-text-primary)]">{job.title}</h1>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)]/50 px-4 py-3">
+              <div className="grid gap-2 text-sm text-[color:var(--sem-text-secondary)]">
+                {customer ? (
+                  <div className="flex items-center gap-2">
+                    <UserRound className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
+                    <span>{customer.full_name}</span>
+                  </div>
+                ) : null}
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
+                  <span>{formatAddress(job.service_address_line_1, job.service_address_line_2 ?? "", job.service_city, job.service_state_or_region ?? "", job.service_postal_code)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
+                  <span>{formatDateTime(job.scheduled_for)}{job.scheduled_window ? ` · ${job.scheduled_window}` : ""}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Strip */}
+          <div className="grid grid-cols-3 gap-2">
+            {customer?.phone ? (
+              <a href={`tel:${customer.phone}`} className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-2 py-3 text-xs font-semibold text-[color:var(--sem-text-secondary)] active:scale-95">
+                <Phone className="h-4 w-4 text-[color:var(--sem-state-success)]" />
+                CALL
+              </a>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-2 py-3 text-xs font-semibold text-[color:var(--sem-text-muted)] opacity-50">
+                <Phone className="h-4 w-4" />
+                CALL
+              </div>
+            )}
+            <a href={googleMapsUrl} target="_blank" rel="noreferrer" className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-2 py-3 text-xs font-semibold text-[color:var(--sem-text-secondary)] active:scale-95">
+              <MapPin className="h-4 w-4 text-[color:var(--sem-state-info)]" />
+              ROUTE
+            </a>
+            <Link href="/messaging" className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-2 py-3 text-xs font-semibold text-[color:var(--sem-text-secondary)] active:scale-95">
+              <MessageSquare className="h-4 w-4 text-[color:var(--sem-accent-primary)]" />
+              SMS
+            </Link>
+          </div>
+
+          {/* Primary Order — Next Status */}
+          <div className="overflow-hidden rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]">
+            <div className="border-b border-[color:var(--cmp-border-subtle)] px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">Primary Order</p>
+                  <p className="mt-0.5 text-sm font-semibold text-[color:var(--sem-text-primary)]">Next field move</p>
+                </div>
+                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${statusBadgeClass(job.status)}`}>
+                  {getJobStatusLabel(job.status)}
+                </span>
+              </div>
+            </div>
+            <div className="p-4">
+              {availableStatuses.filter(s => s !== job.status && s !== "cancelled").length > 0 ? (
+                <button
+                  type="button"
+                  disabled={isUpdatingStatus}
+                  onClick={() => {
+                    const next = availableStatuses.find(s => s !== job.status && s !== "cancelled");
+                    if (next) void applyStatusChange(next, null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-2xl bg-[color:var(--sem-action-secondary)] px-4 py-4 text-left text-[color:var(--sem-text-inverse)] active:scale-[0.99] disabled:opacity-50"
+                >
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] opacity-70">Execute next status</p>
+                    <p className="mt-1 text-lg font-semibold">
+                      {getJobStatusLabel(availableStatuses.find(s => s !== job.status && s !== "cancelled") ?? job.status)}
+                    </p>
+                  </div>
+                  {isUpdatingStatus ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Zap className="h-5 w-5" />}
+                </button>
+              ) : (
+                <div className="rounded-2xl border border-[color:var(--sem-state-success)]/40 bg-[color:var(--cmp-surface-card)] p-4 text-sm text-[color:var(--sem-state-success)]">
+                  Job is fully executed.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Cash Desk — Quote / Invoice */}
+          <div className="overflow-hidden rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]">
+            <div className="flex items-center justify-between border-b border-[color:var(--cmp-border-subtle)] px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-card)] text-[color:var(--sem-accent-primary)]">
+                  <Receipt className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">Cash Desk</p>
+                  <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">Quote / Invoice</p>
+                </div>
+              </div>
+            </div>
+            <div className="divide-y divide-[color:var(--cmp-border-subtle)]">
+              <button type="button" onClick={() => setTab("quote")} className="flex w-full items-center justify-between px-4 py-4 text-left active:bg-[color:var(--cmp-hover-surface)]">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-4 w-4 text-[color:var(--sem-state-info)]" />
+                  <div>
+                    <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">Quote</p>
+                    <p className="text-xs text-[color:var(--sem-text-secondary)]">
+                      {quote ? `${quote.status?.toUpperCase() ?? "DRAFT"} · ${formatCurrency(quote.total_cents || quote.price_cents)}` : "No quote yet"}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
+              </button>
+              <button type="button" onClick={() => setTab("invoice")} className="flex w-full items-center justify-between px-4 py-4 text-left active:bg-[color:var(--cmp-hover-surface)]">
+                <div className="flex items-center gap-3">
+                  <Receipt className={`h-4 w-4 ${invoiceBalanceCents > 0 ? "text-[color:var(--sem-state-error)]" : "text-[color:var(--sem-state-success)]"}`} />
+                  <div>
+                    <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">Invoice</p>
+                    <p className="text-xs text-[color:var(--sem-text-secondary)]">
+                      {invoice ? `${invoice.status?.toUpperCase() ?? "UNPAID"} · Balance ${formatCurrency(invoiceBalanceCents)}` : "No invoice yet"}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
+              </button>
+            </div>
+          </div>
+
+          {/* Intel Feed — Notes */}
+          <div className="rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)]">Intel Feed</p>
+                <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">Recent job notes</p>
+              </div>
+              <FileText className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
+            </div>
+            {sortedNotes.length > 0 ? (
+              <div className="space-y-2">
+                {sortedNotes.slice(0, 3).map((note) => (
+                  <article key={note.id} className="rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)]/50 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{note.author_name ?? "Staff"}</p>
+                      <p className="text-[10px] text-[color:var(--sem-text-muted)]">{formatNoteDateTime(note.created_at)}</p>
+                    </div>
+                    {note.findings ? <p className="mt-2 text-sm leading-5 text-[color:var(--sem-text-secondary)]">{note.findings}</p> : null}
+                    {note.recommendations ? <p className="mt-1 text-sm leading-5 text-[color:var(--sem-text-secondary)]">{note.recommendations}</p> : null}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[color:var(--sem-text-muted)]">No notes yet.</p>
+            )}
+          </div>
+
+          {/* Advanced Controls (collapsed) */}
+          <div className="space-y-3 pt-1">
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Advanced order controls</p>
+
+            {/* Status change via select */}
+            <CollapsibleCard title="Change status" eyebrow="Status Flow" icon={ShieldCheck}>
+              <label className="block space-y-2">
+                <span className="text-xs text-[color:var(--sem-text-muted)]">Update status</span>
+                <select
+                  value={job.status}
+                  onChange={(e) => {
+                    const v = e.target.value as JobStatus;
+                    if (v === "cancelled") { setShowCancelComposer(true); return; }
+                    setShowCancelComposer(false);
+                    if (v !== job.status) void applyStatusChange(v, null);
+                  }}
+                  disabled={isUpdatingStatus || availableStatuses.length <= 1}
+                  className="theme-input-control h-10 w-full rounded-xl border px-3 text-sm disabled:opacity-60"
+                >
+                  {availableStatuses.map((s) => (<option key={s} value={s}>{getJobStatusLabel(s)}</option>))}
+                </select>
+              </label>
+              {showCancelComposer ? (
+                <div className="mt-3 space-y-3 rounded-xl border border-[color:var(--sem-state-error)]/30 bg-[color:color-mix(in_srgb,var(--sem-state-error)_8%,transparent)] p-3">
+                  <textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Cancellation reason..." className="theme-input-control min-h-[80px] w-full rounded-xl border px-3 py-2 text-sm" />
+                  <div className="flex gap-2">
+                    <button type="button" disabled={isUpdatingStatus || !cancelReason.trim()} onClick={() => void applyStatusChange("cancelled", cancelReason.trim())} className="rounded-lg bg-[color:var(--sem-state-error)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
+                      {isUpdatingStatus ? <LoaderCircle className="h-3 w-3 animate-spin" /> : "Confirm cancel"}
+                    </button>
+                    <button type="button" onClick={() => { setShowCancelComposer(false); setCancelReason(""); }} className="rounded-lg border border-[color:var(--cmp-border-subtle)] px-3 py-1.5 text-xs">Keep active</button>
+                  </div>
+                </div>
+              ) : null}
+            </CollapsibleCard>
+
+            {/* Schedule */}
+            <CollapsibleCard title="Scheduling" eyebrow="Dispatch" icon={CalendarDays}>
+              <div className="space-y-3">
+                <label className="block space-y-1.5">
+                  <span className="text-xs text-[color:var(--sem-text-muted)]">Date</span>
+                  <input type="date" value={scheduleForm.scheduledDate} onChange={(e) => setScheduleForm(c => ({ ...c, scheduledDate: e.target.value }))} className="theme-input-control h-10 w-full rounded-xl border px-3 text-sm" />
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block space-y-1.5">
+                    <span className="text-xs text-[color:var(--sem-text-muted)]">Start</span>
+                    <input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm(c => ({ ...c, startTime: e.target.value }))} className="theme-input-control h-10 w-full rounded-xl border px-3 text-sm" />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-xs text-[color:var(--sem-text-muted)]">End</span>
+                    <input type="time" value={scheduleForm.endTime} onChange={(e) => setScheduleForm(c => ({ ...c, endTime: e.target.value }))} className="theme-input-control h-10 w-full rounded-xl border px-3 text-sm" />
+                  </label>
+                </div>
+                <label className="block space-y-1.5">
+                  <span className="text-xs text-[color:var(--sem-text-muted)]">Technician</span>
+                  <select value={scheduleForm.assignedTechnicianId} onChange={(e) => setScheduleForm(c => ({ ...c, assignedTechnicianId: e.target.value }))} className="theme-input-control h-10 w-full rounded-xl border px-3 text-sm">
+                    <option value="">Unassigned</option>
+                    {assignmentTechnicians.map((t) => (<option key={t.id} value={t.id}>{t.display_name}{t.is_active ? "" : " (Inactive)"}</option>))}
+                  </select>
+                </label>
+                {hasScheduleChanges ? (
+                  <button type="button" disabled={isSavingSchedule} onClick={saveSchedule} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[color:var(--sem-accent-primary)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+                    {isSavingSchedule ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Save schedule
+                  </button>
+                ) : null}
+                {conflicts.length > 0 ? (
+                  <div className="rounded-xl border border-[color:var(--sem-state-warning)]/30 bg-[color:color-mix(in_srgb,var(--sem-state-warning)_8%,transparent)] px-3 py-2 text-xs text-[color:var(--sem-state-warning)]">
+                    Potential scheduling conflicts detected.
+                  </div>
+                ) : null}
+              </div>
+            </CollapsibleCard>
+
+            {/* Notes */}
+            <CollapsibleCard title="Technician findings" eyebrow="Field Report" icon={FileText}>
+              <textarea value={noteFindingsDraft} onChange={(e) => setNoteFindingsDraft(e.target.value)} placeholder="Write field finding, defect, customer decision, or required follow-up..." className="theme-input-control min-h-[120px] w-full rounded-xl border px-3 py-3 text-sm" />
+              <textarea value={noteRecommendationsDraft} onChange={(e) => setNoteRecommendationsDraft(e.target.value)} placeholder="Recommendations (optional)..." className="theme-input-control mt-2 min-h-[80px] w-full rounded-xl border px-3 py-3 text-sm" />
+              <button type="button" disabled={isSavingNote || (!noteFindingsDraft.trim() && !noteRecommendationsDraft.trim())} onClick={saveNote} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[color:var(--sem-accent-primary)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">
+                {isSavingNote ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save field note
+              </button>
+            </CollapsibleCard>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop layout — hidden lg:block */}
+      <div className="hidden lg:block">
     <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
       {toast ? (
         <div className="pointer-events-none fixed right-4 top-4 z-50">
@@ -1305,5 +1610,7 @@ export default function JobDetailWorkspace({
         </section>
       </div>
     </main>
+      </div>
+    </>
   );
 }
