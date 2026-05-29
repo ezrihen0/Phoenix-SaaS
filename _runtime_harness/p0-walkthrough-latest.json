@@ -1,0 +1,234 @@
+﻿P0 Core CRM Walkthrough ΓÇö runId=mprfh1pr
+{
+  "runId": "mprfh1pr",
+  "total": 32,
+  "passed": 32,
+  "failed": 0,
+  "go": true,
+  "results": [
+    {
+      "id": "P0-00",
+      "area": "infra",
+      "step": "Backend reachable",
+      "pass": true,
+      "notes": "OK http://127.0.0.1:4000"
+    },
+    {
+      "id": "P0-01",
+      "area": "signup",
+      "step": "POST /api/auth/register creates account + session",
+      "pass": true,
+      "notes": "Account created"
+    },
+    {
+      "id": "P0-02",
+      "area": "signup",
+      "step": "Destination after signup (activation gate)",
+      "pass": true,
+      "notes": "destination=/pricing"
+    },
+    {
+      "id": "P0-03",
+      "area": "login",
+      "step": "POST /api/auth/login restores session",
+      "pass": true,
+      "notes": "Login OK"
+    },
+    {
+      "id": "P0-04",
+      "area": "login",
+      "step": "GET /api/auth/session returns active org",
+      "pass": true,
+      "notes": "orgId=fa036a38-9a85-4842-a5af-37cf1d0ef2ae slug=p0-org-mprfh1pr"
+    },
+    {
+      "id": "P0-05",
+      "area": "customer",
+      "step": "POST /api/customers persists customer",
+      "pass": true,
+      "notes": "customerId=c312d7ac-2371-484d-b623-bf8bbc2bc0fd"
+    },
+    {
+      "id": "P0-06",
+      "area": "customer",
+      "step": "GET /api/customers/:id returns saved customer",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "id": "P0-07",
+      "area": "lead",
+      "step": "POST /api/leads creates lead",
+      "pass": true,
+      "notes": "leadId=bafe06f7-974a-4668-9f59-da5a49519440"
+    },
+    {
+      "id": "P0-08",
+      "area": "job",
+      "step": "Technician roster available for job create",
+      "pass": true,
+      "notes": "technicianId=07759bdb-7393-469b-a5db-af10afd6682f"
+    },
+    {
+      "id": "P0-09",
+      "area": "lead",
+      "step": "Lead converts to job on POST /api/jobs with leadId",
+      "pass": true,
+      "notes": "jobId=20c45360-3588-413b-a794-8ba2bf8cfe42"
+    },
+    {
+      "id": "P0-10",
+      "area": "lead",
+      "step": "Lead status converted after job create",
+      "pass": true,
+      "notes": "status=converted"
+    },
+    {
+      "id": "P0-11",
+      "area": "estimate",
+      "step": "PUT /api/jobs/:id/quote creates approved estimate",
+      "pass": true,
+      "notes": "quoteId=af5589c3-cb1f-4407-867a-60c2091bbeb3"
+    },
+    {
+      "id": "P0-12",
+      "area": "estimate",
+      "step": "GET /api/estimates lists created estimate",
+      "pass": true,
+      "notes": "listed"
+    },
+    {
+      "id": "P0-13",
+      "area": "invoice",
+      "step": "PUT /api/jobs/:id/invoice creates invoice",
+      "pass": true,
+      "notes": "invoiceId=af23970f-ef41-4520-aec5-2a86369f5b01"
+    },
+    {
+      "id": "P0-14",
+      "area": "invoice",
+      "step": "GET /api/invoices/:id returns saved invoice",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "id": "P0-15",
+      "area": "org-switch",
+      "step": "Starter signup cannot add second org (expected plan gate)",
+      "pass": true,
+      "notes": "New signup POST /api/auth/organizations returns organization_limit_reached on starter ΓÇö not a product bug"
+    },
+    {
+      "id": "P0-16",
+      "area": "org-switch",
+      "step": "Multi-org admin login exposes 2+ memberships",
+      "pass": true,
+      "notes": "memberships=2"
+    },
+    {
+      "id": "P0-17",
+      "area": "org-switch",
+      "step": "POST /api/auth/active-organization switches active org",
+      "pass": true,
+      "notes": "activeOrg=daf6b470-413d-473e-a63a-e947ca1f1dfd"
+    },
+    {
+      "id": "P0-18",
+      "area": "org-switch",
+      "step": "Foreign customer ID blocked after org switch (no data leak)",
+      "pass": true,
+      "notes": "HTTP 400 code=customer_lookup_failed"
+    },
+    {
+      "id": "P0-19",
+      "area": "org-switch",
+      "step": "Foreign job ID blocked after org switch (no data leak)",
+      "pass": true,
+      "notes": "HTTP 400"
+    },
+    {
+      "id": "P0-20",
+      "area": "org-switch",
+      "step": "Peer account registers separate org",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "id": "P0-21",
+      "area": "org-switch",
+      "step": "Peer user cannot read foreign customer (no data leak)",
+      "pass": true,
+      "notes": "HTTP 400"
+    },
+    {
+      "id": "P0-22",
+      "area": "portal",
+      "step": "Staff mints portal magic link",
+      "pass": true,
+      "notes": "token minted"
+    },
+    {
+      "id": "P0-23",
+      "area": "portal",
+      "step": "POST /api/portal/magic-links/redeem establishes portal session",
+      "pass": true,
+      "notes": "redeemed"
+    },
+    {
+      "id": "P0-24",
+      "area": "portal",
+      "step": "GET /api/portal/session + home after redeem",
+      "pass": true,
+      "notes": "session customer=c312d7ac-2371-484d-b623-bf8bbc2bc0fd"
+    },
+    {
+      "id": "P0-25",
+      "area": "public-booking",
+      "step": "POST public booking API creates lead",
+      "pass": true,
+      "notes": "lead=30ea2cca-7a07-4263-8293-9dc73c68184f"
+    },
+    {
+      "id": "P0-26",
+      "area": "login-ui",
+      "step": "GET /login page renders (HTTP 200)",
+      "pass": true,
+      "notes": "HTTP 200"
+    },
+    {
+      "id": "P0-27",
+      "area": "login-ui",
+      "step": "Admin credentials login via API (same creds as UI)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "id": "P0-28",
+      "area": "public-booking-ui",
+      "step": "POST via frontend /api rewrite creates booking lead",
+      "pass": true,
+      "notes": "proxy OK"
+    },
+    {
+      "id": "P0-28b",
+      "area": "public-booking-ui",
+      "step": "GET /book/[slug] page renders booking form shell",
+      "pass": true,
+      "notes": "HTTP 200"
+    },
+    {
+      "id": "P0-29",
+      "area": "portal-ui",
+      "step": "GET /access/[token] page renders (HTTP 200 + HTML)",
+      "pass": true,
+      "notes": "HTTP 200 bytes=86236"
+    },
+    {
+      "id": "P0-29b",
+      "area": "portal-ui",
+      "step": "POST redeem via frontend /api rewrite",
+      "pass": true,
+      "notes": "redeemed via proxy"
+    }
+  ]
+}
