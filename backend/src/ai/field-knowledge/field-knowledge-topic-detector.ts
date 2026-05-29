@@ -1,4 +1,5 @@
 import {
+  FIELD_KNOWLEDGE_DOMAIN_DOORS_WINDOWS,
   FIELD_KNOWLEDGE_DOMAIN_GAS_FIREPLACE,
   type FieldKnowledgeDomain,
   type GasFireplaceTopicKey,
@@ -219,5 +220,9 @@ export function detectFieldKnowledgeTopics(
     };
   }
 
-  return { domain, topics: ["safety_first"] };
+  if (domain === FIELD_KNOWLEDGE_DOMAIN_DOORS_WINDOWS) {
+    return { domain, topics: [] };
+  }
+
+  return { domain, topics: [] };
 }

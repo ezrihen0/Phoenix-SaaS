@@ -1,4 +1,5 @@
 import {
+  FIELD_KNOWLEDGE_DOMAIN_DOORS_WINDOWS,
   FIELD_KNOWLEDGE_DOMAIN_GAS_FIREPLACE,
   FIELD_KNOWLEDGE_UNKNOWN_JURISDICTION_MESSAGE,
   type AlbertaV1KnowledgeKey,
@@ -12,9 +13,19 @@ export type FieldKnowledgeJurisdictionSelection = {
   jurisdictionNotice: string | null;
 };
 
-const ALBERTA_BASELINE_PACKS: AlbertaV1KnowledgeKey[] = [
+const ALBERTA_BASELINE_GAS_PACKS: AlbertaV1KnowledgeKey[] = [
   "canada_alberta_gas_fireplace_basics",
   "canada_alberta_gas",
+];
+
+const ALBERTA_BASELINE_DOORS_WINDOWS_PACKS: AlbertaV1KnowledgeKey[] = [
+  "ca_ab_doors_windows_trade_map_basics_v1",
+  "ca_ab_doors_windows_residential_diagnostics_basics_v1",
+  "ca_ab_doors_windows_dispatcher_triage_basics_v1",
+  "ca_ab_doors_windows_report_wording_basics_v1",
+  "ca_ab_doors_windows_photo_intake_safety_v1",
+  "ca_ab_windows_screen_service_basics_v1",
+  "ca_ab_doors_windows_service_opportunity_basics_v1",
 ];
 
 const USA_STATE_NAMES = [
@@ -142,7 +153,10 @@ export function selectAlbertaV1KnowledgePacks(input: {
   userMessage: string;
   serviceCity?: string | null;
 }): FieldKnowledgeJurisdictionSelection {
-  if (input.domain !== FIELD_KNOWLEDGE_DOMAIN_GAS_FIREPLACE) {
+  if (
+    input.domain !== FIELD_KNOWLEDGE_DOMAIN_GAS_FIREPLACE
+    && input.domain !== FIELD_KNOWLEDGE_DOMAIN_DOORS_WINDOWS
+  ) {
     return { jurisdictionPacks: [], jurisdictionNotice: null };
   }
 
@@ -161,7 +175,14 @@ export function selectAlbertaV1KnowledgePacks(input: {
     return { jurisdictionPacks: [], jurisdictionNotice: null };
   }
 
-  const packs: AlbertaV1KnowledgeKey[] = [...ALBERTA_BASELINE_PACKS];
+  if (input.domain === FIELD_KNOWLEDGE_DOMAIN_DOORS_WINDOWS) {
+    return {
+      jurisdictionPacks: [...ALBERTA_BASELINE_DOORS_WINDOWS_PACKS],
+      jurisdictionNotice: null,
+    };
+  }
+
+  const packs: AlbertaV1KnowledgeKey[] = [...ALBERTA_BASELINE_GAS_PACKS];
   const cities = detectCities(text);
 
   if (cities.has("calgary")) {
