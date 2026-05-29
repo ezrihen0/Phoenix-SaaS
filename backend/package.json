@@ -25,6 +25,8 @@
     "field-knowledge:contract-check": "node -r ts-node/register src/ai/field-knowledge/field-knowledge-contract-check.ts",
     "field-knowledge:unit-check": "node -r ts-node/register src/ai/field-knowledge/field-knowledge-unit-check.ts",
     "field-knowledge:runtime-safety-check": "node -r ts-node/register src/ai/field-knowledge/field-knowledge-runtime-safety-unit-check.ts",
+    "field-knowledge:qa-appendix-check": "node -r ts-node/register src/ai/field-knowledge/field-knowledge-qa-appendix-check.ts",
+    "field-knowledge:runtime-adversarial-check": "node -r ts-node/register src/ai/field-knowledge/field-knowledge-runtime-adversarial-check.ts",
     "operator-copilot:isolation:smoke": "node -r ts-node/register src/database/operator-copilot-org-isolation-smoke.ts",
     "public-booking:isolation:smoke": "node -r ts-node/register src/database/public-booking-org-isolation-smoke.ts",
     "portal:scope-check": "node -r ts-node/register src/customer-portal/portal-scope-unit-check.ts"

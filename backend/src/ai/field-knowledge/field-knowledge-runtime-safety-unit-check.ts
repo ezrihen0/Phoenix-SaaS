@@ -95,6 +95,24 @@ assert.equal(emergency.gate_outcome, "fallback");
 assert.equal(emergency.fallback_reason, "emergency");
 assert.equal(emergency.skip_llm, true);
 
+for (const message of [
+  "A broken spring flew off from the garage door.",
+  "Cable snapped on the garage door.",
+  "The garage door is hanging off-track.",
+  "Broken glass with security exposure.",
+]) {
+  const detectedEmergency = gate({
+    userMessage: message,
+    requestedSurface: "ai_voice_phone",
+    tradeConfidenceOverride: 0.92,
+  });
+  assert.equal(detectedEmergency.context.emergency_flag, true, message);
+  assert.equal(detectedEmergency.context.booking_eligibility, false, message);
+  assert.equal(detectedEmergency.gate_outcome, "fallback", message);
+  assert.equal(detectedEmergency.fallback_reason, "emergency", message);
+  assert.equal(detectedEmergency.skip_llm, true, message);
+}
+
 // 9. trade_confidence < 0.80 triggers clarification / no confirmed appointment
 const lowTrade = gate({
   userMessage: "Need help with something in Alberta",
@@ -106,7 +124,7 @@ assert.equal(lowTrade.context.booking_eligibility, false);
 
 // 10. risk_confidence < 0.90 on safety issue triggers human review / no booking
 const lowRisk = gate({
-  userMessage: "The torsion spring snapped on the garage door",
+  userMessage: "There is a combustion concern on the gas fireplace",
   tradeConfidenceOverride: 0.92,
   riskConfidenceOverride: 0.5,
 });
