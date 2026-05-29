@@ -14,13 +14,40 @@ import {
 import { AiDeepSeekProviderService } from "./ai-deepseek-provider.service";
 import { AiFieldJobContextService } from "./ai-field-job-context.service";
 import { AiFieldKnowledgeService } from "./ai-field-knowledge.service";
-import type { FieldKnowledgeSelectionKey } from "./field-knowledge/field-knowledge.constants";
-import { resolveAiFieldCopilotEnabled, resolveAiFoundationEnabled } from "./ai-environment";
+import {
+  ALBERTA_V1_KNOWLEDGE_FILES,
+  FIELD_KNOWLEDGE_DOMAIN_DOORS_WINDOWS,
+  FIELD_KNOWLEDGE_DOMAIN_GAS_FIREPLACE,
+  GAS_FIREPLACE_TOPIC_FILES,
+  type FieldKnowledgeDomain,
+  type FieldKnowledgeSelectionKey,
+} from "./field-knowledge/field-knowledge.constants";
+import {
+  parseCsvEnvList,
+  resolveAiFieldCopilotEnabled,
+  resolveAiFieldCopilotVoiceEnabled,
+  resolveAiFoundationEnabled,
+} from "./ai-environment";
+import { evaluateRuntimeGates } from "./field-knowledge/field-knowledge-runtime-gate.engine";
+import {
+  FIELD_KNOWLEDGE_MANIFEST_STATUS,
+  FIELD_KNOWLEDGE_MANIFEST_VERSION,
+  FIELD_COPILOT_ALLOWED_ROLES,
+} from "./field-knowledge/field-knowledge-runtime.constants";
+import type {
+  FallbackReason,
+  FieldKnowledgeRuntimeAudit,
+  GateOutcome,
+} from "./field-knowledge/field-knowledge-runtime.types";
 
 export type FieldCopilotRequestBody = {
   message?: string;
   jobId?: string;
   knowledgeDomain?: string;
+  runtimeSurface?: string;
+  tradeConfidence?: number;
+  riskConfidence?: number;
+  emergencyFlag?: boolean;
 };
 
 export type FieldCopilotResponse = {
@@ -32,18 +59,15 @@ export type FieldCopilotResponse = {
   knowledgeDomain: string;
   topicsUsed: FieldKnowledgeSelectionKey[];
   runId?: string;
+  /** Additive runtime safety fields — backward compatible. */
+  gate_outcome?: GateOutcome;
+  fallback_reason?: FallbackReason | null;
+  refusal_reason?: string | null;
+  used_llm?: boolean;
 };
 
-const FIELD_COPILOT_ALLOWED_ROLES = new Set<ProfileRole>([
-  "owner",
-  "admin",
-  "office_admin",
-  "dispatcher",
-  "technician",
-]);
-
-const FIELD_COPILOT_SYSTEM_PROMPT =
-  "You are WizField Field Copilot — a read-only field assistant for gas fireplace service, inspection, documentation, and safe sales support. "
+const FIELD_COPILOT_GAS_SYSTEM_PROMPT =
+  "You are WizField Field Copilot - a read-only field assistant for gas fireplace service, inspection, documentation, and safe sales support. "
   + "You receive FIELD_KNOWLEDGE excerpts (generic trade knowledge) and optional FIELD_JOB_CONTEXT (org-scoped job snapshot). "
   + "You have no database, filesystem, env, log, source code, or cross-tenant access. "
   + "HARD BOUNDARIES: Do not provide final gas code compliance certification. "
@@ -61,6 +85,83 @@ const FIELD_COPILOT_SYSTEM_PROMPT =
   + "5) What not to promise "
   + "6) Recommended next step "
   + "7) When to escalate";
+
+const FIELD_COPILOT_DOORS_WINDOWS_SYSTEM_PROMPT =
+  "You are WizField Field Copilot - a read-only field assistant for professional doors and windows field service, documentation, dispatch support, and safe sales support. "
+  + "You receive FIELD_KNOWLEDGE excerpts (approved internal trade packs only) and optional FIELD_JOB_CONTEXT (org-scoped job snapshot). "
+  + "You have no database, filesystem, env, log, source code, or cross-tenant access. "
+  + "HARD BOUNDARIES: Do not provide legal, permit, AHJ, code, egress, fire-rated, tempered-glass, warranty, or manufacturer-specific compliance determinations. "
+  + "Do not provide DIY homeowner repair procedures, lock bypass/rekey/security programming, or structural modification guidance. "
+  + "Do not claim definitive root cause without supporting evidence from approved context. "
+  + "Use assessment-first, non-promissory wording and escalate when safety/compliance scope appears. "
+  + "STRUCTURE every answer with these sections (use clear headings): "
+  + "1) Immediate safety concern (if any) "
+  + "2) What to inspect or capture first "
+  + "3) What evidence to collect "
+  + "4) What to tell the customer "
+  + "5) What not to promise "
+  + "6) Recommended next step "
+  + "7) When to escalate";
+
+function buildFieldCopilotSystemPrompt(domain: FieldKnowledgeDomain): string {
+  if (domain === FIELD_KNOWLEDGE_DOMAIN_DOORS_WINDOWS) {
+    return FIELD_COPILOT_DOORS_WINDOWS_SYSTEM_PROMPT;
+  }
+
+  if (domain === FIELD_KNOWLEDGE_DOMAIN_GAS_FIREPLACE) {
+    return FIELD_COPILOT_GAS_SYSTEM_PROMPT;
+  }
+
+  return FIELD_COPILOT_GAS_SYSTEM_PROMPT;
+}
+
+function resolveSelectionPath(selectionKey: FieldKnowledgeSelectionKey): string | null {
+  if (selectionKey in GAS_FIREPLACE_TOPIC_FILES) {
+    return GAS_FIREPLACE_TOPIC_FILES[selectionKey as keyof typeof GAS_FIREPLACE_TOPIC_FILES];
+  }
+  if (selectionKey in ALBERTA_V1_KNOWLEDGE_FILES) {
+    return ALBERTA_V1_KNOWLEDGE_FILES[selectionKey as keyof typeof ALBERTA_V1_KNOWLEDGE_FILES];
+  }
+  return null;
+}
+
+function buildRuntimeAudit(input: {
+  knowledgeDomain: FieldKnowledgeDomain;
+  gateOutcome: GateOutcome;
+  fallbackReason: FallbackReason | null;
+  refusalReason: string | null;
+  usedLlm: boolean;
+  keysUsed: FieldKnowledgeSelectionKey[];
+  evaluation: ReturnType<typeof evaluateRuntimeGates>;
+}): FieldKnowledgeRuntimeAudit {
+  const ctx = input.evaluation.context;
+  return {
+    manifest_version: FIELD_KNOWLEDGE_MANIFEST_VERSION,
+    manifest_status: FIELD_KNOWLEDGE_MANIFEST_STATUS,
+    selected_knowledge_keys: input.keysUsed,
+    selected_pack_paths: input.keysUsed
+      .map((key) => resolveSelectionPath(key))
+      .filter((path): path is string => path != null),
+    trade: ctx.trade,
+    region_country: ctx.country,
+    region_province: ctx.province_or_state,
+    region_city: ctx.city_or_ahj,
+    runtime_surface: ctx.runtime_surface,
+    user_role: ctx.user_role,
+    risk_level: ctx.risk_level,
+    trade_confidence: ctx.trade_confidence,
+    risk_confidence: ctx.risk_confidence,
+    emergency_flag: ctx.emergency_flag,
+    gate_outcome: input.gateOutcome,
+    fallback_reason: input.fallbackReason,
+    refusal_reason: input.refusalReason,
+    booking_eligibility: ctx.booking_eligibility,
+    lead_capture_only: ctx.lead_capture_only,
+    booking_outcome: ctx.booking_outcome,
+    knowledge_domain: input.knowledgeDomain,
+    used_llm: input.usedLlm,
+  };
+}
 
 @Injectable()
 export class AiFieldCopilotService {
@@ -83,11 +184,12 @@ export class AiFieldCopilotService {
     return rawConfig ?? rawEnv ?? undefined;
   }
 
-  private enforceFieldCopilotAccess(request: RequestWithActor) {
+  private enforceFieldCopilotAccess(request: RequestWithActor): ProfileRole {
     const role = (request.actor?.role ?? request.actor?.profile?.role ?? null) as ProfileRole | null;
     if (!role || !FIELD_COPILOT_ALLOWED_ROLES.has(role)) {
       apiError(403, "field_copilot_forbidden", "Field Copilot is not available for this role.");
     }
+    return role;
   }
 
   private requireActiveOrganizationIdFromActor(actorOrgId: string | null | undefined): string {
@@ -96,6 +198,19 @@ export class AiFieldCopilotService {
       apiError(400, "organization_context_missing", "An active organization is required for this action.");
     }
     return organizationId;
+  }
+
+  private resolveKillSwitches(knowledgeDomain: FieldKnowledgeDomain) {
+    const disabledDomains = parseCsvEnvList(this.mergedEnvPreference("AI_FIELD_COPILOT_DISABLED_DOMAINS"));
+    const disabledSurfaces = parseCsvEnvList(this.mergedEnvPreference("AI_FIELD_COPILOT_DISABLED_SURFACES"));
+
+    return {
+      domainDisabled: disabledDomains.includes(knowledgeDomain.toLowerCase()),
+      voiceEnabled: resolveAiFieldCopilotVoiceEnabled(
+        this.mergedEnvPreference("AI_FIELD_COPILOT_VOICE_ENABLED") ?? undefined,
+      ),
+      disabledSurfaces,
+    };
   }
 
   async postFieldCopilot(
@@ -121,7 +236,7 @@ export class AiFieldCopilotService {
       return { ...baseResponse, status: "disabled", message: "Field Copilot is disabled in this environment." };
     }
 
-    this.enforceFieldCopilotAccess(request);
+    const userRole = this.enforceFieldCopilotAccess(request);
 
     const organizationId = this.requireActiveOrganizationIdFromActor(request.actor?.organization_id);
     const actorProfileId = request.actor?.profile?.id ?? null;
@@ -139,14 +254,6 @@ export class AiFieldCopilotService {
       apiError(400, "field_copilot_job_id_invalid", "jobId must be a string when provided.");
     }
 
-    if (!this.deepSeekProvider.isConfigured()) {
-      return {
-        ...baseResponse,
-        status: "provider_not_configured",
-        message: "DeepSeek is not configured. Add DEEPSEEK_API_KEY to the backend.",
-      };
-    }
-
     const actor = request.actor;
     if (!actor) {
       apiError(401, "unauthorized", "Authentication is required.");
@@ -158,13 +265,93 @@ export class AiFieldCopilotService {
       body.jobId,
     );
 
+    const killSwitchState = this.resolveKillSwitches(knowledgeDomain);
+
+    const gateEvaluation = evaluateRuntimeGates({
+      domain: knowledgeDomain,
+      userMessage,
+      userRole,
+      organizationId,
+      serviceCity: jobContext?.service_city ?? null,
+      requestedSurface: body.runtimeSurface,
+      killSwitches: {
+        domainDisabled: killSwitchState.domainDisabled,
+        surfaceDisabled: false,
+        voiceEnabled: killSwitchState.voiceEnabled,
+        disabledSurfaces: killSwitchState.disabledSurfaces,
+      },
+      tradeConfidenceOverride: typeof body.tradeConfidence === "number" ? body.tradeConfidence : undefined,
+      riskConfidenceOverride: typeof body.riskConfidence === "number" ? body.riskConfidence : undefined,
+      emergencyFlagOverride: body.emergencyFlag === true ? true : undefined,
+    });
+
+    const safetyFields = {
+      gate_outcome: gateEvaluation.gate_outcome,
+      fallback_reason: gateEvaluation.fallback_reason,
+      refusal_reason: gateEvaluation.refusal_reason,
+      used_llm: false as boolean,
+    };
+
+    if (gateEvaluation.skip_llm && gateEvaluation.fallback_message) {
+      const audit = buildRuntimeAudit({
+        knowledgeDomain,
+        gateOutcome: gateEvaluation.gate_outcome,
+        fallbackReason: gateEvaluation.fallback_reason,
+        refusalReason: gateEvaluation.refusal_reason,
+        usedLlm: false,
+        keysUsed: [],
+        evaluation: gateEvaluation,
+      });
+
+      const runId = await this.telemetry.recordActionRun({
+        organizationId,
+        actorProfileId,
+        actionKey: AI_AGENT_KEY_FIELD_COPILOT,
+        provider: AI_DEEPSEEK_PROVIDER_NAME,
+        featureKey: AI_FEATURE_FIELD_COPILOT_V1,
+        promptVersion: AI_PROMPT_VERSION_FIELD_COPILOT_V1,
+        status: gateEvaluation.gate_outcome === "refused" ? "refused" : "completed",
+        modelId: model,
+        traceEnvelope: {
+          ...audit,
+          field_job_context_used: jobContext != null,
+          user_message_length: userMessage.length,
+          response_length: gateEvaluation.fallback_message.length,
+        },
+      });
+
+      return {
+        ...baseResponse,
+        ...safetyFields,
+        topicsUsed: [],
+        status: "ok",
+        message: gateEvaluation.fallback_message,
+        runId,
+      };
+    }
+
+    if (!this.deepSeekProvider.isConfigured()) {
+      return {
+        ...baseResponse,
+        status: "provider_not_configured",
+        message: "DeepSeek is not configured. Add DEEPSEEK_API_KEY to the backend.",
+      };
+    }
+
+    const allowedPackKeys = gateEvaluation.allowed_pack_keys
+      ? new Set(gateEvaluation.allowed_pack_keys)
+      : undefined;
+
     const knowledgeBundle = await this.fieldKnowledge.loadKnowledgeBundle(knowledgeDomain, userMessage, {
       serviceCity: jobContext?.service_city ?? null,
+      allowedPackKeys,
+      runtimeContext: gateEvaluation.context,
     });
 
     const knowledgeBlock = this.fieldKnowledge.formatBundleForPrompt(knowledgeBundle);
     const jobBlock = this.fieldJobContext.formatForPrompt(jobContext);
-    const systemPrompt = `${FIELD_COPILOT_SYSTEM_PROMPT}\n\n${knowledgeBlock}\n\n${jobBlock}`;
+    const domainPrompt = buildFieldCopilotSystemPrompt(knowledgeDomain);
+    const systemPrompt = `${domainPrompt}\n\n${knowledgeBlock}\n\n${jobBlock}`;
 
     const startedAt = Date.now();
     const outcome = await this.deepSeekProvider.completeChat({
@@ -177,6 +364,16 @@ export class AiFieldCopilotService {
     const latencyMs = Date.now() - startedAt;
 
     const topicsUsed = knowledgeBundle.keysUsed;
+
+    const audit = buildRuntimeAudit({
+      knowledgeDomain,
+      gateOutcome: "allowed",
+      fallbackReason: null,
+      refusalReason: null,
+      usedLlm: true,
+      keysUsed: topicsUsed,
+      evaluation: gateEvaluation,
+    });
 
     if (!outcome.ok) {
       if (outcome.reasonCode === "provider_not_configured") {
@@ -200,6 +397,7 @@ export class AiFieldCopilotService {
         modelId: model,
         latencyMs,
         traceEnvelope: {
+          ...audit,
           knowledge_domain: knowledgeDomain,
           topics_used: topicsUsed,
           jurisdiction_packs: knowledgeBundle.jurisdictionPacks,
@@ -232,6 +430,7 @@ export class AiFieldCopilotService {
       estimatedCostUsd: outcome.estimatedCostUsd,
       latencyMs: outcome.latencyMs ?? latencyMs,
       traceEnvelope: {
+        ...audit,
         knowledge_domain: knowledgeDomain,
         topics_used: topicsUsed,
         jurisdiction_packs: knowledgeBundle.jurisdictionPacks,
@@ -250,6 +449,10 @@ export class AiFieldCopilotService {
       model: outcome.modelId,
       message: outcome.text,
       runId,
+      gate_outcome: "allowed",
+      fallback_reason: null,
+      refusal_reason: null,
+      used_llm: true,
     };
   }
 }

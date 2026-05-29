@@ -148,3 +148,28 @@ export function resolveAiFieldCopilotEnabled(raw: string | undefined): boolean {
   const normalized = raw.trim().toLowerCase();
   return ["true", "1", "yes", "on"].includes(normalized);
 }
+
+/**
+ * Field Copilot AI Voice surface shell — hard-disabled unless explicitly enabled.
+ * Requires `AI_FOUNDATION_ENABLED` and `AI_FIELD_COPILOT_ENABLED` first in callers.
+ */
+export function resolveAiFieldCopilotVoiceEnabled(raw: string | undefined): boolean {
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(normalized);
+}
+
+/** Parse comma-separated env list into normalized tokens (empty when unset). */
+export function parseCsvEnvList(raw: string | undefined): string[] {
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return [];
+  }
+
+  return raw
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => item.length > 0);
+}

@@ -15,6 +15,8 @@ function read(name: string) {
 const knowledgeService = read("ai-field-knowledge.service.ts");
 const copilotService = read("ai-field-copilot.service.ts");
 const controller = readFileSync(join(aiRoot, "ai.controller.ts"), "utf8");
+const constants = read("field-knowledge/field-knowledge.constants.ts");
+const topicDetector = read("field-knowledge/field-knowledge-topic-detector.ts");
 
 if (!knowledgeService.includes("GAS_FIREPLACE_TOPIC_FILES")) {
   errors.push("ai-field-knowledge.service must use GAS_FIREPLACE_TOPIC_FILES allowlist");
@@ -26,6 +28,14 @@ if (!knowledgeService.includes("ALBERTA_V1_KNOWLEDGE_FILES")) {
 
 if (!knowledgeService.includes("FIELD_KNOWLEDGE_ALLOWLISTED_PATHS")) {
   errors.push("ai-field-knowledge.service must use FIELD_KNOWLEDGE_ALLOWLISTED_PATHS for reads");
+}
+
+if (!constants.includes("FIELD_KNOWLEDGE_DOMAIN_DOORS_WINDOWS")) {
+  errors.push("field-knowledge constants must declare doors_windows domain");
+}
+
+if (!constants.includes("ca_ab_doors_windows_trade_map_basics_v1")) {
+  errors.push("field-knowledge constants must include doors-windows Alberta pack keys");
 }
 
 if (!knowledgeService.includes("selectAlbertaV1KnowledgePacks")) {
@@ -55,6 +65,31 @@ if (copilotService.includes("body.organization") || copilotService.includes("que
 const promptSection = copilotService.slice(0, copilotService.indexOf("export class AiFieldCopilotService"));
 if (!promptSection.includes("Do not instruct unlicensed gas work")) {
   errors.push("field copilot system prompt must forbid unlicensed gas work");
+}
+if (!promptSection.includes("FIELD_COPILOT_DOORS_WINDOWS_SYSTEM_PROMPT")) {
+  errors.push("field copilot must define a doors-windows domain prompt");
+}
+if (!topicDetector.includes("FIELD_KNOWLEDGE_DOMAIN_DOORS_WINDOWS")) {
+  errors.push("topic detector must include doors-windows domain branch");
+}
+if (!topicDetector.includes("return { domain, topics: [] };")) {
+  errors.push("doors-windows topic detection must avoid gas fallback topics");
+}
+
+if (!knowledgeService.includes("assertRuntimeKnowledgePathAllowed")) {
+  errors.push("ai-field-knowledge.service must use assertRuntimeKnowledgePathAllowed path guard");
+}
+
+if (!copilotService.includes("evaluateRuntimeGates")) {
+  errors.push("ai-field-copilot.service must use evaluateRuntimeGates for runtime safety");
+}
+
+if (!copilotService.includes("used_llm")) {
+  errors.push("field copilot response must expose used_llm for runtime safety");
+}
+
+if (copilotService.includes("appointment.create") || copilotService.includes("availability.search")) {
+  errors.push("field copilot must not implement AI Voice live booking tools");
 }
 
 if (errors.length > 0) {
