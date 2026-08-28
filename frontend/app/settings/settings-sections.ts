@@ -85,7 +85,7 @@ export const SETTINGS_SECTIONS: SettingsSectionConfig[] = [
     titleKey: "roles.title",
     helperKey: "roles.helper",
     icon: UsersRound,
-    ownerOnlyPanel: true,
+    ownerOrAdminNav: true,
     metricKey: "teamMembers",
   },
   {

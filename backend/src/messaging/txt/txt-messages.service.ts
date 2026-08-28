@@ -6,6 +6,7 @@ import { apiError } from "../../common/api-response";
 import { assertTablesExist } from "../../database/schema-readiness";
 
 type PersistTxtMessageInput = {
+  organizationId: string;
   conversationId: string;
   direction: "inbound" | "outbound";
   sentByUserId?: string | null;
@@ -29,6 +30,7 @@ type PersistTxtMessageInput = {
 
 type TxtMessageRecord = {
   id: string;
+  organizationId: string | null;
   conversationId: string;
   direction: "inbound" | "outbound";
   sentByUserId: string | null;
@@ -73,6 +75,7 @@ export class TxtMessagesService {
       `
         SELECT
           id,
+          organization_id,
           conversation_id,
           direction,
           sent_by_user_id,
@@ -108,19 +111,21 @@ export class TxtMessagesService {
     return this.toMessage(rows[0]);
   }
 
-  async listByConversationIds(conversationIds: string[], limitRaw: number) {
+  async listByConversationIds(organizationIdRaw: string, conversationIds: string[], limitRaw: number) {
     await this.ensureSchema();
 
     if (!conversationIds.length) {
       return [] as TxtMessageRecord[];
     }
 
+    const organizationId = organizationIdRaw.trim();
     const limit = Math.max(1, Math.floor(limitRaw));
     const placeholders = conversationIds.map(() => "?").join(", ");
     const rows = await this.dataSource.query(
       `
         SELECT
           id,
+          organization_id,
           conversation_id,
           direction,
           sent_by_user_id,
@@ -143,23 +148,25 @@ export class TxtMessagesService {
           created_at,
           updated_at
         FROM txt_messages
-        WHERE conversation_id IN (${placeholders})
+        WHERE organization_id = ?
+          AND conversation_id IN (${placeholders})
         ORDER BY created_at DESC
         LIMIT ?
       `,
-      [...conversationIds, limit],
+      [organizationId, ...conversationIds, limit],
     ) as Array<Record<string, unknown>>;
 
     return rows.map((row) => this.toMessage(row));
   }
 
-  async markInboundMessagesRead(conversationIds: string[]) {
+  async markInboundMessagesRead(organizationIdRaw: string, conversationIds: string[]) {
     await this.ensureSchema();
 
     if (!conversationIds.length) {
       return;
     }
 
+    const organizationId = organizationIdRaw.trim();
     const placeholders = conversationIds.map(() => "?").join(", ");
 
     await this.dataSource.query(
@@ -169,35 +176,39 @@ export class TxtMessagesService {
           read_at = COALESCE(read_at, CURRENT_TIMESTAMP(6)),
           updated_at = CURRENT_TIMESTAMP(6)
         WHERE conversation_id IN (${placeholders})
+          AND organization_id = ?
           AND direction = 'inbound'
           AND read_at IS NULL
       `,
-      conversationIds,
+      [...conversationIds, organizationId],
     );
   }
 
-  async findLatestInboundMessage(conversationIds: string[]) {
+  async findLatestInboundMessage(organizationIdRaw: string, conversationIds: string[]) {
     await this.ensureSchema();
 
     if (!conversationIds.length) {
       return null as TxtMessageReadStateRecord | null;
     }
 
+    const organizationId = organizationIdRaw.trim();
     const placeholders = conversationIds.map(() => "?").join(", ");
     const rows = await this.dataSource.query(
       `
         SELECT
           id,
+          organization_id,
           conversation_id,
           read_at,
           created_at
         FROM txt_messages
-        WHERE conversation_id IN (${placeholders})
+        WHERE organization_id = ?
+          AND conversation_id IN (${placeholders})
           AND direction = 'inbound'
         ORDER BY created_at DESC
         LIMIT 1
       `,
-      conversationIds,
+      [organizationId, ...conversationIds],
     ) as Array<Record<string, unknown>>;
 
     if (!rows[0]) {
@@ -212,9 +223,10 @@ export class TxtMessagesService {
     };
   }
 
-  async markMessageUnread(messageIdRaw: string) {
+  async markMessageUnread(organizationIdRaw: string, messageIdRaw: string) {
     await this.ensureSchema();
 
+    const organizationId = organizationIdRaw.trim();
     const messageId = messageIdRaw.trim();
 
     if (!messageId) {
@@ -228,9 +240,10 @@ export class TxtMessagesService {
           read_at = NULL,
           updated_at = CURRENT_TIMESTAMP(6)
         WHERE id = ?
+          AND organization_id = ?
           AND direction = 'inbound'
       `,
-      [messageId],
+      [messageId, organizationId],
     );
   }
 
@@ -249,10 +262,16 @@ export class TxtMessagesService {
       apiError(400, "txt_message_body_required", "TXT message body is required.");
     }
 
+    const organizationId = input.organizationId.trim();
+    if (!organizationId) {
+      apiError(400, "txt_message_organization_required", "Organization scope is required for TXT message persistence.");
+    }
+
     await this.dataSource.query(
       `
         INSERT INTO txt_messages (
           id,
+          organization_id,
           conversation_id,
           direction,
           sent_by_user_id,
@@ -274,10 +293,11 @@ export class TxtMessagesService {
           raw_payload,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
       `,
       [
         id,
+        organizationId,
         input.conversationId,
         input.direction,
         this.asTrimmedString(input.sentByUserId),
@@ -304,6 +324,7 @@ export class TxtMessagesService {
   }
 
   async updateMessageDelivery(input: {
+    organizationId?: string | null;
     idOrProviderMessageId: string;
     providerMessageId?: string | null;
     providerStatus?: string | null;
@@ -324,6 +345,7 @@ export class TxtMessagesService {
       apiError(400, "txt_message_update_key_required", "TXT message update key is required.");
     }
 
+    const organizationId = this.asTrimmedString(input.organizationId);
     await this.dataSource.query(
       `
         UPDATE txt_messages
@@ -339,7 +361,8 @@ export class TxtMessagesService {
           read_at = COALESCE(?, read_at),
           raw_payload = COALESCE(?, raw_payload),
           updated_at = CURRENT_TIMESTAMP(6)
-        WHERE id = ? OR provider_message_id = ?
+        WHERE (id = ? OR provider_message_id = ?)
+          AND (? IS NULL OR organization_id = ?)
       `,
       [
         this.asTrimmedString(input.providerMessageId),
@@ -354,6 +377,8 @@ export class TxtMessagesService {
         this.stringifyPayload(input.rawPayload),
         key,
         key,
+        organizationId,
+        organizationId,
       ],
     );
   }
@@ -363,6 +388,7 @@ export class TxtMessagesService {
       `
         SELECT
           id,
+          organization_id,
           conversation_id,
           direction,
           sent_by_user_id,
@@ -401,6 +427,7 @@ export class TxtMessagesService {
   private toMessage(row: Record<string, unknown>): TxtMessageRecord {
     return {
       id: String(row.id),
+      organizationId: this.asTrimmedString(row.organization_id),
       conversationId: String(row.conversation_id),
       direction: this.asDirection(row.direction),
       sentByUserId: this.asTrimmedString(row.sent_by_user_id),

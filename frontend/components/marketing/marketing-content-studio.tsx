@@ -521,6 +521,10 @@ export function MarketingContentStudio({ studioDraftQuery, publishCapabilities }
                       Schedule publishing
                     </button>
                   </>
+                ) : detail.draft.workflow_state === "approved" && !canPublish ? (
+                  <p className="text-xs leading-5 text-[color:var(--sem-text-muted)]">
+                    Publishing requires connected OAuth channels and dispatcher eligibility. Connect channels in Growth Center → Channels before enqueueing publish jobs.
+                  </p>
                 ) : null}
               </div>
             </header>

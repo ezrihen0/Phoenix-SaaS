@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -23,7 +24,7 @@ type UpdateCallbackTaskPayload = {
   notes?: unknown;
 };
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/telephony")
 export class CallbackTasksController {
   constructor(private readonly callbackTaskService: CallbackTaskService) {}

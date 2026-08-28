@@ -22,8 +22,22 @@ export type AiDeepSeekCompletionResult =
       outputTokens: number;
       latencyMs: number;
       estimatedCostUsd: number;
+      toolCalls?: Array<{ id: string; name: string; arguments: string }>;
     }
   | { ok: false; reasonCode: string };
+
+export type AiDeepSeekChatMessage =
+  | { role: "system" | "user"; content: string }
+  | {
+      role: "assistant";
+      content: string;
+      tool_calls?: Array<{
+        id: string;
+        type: "function";
+        function: { name: string; arguments: string };
+      }>;
+    }
+  | { role: "tool"; content: string; tool_call_id: string };
 
 /**
  * DeepSeek Chat Completions boundary (OpenAI-compatible wire format).
@@ -121,12 +135,28 @@ export class AiDeepSeekProviderService {
       }
 
       const body = (await response.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
+        choices?: Array<{
+          message?: {
+            content?: string;
+            tool_calls?: Array<{
+              id?: string;
+              function?: { name?: string; arguments?: string };
+            }>;
+          };
+        }>;
         usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
-      const text = body.choices?.[0]?.message?.content?.trim() ?? "";
+      const message = body.choices?.[0]?.message;
+      const text = message?.content?.trim() ?? "";
+      const toolCalls = (message?.tool_calls ?? [])
+        .map((call) => ({
+          id: call.id ?? "",
+          name: call.function?.name ?? "",
+          arguments: call.function?.arguments ?? "{}",
+        }))
+        .filter((call) => call.id && call.name);
 
-      if (!text) {
+      if (!text && toolCalls.length === 0) {
         return { ok: false, reasonCode: "deepseek_empty_content" };
       }
 
@@ -143,6 +173,7 @@ export class AiDeepSeekProviderService {
         outputTokens,
         latencyMs,
         estimatedCostUsd: this.estimateCostUsd(model, inputTokens, outputTokens),
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       };
     } catch (error) {
       this.logger.warn(`deepseek_fetch_failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -166,5 +197,91 @@ export class AiDeepSeekProviderService {
       temperature: 0.35,
       maxOutputChars: 2000,
     });
+  }
+
+  async completeChatWithMessages(input: {
+    messages: AiDeepSeekChatMessage[];
+    tools?: Array<Record<string, unknown>>;
+    maxTokens?: number;
+    temperature?: number;
+    maxOutputChars?: number;
+  }): Promise<AiDeepSeekCompletionResult> {
+    const apiKey = this.readApiKey();
+    if (!apiKey) {
+      return { ok: false, reasonCode: "provider_not_configured" };
+    }
+
+    const model = this.readConfiguredModelId();
+    const startedAt = Date.now();
+
+    try {
+      const response = await fetch(this.chatCompletionsUrl(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: input.temperature ?? 0.35,
+          max_tokens: input.maxTokens ?? 800,
+          messages: input.messages,
+          ...(input.tools && input.tools.length > 0 ? { tools: input.tools } : {}),
+        }),
+      });
+
+      const latencyMs = Date.now() - startedAt;
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        this.logger.warn(`deepseek_http_error status=${response.status} body=${errText.slice(0, 500)}`);
+        return { ok: false, reasonCode: "deepseek_http_error" };
+      }
+
+      const body = (await response.json()) as {
+        choices?: Array<{
+          message?: {
+            content?: string;
+            tool_calls?: Array<{
+              id?: string;
+              function?: { name?: string; arguments?: string };
+            }>;
+          };
+        }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+      const message = body.choices?.[0]?.message;
+      const text = message?.content?.trim() ?? "";
+      const toolCalls = (message?.tool_calls ?? [])
+        .map((call) => ({
+          id: call.id ?? "",
+          name: call.function?.name ?? "",
+          arguments: call.function?.arguments ?? "{}",
+        }))
+        .filter((call) => call.id && call.name);
+
+      if (!text && toolCalls.length === 0) {
+        return { ok: false, reasonCode: "deepseek_empty_content" };
+      }
+
+      const maxChars = input.maxOutputChars ?? 4000;
+      const normalized = text.length > maxChars ? text.slice(0, maxChars) : text;
+      const inputTokens = body.usage?.prompt_tokens ?? 0;
+      const outputTokens = body.usage?.completion_tokens ?? 0;
+
+      return {
+        ok: true,
+        text: normalized,
+        modelId: model,
+        inputTokens,
+        outputTokens,
+        latencyMs,
+        estimatedCostUsd: this.estimateCostUsd(model, inputTokens, outputTokens),
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      };
+    } catch (error) {
+      this.logger.warn(`deepseek_fetch_failed: ${error instanceof Error ? error.message : String(error)}`);
+      return { ok: false, reasonCode: "deepseek_fetch_failed" };
+    }
   }
 }

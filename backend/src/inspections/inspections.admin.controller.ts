@@ -17,6 +17,7 @@ import { FilesInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
 
 import { requirePermission } from "../auth/permissions";
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { ActorContext, RequestWithActor } from "../common/request-types";
@@ -71,7 +72,7 @@ type AssignPhotoPayload = {
   make_primary?: boolean;
 };
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/inspections")
 export class InspectionsAdminController {
   constructor(private readonly inspectionsAdminService: InspectionsAdminService) {}

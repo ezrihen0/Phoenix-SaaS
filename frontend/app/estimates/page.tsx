@@ -268,8 +268,8 @@ function getEstimateNextStep(estimate: EstimateListItem, locale: string): Estima
   }
 
   return {
-    label: "Finish and send",
-    detail: "Complete scope details and send the estimate to the customer.",
+    label: "Mark ready for approval",
+    detail: "Complete scope details and mark the estimate ready for internal approval.",
     tone: "default",
   };
 }
@@ -929,7 +929,9 @@ export default async function EstimatesPage({ searchParams }: EstimatesPageConte
             </div>
           </section>
 
-          <AiFollowUpAssistantPanel estimates={estimates} aiState={aiState} locale={locale} labels={aiPanelLabels} />
+          {aiState.mode === "connected" ? (
+            <AiFollowUpAssistantPanel estimates={estimates} aiState={aiState} locale={locale} labels={aiPanelLabels} />
+          ) : null}
         </div>
       </div>
     </BoardShell>

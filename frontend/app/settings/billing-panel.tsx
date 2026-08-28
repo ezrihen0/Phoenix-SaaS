@@ -53,6 +53,87 @@ type BillingPanelProps = {
 
 const planOptions = ["starter", "pro", "business"] as const;
 
+type BillingStatusPresentation = {
+  tone: "healthy" | "attention" | "waiting" | "retry";
+  title: string;
+  body: string;
+  showRetry: boolean;
+};
+
+function getBillingStatusPresentation(
+  billingStatus: string,
+  attentionReason: string | null,
+  cancelAtPeriodEnd: boolean,
+  lastProviderSyncAt: string | null,
+): BillingStatusPresentation {
+  if (billingStatus === "past_due") {
+    return {
+      tone: "retry",
+      title: "Payment past due",
+      body: attentionReason
+        ? `Stripe reported a payment problem: ${attentionReason}. Retry checkout or update payment in Stripe to restore access.`
+        : "Stripe reported a payment problem on this subscription. Retry checkout or update payment in Stripe to restore access.",
+      showRetry: true,
+    };
+  }
+
+  if (billingStatus === "canceled") {
+    return {
+      tone: "retry",
+      title: cancelAtPeriodEnd ? "Subscription ending" : "Subscription canceled",
+      body: cancelAtPeriodEnd
+        ? "This subscription is set to cancel at the end of the current billing period. Start a new checkout if you need to reactivate before access is removed."
+        : "This shared billing account no longer has an active paid subscription. Start checkout again to reactivate workspace access.",
+      showRetry: true,
+    };
+  }
+
+  if (billingStatus === "deactivated") {
+    return {
+      tone: "retry",
+      title: "Billing account deactivated",
+      body: "Workspace access is blocked until a paid subscription is active again. Start checkout to reactivate this billing account.",
+      showRetry: true,
+    };
+  }
+
+  if (billingStatus === "unknown") {
+    return {
+      tone: "waiting",
+      title: "Waiting for billing confirmation",
+      body: lastProviderSyncAt
+        ? "Local billing state has not been confirmed yet. If you recently completed checkout, wait for verified Stripe webhook sync or retry checkout."
+        : "No verified provider sync has been recorded yet. Complete Stripe Checkout and wait for webhook confirmation before expecting CRM access.",
+      showRetry: true,
+    };
+  }
+
+  if (billingStatus === "trialing") {
+    return {
+      tone: "healthy",
+      title: "Trial in progress",
+      body: "This billing account is in a trial window. CRM access follows the current trial entitlement until the trial ends or converts to paid billing.",
+      showRetry: false,
+    };
+  }
+
+  if (attentionReason) {
+    return {
+      tone: "attention",
+      title: "Billing attention required",
+      body: `Status: ${billingStatus} — ${attentionReason}`,
+      showRetry: billingStatus !== "active",
+    };
+  }
+
+  return {
+    tone: "healthy",
+    title: `Billing status: ${billingStatus}`,
+    body: "Checkout and plan changes remain controlled through the existing Stripe flow.",
+    showRetry: false,
+  };
+}
+
 export function BillingPanel({ initial, loadError }: BillingPanelProps) {
   const [payload] = useState<BillingSummaryPayload | null>(initial);
   const [busy, setBusy] = useState(false);
@@ -93,11 +174,30 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
   const selectedPlanConfigured = Boolean(planEnv?.[selectedPlan]);
   const checkoutReady = payload.provider_checkout_configured && payload.checkout_urls_configured;
   const activeProvider = billing.billing_provider ?? payload.active_provider;
-
-  const needsAttention =
-    billing.billing_status === "unknown"
-    || billing.billing_status === "past_due"
-    || Boolean(billing.attention_reason);
+  const statusPresentation = getBillingStatusPresentation(
+    billing.billing_status,
+    billing.attention_reason,
+    billing.cancel_at_period_end,
+    billing.last_provider_sync_at,
+  );
+  const statusPanelClassName =
+    statusPresentation.tone === "healthy"
+      ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)]"
+      : statusPresentation.tone === "waiting"
+        ? "border-sky-500/35 bg-sky-500/10"
+        : "border-amber-500/40 bg-amber-500/10";
+  const statusTitleClassName =
+    statusPresentation.tone === "healthy"
+      ? "text-[color:var(--sem-display-headline)]"
+      : statusPresentation.tone === "waiting"
+        ? "text-sky-100"
+        : "text-amber-100";
+  const statusBodyClassName =
+    statusPresentation.tone === "healthy"
+      ? "text-[color:var(--sem-text-secondary)]"
+      : statusPresentation.tone === "waiting"
+        ? "text-sky-100/90"
+        : "text-amber-100/90";
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -109,23 +209,18 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
         businesses according to the current plan entitlement, while tenant invoice payments stay separate.
       </p>
 
-      {needsAttention ? (
-        <div className="mt-4 rounded-[18px] border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          <p className="font-semibold">Billing attention</p>
-          <p className="mt-1 text-amber-100/90">
-            Status: {billing.billing_status}
-            {billing.attention_reason ? ` — ${billing.attention_reason}` : ""}
+      <div className={`mt-4 rounded-[18px] border px-4 py-3 ${statusPanelClassName}`}>
+        <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">
+          {statusPresentation.tone === "healthy" ? "Plan health" : "Billing status"}
+        </p>
+        <h4 className={`mt-2 text-lg font-semibold ${statusTitleClassName}`}>{statusPresentation.title}</h4>
+        <p className={`mt-2 text-sm leading-6 ${statusBodyClassName}`}>{statusPresentation.body}</p>
+        {statusPresentation.showRetry ? (
+          <p className={`mt-3 text-sm leading-6 ${statusBodyClassName}`}>
+            Use Stripe checkout below to retry activation or start a new subscription.
           </p>
-        </div>
-      ) : (
-        <div className="mt-4 rounded-[18px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] px-4 py-3">
-          <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Plan health</p>
-          <h4 className="mt-2 text-lg font-semibold text-[color:var(--sem-display-headline)]">Billing status: {billing.billing_status}</h4>
-          <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-            Checkout and plan changes remain controlled through the existing Stripe flow.
-          </p>
-        </div>
-      )}
+        ) : null}
+      </div>
 
       <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
         <div className="theme-control-surface-soft rounded-[16px] border px-4 py-3">
@@ -234,7 +329,11 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
               onClick={() => void startCheckout()}
               className="w-full rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--sem-accent-primary)] px-4 py-3 text-sm font-semibold text-[color:var(--cmp-surface-canvas)] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy ? "Redirecting…" : "Start Stripe checkout"}
+              {busy
+                ? "Redirecting…"
+                : statusPresentation.showRetry
+                  ? "Retry Stripe checkout"
+                  : "Start Stripe checkout"}
             </button>
           </div>
 

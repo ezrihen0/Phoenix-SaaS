@@ -1,5 +1,6 @@
 import { Controller, Param, Post, Req, UseGuards } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { requirePermission } from "../auth/permissions";
 import { apiError, apiSuccess } from "../common/api-response";
@@ -7,7 +8,7 @@ import type { RequestWithActor } from "../common/request-types";
 import { CustomerPortalService } from "./customer-portal.service";
 
 @Controller("api/portal/staff")
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 export class CustomerPortalStaffController {
   constructor(private readonly customerPortalService: CustomerPortalService) {}
 

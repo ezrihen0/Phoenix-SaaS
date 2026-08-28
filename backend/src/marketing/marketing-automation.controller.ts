@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -25,7 +26,7 @@ function readObjectBody(body: unknown): Record<string, unknown> {
   return body as Record<string, unknown>;
 }
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/marketing")
 export class MarketingAutomationController {
   constructor(private readonly automationService: MarketingAutomationService) {}

@@ -3,7 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { createReadStream } from "fs";
 import { promises as fs } from "fs";
 import { join } from "path";
-import { IsNull, Repository } from "typeorm";
+import { Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import { CustomerEntity } from "../database/entities/customer.entity";
@@ -199,10 +199,7 @@ export class WarrantyCertificatesService {
 
   async getLatestByCustomerForPortal(organizationId: string, customerId: string, limit = 5) {
     return this.warrantyCertificatesRepository.find({
-      where: [
-        { organization_id: organizationId, customer_id: customerId },
-        { organization_id: IsNull(), customer_id: customerId },
-      ],
+      where: { organization_id: organizationId, customer_id: customerId },
       order: { created_at: "DESC" },
       take: limit,
     });
@@ -210,10 +207,7 @@ export class WarrantyCertificatesService {
 
   async getByIdForPortal(certificateId: string, organizationId: string, customerId: string) {
     const certificate = await this.warrantyCertificatesRepository.findOne({
-      where: [
-        { id: certificateId, organization_id: organizationId, customer_id: customerId },
-        { id: certificateId, organization_id: IsNull(), customer_id: customerId },
-      ],
+      where: { id: certificateId, organization_id: organizationId, customer_id: customerId },
     });
     if (!certificate) {
       apiError(404, "warranty_certificate_not_found", "The warranty certificate could not be found.");

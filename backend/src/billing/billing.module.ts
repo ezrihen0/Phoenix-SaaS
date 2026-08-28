@@ -8,6 +8,7 @@ import { BillingAccountSubscriptionItemEntity } from "../database/entities/billi
 import { OrganizationEntity } from "../database/entities/organization.entity";
 import { OrganizationBillingEntity } from "../database/entities/organization-billing.entity";
 import { OrganizationLanguageEntitlementEntity } from "../database/entities/organization-language-entitlement.entity";
+import { StripeWebhookEventReceiptEntity } from "../database/entities/stripe-webhook-event-receipt.entity";
 import { BillingController } from "./billing.controller";
 import { BillingOrchestrationService } from "./billing-orchestration.service";
 import { BillingProviderRegistryService } from "./billing-provider-registry.service";
@@ -17,6 +18,7 @@ import { LanguageStoreEntitlementService } from "./language-store-entitlement.se
 import { OrganizationBillingService } from "./organization-billing.service";
 import { StripeBillingProvider } from "./stripe/stripe-billing.provider";
 import { StripeClient } from "./stripe/stripe.client";
+import { StripeWebhookReceiptService } from "./stripe/stripe-webhook-receipt.service";
 import { StripeWebhookService } from "./stripe/stripe-webhook.service";
 
 @Module({
@@ -29,6 +31,7 @@ import { StripeWebhookService } from "./stripe/stripe-webhook.service";
       OrganizationBillingEntity,
       OrganizationEntity,
       OrganizationLanguageEntitlementEntity,
+      StripeWebhookEventReceiptEntity,
     ]),
   ],
   controllers: [BillingController, BillingWebhookController],
@@ -36,6 +39,7 @@ import { StripeWebhookService } from "./stripe/stripe-webhook.service";
     StripeClient,
     StripeBillingProvider,
     StripeWebhookService,
+    StripeWebhookReceiptService,
     BillingProviderRegistryService,
     BillingOrchestrationService,
     OrganizationBillingService,

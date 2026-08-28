@@ -27,7 +27,7 @@ const messages = {
     settingsAria: "Settings",
     expandQuickNavigation: "Expand quick navigation",
     collapseQuickNavigation: "Collapse quick navigation",
-    activationLocked: "Complete subscription activation to unlock CRM modules. Settings and billing remain available.",
+    activationLocked: "Complete subscription activation to unlock CRM modules. Use Pricing to choose a plan and activate your workspace.",
     mobile: {
       more: "More",
       done: "Done",
@@ -642,12 +642,14 @@ const messages = {
       helper: "Theme and interface style for this browser.",
     },
     roles: {
-      label: "Team",
-      title: "Staff directory & role assignments",
-      helper: "Staff and role management for this workspace.",
+      label: "Team & Permissions",
+      title: "Team directory, roles, and access",
+      helper: "Manage users, roles, and organization access.",
+      restrictedTitle: "Team management is restricted",
+      restrictedBody: "Your current role is {role}. Team & Permissions appears here for owners and admins.",
+      unavailable: "Team & Permissions unavailable",
       ownerOnlyTitle: "Staff roles are owner-only",
       ownerOnlyBody: "Your current role is {role}. The staff role creation panel appears here after this account is promoted to owner.",
-      unavailable: "Staff roles unavailable",
     },
     billing: {
       label: "Billing",

@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, Req, Res, StreamableFile, Us
 import type { Response } from "express";
 
 import { requirePermission } from "../auth/permissions";
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -33,7 +34,7 @@ function readOptionalString(value: unknown, fieldName: string, maxLength: number
 }
 
 @Controller("api/warranty-certificates")
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 export class WarrantyCertificatesController {
   constructor(private readonly warrantyCertificatesService: WarrantyCertificatesService) {}
 

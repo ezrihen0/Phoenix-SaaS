@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { createStripeCheckoutSession } from "@/lib/billing/client-billing";
-import { PLAN_DISPLAY_CATALOG, type BillingPlanKey } from "@/lib/billing/plan-display";
+import { BILLING_HONESTY_FOOTNOTE, PLAN_DISPLAY_CATALOG, type BillingPlanKey } from "@/lib/billing/plan-display";
 
 type PricingPlansProps = {
   ownerMode: boolean;
@@ -46,9 +46,6 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, acti
           >
             <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">{plan.title}</p>
             <p className="mt-3 text-3xl font-semibold text-[#f7df97]">{plan.monthlyPriceLabel}</p>
-            {plan.annualPriceLabel ? (
-              <p className="mt-1 text-sm text-[color:var(--sem-text-muted)]">or {plan.annualPriceLabel} billed annually</p>
-            ) : null}
             <h2 className="mt-4 text-xl font-semibold text-[color:var(--sem-display-headline)]">{plan.coverage}</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--sem-text-secondary)]">{plan.body}</p>
             <ul className="mt-4 space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
@@ -131,6 +128,8 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, acti
           </tbody>
         </table>
       </section>
+
+      <p className="mt-6 text-xs leading-6 text-[color:var(--sem-text-muted)]">{BILLING_HONESTY_FOOTNOTE}</p>
     </>
   );
 }

@@ -107,6 +107,33 @@ export const AI_DRAFT_TYPE_CUSTOMER_SMS_FOLLOWUP_V1 = "customer_sms_followup_v1"
 
 export const AI_PROMPT_VERSION_OPERATOR_COPILOT_SMS_V1 = "operator_copilot_sms_v1";
 
+/** HOME AI V1 — AI-first operational home (`/api/ai/home/*`). */
+export const AI_AGENT_KEY_HOME_AI_V1 = "home_ai_v1";
+
+export const AI_FEATURE_HOME_AI_V1 = "home_ai_v1";
+
+export const AI_PROMPT_VERSION_HOME_AI_V1 = "home_ai_v1";
+
+export const AI_ACTION_KEY_HOME_AI_V1 = "home_ai_v1";
+
+/** Exactly six read-only Home tool families. */
+export const HOME_AI_TOOL_KEYS = [
+  "search_customers",
+  "get_leads",
+  "get_jobs",
+  "get_schedule",
+  "get_estimates",
+  "get_invoices",
+] as const;
+
+export type HomeAiToolKey = (typeof HOME_AI_TOOL_KEYS)[number];
+
+export const HOME_AI_MAX_MESSAGE_LENGTH = 4000;
+export const HOME_AI_MAX_CONTEXT_MESSAGES = 20;
+export const HOME_AI_MAX_TOOL_ITERATIONS = 3;
+export const HOME_AI_DEFAULT_TOOL_RESULT_LIMIT = 15;
+export const HOME_AI_MAX_OUTPUT_TOKENS = 900;
+
 /**
  * Canonical section keys for call intake trace payload (Phase 1.5A populates v0; Phase 1.5B may extend).
  */

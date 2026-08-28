@@ -9,6 +9,7 @@ import { DataSource } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
 import { PublicBookingsService } from "../public/public-bookings.service";
+import { CustomerEntity } from "./entities/customer.entity";
 import { LeadEntity } from "./entities/lead.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
 import { buildDataSourceOptions } from "./typeorm.config";
@@ -146,6 +147,7 @@ async function expectApiError(
 function buildPublicBookingService(dataSource: DataSource) {
   return new PublicBookingsService(
     dataSource.getRepository(LeadEntity),
+    dataSource.getRepository(CustomerEntity),
     dataSource.getRepository(OrganizationEntity),
   );
 }
@@ -215,13 +217,29 @@ async function runChecks(summary: SmokeSummary, dataSource: DataSource, seed: Se
     const org = await service.resolveActiveOrganizationBySlug(seed.slugA);
     const result = await service.createBooking(org.id, input);
     const rows = await dataSource.query(
-      `SELECT organization_id FROM leads WHERE id = ? LIMIT 1`,
+      `SELECT organization_id, customer_id FROM leads WHERE id = ? LIMIT 1`,
       [result.leadId],
-    ) as Array<{ organization_id: string | null }>;
+    ) as Array<{ organization_id: string | null; customer_id: string | null }>;
     if (rows[0]?.organization_id !== seed.orgAId) {
       throw new Error(`Expected organization_id ${seed.orgAId}, got ${rows[0]?.organization_id}`);
     }
-    return { leadId: result.leadId, organizationId: rows[0]?.organization_id };
+    if (!rows[0]?.customer_id) {
+      throw new Error("Expected public booking lead to be linked to a prospect customer.");
+    }
+    return { leadId: result.leadId, organizationId: rows[0]?.organization_id, customerId: rows[0]?.customer_id };
+  });
+
+  await expectPass(summary, "A1 — Replay of same Org A booking returns existing lead", async () => {
+    const before = await countLeads(dataSource);
+    const result = await service.createBooking(seed.orgAId, input);
+    const after = await countLeads(dataSource);
+    if (!result.duplicate) {
+      throw new Error("Expected duplicate=true for replayed public booking.");
+    }
+    if (after !== before) {
+      throw new Error(`Expected duplicate booking not to add lead: ${before} -> ${after}`);
+    }
+    return { leadId: result.leadId, duplicate: result.duplicate };
   });
 
   await expectPass(summary, "A2 — Org B slug booking creates lead with organization_id = Org B", async () => {

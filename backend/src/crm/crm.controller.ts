@@ -28,6 +28,7 @@ import {
   requirePermission,
   type RoleModePermission,
 } from "../auth/permissions";
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { ActorContext, RequestWithActor } from "../common/request-types";
@@ -146,7 +147,7 @@ const TECHNICIAN_FALLBACK_ROLE_PRIORITY: Record<(typeof TECHNICIAN_FALLBACK_MEMB
 };
 const ORGANIZATION_SETTINGS_KEY = "default";
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api")
 export class CrmController {
   constructor(
@@ -701,7 +702,7 @@ export class CrmController {
       return;
     }
 
-    const [profiles, organizationTechnicians, globalTechnicians] = await Promise.all([
+    const [profiles, organizationTechnicians] = await Promise.all([
       this.profilesRepository.find({
         where: {
           auth_user_id: In(userIds),
@@ -713,11 +714,6 @@ export class CrmController {
           auth_user_id: In(userIds),
         },
       }),
-      this.techniciansRepository.find({
-        where: {
-          auth_user_id: In(userIds),
-        },
-      }),
     ]);
 
     const profileByUserId = new Map(profiles.map((profile) => [profile.auth_user_id, profile] as const));
@@ -725,13 +721,6 @@ export class CrmController {
     for (const technician of organizationTechnicians) {
       if (technician.auth_user_id) {
         organizationTechnicianByUserId.set(technician.auth_user_id, technician);
-      }
-    }
-
-    const globalTechnicianByUserId = new Map<string, TechnicianEntity>();
-    for (const technician of globalTechnicians) {
-      if (technician.auth_user_id) {
-        globalTechnicianByUserId.set(technician.auth_user_id, technician);
       }
     }
 
@@ -766,11 +755,6 @@ export class CrmController {
         continue;
       }
 
-      // auth_user_id is globally unique in technicians; skip cross-org links we cannot safely move in V1 fallback.
-      if (globalTechnicianByUserId.has(membership.user_id)) {
-        continue;
-      }
-
       const created = await this.techniciansRepository.save(
         this.techniciansRepository.create({
           organization_id: organizationId,
@@ -782,7 +766,6 @@ export class CrmController {
         }),
       );
       organizationTechnicianByUserId.set(membership.user_id, created);
-      globalTechnicianByUserId.set(membership.user_id, created);
     }
   }
 

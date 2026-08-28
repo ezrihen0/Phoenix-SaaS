@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -26,7 +27,7 @@ function readPositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/marketing")
 export class MarketingCampaignController {
   constructor(private readonly campaignService: MarketingCampaignService) {}

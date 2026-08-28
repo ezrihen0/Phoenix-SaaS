@@ -991,13 +991,15 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
             </div>
           </section>
 
-          <PaymentAssistantPanel
-            invoices={filteredInvoices}
-            aiState={aiState}
-            customerHrefByName={customerHrefByName}
-            locale={locale}
-            labels={assistantLabels}
-          />
+          {aiState.mode === "connected" ? (
+            <PaymentAssistantPanel
+              invoices={filteredInvoices}
+              aiState={aiState}
+              customerHrefByName={customerHrefByName}
+              locale={locale}
+              labels={assistantLabels}
+            />
+          ) : null}
         </div>
       </div>
     </BoardShell>

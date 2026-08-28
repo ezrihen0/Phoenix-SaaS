@@ -116,7 +116,6 @@ type ScheduleFormState = {
   startTime: string;
   endTime: string;
   arrivalWindow: ArrivalWindowOption;
-  syncCalendar: boolean;
 };
 
 type WorkspaceToast = {
@@ -305,7 +304,6 @@ function buildScheduleForm(job: JobDetailRecord): ScheduleFormState {
     startTime: scheduledParts.time,
     endTime: deriveEndTimeInput(job.scheduled_for, job.scheduled_window),
     arrivalWindow: inferArrivalWindow(job.scheduled_window),
-    syncCalendar: false,
   };
 }
 
@@ -767,10 +765,6 @@ export default function JobDetailWorkspace({
         }
       } else {
         pushToast("Scheduling details saved.");
-      }
-
-      if (scheduleForm.syncCalendar) {
-        pushToast("Scheduling details saved. Calendar sync is ready for future integration.", "success");
       }
 
       setScheduleForm(buildScheduleForm(nextJob));
@@ -1375,21 +1369,6 @@ export default function JobDetailWorkspace({
                       })}
                     </div>
                   </div>
-
-                  <label className="mt-5 flex items-start gap-3 rounded-[20px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-3 text-sm text-[color:var(--sem-text-secondary)]">
-                    <input
-                      type="checkbox"
-                      checked={scheduleForm.syncCalendar}
-                      onChange={(event) => setScheduleForm((current) => ({ ...current, syncCalendar: event.target.checked }))}
-                      className="mt-1 h-4 w-4 rounded border-[color:var(--cmp-border-subtle)] text-[color:var(--sem-accent-primary)]"
-                    />
-                    <span>
-                      Sync to Google/Outlook
-                      <span className="mt-1 block text-xs text-[color:var(--sem-text-muted)]">
-                        UI placeholder only for now. This setting is saved only in the current browser session.
-                      </span>
-                    </span>
-                  </label>
 
                   {conflicts.length > 0 ? (
                     <div className="mt-5 rounded-[20px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">

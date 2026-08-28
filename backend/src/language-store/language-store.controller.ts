@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
 
 import { readActorRole, requireActorProfile } from "../auth/permissions";
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -8,7 +9,7 @@ import { LanguageStoreService } from "./language-store.service";
 import { isLanguageStoreCatalogCode } from "./language-store.constants";
 
 @Controller("api/language-store")
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 export class LanguageStoreController {
   constructor(private readonly languageStoreService: LanguageStoreService) {}
 

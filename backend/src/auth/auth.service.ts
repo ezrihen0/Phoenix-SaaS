@@ -12,7 +12,15 @@ import { resolveOrganizationLimitForPlan } from "../billing/billing.constants";
 import type { ActorContext } from "../common/request-types";
 import type { ProfileRole } from "../crm/constants";
 import { BillingAccountEntity } from "../database/entities/billing-account.entity";
+import {
+  isProductionNodeEnv,
+  resolveBootstrapDecision,
+  shouldAutoAttachDefaultOrganizationMembership,
+  shouldWarnAboutDefaultBootstrapCredentials,
+} from "./bootstrap-auth.policy";
 import { listPermissionsForRole } from "./permissions";
+import { listPermissionsForMembership } from "../team/membership-permissions";
+import { assertOrganizationSeatAvailable } from "../team/team-seat-enforcement";
 import { AuthSessionEntity } from "../database/entities/auth-session.entity";
 import { ControlledAccessGrantEntity } from "../database/entities/controlled-access-grant.entity";
 import { MembershipEntity } from "../database/entities/membership.entity";
@@ -52,14 +60,35 @@ export class AuthService {
   ) {}
 
   async ensureBootstrapAdmin() {
-    const adminEmail = (this.configService.get<string>("BACKEND_BOOTSTRAP_ADMIN_EMAIL") ?? "admin@phoenixcrm.local").trim().toLowerCase();
-    const adminPassword = this.configService.get<string>("BACKEND_BOOTSTRAP_ADMIN_PASSWORD") ?? "Admin12345!";
-    const adminName = this.configService.get<string>("BACKEND_BOOTSTRAP_ADMIN_NAME") ?? "Phoenix Admin";
-    const defaultOrganization = await this.ensureDefaultOrganization();
+    const decision = resolveBootstrapDecision({
+      nodeEnv: this.configService.get<string>("NODE_ENV") ?? process.env.NODE_ENV,
+      bootstrapEnabled: this.configService.get<string>("BACKEND_BOOTSTRAP_ENABLED"),
+      adminEmail: this.configService.get<string>("BACKEND_BOOTSTRAP_ADMIN_EMAIL"),
+      adminPassword: this.configService.get<string>("BACKEND_BOOTSTRAP_ADMIN_PASSWORD"),
+      adminName: this.configService.get<string>("BACKEND_BOOTSTRAP_ADMIN_NAME"),
+    });
 
-    if (!adminEmail || !adminPassword) {
+    if (decision.action === "skip") {
+      if (isProductionNodeEnv(this.configService.get<string>("NODE_ENV") ?? process.env.NODE_ENV)) {
+        this.logger.log(`Bootstrap admin skipped in production (${decision.reason}).`);
+      }
       return;
     }
+
+    const { adminEmail, adminPassword, adminName } = decision;
+
+    if (shouldWarnAboutDefaultBootstrapCredentials(
+      this.configService.get<string>("NODE_ENV") ?? process.env.NODE_ENV,
+      adminEmail,
+      adminPassword,
+    )) {
+      this.logger.warn(
+        `Bootstrap admin is using known default credentials for ${adminEmail}. `
+        + "Change BACKEND_BOOTSTRAP_ADMIN_EMAIL and BACKEND_BOOTSTRAP_ADMIN_PASSWORD before any shared or production-like deployment.",
+      );
+    }
+
+    const defaultOrganization = await this.ensureDefaultOrganization();
 
     const existingUser = await this.usersRepository.findOne({
       where: {
@@ -417,6 +446,8 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(input.password, 10);
 
     const profile = await this.dataSource.transaction(async (manager) => {
+      await assertOrganizationSeatAvailable(organizationId, manager);
+
       const membershipRepository = manager.getRepository(MembershipEntity);
       const profilesRepository = manager.getRepository(ProfileEntity);
       const user = await manager.getRepository(UserEntity).save(
@@ -494,8 +525,31 @@ export class AuthService {
       apiError(404, "staff_membership_not_found", "The staff member is not part of the active organization.");
     }
 
+    if (membership.role === "owner" && role !== "owner") {
+      const ownerCount = await this.membershipsRepository.count({
+        where: {
+          organization_id: actor.organization_id,
+          role: "owner",
+          status: "active",
+        },
+      });
+
+      if (ownerCount <= 1) {
+        apiError(403, "final_owner_protected", "The final owner cannot be removed or demoted.");
+      }
+    }
+
+    if (role === "owner") {
+      apiError(403, "owner_role_protected", "Ownership cannot be granted through this flow.");
+    }
+
     membership.role = role;
+    membership.custom_role_id = null;
+    membership.custom_permission_keys = null;
     await this.membershipsRepository.save(membership);
+
+    profile.role = role;
+    await this.profilesRepository.save(profile);
 
     return this.buildStaffProfileResponse(profile, role);
   }
@@ -598,7 +652,7 @@ export class AuthService {
       return "/home" as const;
     }
 
-    const accessEligible = await this.isCrmAccessEligibleForOrganization(organizationId);
+    const accessEligible = await this.isOrganizationOperationallyEligible(organizationId);
     if (!accessEligible) {
       return "/pricing" as const;
     }
@@ -719,18 +773,9 @@ export class AuthService {
     preferredOrganizationId: string | null = null,
     requireExactPreferredOrganization = false,
   ): Promise<ActorContext | null> {
-    const [user, profile, technician] = await Promise.all([
+    const [user, profile] = await Promise.all([
       this.usersRepository.findOne({ where: { id: userId } }),
       this.profilesRepository.findOne({ where: { auth_user_id: userId } }),
-      this.techniciansRepository.findOne({
-        where: [
-          { auth_user_id: userId },
-          { auth_user_id: IsNull() },
-        ],
-        order: {
-          auth_user_id: "DESC",
-        },
-      }),
     ]);
 
     if (!user) {
@@ -744,13 +789,20 @@ export class AuthService {
       },
       relations: {
         organization: true,
+        custom_role: true,
       },
       order: {
         created_at: "ASC",
       },
     });
 
-    if (memberships.length === 0 && profile) {
+    if (
+      memberships.length === 0
+      && profile
+      && shouldAutoAttachDefaultOrganizationMembership(
+        this.configService.get<string>("NODE_ENV") ?? process.env.NODE_ENV,
+      )
+    ) {
       const defaultOrganization = await this.ensureDefaultOrganization();
       await this.ensureMembershipForUser(userId, profile.role, defaultOrganization.id);
       memberships = await this.membershipsRepository.find({
@@ -760,6 +812,7 @@ export class AuthService {
         },
         relations: {
           organization: true,
+          custom_role: true,
         },
         order: {
           created_at: "ASC",
@@ -788,18 +841,29 @@ export class AuthService {
       ?? null;
     const organization = membership?.organization ?? null;
     const role = membership?.role ?? null;
+    const organizationId = membership?.organization_id ?? null;
+
+    let technician: TechnicianEntity | null = null;
+    if (organizationId) {
+      technician = await this.techniciansRepository.findOne({
+        where: {
+          auth_user_id: userId,
+          organization_id: organizationId,
+        },
+      });
+    }
 
     return {
       user,
       profile,
-      technician: technician?.auth_user_id === userId ? technician : null,
+      technician,
       memberships,
       membership,
       organization,
       membership_id: membership?.id ?? null,
       organization_id: membership?.organization_id ?? null,
       role,
-      permissions: listPermissionsForRole(role),
+      permissions: listPermissionsForMembership(membership),
     };
   }
 
@@ -991,7 +1055,7 @@ export class AuthService {
     return (this.configService.get<string>("SESSION_COOKIE_SECURE") ?? "false").toLowerCase() === "true";
   }
 
-  private async isCrmAccessEligibleForOrganization(organizationId: string) {
+  async isOrganizationOperationallyEligible(organizationId: string) {
     const context = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
     const billingStatus = context.account.billing_status;
     const hasVerifiedStripeSync = Boolean(

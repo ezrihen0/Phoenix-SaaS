@@ -541,15 +541,15 @@ function getOperatorNextAction(
 
   if (!quote && (job.status === "scheduled" || job.status === "contacted" || job.status === "new_lead")) {
     return {
-      title: "Send estimate",
+      title: "Create estimate",
       detail: "No quote on file yet — confirm scope and pricing with the customer.",
     };
   }
 
   if (quote && quote.status === "draft") {
     return {
-      title: "Send quote to customer",
-      detail: `${formatCurrency(quote.price_cents)} draft is ready to go out.`,
+      title: "Finalize quote approval",
+      detail: `${formatCurrency(quote.price_cents)} draft is ready for internal approval.`,
     };
   }
 
@@ -1388,7 +1388,7 @@ export default function JobsWorkspace() {
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <MetricTile icon={Flame} label="New Leads" value={dashboard?.summary.newLeads ?? 0} />
           <MetricTile icon={Hammer} label="Active Jobs" value={dashboard?.summary.activeJobs ?? 0} />
-          <MetricTile icon={Receipt} label="Unpaid Invoices" value={dashboard?.summary.unpaidInvoices ?? 0} />
+          <MetricTile icon={CalendarDays} label="Scheduled Today" value={dashboard?.summary.jobsScheduledToday ?? 0} />
         </div>
 
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">

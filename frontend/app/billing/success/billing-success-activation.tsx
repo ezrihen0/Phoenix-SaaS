@@ -92,18 +92,12 @@ export function BillingSuccessActivation({
           </Link>
         </div>
       ) : (
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-6">
           <Link
             href="/pricing"
             className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] px-5 py-2.5 text-sm text-[color:var(--sem-text-primary)] transition hover:text-[color:var(--sem-text-primary)]"
           >
             Return to pricing
-          </Link>
-          <Link
-            href="/settings"
-            className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] px-5 py-2.5 text-sm text-[color:var(--sem-text-primary)] transition hover:text-[color:var(--sem-text-primary)]"
-          >
-            Open settings
           </Link>
         </div>
       )}

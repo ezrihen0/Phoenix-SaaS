@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Put, Req, UseGuards } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -22,7 +23,7 @@ type PhoneNumberRegistryPayload = {
   isActive?: unknown;
 };
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/telephony")
 export class PhoneNumberRegistryController {
   constructor(private readonly ownedPhoneNumbersService: OwnedPhoneNumbersService) {}

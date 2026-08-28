@@ -57,19 +57,41 @@ export default function PortalHomePage() {
           <p className="text-[11px] uppercase tracking-[0.3em] text-[color:var(--flat-gold)]">Portal Overview</p>
           <h1 className="mt-3 text-3xl font-semibold leading-tight">Customer Portal</h1>
           <p className="mt-3 text-sm leading-7 text-[color:var(--text-secondary)]">
-            Review your current account status and contact your service team.
+            Review supported account documents, quote status, payment status, and service contact details.
           </p>
         </section>
         {error ? <p className="theme-alert-error rounded-[20px] border px-5 py-4 text-sm">{error}</p> : null}
         {data ? (
           <>
-            <section className="theme-surface-card rounded-[24px] border border-[color:var(--border-subtle)] bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))] p-6">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Inspection</p>
-              <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Status: {data.active_inspection?.status ?? "No inspection available"}</p>
-            </section>
+            {data.active_inspection ? (
+              <section className="theme-surface-card rounded-[24px] border border-[color:var(--border-subtle)] bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))] p-6">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Inspection</p>
+                <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Status: {data.active_inspection.status}</p>
+              </section>
+            ) : null}
             <section className="theme-surface-card rounded-[24px] border border-[color:var(--border-subtle)] bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))] p-6">
               <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Quote</p>
               <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Status: {data.active_quote?.status ?? "No quote available"}</p>
+              {data.active_quote ? (
+                <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
+                  Estimated amount: {formatCurrency(data.active_quote.price_cents)}
+                </p>
+              ) : null}
+            </section>
+            <section className="theme-surface-card rounded-[24px] border border-[color:var(--border-subtle)] bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))] p-6">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Payment</p>
+              {data.payment_state ? (
+                <>
+                  <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Invoice status: {data.payment_state.invoice_status}</p>
+                  <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
+                    {data.payment_state.paid_at
+                      ? `Paid ${new Date(data.payment_state.paid_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                      : "Payment has not been recorded yet."}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-[color:var(--text-secondary)]">No invoice is available in this portal yet.</p>
+              )}
             </section>
             <section className="theme-surface-card rounded-[24px] border border-[color:var(--border-subtle)] bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))] p-6">
               <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Support</p>
@@ -111,7 +133,7 @@ export default function PortalHomePage() {
                 className="theme-control-surface inline-flex items-center rounded-full px-4 py-2 text-sm text-[color:var(--text-secondary)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:rgba(212,175,55,0.35)]"
                 onClick={async () => {
                   await portalApiFetch("/api/portal/logout", { method: "POST" });
-                  router.replace("/login");
+                  router.replace("/");
                 }}
               >
                 Logout
@@ -124,4 +146,11 @@ export default function PortalHomePage() {
       </div>
     </main>
   );
+}
+
+function formatCurrency(cents: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(cents / 100);
 }

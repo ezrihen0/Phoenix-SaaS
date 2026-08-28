@@ -29,7 +29,7 @@ import { AiUsagePanel } from "./ai-usage-panel";
 import type { BillingSummaryPayload } from "./billing-panel";
 import { BillingPanel } from "./billing-panel";
 import { OrganizationProfilePanel, type OrganizationSettings } from "./organization-profile-panel";
-import { RoleManagementPanel } from "./role-management-panel";
+import { TeamPermissionsPanel } from "./team-permissions-panel";
 import {
   getVisibleSections,
   isSettingsTopic,
@@ -275,32 +275,16 @@ function renderSettingsPanel(sectionId: SettingsTopicId, ctx: SettingsPanelConte
         />
       );
     case "roles":
-      if (ownerMode && currentProfileId) {
-        if (staffLoadError) {
-          return (
-            <SettingsLockedState
-              icon={ShieldCheck}
-              eyebrow={t("roles.label")}
-              title={t("roles.unavailable")}
-              body={staffLoadError}
-            />
-          );
-        }
-
-        return (
-          <RoleManagementPanel
-            initialStaff={staffProfiles}
-            currentProfileId={currentProfileId}
-          />
-        );
+      if ((ownerMode || role === "admin") && currentProfileId) {
+        return <TeamPermissionsPanel currentProfileId={currentProfileId} />;
       }
 
       return (
         <SettingsLockedState
           icon={LockKeyhole}
           eyebrow={t("roles.label")}
-          title={t("roles.ownerOnlyTitle")}
-          body={t("roles.ownerOnlyBody", { role: formatRoleLabel(role) })}
+          title={t("roles.restrictedTitle")}
+          body={t("roles.restrictedBody", { role: formatRoleLabel(role) })}
         />
       );
     default:
@@ -771,19 +755,8 @@ function LegacySettingsWorkspace(props: SettingsWorkspaceProps) {
               ) : null}
 
               {selectedTopic === "roles" ? (
-                ownerMode && currentProfileId ? (
-                  staffLoadError ? (
-                    <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6">
-                      <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{t("roles.label")}</p>
-                      <h2 className="mt-3 text-2xl font-semibold text-[color:var(--sem-text-primary)]">{t("roles.unavailable")}</h2>
-                      <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">{staffLoadError}</p>
-                    </section>
-                  ) : (
-                    <RoleManagementPanel
-                      initialStaff={staffProfiles}
-                      currentProfileId={currentProfileId}
-                    />
-                  )
+                (ownerMode || role === "admin") && currentProfileId ? (
+                  <TeamPermissionsPanel currentProfileId={currentProfileId} />
                 ) : (
                   <section className="theme-surface-card rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-6">
                     <div className="flex items-start gap-3">
@@ -792,11 +765,11 @@ function LegacySettingsWorkspace(props: SettingsWorkspaceProps) {
                       </div>
                       <div>
                         <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">{t("roles.label")}</p>
-                        <h2 className="mt-3 text-2xl font-semibold text-[color:var(--sem-text-primary)]">{t("roles.ownerOnlyTitle")}</h2>
+                        <h2 className="mt-3 text-2xl font-semibold text-[color:var(--sem-text-primary)]">{t("roles.restrictedTitle")}</h2>
                       </div>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                      {t("roles.ownerOnlyBody", { role: formatRoleLabel(role) })}
+                      {t("roles.restrictedBody", { role: formatRoleLabel(role) })}
                     </p>
                   </section>
                 )

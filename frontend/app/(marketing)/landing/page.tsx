@@ -39,7 +39,7 @@ export default function LandingPage() {
             href="/pricing"
             className="inline-flex items-center justify-center rounded-full border border-[color:var(--cmp-border-subtle)] px-6 py-3 text-sm font-medium text-[color:var(--sem-text-primary)] transition hover:border-[color:var(--cmp-border-accent)]"
           >
-            View pricing and trial model
+            View pricing and activation
           </Link>
           <Link
             href="/contact"

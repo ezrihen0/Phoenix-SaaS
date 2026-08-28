@@ -11,15 +11,19 @@ import {
 export type TxtConversationLastDirection = "inbound" | "outbound";
 
 @Entity({ name: "txt_conversations" })
-@Unique("ux_txt_conversations_active_pair", ["owned_phone_number_normalized", "customer_phone_number_normalized", "is_archived"])
+@Unique("ux_txt_conversations_active_pair", ["organization_id", "owned_phone_number_normalized", "customer_phone_number_normalized", "is_archived"])
+@Index("ix_txt_conversations_organization", ["organization_id"])
 @Index("ix_txt_conversations_customer", ["customer_id"])
 @Index("ix_txt_conversations_last_message_at", ["last_message_at"])
 @Index("ix_txt_conversations_unread_count", ["unread_count"])
 @Index("ix_txt_conversations_owned_number", ["owned_phone_number_id"])
-@Index("ix_txt_conversations_customer_phone_lookup", ["customer_phone_number_normalized", "is_archived"])
+@Index("ix_txt_conversations_customer_phone_lookup", ["organization_id", "customer_phone_number_normalized", "is_archived"])
 export class TxtConversationEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "char", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "char", length: 7, unique: true })
   public_conversation_code!: string;

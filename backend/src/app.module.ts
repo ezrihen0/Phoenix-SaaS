@@ -9,6 +9,7 @@ import { AutomationsModule } from "./automations/automations.module";
 import { BillingModule } from "./billing/billing.module";
 import { AuthModule } from "./auth/auth.module";
 import { AuthService } from "./auth/auth.service";
+import { HealthModule } from "./common/health.module";
 import { CrmModule } from "./crm/crm.module";
 import { CustomerPortalModule } from "./customer-portal/customer-portal.module";
 import { buildTypeOrmModuleOptions } from "./database/typeorm.config";
@@ -23,6 +24,7 @@ import { SearchModule } from "./search/search.module";
 import { SettingsModule } from "./settings/settings.module";
 import { TelephonyModule } from "./telephony/telephony.module";
 import { WarrantyModule } from "./warranty/warranty.module";
+import { TeamModule } from "./team/team.module";
 
 @Module({
   imports: [
@@ -36,6 +38,7 @@ import { WarrantyModule } from "./warranty/warranty.module";
       useFactory: (configService: ConfigService) => buildTypeOrmModuleOptions(configService),
     }),
     AuthModule,
+    HealthModule,
     CrmModule,
     AiModule,
     SearchModule,
@@ -52,6 +55,7 @@ import { WarrantyModule } from "./warranty/warranty.module";
     AutomationsModule,
     BillingModule,
     WarrantyModule,
+    TeamModule,
   ],
 })
 export class AppModule implements OnModuleInit {

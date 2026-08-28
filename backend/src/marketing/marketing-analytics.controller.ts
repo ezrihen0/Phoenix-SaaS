@@ -1,12 +1,13 @@
 import { Controller, Get, Query, Req, UseGuards } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { requireMarketingOfficeActor } from "./marketing-access";
 import { MarketingAnalyticsService } from "./marketing-analytics.service";
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/marketing")
 export class MarketingAnalyticsController {
   constructor(private readonly analyticsService: MarketingAnalyticsService) {}

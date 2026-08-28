@@ -20,6 +20,8 @@ import { BillingAccountEntity } from "./entities/billing-account.entity";
 import { BillingAccountSubscriptionItemEntity } from "./entities/billing-account-subscription-item.entity";
 import { AiOperatorDraftEntity } from "./entities/ai-operator-draft.entity";
 import { AiRecommendationRunEntity } from "./entities/ai-recommendation-run.entity";
+import { HomeAiConversationEntity } from "./entities/home-ai-conversation.entity";
+import { HomeAiMessageEntity } from "./entities/home-ai-message.entity";
 import { AuthSessionEntity } from "./entities/auth-session.entity";
 import { ControlledAccessGrantEntity } from "./entities/controlled-access-grant.entity";
 import { CustomerOutputTranslationRecordEntity } from "./entities/customer-output-translation-record.entity";
@@ -56,6 +58,9 @@ import { OrganizationEntity } from "./entities/organization.entity";
 import { OrganizationBillingEntity } from "./entities/organization-billing.entity";
 import { OrganizationEnabledLanguageEntity } from "./entities/organization-enabled-language.entity";
 import { OrganizationLanguageEntitlementEntity } from "./entities/organization-language-entitlement.entity";
+import { OrganizationCustomRoleEntity } from "./entities/organization-custom-role.entity";
+import { OrganizationTeamEntitlementEntity } from "./entities/organization-team-entitlement.entity";
+import { TeamRbacAuditEventEntity } from "./entities/team-rbac-audit-event.entity";
 import { OrganizationSettingEntity } from "./entities/organization-setting.entity";
 import { PortalAccessEventEntity } from "./entities/portal-access-event.entity";
 import { PortalMagicLinkEntity } from "./entities/portal-magic-link.entity";
@@ -68,6 +73,7 @@ import { QuoteEntity } from "./entities/quote.entity";
 import { QuoteLineItemEntity } from "./entities/quote-line-item.entity";
 import { RecentCallEntity } from "./entities/recent-call.entity";
 import { ServiceEntity } from "./entities/service.entity";
+import { StripeWebhookEventReceiptEntity } from "./entities/stripe-webhook-event-receipt.entity";
 import { TechnicianEntity } from "./entities/technician.entity";
 import { TranslationUsageLedgerEntity } from "./entities/translation-usage-ledger.entity";
 import { UserEntity } from "./entities/user.entity";
@@ -86,6 +92,7 @@ export const typeOrmEntities = [
   TechnicianEntity,
   TranslationUsageLedgerEntity,
   ServiceEntity,
+  StripeWebhookEventReceiptEntity,
   CustomerEntity,
   LeadEntity,
   MarketingProfileEntity,
@@ -104,6 +111,9 @@ export const typeOrmEntities = [
   OrganizationBillingEntity,
   OrganizationEnabledLanguageEntity,
   OrganizationLanguageEntitlementEntity,
+  OrganizationCustomRoleEntity,
+  OrganizationTeamEntitlementEntity,
+  TeamRbacAuditEventEntity,
   MembershipEntity,
   JobEntity,
   QuoteEntity,
@@ -120,6 +130,8 @@ export const typeOrmEntities = [
   ControlledAccessGrantEntity,
   AiRecommendationRunEntity,
   AiOperatorDraftEntity,
+  HomeAiConversationEntity,
+  HomeAiMessageEntity,
   InspectionEntity,
   InspectionPhotoEntity,
   InspectionItemEntity,

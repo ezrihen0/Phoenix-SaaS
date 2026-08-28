@@ -12,15 +12,20 @@ export type TxtMessageDirection = "inbound" | "outbound";
 export type TxtMessageStatus = "pending" | "sent" | "delivered" | "failed" | "received";
 
 @Entity({ name: "txt_messages" })
+@Index("ix_txt_messages_organization", ["organization_id"])
 @Index("ix_txt_messages_conversation", ["conversation_id"])
 @Index("ix_txt_messages_conversation_created_at", ["conversation_id", "created_at"])
 @Index("ix_txt_messages_created_at", ["created_at"])
 @Index("ix_txt_messages_read_at", ["read_at"])
 @Index("ix_txt_messages_status", ["status"])
 @Index("ix_txt_messages_sent_by_user", ["sent_by_user_id"])
+@Index("ux_txt_messages_provider_message", ["provider", "provider_message_id"], { unique: true })
 export class TxtMessageEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
+
+  @Column({ type: "char", length: 36, nullable: true })
+  organization_id!: string | null;
 
   @Column({ type: "char", length: 36 })
   conversation_id!: string;

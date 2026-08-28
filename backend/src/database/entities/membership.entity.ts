@@ -9,7 +9,9 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
+import type { RoleModePermission } from "../../auth/permissions";
 import { profileRoles, type ProfileRole } from "../../crm/constants";
+import { OrganizationCustomRoleEntity } from "./organization-custom-role.entity";
 import { OrganizationEntity } from "./organization.entity";
 import { UserEntity } from "./user.entity";
 
@@ -41,6 +43,12 @@ export class MembershipEntity {
   })
   status!: MembershipStatus;
 
+  @Column({ type: "varchar", length: 36, nullable: true })
+  custom_role_id!: string | null;
+
+  @Column({ type: "json", nullable: true })
+  custom_permission_keys!: RoleModePermission[] | null;
+
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;
 
@@ -58,4 +66,8 @@ export class MembershipEntity {
   })
   @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
   organization?: OrganizationEntity;
+
+  @ManyToOne(() => OrganizationCustomRoleEntity, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "custom_role_id", referencedColumnName: "id" })
+  custom_role?: OrganizationCustomRoleEntity | null;
 }

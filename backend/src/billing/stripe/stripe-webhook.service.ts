@@ -7,6 +7,7 @@ import type { BillingPlanKey, OrganizationBillingStatus } from "../billing.const
 import { BillingOrchestrationService } from "../billing-orchestration.service";
 import { resolvePlanKeyForStripePriceId, resolveStripeSubscriptionCatalogEntry } from "./stripe-price-catalog";
 import { StripeClient } from "./stripe.client";
+import { StripeWebhookReceiptService } from "./stripe-webhook-receipt.service";
 
 type StripeMetadata = Partial<{
   billing_account_id: string;
@@ -17,6 +18,8 @@ type StripeMetadata = Partial<{
 }>;
 
 type StripeEventPayload = {
+  id?: string;
+  created?: number;
   type: string;
   data?: {
     object?: unknown;
@@ -90,6 +93,7 @@ export class StripeWebhookService {
     private readonly configService: ConfigService,
     private readonly stripeClient: StripeClient,
     private readonly billingOrchestrationService: BillingOrchestrationService,
+    private readonly stripeWebhookReceiptService: StripeWebhookReceiptService,
   ) {}
 
   async handleWebhook(rawBody: Buffer | undefined, signature: string | undefined) {
@@ -109,31 +113,107 @@ export class StripeWebhookService {
       apiError(400, "stripe_webhook_signature_invalid", message);
     }
 
+    const stripeEventId = event.id?.trim();
+    const stripeEventCreated = event.created;
+    if (!stripeEventId || typeof stripeEventCreated !== "number") {
+      apiError(400, "stripe_webhook_event_invalid", "Stripe event id/created timestamp is missing.");
+    }
+
+    const routing = this.resolveEventRouting(event);
+    const begin = await this.stripeWebhookReceiptService.beginProcessing({
+      stripeEventId,
+      eventType: event.type,
+      stripeEventCreated,
+      billingAccountId: routing.billingAccountId,
+      providerCustomerId: routing.providerCustomerId,
+      providerSubscriptionId: routing.providerSubscriptionId,
+    });
+
+    if (begin.action === "duplicate" || begin.action === "stale") {
+      return;
+    }
+
+    try {
+      const account = await this.dispatchEvent(event);
+      if (!account) {
+        await this.stripeWebhookReceiptService.markIgnored(
+          begin.receipt.id,
+          "No billing account could be resolved for this Stripe event.",
+        );
+        return;
+      }
+
+      await this.stripeWebhookReceiptService.markProcessed(begin.receipt.id, account.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Stripe webhook processing failed.";
+      await this.stripeWebhookReceiptService.markFailed(begin.receipt.id, message.slice(0, 512));
+      throw error;
+    }
+  }
+
+  private resolveEventRouting(event: StripeEventPayload) {
     switch (event.type) {
-      case "checkout.session.completed":
-        await this.handleCheckoutSessionCompleted(event.data?.object as StripeCheckoutSessionPayload);
-        break;
+      case "checkout.session.completed": {
+        const session = event.data?.object as StripeCheckoutSessionPayload;
+        const metadata = readStripeMetadata(session.metadata);
+        return {
+          billingAccountId: metadata.billing_account_id ?? null,
+          providerCustomerId: readStripeId(session.customer),
+          providerSubscriptionId: readStripeId(session.subscription),
+        };
+      }
       case "customer.subscription.created":
       case "customer.subscription.updated":
-        await this.handleSubscriptionUpsert(event.data?.object as StripeSubscriptionPayload);
-        break;
-      case "customer.subscription.deleted":
-        await this.handleSubscriptionDeleted(event.data?.object as StripeSubscriptionPayload);
-        break;
+      case "customer.subscription.deleted": {
+        const subscription = event.data?.object as StripeSubscriptionPayload;
+        const metadata = readStripeMetadata(subscription.metadata);
+        return {
+          billingAccountId: metadata.billing_account_id ?? null,
+          providerCustomerId: readStripeId(subscription.customer),
+          providerSubscriptionId: subscription.id,
+        };
+      }
       case "invoice.paid":
-        await this.handleInvoicePaid(event.data?.object as StripeInvoicePayload);
-        break;
+      case "invoice.payment_failed": {
+        const invoice = event.data?.object as StripeInvoicePayload;
+        const metadata = readStripeMetadata(invoice.parent?.subscription_details?.metadata ?? null);
+        return {
+          billingAccountId: metadata.billing_account_id ?? null,
+          providerCustomerId: readStripeId(invoice.customer),
+          providerSubscriptionId: readStripeId(invoice.subscription),
+        };
+      }
+      default:
+        return {
+          billingAccountId: null,
+          providerCustomerId: null,
+          providerSubscriptionId: null,
+        };
+    }
+  }
+
+  private async dispatchEvent(event: StripeEventPayload) {
+    switch (event.type) {
+      case "checkout.session.completed":
+        return this.handleCheckoutSessionCompleted(event.data?.object as StripeCheckoutSessionPayload);
+      case "customer.subscription.created":
+      case "customer.subscription.updated":
+        return this.handleSubscriptionUpsert(event.data?.object as StripeSubscriptionPayload);
+      case "customer.subscription.deleted":
+        return this.handleSubscriptionDeleted(event.data?.object as StripeSubscriptionPayload);
+      case "invoice.paid":
+        return this.handleInvoicePaid(event.data?.object as StripeInvoicePayload);
       case "invoice.payment_failed":
-        await this.handleInvoicePaymentFailed(event.data?.object as StripeInvoicePayload);
-        break;
+        return this.handleInvoicePaymentFailed(event.data?.object as StripeInvoicePayload);
       default:
         this.logger.debug(`Ignoring Stripe event ${event.type}`);
+        return null;
     }
   }
 
   private async handleCheckoutSessionCompleted(session: StripeCheckoutSessionPayload) {
     const metadata = readStripeMetadata(session.metadata);
-    await this.billingOrchestrationService.applyProviderSnapshot({
+    return this.billingOrchestrationService.applyProviderSnapshot({
       provider: "stripe",
       billingAccountId: metadata.billing_account_id ?? null,
       organizationId: metadata.organization_id ?? null,
@@ -150,7 +230,7 @@ export class StripeWebhookService {
     const priceId = readSubscriptionPriceId(subscription);
     const metadata = readStripeMetadata(subscription.metadata);
     const subscriptionItems = readSubscriptionItems(this.configService, subscription);
-    await this.billingOrchestrationService.applyProviderSnapshot({
+    return this.billingOrchestrationService.applyProviderSnapshot({
       provider: "stripe",
       billingAccountId: metadata.billing_account_id ?? null,
       organizationId: metadata.organization_id ?? null,
@@ -177,7 +257,7 @@ export class StripeWebhookService {
     const priceId = readSubscriptionPriceId(subscription);
     const metadata = readStripeMetadata(subscription.metadata);
     const subscriptionItems = readSubscriptionItems(this.configService, subscription);
-    await this.billingOrchestrationService.applyProviderSnapshot({
+    return this.billingOrchestrationService.applyProviderSnapshot({
       provider: "stripe",
       billingAccountId: metadata.billing_account_id ?? null,
       organizationId: metadata.organization_id ?? null,
@@ -199,7 +279,7 @@ export class StripeWebhookService {
   private async handleInvoicePaid(invoice: StripeInvoicePayload) {
     const priceId = readInvoicePriceId(invoice);
     const metadata = readStripeMetadata(invoice.parent?.subscription_details?.metadata ?? null);
-    await this.billingOrchestrationService.applyProviderSnapshot({
+    return this.billingOrchestrationService.applyProviderSnapshot({
       provider: "stripe",
       billingAccountId: metadata.billing_account_id ?? null,
       organizationId: metadata.organization_id ?? null,
@@ -219,7 +299,7 @@ export class StripeWebhookService {
   private async handleInvoicePaymentFailed(invoice: StripeInvoicePayload) {
     const priceId = readInvoicePriceId(invoice);
     const metadata = readStripeMetadata(invoice.parent?.subscription_details?.metadata ?? null);
-    await this.billingOrchestrationService.applyProviderSnapshot({
+    return this.billingOrchestrationService.applyProviderSnapshot({
       provider: "stripe",
       billingAccountId: metadata.billing_account_id ?? null,
       organizationId: metadata.organization_id ?? null,

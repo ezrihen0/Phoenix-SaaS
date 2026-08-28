@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -10,7 +11,7 @@ import {
 } from "./marketing-access";
 import { MarketingChannelsService } from "./marketing-channels.service";
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/marketing/channels")
 export class MarketingChannelsController {
   constructor(private readonly channelsService: MarketingChannelsService) {}

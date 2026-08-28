@@ -5,7 +5,6 @@ import {
   JoinColumn,
   ManyToOne,
   OneToMany,
-  OneToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
@@ -46,7 +45,7 @@ export class TechnicianEntity {
   @UpdateDateColumn({ type: "datetime", precision: 6 })
   updated_at!: Date;
 
-  @OneToOne(() => UserEntity, (user) => user.technician, {
+  @ManyToOne(() => UserEntity, (user) => user.technicians, {
     onDelete: "SET NULL",
   })
   @JoinColumn({ name: "auth_user_id", referencedColumnName: "id" })

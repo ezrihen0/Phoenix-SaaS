@@ -214,6 +214,36 @@ npm run dev
 
 Run from repo root after backend env + database are in place.
 
+### Part 3 money / production verification (V1.3)
+
+Source: Part 3 implementation checkpoint and `part3:suite`
+
+```text
+npm.cmd run part3:checkpoint --workspace backend
+npm.cmd run auth:operational-access:check --workspace backend
+npm.cmd run billing:plan-catalog:check --workspace backend
+npm.cmd run billing:webhook-contract-check --workspace backend
+npm.cmd run production-config:check --workspace backend
+npm.cmd run security:secrets-check --workspace backend
+npm.cmd run launch:surface:check --workspace backend
+npm.cmd run billing:lifecycle:smoke --workspace backend
+npm.cmd run billing:activation:smoke --workspace backend
+npm.cmd run billing:multi-org:smoke --workspace backend
+npm.cmd run operational-access:isolation:smoke --workspace backend
+npm.cmd run part2:suite --workspace backend
+npm.cmd run part3:deployment-check --workspace backend
+curl http://127.0.0.1:4000/api/health
+```
+
+Expected result:
+
+- Part 3 static checks pass
+- billing/operational-access smokes return `ok: true` (requires MySQL + `DB_SMOKE_DROP=true` for disposable DB)
+- `GET /api/health` returns process + database checks without secrets
+- Stripe webhook receipts table exists after migrations (`stripe_webhook_event_receipts`)
+
+**Launch constraint:** Inspection photos and warranty PDFs use local `backend/uploads` unless owner configures durable shared storage. Single-instance persistent disk or shared storage backup is required for multi-instance production.
+
 ### Core engineering closeout commands
 
 Source: `WizField_Engineering_Closeout_and_Verification.md` §7 and `WizField_Reverification_Runbook.md` §6

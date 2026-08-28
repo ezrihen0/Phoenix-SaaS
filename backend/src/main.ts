@@ -8,6 +8,7 @@ import { NestFactory } from "@nestjs/core";
 import cookieParser from "cookie-parser";
 
 import { AppModule } from "./app.module";
+import { assertProductionConfigValid } from "./config/production-config.validator";
 
 function parseCorsOrigins(value: string | undefined) {
   if (!value) {
@@ -37,6 +38,10 @@ function isAllowedCorsOrigin(origin: string | undefined, allowedOrigins: string[
 }
 
 async function bootstrap() {
+  if ((process.env.NODE_ENV ?? "").trim().toLowerCase() === "production") {
+    assertProductionConfigValid(process.env);
+  }
+
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
   });

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../../auth/operational-access.guard";
 import { SessionGuard } from "../../auth/session.guard";
 import { apiError, apiSuccess } from "../../common/api-response";
 import type { RequestWithActor } from "../../common/request-types";
@@ -8,7 +9,7 @@ import type { TxtListConversationsQueryDto } from "./dto/txt-list-conversations-
 import type { TxtSendDto } from "./dto/txt-send.dto";
 import { TxtService } from "./txt.service";
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/messaging/txt")
 export class TxtController {
   constructor(
@@ -23,8 +24,10 @@ export class TxtController {
   ) {
     this.messagingAccessService.requireGlobalInboxAccess(request);
 
+    const organizationId = this.requireOrganizationId(request);
     const parsedLimit = query.limit ? Number(query.limit) : undefined;
     return apiSuccess(await this.txtService.listConversations(
+      organizationId,
       Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     ));
   }
@@ -37,8 +40,10 @@ export class TxtController {
   ) {
     this.messagingAccessService.requireConversationAccess(request);
 
+    const organizationId = this.requireOrganizationId(request);
     const parsedLimit = limitRaw ? Number(limitRaw) : undefined;
     return apiSuccess(await this.txtService.listConversationMessages(
+      organizationId,
       conversationId,
       Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     ));
@@ -52,8 +57,10 @@ export class TxtController {
   ) {
     this.messagingAccessService.requireMarkReadAccess(request);
 
+    const organizationId = this.requireOrganizationId(request);
     const parsedLimit = limitRaw ? Number(limitRaw) : undefined;
     return apiSuccess(await this.txtService.markConversationRead(
+      organizationId,
       conversationId,
       Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     ));
@@ -67,8 +74,10 @@ export class TxtController {
   ) {
     this.messagingAccessService.requireMarkReadAccess(request);
 
+    const organizationId = this.requireOrganizationId(request);
     const parsedLimit = limitRaw ? Number(limitRaw) : undefined;
     return apiSuccess(await this.txtService.markConversationUnread(
+      organizationId,
       conversationId,
       Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     ));
@@ -78,7 +87,7 @@ export class TxtController {
   async getUnreadSummary(@Req() request: RequestWithActor) {
     this.messagingAccessService.requireGlobalInboxAccess(request);
 
-    return apiSuccess(await this.txtService.getUnreadSummary());
+    return apiSuccess(await this.txtService.getUnreadSummary(this.requireOrganizationId(request)));
   }
 
   @Post("send")
@@ -96,11 +105,7 @@ export class TxtController {
       apiError(400, "messaging_txt_body_required", "TXT message body is required.");
     }
 
-    const organizationId = request.actor?.organization_id?.trim();
-
-    if (!organizationId) {
-      apiError(400, "organization_context_missing", "An active organization is required to send TXT messages.");
-    }
+    const organizationId = this.requireOrganizationId(request);
 
     const { thread } = await this.txtService.sendMessage({
       conversationId: payload.conversationId,
@@ -110,5 +115,15 @@ export class TxtController {
     });
 
     return apiSuccess(thread);
+  }
+
+  private requireOrganizationId(request: RequestWithActor) {
+    const organizationId = request.actor?.organization_id?.trim();
+
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required for TXT messaging.");
+    }
+
+    return organizationId;
   }
 }

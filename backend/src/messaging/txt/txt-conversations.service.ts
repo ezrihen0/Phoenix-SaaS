@@ -7,6 +7,7 @@ import { assertTablesExist } from "../../database/schema-readiness";
 import { OwnedPhoneNumbersService } from "../phone-numbers/owned-phone-numbers.service";
 
 type FindOrCreateTxtConversationInput = {
+  organizationId: string;
   customerId?: string | null;
   customerPhoneNumber: string;
   ownedPhoneNumberId: string;
@@ -17,6 +18,7 @@ type FindOrCreateTxtConversationInput = {
 
 type TxtConversationRecord = {
   id: string;
+  organizationId: string | null;
   publicConversationCode: string;
   customerId: string | null;
   customerPhoneNumber: string;
@@ -49,6 +51,11 @@ export class TxtConversationsService {
   async findOrCreateConversation(input: FindOrCreateTxtConversationInput): Promise<TxtConversationRecord> {
     await this.ensureSchema();
 
+    const organizationId = input.organizationId.trim();
+    if (!organizationId) {
+      apiError(400, "txt_conversation_organization_required", "Organization scope is required for TXT conversations.");
+    }
+
     const customerPhoneNumber = input.customerPhoneNumber.trim();
     const customerPhoneNumberNormalized = this.ownedPhoneNumbersService.normalizePhone(customerPhoneNumber);
 
@@ -66,16 +73,17 @@ export class TxtConversationsService {
       `
         SELECT id
         FROM txt_conversations
-        WHERE owned_phone_number_normalized = ?
+        WHERE organization_id = ?
+          AND owned_phone_number_normalized = ?
           AND customer_phone_number_normalized = ?
           AND is_archived = 0
         LIMIT 1
       `,
-      [ownedPhoneNumberNormalized, customerPhoneNumberNormalized],
+      [organizationId, ownedPhoneNumberNormalized, customerPhoneNumberNormalized],
     ) as Array<{ id: string }>;
 
     if (existing[0]?.id) {
-      return this.getConversationById(existing[0].id);
+      return this.getConversationById(existing[0].id, organizationId);
     }
 
     for (let attempt = 0; attempt < 1000; attempt += 1) {
@@ -87,6 +95,7 @@ export class TxtConversationsService {
           `
             INSERT INTO txt_conversations (
               id,
+              organization_id,
               public_conversation_code,
               customer_id,
               customer_phone_number,
@@ -103,10 +112,11 @@ export class TxtConversationsService {
               is_archived,
               created_at,
               updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, 0, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, 0, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
           `,
           [
             id,
+            organizationId,
             publicConversationCode,
             this.asTrimmedString(input.customerId),
             customerPhoneNumber,
@@ -119,7 +129,7 @@ export class TxtConversationsService {
           ],
         );
 
-        return this.getConversationById(id);
+        return this.getConversationById(id, organizationId);
       } catch {
         // Retry when code collides or insertion races on unique keys.
       }
@@ -128,13 +138,15 @@ export class TxtConversationsService {
     apiError(500, "txt_conversation_create_failed", "Unable to create TXT conversation right now.");
   }
 
-  async listRecentConversations(limit: number): Promise<TxtConversationListRow[]> {
+  async listRecentConversations(organizationIdRaw: string, limit: number): Promise<TxtConversationListRow[]> {
     await this.ensureSchema();
+    const organizationId = organizationIdRaw.trim();
 
     const rows = await this.dataSource.query(
       `
         SELECT
           c.id,
+          c.organization_id,
           c.public_conversation_code,
           c.customer_id,
           c.customer_phone_number,
@@ -154,12 +166,15 @@ export class TxtConversationsService {
           customer.full_name AS customer_full_name,
           customer.company_name AS customer_company_name
         FROM txt_conversations c
-        LEFT JOIN customers customer ON BINARY customer.id = BINARY c.customer_id
-        WHERE c.is_archived = 0
+        LEFT JOIN customers customer
+          ON BINARY customer.id = BINARY c.customer_id
+          AND customer.organization_id = c.organization_id
+        WHERE c.organization_id = ?
+          AND c.is_archived = 0
         ORDER BY COALESCE(c.last_message_at, c.updated_at, c.created_at) DESC
         LIMIT ?
       `,
-      [Math.max(1, Math.floor(limit))],
+      [organizationId, Math.max(1, Math.floor(limit))],
     ) as Array<Record<string, unknown>>;
 
     return rows.map((row) => {
@@ -175,9 +190,10 @@ export class TxtConversationsService {
     });
   }
 
-  async listActiveByCustomerId(customerIdRaw: string) {
+  async listActiveByCustomerId(organizationIdRaw: string, customerIdRaw: string) {
     await this.ensureSchema();
 
+    const organizationId = organizationIdRaw.trim();
     const customerId = customerIdRaw.trim();
 
     if (!customerId) {
@@ -188,6 +204,7 @@ export class TxtConversationsService {
       `
         SELECT
           id,
+          organization_id,
           public_conversation_code,
           customer_id,
           customer_phone_number,
@@ -205,19 +222,21 @@ export class TxtConversationsService {
           created_at,
           updated_at
         FROM txt_conversations
-        WHERE customer_id = ?
+        WHERE organization_id = ?
+          AND customer_id = ?
           AND is_archived = 0
         ORDER BY COALESCE(last_message_at, updated_at, created_at) DESC
       `,
-      [customerId],
+      [organizationId, customerId],
     ) as Array<Record<string, unknown>>;
 
     return rows.map((row) => this.toConversation(row));
   }
 
-  async listActiveUnknownByPhoneNormalized(phoneNormalizedRaw: string) {
+  async listActiveUnknownByPhoneNormalized(organizationIdRaw: string, phoneNormalizedRaw: string) {
     await this.ensureSchema();
 
+    const organizationId = organizationIdRaw.trim();
     const phoneNormalized = phoneNormalizedRaw.trim();
 
     if (!phoneNormalized) {
@@ -228,6 +247,7 @@ export class TxtConversationsService {
       `
         SELECT
           id,
+          organization_id,
           public_conversation_code,
           customer_id,
           customer_phone_number,
@@ -245,24 +265,26 @@ export class TxtConversationsService {
           created_at,
           updated_at
         FROM txt_conversations
-        WHERE customer_id IS NULL
+        WHERE organization_id = ?
+          AND customer_id IS NULL
           AND customer_phone_number_normalized = ?
           AND is_archived = 0
         ORDER BY COALESCE(last_message_at, updated_at, created_at) DESC
       `,
-      [phoneNormalized],
+      [organizationId, phoneNormalized],
     ) as Array<Record<string, unknown>>;
 
     return rows.map((row) => this.toConversation(row));
   }
 
-  async resetUnreadCount(conversationIds: string[]) {
+  async resetUnreadCount(organizationIdRaw: string, conversationIds: string[]) {
     await this.ensureSchema();
 
     if (!conversationIds.length) {
       return;
     }
 
+    const organizationId = organizationIdRaw.trim();
     const placeholders = conversationIds.map(() => "?").join(", ");
 
     await this.dataSource.query(
@@ -272,14 +294,16 @@ export class TxtConversationsService {
           unread_count = 0,
           updated_at = CURRENT_TIMESTAMP(6)
         WHERE id IN (${placeholders})
+          AND organization_id = ?
       `,
-      conversationIds,
+      [...conversationIds, organizationId],
     );
   }
 
-  async setUnreadCount(conversationIdRaw: string, unreadCountRaw: number) {
+  async setUnreadCount(organizationIdRaw: string, conversationIdRaw: string, unreadCountRaw: number) {
     await this.ensureSchema();
 
+    const organizationId = organizationIdRaw.trim();
     const conversationId = conversationIdRaw.trim();
 
     if (!conversationId) {
@@ -295,34 +319,40 @@ export class TxtConversationsService {
           unread_count = ?,
           updated_at = CURRENT_TIMESTAMP(6)
         WHERE id = ?
+          AND organization_id = ?
       `,
-      [unreadCount, conversationId],
+      [unreadCount, conversationId, organizationId],
     );
   }
 
-  async getTotalUnreadCount() {
+  async getTotalUnreadCount(organizationIdRaw: string) {
     await this.ensureSchema();
+    const organizationId = organizationIdRaw.trim();
 
     const rows = await this.dataSource.query(
       `
         SELECT COALESCE(SUM(unread_count), 0) AS unread_count
         FROM txt_conversations
-        WHERE is_archived = 0
+        WHERE organization_id = ?
+          AND is_archived = 0
       `,
+      [organizationId],
     ) as Array<Record<string, unknown>>;
 
     return Number(rows[0]?.unread_count ?? 0);
   }
 
-  async getConversationByIdOrCode(idOrCodeRaw: string): Promise<TxtConversationRecord> {
+  async getConversationByIdOrCode(organizationIdRaw: string, idOrCodeRaw: string): Promise<TxtConversationRecord> {
     await this.ensureSchema();
 
+    const organizationId = organizationIdRaw.trim();
     const value = idOrCodeRaw.trim();
 
     const rows = await this.dataSource.query(
       `
         SELECT
           id,
+          organization_id,
           public_conversation_code,
           customer_id,
           customer_phone_number,
@@ -340,10 +370,11 @@ export class TxtConversationsService {
           created_at,
           updated_at
         FROM txt_conversations
-        WHERE id = ? OR public_conversation_code = ?
+        WHERE organization_id = ?
+          AND (id = ? OR public_conversation_code = ?)
         LIMIT 1
       `,
-      [value, value.toUpperCase()],
+      [organizationId, value, value.toUpperCase()],
     ) as Array<Record<string, unknown>>;
 
     if (!rows[0]) {
@@ -354,6 +385,7 @@ export class TxtConversationsService {
   }
 
   async applyConversationActivity(input: {
+    organizationId: string;
     conversationId: string;
     body: string;
     direction: "inbound" | "outbound";
@@ -362,6 +394,7 @@ export class TxtConversationsService {
   }) {
     await this.ensureSchema();
 
+    const organizationId = input.organizationId.trim();
     const preview = this.previewMessage(input.body);
     const occurredAt = input.occurredAt ?? new Date();
 
@@ -376,8 +409,9 @@ export class TxtConversationsService {
             unread_count = 0,
             updated_at = CURRENT_TIMESTAMP(6)
           WHERE id = ?
+            AND organization_id = ?
         `,
-        [preview, input.direction, occurredAt, input.conversationId],
+        [preview, input.direction, occurredAt, input.conversationId, organizationId],
       );
 
       return;
@@ -394,8 +428,9 @@ export class TxtConversationsService {
             unread_count = unread_count + 1,
             updated_at = CURRENT_TIMESTAMP(6)
           WHERE id = ?
+            AND organization_id = ?
         `,
-        [preview, input.direction, occurredAt, input.conversationId],
+        [preview, input.direction, occurredAt, input.conversationId, organizationId],
       );
 
       return;
@@ -410,8 +445,9 @@ export class TxtConversationsService {
           last_message_at = ?,
           updated_at = CURRENT_TIMESTAMP(6)
         WHERE id = ?
+          AND organization_id = ?
       `,
-      [preview, input.direction, occurredAt, input.conversationId],
+      [preview, input.direction, occurredAt, input.conversationId, organizationId],
     );
   }
 
@@ -428,6 +464,7 @@ export class TxtConversationsService {
   private toConversation(row: Record<string, unknown>): TxtConversationRecord {
     return {
       id: String(row.id),
+      organizationId: this.asTrimmedString(row.organization_id),
       publicConversationCode: String(row.public_conversation_code),
       customerId: this.asTrimmedString(row.customer_id),
       customerPhoneNumber: String(row.customer_phone_number ?? ""),
@@ -485,11 +522,12 @@ export class TxtConversationsService {
     return output;
   }
 
-  private async getConversationById(id: string): Promise<TxtConversationRecord> {
+  private async getConversationById(id: string, organizationId: string): Promise<TxtConversationRecord> {
     const rows = await this.dataSource.query(
       `
         SELECT
           id,
+          organization_id,
           public_conversation_code,
           customer_id,
           customer_phone_number,
@@ -508,9 +546,10 @@ export class TxtConversationsService {
           updated_at
         FROM txt_conversations
         WHERE id = ?
+          AND organization_id = ?
         LIMIT 1
       `,
-      [id],
+      [id, organizationId],
     ) as Array<Record<string, unknown>>;
 
     if (!rows[0]) {

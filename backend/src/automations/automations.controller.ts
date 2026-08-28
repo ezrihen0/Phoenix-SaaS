@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { requirePermission } from "../auth/permissions";
 import { SessionGuard } from "../auth/session.guard";
 import { EntitlementService } from "../billing/entitlement.service";
@@ -8,7 +9,7 @@ import type { RequestWithActor } from "../common/request-types";
 import { AutomationsService } from "./automations.service";
 
 @Controller("api/automations")
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 export class AutomationsController {
   constructor(
     private readonly automationsService: AutomationsService,

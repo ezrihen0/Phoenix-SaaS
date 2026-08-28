@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { EntityManager, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import { BillingAccountEntity } from "../database/entities/billing-account.entity";
@@ -215,6 +215,50 @@ export class OrganizationBillingService {
     return account;
   }
 
+  async getBillingAccountByIdWithManager(manager: EntityManager, billingAccountId: string) {
+    const account = await manager.getRepository(BillingAccountEntity).findOne({
+      where: { id: billingAccountId.trim() },
+    });
+
+    if (!account) {
+      apiError(404, "billing_account_not_found", "Billing account could not be found.");
+    }
+
+    return account;
+  }
+
+  async updateBillingAccountFieldsByIdWithManager(
+    manager: EntityManager,
+    billingAccountId: string,
+    patch: Partial<
+      Pick<
+        BillingAccountEntity,
+        | "billing_provider"
+        | "provider_customer_id"
+        | "provider_subscription_id"
+        | "provider_price_id"
+        | "plan_key"
+        | "billing_status"
+        | "current_period_start"
+        | "current_period_end"
+        | "cancel_at_period_end"
+        | "canceled_at"
+        | "deactivated_at"
+        | "attention_reason"
+        | "last_provider_sync_at"
+        | "last_webhook_at"
+      >
+    >,
+  ) {
+    const nextPatch = {
+      ...patch,
+      organization_limit: patch.plan_key
+        ? resolveOrganizationLimitForPlan(patch.plan_key)
+        : undefined,
+    };
+    await this.updateBillingAccountWithManager(manager, billingAccountId, nextPatch);
+  }
+
   async findBillingAccountByProviderSubscriptionId(providerSubscriptionId: string) {
     return this.billingAccountsRepository.findOne({
       where: { provider_subscription_id: providerSubscriptionId.trim() },
@@ -419,13 +463,42 @@ export class OrganizationBillingService {
     billingAccountId: string,
     patch: Partial<BillingAccountEntity>,
   ) {
+    await this.updateBillingAccountWithManager(this.billingAccountsRepository.manager, billingAccountId, patch);
+  }
+
+  private async updateBillingAccountWithManager(
+    manager: EntityManager,
+    billingAccountId: string,
+    patch: Partial<BillingAccountEntity>,
+  ) {
     const accountId = billingAccountId.trim();
-    await this.billingAccountsRepository.update({ id: accountId }, patch);
-    const next = await this.billingAccountsRepository.findOne({ where: { id: accountId } });
+    const billingAccountsRepository = manager.getRepository(BillingAccountEntity);
+    const billingRepository = manager.getRepository(OrganizationBillingEntity);
+    await billingAccountsRepository.update({ id: accountId }, patch);
+    const next = await billingAccountsRepository.findOne({ where: { id: accountId } });
     if (!next) {
       apiError(404, "billing_account_not_found", "Billing account could not be found.");
     }
-    await this.syncCoverageCacheForAccount(next);
+    await billingRepository.update(
+      { billing_account_id: accountId },
+      {
+        plan_key: next.plan_key,
+        billing_status: next.billing_status,
+        clover_customer_id: next.clover_customer_id,
+        clover_plan_id: next.clover_plan_id,
+        clover_subscription_id: next.clover_subscription_id,
+        trial_starts_at: next.trial_starts_at,
+        trial_ends_at: next.trial_ends_at,
+        current_period_start: next.current_period_start,
+        current_period_end: next.current_period_end,
+        cancel_at_period_end: next.cancel_at_period_end,
+        canceled_at: next.canceled_at,
+        deactivated_at: next.deactivated_at,
+        last_clover_sync_at: next.last_clover_sync_at,
+        last_webhook_at: next.last_webhook_at,
+        attention_reason: next.attention_reason,
+      },
+    );
   }
 
   private async syncCoverageCacheForAccount(account: BillingAccountEntity) {

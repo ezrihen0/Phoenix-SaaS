@@ -350,14 +350,15 @@ export class AuthController {
   @Get("staff")
   @UseGuards(SessionGuard)
   async listStaff(@Req() request: RequestWithActor) {
-    const actor = requirePermission(
-      request.actor,
-      "system.roles.manage",
-      "role_management_forbidden",
-      "Only owners can manage staff roles.",
-    );
+    const actor = request.actor;
+    if (
+      !actor?.permissions?.includes("team.view")
+      && !actor?.permissions?.includes("system.roles.manage")
+    ) {
+      requirePermission(actor, "team.view", "team_view_forbidden", "You cannot view team members.");
+    }
 
-    return apiSuccess(await this.authService.listStaffProfiles(actor));
+    return apiSuccess(await this.authService.listStaffProfiles(actor!));
   }
 
   @Post("staff")
@@ -366,14 +367,15 @@ export class AuthController {
     @Body() payload: CreateStaffPayload,
     @Req() request: RequestWithActor,
   ) {
-    const actor = requirePermission(
-      request.actor,
-      "system.roles.manage",
-      "role_management_forbidden",
-      "Only owners can manage staff roles.",
-    );
+    const actor = request.actor;
+    if (
+      !actor?.permissions?.includes("team.invite")
+      && !actor?.permissions?.includes("system.roles.manage")
+    ) {
+      requirePermission(actor, "team.invite", "team_invite_forbidden", "You cannot add team members.");
+    }
 
-    return apiSuccess(await this.authService.createStaffProfile(parseCreateStaffPayload(payload), actor));
+    return apiSuccess(await this.authService.createStaffProfile(parseCreateStaffPayload(payload), actor!));
   }
 
   @Patch("staff/:profileId/role")
@@ -383,12 +385,17 @@ export class AuthController {
     @Body() payload: RoleUpdatePayload,
     @Req() request: RequestWithActor,
   ) {
-    const actor = requirePermission(
-      request.actor,
-      "system.roles.manage",
-      "role_management_forbidden",
-      "Only owners can manage staff roles.",
-    );
+    const actor = request.actor;
+    if (
+      !actor?.permissions?.includes("team.manage")
+      && !actor?.permissions?.includes("system.roles.manage")
+    ) {
+      requirePermission(actor, "team.manage", "team_manage_forbidden", "You cannot manage team access.");
+    }
+
+    if (!actor?.profile) {
+      apiError(403, "actor_profile_missing", "The authenticated user does not have a workspace profile yet.");
+    }
 
     if (actor.profile.id === profileId) {
       apiError(400, "cannot_change_own_role", "Owners cannot change their own role from this panel.");

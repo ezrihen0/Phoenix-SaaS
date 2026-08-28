@@ -377,7 +377,7 @@ export function resolvePhaseBadge(phase: MarketingFoundationData["phase"] | unde
 
 export function resolvePhaseLabel(phase: MarketingFoundationData["phase"] | undefined): string {
   if (isGrowthCenterProgramV1Complete(phase)) {
-    return "Growth Center · Program V1 (Phases 1–7)";
+    return "Growth Center · V1 workspace ready";
   }
 
   if (phase === "phase_4_crm_intelligence") {
@@ -397,7 +397,7 @@ export function resolvePhaseLabel(phase: MarketingFoundationData["phase"] | unde
 
 export function resolveHeroBody(phase: MarketingFoundationData["phase"] | undefined): string {
   if (isGrowthCenterProgramV1Complete(phase)) {
-    return "The full Growth Center stack is live: Marketing Profile and Content Studio, metadata calendar, Google and Facebook OAuth publishing with explicit UTC jobs, CRM opportunities, Campaign Builder, V1 automations (draft creation or suggestions only — never auto-publish without a future product decision), and honest internal analytics.";
+    return "Growth Center V1 is available in your workspace: Marketing Profile and Content Studio, metadata calendar, Google and Facebook OAuth publishing via explicit UTC jobs (provider-dependent), CRM opportunities, Campaign Builder, V1 automations (draft creation or suggestions only — never auto-publish), and internal analytics.";
   }
 
   if (phase === "phase_4_crm_intelligence") {

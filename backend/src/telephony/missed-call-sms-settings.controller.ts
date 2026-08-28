@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Put, Req, UseGuards } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -12,7 +13,7 @@ type MissedCallSmsSettingsPayload = {
   cooldownSeconds?: unknown;
 };
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/telephony")
 export class MissedCallSmsSettingsController {
   constructor(private readonly telnyxWebhookService: TelnyxWebhookService) {}
@@ -25,7 +26,7 @@ export class MissedCallSmsSettingsController {
       apiError(403, "forbidden", "Only office roles can manage missed-call SMS settings.");
     }
 
-    return apiSuccess(await this.telnyxWebhookService.getMissedCallSmsSettings());
+    return apiSuccess(await this.telnyxWebhookService.getMissedCallSmsSettings(this.requireOrganizationId(actor.organization_id)));
   }
 
   @Put("missed-call-sms-settings")
@@ -54,6 +55,7 @@ export class MissedCallSmsSettingsController {
     }
 
     const updated = await this.telnyxWebhookService.updateMissedCallSmsSettings({
+      organizationId: this.requireOrganizationId(actor.organization_id),
       enabled: payload.enabled,
       template: payload.template,
       cooldownSeconds,
@@ -61,5 +63,15 @@ export class MissedCallSmsSettingsController {
     });
 
     return apiSuccess(updated);
+  }
+
+  private requireOrganizationId(value: string | null | undefined) {
+    const organizationId = value?.trim();
+
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required for telephony settings.");
+    }
+
+    return organizationId;
   }
 }

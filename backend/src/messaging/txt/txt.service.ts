@@ -86,10 +86,10 @@ export class TxtService {
     private readonly customersRepository: Repository<CustomerEntity>,
   ) {}
 
-  async listConversations(limitRaw?: number): Promise<MessagingTxtConversationsResponse> {
+  async listConversations(organizationId: string, limitRaw?: number): Promise<MessagingTxtConversationsResponse> {
     const limit = this.clampLimit(limitRaw, 120, 500);
 
-    const rows = await this.txtConversationsService.listRecentConversations(limit * 4);
+    const rows = await this.txtConversationsService.listRecentConversations(organizationId, limit * 4);
     const grouped = new Map<string, MessagingTxtConversation>();
 
     for (const row of rows) {
@@ -138,10 +138,10 @@ export class TxtService {
     };
   }
 
-  async listConversationMessages(conversationId: string, limitRaw?: number): Promise<MessagingTxtThreadResponse> {
+  async listConversationMessages(organizationId: string, conversationId: string, limitRaw?: number): Promise<MessagingTxtThreadResponse> {
     const parsed = this.parseConversationId(conversationId);
     const limit = this.clampLimit(limitRaw, 200, 600);
-    const conversations = await this.resolveConversationTargets(parsed);
+    const conversations = await this.resolveConversationTargets(organizationId, parsed);
 
     if (!conversations.length) {
       return {
@@ -153,6 +153,7 @@ export class TxtService {
     const conversationIdSet = new Set(conversations.map((item) => item.id));
     const unreadCount = conversations.reduce((sum, item) => sum + item.unreadCount, 0);
     const messages = await this.txtMessagesService.listByConversationIds(
+      organizationId,
       Array.from(conversationIdSet),
       limit,
     );
@@ -183,19 +184,19 @@ export class TxtService {
     };
   }
 
-  async createConversationShortLink(payload: MessagingConversationShortLinkPayload): Promise<MessagingConversationShortLinkResponse> {
-    const conversation = await this.resolveShortLinkConversation(payload);
+  async createConversationShortLink(organizationId: string, payload: MessagingConversationShortLinkPayload): Promise<MessagingConversationShortLinkResponse> {
+    const conversation = await this.resolveShortLinkConversation(organizationId, payload);
     return this.toConversationShortLink(conversation);
   }
 
-  async resolveConversationShortLink(shortIdRaw: string): Promise<MessagingConversationShortLinkResponse> {
+  async resolveConversationShortLink(organizationId: string, shortIdRaw: string): Promise<MessagingConversationShortLinkResponse> {
     const shortId = shortIdRaw.trim();
 
     if (!shortId) {
       apiError(400, "messaging_short_link_required", "A messaging short link id is required.");
     }
 
-    const conversation = await this.txtConversationsService.getConversationByIdOrCode(shortId);
+    const conversation = await this.txtConversationsService.getConversationByIdOrCode(organizationId, shortId);
     return this.toConversationShortLink(conversation);
   }
 
@@ -211,6 +212,11 @@ export class TxtService {
 
     if (!messageBody) {
       apiError(400, "messaging_txt_body_required", "TXT message body is required.");
+    }
+
+    const organizationId = payload.organizationIdForCustomerScope?.trim();
+    if (!organizationId) {
+      apiError(400, "messaging_txt_organization_scope_missing", "An active organization is required for TXT messaging.");
     }
 
     const ownedPhoneNumberRaw = (
@@ -232,10 +238,12 @@ export class TxtService {
       smsEnabled: true,
       voiceEnabled: true,
       isActive: true,
+      actingOrganizationId: organizationId,
     });
 
-    const target = await this.resolveConversationTarget(parsed, payload.organizationIdForCustomerScope);
+    const target = await this.resolveConversationTarget(parsed, organizationId);
     const conversation = await this.txtConversationsService.findOrCreateConversation({
+      organizationId,
       customerId: target.customerId,
       customerPhoneNumber: target.phoneNumber,
       ownedPhoneNumberId: ownedNumber.id,
@@ -252,6 +260,7 @@ export class TxtService {
     };
 
     const pendingMessage = await this.txtMessagesService.persistMessage({
+      organizationId,
       conversationId: conversation.id,
       direction: "outbound",
       sentByUserId: payload.sentByUserId ?? null,
@@ -277,6 +286,7 @@ export class TxtService {
       const providerStatus = smsResult.ok ? "sent" : "failed_delivery";
 
       await this.txtMessagesService.updateMessageDelivery({
+        organizationId,
         idOrProviderMessageId: pendingMessage.id,
         providerMessageId: smsResult.messageId,
         providerStatus,
@@ -291,16 +301,18 @@ export class TxtService {
       });
 
       await this.txtConversationsService.applyConversationActivity({
+        organizationId,
         conversationId: conversation.id,
         body: messageBody,
         direction: "outbound",
         occurredAt: eventTime,
       });
 
-      const thread = await this.listConversationMessages(payload.conversationId);
+      const thread = await this.listConversationMessages(organizationId, payload.conversationId);
       return { thread, outboundTxtMessageId: pendingMessage.id };
     } catch (error) {
       await this.txtMessagesService.updateMessageDelivery({
+        organizationId,
         idOrProviderMessageId: pendingMessage.id,
         providerStatus: "failed_delivery",
         status: "failed",
@@ -312,6 +324,7 @@ export class TxtService {
       });
 
       await this.txtConversationsService.applyConversationActivity({
+        organizationId,
         conversationId: conversation.id,
         body: messageBody,
         direction: "outbound",
@@ -322,9 +335,9 @@ export class TxtService {
     }
   }
 
-  async markConversationRead(conversationId: string, limitRaw?: number): Promise<MessagingTxtThreadResponse> {
+  async markConversationRead(organizationId: string, conversationId: string, limitRaw?: number): Promise<MessagingTxtThreadResponse> {
     const parsed = this.parseConversationId(conversationId);
-    const conversations = await this.resolveConversationTargets(parsed);
+    const conversations = await this.resolveConversationTargets(organizationId, parsed);
 
     if (!conversations.length) {
       return {
@@ -334,15 +347,15 @@ export class TxtService {
     }
 
     const conversationIds = conversations.map((item) => item.id);
-    await this.txtMessagesService.markInboundMessagesRead(conversationIds);
-    await this.txtConversationsService.resetUnreadCount(conversationIds);
+    await this.txtMessagesService.markInboundMessagesRead(organizationId, conversationIds);
+    await this.txtConversationsService.resetUnreadCount(organizationId, conversationIds);
 
-    return this.listConversationMessages(conversationId, limitRaw);
+    return this.listConversationMessages(organizationId, conversationId, limitRaw);
   }
 
-  async markConversationUnread(conversationId: string, limitRaw?: number): Promise<MessagingTxtThreadResponse> {
+  async markConversationUnread(organizationId: string, conversationId: string, limitRaw?: number): Promise<MessagingTxtThreadResponse> {
     const parsed = this.parseConversationId(conversationId);
-    const conversations = await this.resolveConversationTargets(parsed);
+    const conversations = await this.resolveConversationTargets(organizationId, parsed);
 
     if (!conversations.length) {
       return {
@@ -352,23 +365,23 @@ export class TxtService {
     }
 
     const conversationIds = conversations.map((item) => item.id);
-    const latestInbound = await this.txtMessagesService.findLatestInboundMessage(conversationIds);
+    const latestInbound = await this.txtMessagesService.findLatestInboundMessage(organizationId, conversationIds);
 
     if (!latestInbound) {
-      return this.listConversationMessages(conversationId, limitRaw);
+      return this.listConversationMessages(organizationId, conversationId, limitRaw);
     }
 
-    await this.txtMessagesService.markInboundMessagesRead(conversationIds);
-    await this.txtConversationsService.resetUnreadCount(conversationIds);
-    await this.txtMessagesService.markMessageUnread(latestInbound.id);
-    await this.txtConversationsService.setUnreadCount(latestInbound.conversationId, 1);
+    await this.txtMessagesService.markInboundMessagesRead(organizationId, conversationIds);
+    await this.txtConversationsService.resetUnreadCount(organizationId, conversationIds);
+    await this.txtMessagesService.markMessageUnread(organizationId, latestInbound.id);
+    await this.txtConversationsService.setUnreadCount(organizationId, latestInbound.conversationId, 1);
 
-    return this.listConversationMessages(conversationId, limitRaw);
+    return this.listConversationMessages(organizationId, conversationId, limitRaw);
   }
 
-  async getUnreadSummary(): Promise<MessagingTxtUnreadSummaryResponse> {
+  async getUnreadSummary(organizationId: string): Promise<MessagingTxtUnreadSummaryResponse> {
     return {
-      unreadCount: await this.txtConversationsService.getTotalUnreadCount(),
+      unreadCount: await this.txtConversationsService.getTotalUnreadCount(organizationId),
     };
   }
 
@@ -404,15 +417,42 @@ export class TxtService {
       };
     }
 
-    const existingInbound = await this.findTxtMessageByProviderMessageId(providerMessageId);
+    const existingMessage = await this.findTxtMessageByProviderMessageId(providerMessageId);
 
-    if (existingInbound) {
+    if (existingMessage?.direction === "outbound") {
+      const providerStatus = this.readFirstString(eventPayload, [
+        ["status"],
+        ["to", "0", "status"],
+        ["delivery_status"],
+      ]) ?? eventType ?? "provider_callback";
+      const deliveryStatus = this.mapProviderDeliveryStatus(providerStatus);
+      await this.txtMessagesService.updateMessageDelivery({
+        organizationId: existingMessage.organizationId,
+        idOrProviderMessageId: providerMessageId,
+        providerStatus,
+        status: deliveryStatus.status,
+        errorCode: deliveryStatus.errorCode,
+        errorMessage: deliveryStatus.errorMessage,
+        deliveredAt: deliveryStatus.status === "delivered" ? (this.asDate(envelope.data?.occurred_at) ?? new Date()) : null,
+        rawPayload: envelope,
+      });
+
+      return {
+        received: true,
+        deliveryUpdate: true,
+        providerMessageId,
+        txtMessageId: existingMessage.id,
+        status: deliveryStatus.status,
+      };
+    }
+
+    if (existingMessage) {
       return {
         received: true,
         duplicate: true,
         reason: "provider_message_id_duplicate",
-        txtMessageId: existingInbound.id,
-        conversationId: existingInbound.conversationId,
+        txtMessageId: existingMessage.id,
+        conversationId: existingMessage.conversationId,
       };
     }
 
@@ -469,8 +509,20 @@ export class TxtService {
       };
     }
 
-    const matchedCustomer = await this.matchCustomerByPhoneNormalized(fromNumberNormalized);
+    const organizationId = ownedPhoneNumber.organizationId ?? ownedPhoneNumber.tenantId;
+    if (!organizationId) {
+      return {
+        received: true,
+        ignored: true,
+        reason: "owned_number_organization_missing",
+        providerMessageId,
+        toNumber: toNumberNormalized,
+      };
+    }
+
+    const matchedCustomer = await this.matchCustomerByPhoneNormalized(fromNumberNormalized, organizationId);
     const conversation = await this.txtConversationsService.findOrCreateConversation({
+      organizationId,
       customerId: matchedCustomer?.id ?? null,
       customerPhoneNumber: fromNumber,
       ownedPhoneNumberId: ownedPhoneNumber.id,
@@ -482,6 +534,7 @@ export class TxtService {
     const occurredAt = this.asDate(envelope.data?.occurred_at) ?? new Date();
 
     const savedMessage = await this.txtMessagesService.persistMessage({
+      organizationId,
       conversationId: conversation.id,
       direction: "inbound",
       provider: "telnyx",
@@ -498,6 +551,7 @@ export class TxtService {
     });
 
     await this.txtConversationsService.applyConversationActivity({
+      organizationId,
       conversationId: conversation.id,
       body: messageBody,
       direction: "inbound",
@@ -602,22 +656,22 @@ export class TxtService {
     };
   }
 
-  private async resolveConversationTargets(parsed: { kind: "customer" | "unknown"; value: string }) {
+  private async resolveConversationTargets(organizationId: string, parsed: { kind: "customer" | "unknown"; value: string }) {
     if (parsed.kind === "customer") {
-      return this.txtConversationsService.listActiveByCustomerId(parsed.value);
+      return this.txtConversationsService.listActiveByCustomerId(organizationId, parsed.value);
     }
 
     const normalized = this.ownedPhoneNumbersService.normalizePhone(parsed.value) ?? parsed.value.trim();
-    return this.txtConversationsService.listActiveUnknownByPhoneNormalized(normalized);
+    return this.txtConversationsService.listActiveUnknownByPhoneNormalized(organizationId, normalized);
   }
 
-  private async resolveShortLinkConversation(payload: MessagingConversationShortLinkPayload) {
+  private async resolveShortLinkConversation(organizationId: string, payload: MessagingConversationShortLinkPayload) {
     if (payload.lane === "customers") {
       if (!payload.customerId?.trim()) {
         apiError(400, "messaging_short_link_customer_required", "A customer conversation target is required.");
       }
 
-      const conversations = await this.txtConversationsService.listActiveByCustomerId(payload.customerId);
+      const conversations = await this.txtConversationsService.listActiveByCustomerId(organizationId, payload.customerId);
 
       if (!conversations[0]) {
         apiError(404, "messaging_short_link_not_found", "No active TXT conversation was found for this customer.");
@@ -631,7 +685,7 @@ export class TxtService {
     }
 
     const normalizedPhone = this.ownedPhoneNumbersService.normalizePhone(payload.phoneKey) ?? payload.phoneKey.trim();
-    const conversations = await this.txtConversationsService.listActiveUnknownByPhoneNormalized(normalizedPhone);
+    const conversations = await this.txtConversationsService.listActiveUnknownByPhoneNormalized(organizationId, normalizedPhone);
 
     if (!conversations[0]) {
       apiError(404, "messaging_short_link_not_found", "No active TXT conversation was found for this phone number.");
@@ -787,7 +841,29 @@ export class TxtService {
     return rows;
   }
 
-  private async matchCustomerByPhoneNormalized(phoneNormalized: string) {
+  private mapProviderDeliveryStatus(providerStatus: string) {
+    const normalized = providerStatus.trim().toLowerCase();
+
+    if (normalized.includes("delivered")) {
+      return { status: "delivered" as const, errorCode: null, errorMessage: null };
+    }
+
+    if (normalized.includes("fail") || normalized.includes("undeliver") || normalized.includes("reject")) {
+      return {
+        status: "failed" as const,
+        errorCode: "provider_delivery_failed",
+        errorMessage: `Provider reported ${providerStatus}.`,
+      };
+    }
+
+    if (normalized.includes("send") || normalized.includes("sent") || normalized.includes("queued")) {
+      return { status: "sent" as const, errorCode: null, errorMessage: null };
+    }
+
+    return { status: "sent" as const, errorCode: null, errorMessage: null };
+  }
+
+  private async matchCustomerByPhoneNormalized(phoneNormalized: string, organizationId: string) {
     const customers = await this.customersRepository.find({
       select: {
         id: true,
@@ -795,6 +871,9 @@ export class TxtService {
         company_name: true,
         phone: true,
         updated_at: true,
+      },
+      where: {
+        organization_id: organizationId,
       },
       take: 5000,
       order: {

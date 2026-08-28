@@ -162,6 +162,19 @@ export function resolveAiFieldCopilotVoiceEnabled(raw: string | undefined): bool
   return ["true", "1", "yes", "on"].includes(normalized);
 }
 
+/**
+ * HOME AI V1 — AI-first operational home (`/api/ai/home/*`).
+ * Requires `AI_FOUNDATION_ENABLED` first in callers.
+ */
+export function resolveAiHomeV1Enabled(raw: string | undefined): boolean {
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return ["true", "1", "yes", "on"].includes(normalized);
+}
+
 /** Parse comma-separated env list into normalized tokens (empty when unset). */
 export function parseCsvEnvList(raw: string | undefined): string[] {
   if (typeof raw !== "string" || raw.trim() === "") {

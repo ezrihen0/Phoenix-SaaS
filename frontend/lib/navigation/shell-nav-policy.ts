@@ -46,6 +46,7 @@ const ROLES_ESTIMATES: ReadonlySet<ShellNavRole> = new Set([
   "owner",
   "admin",
   "office_admin",
+  "dispatcher",
   "technician",
 ]);
 

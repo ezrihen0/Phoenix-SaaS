@@ -36,8 +36,8 @@ export class UserEntity {
   @OneToOne(() => ProfileEntity, (profile) => profile.user)
   profile?: ProfileEntity | null;
 
-  @OneToOne(() => TechnicianEntity, (technician) => technician.user)
-  technician?: TechnicianEntity | null;
+  @OneToMany(() => TechnicianEntity, (technician) => technician.user)
+  technicians?: TechnicianEntity[];
 
   @OneToMany(() => AuthSessionEntity, (session) => session.user)
   sessions?: AuthSessionEntity[];

@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
-import { In, Repository } from "typeorm";
+import { EntityManager, In, Repository } from "typeorm";
 
 import type { BillingAccountEntity } from "../database/entities/billing-account.entity";
 import { BillingAccountSubscriptionItemEntity } from "../database/entities/billing-account-subscription-item.entity";
@@ -27,10 +27,23 @@ export class LanguageStoreEntitlementService {
   ) {}
 
   async reconcileBillingAccount(account: BillingAccountEntity, snapshot: ProviderSubscriptionSnapshot) {
+    return this.reconcileBillingAccountWithManager(
+      this.organizationBillingRepository.manager,
+      account,
+      snapshot,
+    );
+  }
+
+  async reconcileBillingAccountWithManager(
+    manager: EntityManager,
+    account: BillingAccountEntity,
+    snapshot: ProviderSubscriptionSnapshot,
+  ) {
     if (Array.isArray(snapshot.subscriptionItems)) {
-      await this.syncSubscriptionItems(account, snapshot);
+      await this.syncSubscriptionItemsWithManager(manager, account, snapshot);
     } else if (snapshot.providerSubscriptionId?.trim() && snapshot.billingStatus === "deactivated") {
-      await this.markSubscriptionItemsInactive(
+      await this.markSubscriptionItemsInactiveWithManager(
+        manager,
         account.id,
         snapshot.provider,
         snapshot.providerSubscriptionId.trim(),
@@ -38,7 +51,7 @@ export class LanguageStoreEntitlementService {
       );
     }
 
-    await this.projectOrganizationEntitlements(account);
+    await this.projectOrganizationEntitlementsWithManager(manager, account);
   }
 
   async reprojectBillingAccount(account: BillingAccountEntity) {
@@ -46,12 +59,25 @@ export class LanguageStoreEntitlementService {
   }
 
   private async syncSubscriptionItems(account: BillingAccountEntity, snapshot: ProviderSubscriptionSnapshot) {
+    return this.syncSubscriptionItemsWithManager(
+      this.billingAccountSubscriptionItemsRepository.manager,
+      account,
+      snapshot,
+    );
+  }
+
+  private async syncSubscriptionItemsWithManager(
+    manager: EntityManager,
+    account: BillingAccountEntity,
+    snapshot: ProviderSubscriptionSnapshot,
+  ) {
+    const billingAccountSubscriptionItemsRepository = manager.getRepository(BillingAccountSubscriptionItemEntity);
     const subscriptionItems = snapshot.subscriptionItems ?? [];
     const providerSubscriptionId = snapshot.providerSubscriptionId?.trim() ?? null;
     const providerOrganizationId = snapshot.organizationId?.trim() ?? null;
     const syncedAt = snapshot.lastProviderSyncAt ?? new Date();
 
-    const existingItems = await this.billingAccountSubscriptionItemsRepository.find({
+    const existingItems = await billingAccountSubscriptionItemsRepository.find({
       where: {
         billing_account_id: account.id,
         provider: snapshot.provider,
@@ -82,7 +108,7 @@ export class LanguageStoreEntitlementService {
         providerOrganizationId,
       });
 
-      const entity = existing ?? this.billingAccountSubscriptionItemsRepository.create({
+      const entity = existing ?? billingAccountSubscriptionItemsRepository.create({
         billing_account_id: account.id,
         provider: snapshot.provider,
         provider_subscription_item_id: providerSubscriptionItemId,
@@ -102,7 +128,7 @@ export class LanguageStoreEntitlementService {
       entity.current_period_end = snapshot.currentPeriodEnd ?? account.current_period_end ?? null;
       entity.last_provider_sync_at = syncedAt;
 
-      await this.billingAccountSubscriptionItemsRepository.save(entity);
+      await billingAccountSubscriptionItemsRepository.save(entity);
     }
 
     const staleItems = existingItems.filter((item) =>
@@ -114,7 +140,7 @@ export class LanguageStoreEntitlementService {
         item.quantity = 0;
         item.last_provider_sync_at = syncedAt;
       }
-      await this.billingAccountSubscriptionItemsRepository.save(staleItems);
+      await billingAccountSubscriptionItemsRepository.save(staleItems);
     }
   }
 
@@ -124,7 +150,24 @@ export class LanguageStoreEntitlementService {
     providerSubscriptionId: string,
     syncedAt: Date,
   ) {
-    const existingItems = await this.billingAccountSubscriptionItemsRepository.find({
+    return this.markSubscriptionItemsInactiveWithManager(
+      this.billingAccountSubscriptionItemsRepository.manager,
+      billingAccountId,
+      provider,
+      providerSubscriptionId,
+      syncedAt,
+    );
+  }
+
+  private async markSubscriptionItemsInactiveWithManager(
+    manager: EntityManager,
+    billingAccountId: string,
+    provider: ProviderSubscriptionSnapshot["provider"],
+    providerSubscriptionId: string,
+    syncedAt: Date,
+  ) {
+    const billingAccountSubscriptionItemsRepository = manager.getRepository(BillingAccountSubscriptionItemEntity);
+    const existingItems = await billingAccountSubscriptionItemsRepository.find({
       where: {
         billing_account_id: billingAccountId,
         provider,
@@ -143,17 +186,28 @@ export class LanguageStoreEntitlementService {
       item.last_provider_sync_at = syncedAt;
     }
 
-    await this.billingAccountSubscriptionItemsRepository.save(existingItems);
+    await billingAccountSubscriptionItemsRepository.save(existingItems);
   }
 
   private async projectOrganizationEntitlements(account: BillingAccountEntity) {
-    const coverages = await this.organizationBillingRepository.find({
+    return this.projectOrganizationEntitlementsWithManager(
+      this.organizationBillingRepository.manager,
+      account,
+    );
+  }
+
+  private async projectOrganizationEntitlementsWithManager(manager: EntityManager, account: BillingAccountEntity) {
+    const organizationBillingRepository = manager.getRepository(OrganizationBillingEntity);
+    const billingAccountSubscriptionItemsRepository = manager.getRepository(BillingAccountSubscriptionItemEntity);
+    const organizationLanguageEntitlementsRepository = manager.getRepository(OrganizationLanguageEntitlementEntity);
+
+    const coverages = await organizationBillingRepository.find({
       where: { billing_account_id: account.id },
       order: { created_at: "ASC" },
     });
     const organizationIds = coverages.map((coverage) => coverage.organization_id);
 
-    const activeSubscriptionItems = await this.billingAccountSubscriptionItemsRepository.find({
+    const activeSubscriptionItems = await billingAccountSubscriptionItemsRepository.find({
       where: {
         billing_account_id: account.id,
         is_active: true,
@@ -180,9 +234,9 @@ export class LanguageStoreEntitlementService {
         activeItems: activeItemsByOrganization.get(coverage.organization_id) ?? [],
       });
 
-      const entity = await this.organizationLanguageEntitlementsRepository.findOne({
+      const entity = await organizationLanguageEntitlementsRepository.findOne({
         where: { organization_id: coverage.organization_id },
-      }) ?? this.organizationLanguageEntitlementsRepository.create({
+      }) ?? organizationLanguageEntitlementsRepository.create({
         organization_id: coverage.organization_id,
       });
 
@@ -198,15 +252,15 @@ export class LanguageStoreEntitlementService {
       entity.total_translation_units = projected.total_translation_units;
       entity.last_reconciled_at = new Date();
 
-      await this.organizationLanguageEntitlementsRepository.save(entity);
+      await organizationLanguageEntitlementsRepository.save(entity);
     }
 
     if (organizationIds.length === 0) {
-      await this.organizationLanguageEntitlementsRepository.delete({ billing_account_id: account.id });
+      await organizationLanguageEntitlementsRepository.delete({ billing_account_id: account.id });
       return;
     }
 
-    const staleRows = await this.organizationLanguageEntitlementsRepository.find({
+    const staleRows = await organizationLanguageEntitlementsRepository.find({
       where: {
         billing_account_id: account.id,
       },
@@ -216,7 +270,7 @@ export class LanguageStoreEntitlementService {
       .filter((organizationId) => !organizationIds.includes(organizationId));
 
     if (staleOrganizationIds.length > 0) {
-      await this.organizationLanguageEntitlementsRepository.delete({
+      await organizationLanguageEntitlementsRepository.delete({
         organization_id: In(staleOrganizationIds),
       });
     }

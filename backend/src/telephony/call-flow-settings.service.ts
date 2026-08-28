@@ -54,6 +54,7 @@ export type CallFlowSettings = {
 };
 
 export type UpdateCallFlowSettingsInput = {
+  organizationId: string;
   configName: string;
   timeZone: string;
   greetingMode: CallFlowGreetingMode;
@@ -92,6 +93,7 @@ export type CallFlowDecisionSummary = {
 
 type RawConfigRow = {
   id: string;
+  organization_id: string | null;
   config_name: string;
   is_active: number | boolean | string;
   time_zone: string;
@@ -147,9 +149,9 @@ export class CallFlowSettingsService {
 
   constructor(private readonly dataSource: DataSource) {}
 
-  async getSettings(): Promise<CallFlowSettings> {
+  async getSettings(organizationId: string | null = null): Promise<CallFlowSettings> {
     await this.ensureSchema();
-    const config = await this.getActiveConfigRow();
+    const config = await this.getActiveConfigRow(organizationId);
     const businessHours = await this.getBusinessHours(config.id);
     const ivrOptions = await this.getIvrOptions(config.id);
 
@@ -175,7 +177,9 @@ export class CallFlowSettingsService {
   async updateSettings(input: UpdateCallFlowSettingsInput): Promise<CallFlowSettings> {
     await this.ensureSchema();
 
-    const config = await this.getActiveConfigRow();
+    const organizationId = input.organizationId.trim();
+    const config = await this.getActiveConfigRow(organizationId);
+    const configId = config.organization_id === organizationId ? config.id : randomUUID();
     const configName = this.requireText(input.configName, "call_flow_config_name_invalid", "Configuration name is required.", 100);
     const timeZone = this.validateTimeZone(input.timeZone);
     const greetingMode = this.validateGreetingMode(input.greetingMode);
@@ -191,23 +195,42 @@ export class CallFlowSettingsService {
 
     await this.dataSource.query(
       `
-        UPDATE call_flow_configs
-        SET
-          config_name = ?,
-          time_zone = ?,
-          greeting_mode = ?,
-          greeting_text = ?,
-          open_hours_action = ?,
-          open_hours_route_target = ?,
-          after_hours_action = ?,
-          after_hours_route_target = ?,
-          whisper_message = ?,
-          missed_call_sms_template_key = ?,
-          updated_by_auth_user_id = ?,
+        INSERT INTO call_flow_configs (
+          id,
+          organization_id,
+          config_name,
+          is_active,
+          time_zone,
+          greeting_mode,
+          greeting_text,
+          open_hours_action,
+          open_hours_route_target,
+          after_hours_action,
+          after_hours_route_target,
+          whisper_message,
+          missed_call_sms_template_key,
+          updated_by_auth_user_id,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
+        ON DUPLICATE KEY UPDATE
+          organization_id = VALUES(organization_id),
+          config_name = VALUES(config_name),
+          time_zone = VALUES(time_zone),
+          greeting_mode = VALUES(greeting_mode),
+          greeting_text = VALUES(greeting_text),
+          open_hours_action = VALUES(open_hours_action),
+          open_hours_route_target = VALUES(open_hours_route_target),
+          after_hours_action = VALUES(after_hours_action),
+          after_hours_route_target = VALUES(after_hours_route_target),
+          whisper_message = VALUES(whisper_message),
+          missed_call_sms_template_key = VALUES(missed_call_sms_template_key),
+          updated_by_auth_user_id = VALUES(updated_by_auth_user_id),
           updated_at = CURRENT_TIMESTAMP(6)
-        WHERE id = ?
       `,
       [
+        configId,
+        organizationId,
         configName,
         timeZone,
         greetingMode,
@@ -219,11 +242,10 @@ export class CallFlowSettingsService {
         whisperMessage,
         missedCallSmsTemplateKey,
         input.updatedByAuthUserId,
-        config.id,
       ],
     );
 
-    await this.dataSource.query(`DELETE FROM call_flow_business_hours WHERE call_flow_config_id = ?`, [config.id]);
+    await this.dataSource.query(`DELETE FROM call_flow_business_hours WHERE call_flow_config_id = ?`, [configId]);
     for (const [index, item] of businessHours.entries()) {
       await this.dataSource.query(
         `
@@ -239,11 +261,11 @@ export class CallFlowSettingsService {
             updated_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
         `,
-        [randomUUID(), config.id, item.dayKey, item.enabled ? 1 : 0, item.openTime, item.closeTime, index],
+        [randomUUID(), configId, item.dayKey, item.enabled ? 1 : 0, item.openTime, item.closeTime, index],
       );
     }
 
-    await this.dataSource.query(`DELETE FROM call_flow_ivr_options WHERE call_flow_config_id = ?`, [config.id]);
+    await this.dataSource.query(`DELETE FROM call_flow_ivr_options WHERE call_flow_config_id = ?`, [configId]);
     for (const [index, item] of ivrOptions.entries()) {
       await this.dataSource.query(
         `
@@ -259,15 +281,15 @@ export class CallFlowSettingsService {
             updated_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
         `,
-        [randomUUID(), config.id, item.digit, item.label, item.serviceType, item.routeTarget, index],
+        [randomUUID(), configId, item.digit, item.label, item.serviceType, item.routeTarget, index],
       );
     }
 
-    return this.getSettings();
+    return this.getSettings(organizationId);
   }
 
-  async evaluateActiveCallFlow(occurredAt: Date | null): Promise<CallFlowDecisionSummary> {
-    const settings = await this.getSettings();
+  async evaluateActiveCallFlow(occurredAt: Date | null, organizationId: string | null = null): Promise<CallFlowDecisionSummary> {
+    const settings = await this.getSettings(organizationId);
     const evaluatedAt = occurredAt ?? new Date();
     const parts = this.getZonedDateParts(evaluatedAt, settings.timeZone);
     const businessHours = settings.businessHours.find((item) => item.dayKey === parts.dayKey)
@@ -303,7 +325,7 @@ export class CallFlowSettingsService {
     this.schemaEnsured = true;
   }
 
-  private async getActiveConfigRow() {
+  private async getActiveConfigRow(organizationId: string | null) {
     const hasModernConfigColumns = await this.hasCallFlowConfigColumn("config_name");
 
     const rows = await this.dataSource.query(
@@ -311,6 +333,7 @@ export class CallFlowSettingsService {
         ? `
             SELECT
               id,
+              organization_id,
               config_name,
               is_active,
               time_zone,
@@ -325,12 +348,14 @@ export class CallFlowSettingsService {
               updated_at
             FROM call_flow_configs
             WHERE is_active = 1
-            ORDER BY updated_at DESC
+              AND (? IS NULL OR organization_id = ? OR organization_id IS NULL)
+            ORDER BY CASE WHEN organization_id = ? THEN 0 ELSE 1 END, updated_at DESC
             LIMIT 1
           `
         : `
             SELECT
               id,
+              NULL AS organization_id,
               name AS config_name,
               is_active,
               business_timezone AS time_zone,
@@ -360,6 +385,7 @@ export class CallFlowSettingsService {
             ORDER BY updated_at DESC
             LIMIT 1
           `,
+      hasModernConfigColumns ? [organizationId, organizationId, organizationId] : [],
     ) as RawConfigRow[];
 
     const row = rows[0];

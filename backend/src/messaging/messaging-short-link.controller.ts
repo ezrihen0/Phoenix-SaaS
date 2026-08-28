@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -44,7 +45,7 @@ function parseShortLinkPayload(payload: CreateMessagingShortLinkPayload) {
   apiError(400, "messaging_short_link_lane_invalid", "Messaging short links only support TXT customer and unknown-number lanes.");
 }
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/messaging/conversations")
 export class MessagingShortLinkController {
   constructor(
@@ -58,7 +59,7 @@ export class MessagingShortLinkController {
     @Body() payload: CreateMessagingShortLinkPayload,
   ) {
     this.messagingAccessService.requireSendAccess(request);
-    return apiSuccess(await this.txtService.createConversationShortLink(parseShortLinkPayload(payload)));
+    return apiSuccess(await this.txtService.createConversationShortLink(this.requireOrganizationId(request), parseShortLinkPayload(payload)));
   }
 
   @Get("short-link/:shortId")
@@ -67,6 +68,16 @@ export class MessagingShortLinkController {
     @Param("shortId") shortId: string,
   ) {
     this.messagingAccessService.requireGlobalInboxAccess(request);
-    return apiSuccess(await this.txtService.resolveConversationShortLink(shortId));
+    return apiSuccess(await this.txtService.resolveConversationShortLink(this.requireOrganizationId(request), shortId));
+  }
+
+  private requireOrganizationId(request: RequestWithActor) {
+    const organizationId = request.actor?.organization_id?.trim();
+
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required for TXT messaging.");
+    }
+
+    return organizationId;
   }
 }

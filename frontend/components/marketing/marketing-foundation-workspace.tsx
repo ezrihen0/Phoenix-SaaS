@@ -577,7 +577,7 @@ function LegacyMarketingFoundationWorkspace({
   const programV1Complete = isGrowthCenterProgramV1Complete(foundationData?.phase);
   const phaseLabel = resolvePhaseLabel(foundationData?.phase);
   const heroEyebrow = programV1Complete
-    ? "Growth Center · Program complete"
+    ? "Growth Center · V1 workspace ready"
     : foundationData?.phase === "phase_4_crm_intelligence"
       ? "Growth Intelligence online"
       : foundationData?.phase === "phase_3_publishing_integrations"

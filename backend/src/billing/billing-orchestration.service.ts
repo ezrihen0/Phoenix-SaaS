@@ -1,5 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { InjectDataSource } from "@nestjs/typeorm";
+import { DataSource } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import type { BillingAccountEntity } from "../database/entities/billing-account.entity";
@@ -15,6 +17,8 @@ export class BillingOrchestrationService {
 
   constructor(
     private readonly configService: ConfigService,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly organizationBillingService: OrganizationBillingService,
     private readonly billingProviderRegistryService: BillingProviderRegistryService,
     private readonly languageStoreEntitlementService: LanguageStoreEntitlementService,
@@ -84,43 +88,25 @@ export class BillingOrchestrationService {
       return null;
     }
 
-    const patch = {
-      billing_provider: snapshot.provider,
-      provider_customer_id: snapshot.providerCustomerId ?? account.provider_customer_id ?? null,
-      provider_subscription_id: snapshot.providerSubscriptionId ?? account.provider_subscription_id ?? null,
-      provider_price_id: snapshot.providerPriceId ?? account.provider_price_id ?? null,
-      ...(Object.prototype.hasOwnProperty.call(snapshot, "planKey") ? { plan_key: snapshot.planKey ?? undefined } : {}),
-      ...(Object.prototype.hasOwnProperty.call(snapshot, "billingStatus")
-        ? { billing_status: snapshot.billingStatus ?? undefined }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(snapshot, "currentPeriodStart")
-        ? { current_period_start: snapshot.currentPeriodStart ?? null }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(snapshot, "currentPeriodEnd")
-        ? { current_period_end: snapshot.currentPeriodEnd ?? null }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(snapshot, "cancelAtPeriodEnd")
-        ? { cancel_at_period_end: snapshot.cancelAtPeriodEnd ?? false }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(snapshot, "canceledAt")
-        ? { canceled_at: snapshot.canceledAt ?? null }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(snapshot, "deactivatedAt")
-        ? { deactivated_at: snapshot.deactivatedAt ?? null }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(snapshot, "attentionReason")
-        ? { attention_reason: snapshot.attentionReason ?? null }
-        : {}),
-      last_provider_sync_at: snapshot.lastProviderSyncAt ?? new Date(),
-      ...(Object.prototype.hasOwnProperty.call(snapshot, "lastWebhookAt")
-        ? { last_webhook_at: snapshot.lastWebhookAt ?? null }
-        : {}),
-    };
+    const patch = buildBillingAccountPatch(snapshot, account);
 
-    await this.organizationBillingService.updateBillingAccountFieldsById(account.id, patch);
-    const nextAccount = await this.organizationBillingService.getBillingAccountById(account.id);
-    await this.languageStoreEntitlementService.reconcileBillingAccount(nextAccount, snapshot);
-    return nextAccount;
+    return this.dataSource.transaction(async (manager) => {
+      await this.organizationBillingService.updateBillingAccountFieldsByIdWithManager(
+        manager,
+        account.id,
+        patch,
+      );
+      const nextAccount = await this.organizationBillingService.getBillingAccountByIdWithManager(
+        manager,
+        account.id,
+      );
+      await this.languageStoreEntitlementService.reconcileBillingAccountWithManager(
+        manager,
+        nextAccount,
+        snapshot,
+      );
+      return nextAccount;
+    });
   }
 
   private async resolveBillingAccount(snapshot: ProviderSubscriptionSnapshot): Promise<BillingAccountEntity | null> {
@@ -157,4 +143,42 @@ export class BillingOrchestrationService {
       ?? "http://localhost:3000/pricing?checkout=cancelled"
     );
   }
+}
+
+function buildBillingAccountPatch(
+  snapshot: ProviderSubscriptionSnapshot,
+  account: BillingAccountEntity,
+) {
+  return {
+    billing_provider: snapshot.provider,
+    provider_customer_id: snapshot.providerCustomerId ?? account.provider_customer_id ?? null,
+    provider_subscription_id: snapshot.providerSubscriptionId ?? account.provider_subscription_id ?? null,
+    provider_price_id: snapshot.providerPriceId ?? account.provider_price_id ?? null,
+    ...(Object.prototype.hasOwnProperty.call(snapshot, "planKey") ? { plan_key: snapshot.planKey ?? undefined } : {}),
+    ...(Object.prototype.hasOwnProperty.call(snapshot, "billingStatus")
+      ? { billing_status: snapshot.billingStatus ?? undefined }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(snapshot, "currentPeriodStart")
+      ? { current_period_start: snapshot.currentPeriodStart ?? null }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(snapshot, "currentPeriodEnd")
+      ? { current_period_end: snapshot.currentPeriodEnd ?? null }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(snapshot, "cancelAtPeriodEnd")
+      ? { cancel_at_period_end: snapshot.cancelAtPeriodEnd ?? false }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(snapshot, "canceledAt")
+      ? { canceled_at: snapshot.canceledAt ?? null }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(snapshot, "deactivatedAt")
+      ? { deactivated_at: snapshot.deactivatedAt ?? null }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(snapshot, "attentionReason")
+      ? { attention_reason: snapshot.attentionReason ?? null }
+      : {}),
+    last_provider_sync_at: snapshot.lastProviderSyncAt ?? new Date(),
+    ...(Object.prototype.hasOwnProperty.call(snapshot, "lastWebhookAt")
+      ? { last_webhook_at: snapshot.lastWebhookAt ?? null }
+      : {}),
+  };
 }

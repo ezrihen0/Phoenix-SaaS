@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -19,7 +20,7 @@ import type { FieldCopilotRequestBody } from "./ai-field-copilot.service";
 import { AiFieldCopilotService } from "./ai-field-copilot.service";
 
 @Controller("api/ai")
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 export class AiController {
   constructor(
     private readonly aiOrchestrationService: AiOrchestrationService,

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Put, Req, UseGuards } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -40,15 +41,15 @@ type CallFlowSettingsPayload = {
   ivrOptions?: unknown;
 };
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/telephony")
 export class CallFlowSettingsController {
   constructor(private readonly callFlowSettingsService: CallFlowSettingsService) {}
 
   @Get("call-flow-settings")
   async getSettings(@Req() request: RequestWithActor) {
-    this.requireOfficeRole(request);
-    return apiSuccess(await this.callFlowSettingsService.getSettings());
+    const actor = this.requireOfficeRole(request);
+    return apiSuccess(await this.callFlowSettingsService.getSettings(this.requireOrganizationId(actor.organization_id)));
   }
 
   @Put("call-flow-settings")
@@ -96,6 +97,7 @@ export class CallFlowSettingsController {
       missedCallSmsTemplateKey: this.readNullableString(payload.missedCallSmsTemplateKey),
       businessHours: payload.businessHours.map((item) => this.normalizeBusinessHoursItem(item)),
       ivrOptions: payload.ivrOptions.map((item) => this.normalizeIvrItem(item)),
+      organizationId: this.requireOrganizationId(actor.organization_id),
       updatedByAuthUserId: actor.user.id,
     });
 
@@ -110,6 +112,16 @@ export class CallFlowSettingsController {
     }
 
     return actor;
+  }
+
+  private requireOrganizationId(value: string | null | undefined) {
+    const organizationId = value?.trim();
+
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required for call flow settings.");
+    }
+
+    return organizationId;
   }
 
   private readNullableString(value: unknown) {

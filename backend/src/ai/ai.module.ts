@@ -8,7 +8,12 @@ import { JobEntity } from "../database/entities/job.entity";
 import { AiOperatorDraftEntity } from "../database/entities/ai-operator-draft.entity";
 import { MessagingModule } from "../messaging/messaging.module";
 import { AiRecommendationRunEntity } from "../database/entities/ai-recommendation-run.entity";
+import { HomeAiConversationEntity } from "../database/entities/home-ai-conversation.entity";
+import { HomeAiMessageEntity } from "../database/entities/home-ai-message.entity";
+import { InvoiceEntity } from "../database/entities/invoice.entity";
+import { LeadEntity } from "../database/entities/lead.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
+import { QuoteEntity } from "../database/entities/quote.entity";
 import { RecentCallEntity } from "../database/entities/recent-call.entity";
 import { AiBrainBriefService } from "./ai-brain-brief.service";
 import { AiCallIntakeService } from "./ai-call-intake.service";
@@ -26,6 +31,10 @@ import { AiFieldKnowledgeService } from "./ai-field-knowledge.service";
 import { AiContextBuilderService } from "./ai-context-builder.service";
 import { aiModelInvokerToken } from "./ai-model-invoker";
 import { AiDeepSeekProviderService } from "./ai-deepseek-provider.service";
+import { HomeAiController } from "./home-ai.controller";
+import { HomeAiCrmReadService } from "./home-ai-crm-read.service";
+import { HomeAiService } from "./home-ai.service";
+import { HomeAiToolRegistryService } from "./home-ai-tool-registry.service";
 import { AiOperatorCopilotService } from "./ai-operator-copilot.service";
 import { AiOrchestrationService } from "./ai-orchestration.service";
 import { AiPhase0NoopModelInvoker } from "./ai-phase0-noop-model-invoker";
@@ -44,10 +53,15 @@ import { BrainRulesEngine } from "./brain-rules.engine";
       AiOperatorDraftEntity,
       CustomerEntity,
       JobEntity,
+      LeadEntity,
+      QuoteEntity,
+      InvoiceEntity,
       OrganizationEntity,
+      HomeAiConversationEntity,
+      HomeAiMessageEntity,
     ]),
   ],
-  controllers: [AiController],
+  controllers: [AiController, HomeAiController],
   providers: [
     AiOrchestrationService,
     AiBrainBriefService,
@@ -68,6 +82,9 @@ import { BrainRulesEngine } from "./brain-rules.engine";
     AiToolRegistryService,
     AiAuditService,
     AiContextBuilderService,
+    HomeAiService,
+    HomeAiCrmReadService,
+    HomeAiToolRegistryService,
     AiPhase0NoopModelInvoker,
     {
       provide: aiModelInvokerToken,

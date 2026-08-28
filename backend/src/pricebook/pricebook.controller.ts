@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { requirePermission } from "../auth/permissions";
 import { EntitlementService } from "../billing/entitlement.service";
@@ -29,7 +30,7 @@ import {
   parseUuidParam,
 } from "./validation";
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/pricebook")
 export class PricebookController {
   constructor(

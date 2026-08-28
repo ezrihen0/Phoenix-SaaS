@@ -4,8 +4,9 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { createHash, randomBytes } from "crypto";
 import type { Request, Response } from "express";
 import type { EntityManager } from "typeorm";
-import { IsNull, Repository } from "typeorm";
+import { Repository } from "typeorm";
 
+import { apiError } from "../common/api-response";
 import { CustomerEntity } from "../database/entities/customer.entity";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
 import { JobEntity } from "../database/entities/job.entity";
@@ -106,13 +107,21 @@ export class CustomerPortalService {
     await this.linksRepository.manager.transaction(async (manager) => {
       const sessionsRepo = manager.getRepository(PortalSessionEntity);
       const linksRepo = manager.getRepository(PortalMagicLinkEntity);
+      const lockedLink = await linksRepo.createQueryBuilder("link")
+        .setLock("pessimistic_write")
+        .where("link.id = :id", { id: link.id })
+        .getOne();
+
+      if (!lockedLink || lockedLink.status === "used" || lockedLink.expires_at <= now) {
+        apiError(401, "portal_link_redeem_race", "The portal link is invalid or no longer available.");
+      }
 
       portalSession = await sessionsRepo.save(
         sessionsRepo.create({
           organization_id: organizationId,
           session_token_hash: this.hashToken(rawSessionToken),
-          customer_id: link.customer_id,
-          portal_magic_link_id: link.id,
+          customer_id: lockedLink.customer_id,
+          portal_magic_link_id: lockedLink.id,
           is_preview: false,
           is_read_only: false,
           expires_at: this.getPortalSessionExpiryDate(),
@@ -121,9 +130,9 @@ export class CustomerPortalService {
         }),
       );
 
-      link.status = "used";
-      link.used_at = now;
-      await linksRepo.save(link);
+      lockedLink.status = "used";
+      lockedLink.used_at = now;
+      await linksRepo.save(lockedLink);
 
       await this.persistPortalAccessEvent(manager, {
         customerId: link.customer_id,
@@ -280,41 +289,26 @@ export class CustomerPortalService {
     const latestJob = await this.jobsRepository
       .createQueryBuilder("job")
       .where("job.customer_id = :customerId", { customerId })
-      .andWhere("(job.organization_id = :organizationId OR job.organization_id IS NULL)", {
+      .andWhere("job.organization_id = :organizationId", {
         organizationId: organizationScope,
       })
       .orderBy("job.updated_at", "DESC")
       .getOne();
     const technician = latestJob?.assigned_technician_id
-      ? await this.techniciansRepository.findOne({ where: { id: latestJob.assigned_technician_id } })
+      ? await this.techniciansRepository.findOne({ where: { id: latestJob.assigned_technician_id, organization_id: organizationScope } })
       : null;
 
     let activeQuote: QuoteEntity | null = null;
     let invoice: InvoiceEntity | null = null;
 
     if (latestJob) {
-      const quoteCandidate = await this.quotesRepository.findOne({ where: { job_id: latestJob.id } });
-      if (
-        quoteCandidate
-        && (!quoteCandidate.organization_id || quoteCandidate.organization_id === organizationScope)
-      ) {
-        activeQuote = quoteCandidate;
-      }
+      activeQuote = await this.quotesRepository.findOne({ where: { job_id: latestJob.id, organization_id: organizationScope } });
 
-      const invoiceCandidate = await this.invoicesRepository.findOne({ where: { job_id: latestJob.id } });
-      if (
-        invoiceCandidate
-        && (!invoiceCandidate.organization_id || invoiceCandidate.organization_id === organizationScope)
-      ) {
-        invoice = invoiceCandidate;
-      }
+      invoice = await this.invoicesRepository.findOne({ where: { job_id: latestJob.id, organization_id: organizationScope } });
     }
 
     const warrantyCertificates = await this.warrantyCertificatesRepository.find({
-      where: [
-        { customer_id: customerId, organization_id: organizationScope },
-        { customer_id: customerId, organization_id: IsNull() },
-      ],
+      where: { customer_id: customerId, organization_id: organizationScope },
       order: { created_at: "DESC" },
       take: 5,
     });

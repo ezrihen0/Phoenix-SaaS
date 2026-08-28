@@ -114,6 +114,7 @@ type MissedCallSmsSettings = {
 };
 
 type MissedCallSmsSettingsInput = {
+  organizationId: string;
   enabled: boolean;
   template: string;
   cooldownSeconds: number;
@@ -363,7 +364,10 @@ export class TelnyxWebhookService {
       ["call_connection_id"],
     ]);
     const occurredAt = this.asDate(payload.data?.occurred_at);
-    const callFlowDecision = await this.callFlowSettingsService.evaluateActiveCallFlow(occurredAt ?? new Date());
+    const callFlowDecision = await this.callFlowSettingsService.evaluateActiveCallFlow(
+      occurredAt ?? new Date(),
+      sourceContext.matchOrganizationId,
+    );
 
     let saved: RecentCallEntity;
 
@@ -813,16 +817,21 @@ export class TelnyxWebhookService {
     );
   }
 
-  async getMissedCallSmsSettings(): Promise<MissedCallSmsSettings> {
+  async getMissedCallSmsSettings(organizationIdRaw: string | null = null): Promise<MissedCallSmsSettings> {
     await this.ensureRecentCallsSchema();
+    const organizationId = organizationIdRaw?.trim() ?? null;
+    const settingsKey = organizationId ? `org:${organizationId}` : "default";
 
     const rows = await this.dataSource.query(
       `
         SELECT is_enabled, template, cooldown_seconds, updated_at
         FROM missed_call_sms_settings
-        WHERE settings_key = 'default'
+        WHERE settings_key IN (?, 'default')
+          AND (? IS NULL OR organization_id = ? OR organization_id IS NULL)
+        ORDER BY CASE WHEN settings_key = ? THEN 0 ELSE 1 END
         LIMIT 1
       `,
+      [settingsKey, organizationId, organizationId, settingsKey],
     ) as Array<{
       is_enabled: number | boolean | string;
       template: string | null;
@@ -847,29 +856,33 @@ export class TelnyxWebhookService {
   async updateMissedCallSmsSettings(input: MissedCallSmsSettingsInput) {
     await this.ensureRecentCallsSchema();
 
+    const organizationId = input.organizationId.trim();
     const template = this.validateMissedCallSmsTemplate(input.template);
     const cooldownSeconds = Math.max(0, Math.min(Math.trunc(input.cooldownSeconds), 604800));
+    const settingsKey = `org:${organizationId}`;
 
     await this.dataSource.query(
       `
         INSERT INTO missed_call_sms_settings (
           id,
+          organization_id,
           settings_key,
           is_enabled,
           template,
           cooldown_seconds,
           updated_by_auth_user_id
-        ) VALUES (?, 'default', ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
+          organization_id = VALUES(organization_id),
           is_enabled = VALUES(is_enabled),
           template = VALUES(template),
           cooldown_seconds = VALUES(cooldown_seconds),
           updated_by_auth_user_id = VALUES(updated_by_auth_user_id)
       `,
-      [randomUUID(), input.enabled ? 1 : 0, template, cooldownSeconds, input.updatedByAuthUserId],
+      [randomUUID(), organizationId, settingsKey, input.enabled ? 1 : 0, template, cooldownSeconds, input.updatedByAuthUserId],
     );
 
-    return this.getMissedCallSmsSettings();
+    return this.getMissedCallSmsSettings(organizationId);
   }
 
   async listRecentTexts(organizationId: string, limitRaw?: number): Promise<RecentTextsResponse> {
@@ -1580,7 +1593,9 @@ export class TelnyxWebhookService {
       ["gathered_digits"],
       ["result", "digits"],
     ]);
-    const settings = await this.callFlowSettingsService.getSettings();
+    const settings = await this.callFlowSettingsService.getSettings(
+      (await this.resolveRecentCallSource(recentCall.to_number)).matchOrganizationId,
+    );
     const selection = await this.telephonyExecutionService.handleIvrSelection(settings, {
       providerCallId: recentCall.provider_call_id,
       source: recentCall.source,
@@ -2518,7 +2533,9 @@ export class TelnyxWebhookService {
   }
 
   private async executeInitialCallFlow(recentCall: RecentCallEntity) {
-    const settings = await this.callFlowSettingsService.getSettings();
+    const settings = await this.callFlowSettingsService.getSettings(
+      (await this.resolveRecentCallSource(recentCall.to_number)).matchOrganizationId,
+    );
     const execution = await this.telephonyExecutionService.runInitialFlow(settings, {
       providerCallId: recentCall.provider_call_id,
       source: recentCall.source,
@@ -2543,7 +2560,9 @@ export class TelnyxWebhookService {
   }
 
   private async maybeSendMissedCallSms(recentCall: RecentCallEntity) {
-    const settings = await this.getMissedCallSmsSettings();
+    const settings = await this.getMissedCallSmsSettings(
+      (await this.resolveRecentCallSource(recentCall.to_number)).matchOrganizationId,
+    );
 
     if (!settings.enabled) {
       return null;

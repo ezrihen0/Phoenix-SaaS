@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Receipt, Search, UserRound } from "lucide-react";
 
-import { requireServerRoles } from "@/lib/auth/server-session";
+import { requireServerPermission } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { getJobStatusLabel, type JobStatus } from "@/lib/crm/statuses";
 import type { Database } from "@/lib/types/database";
@@ -141,7 +141,7 @@ function buildCustomerQuery(q: string) {
 }
 
 export default async function NewInvoicePage({ searchParams }: NewInvoicePageContext) {
-  await requireServerRoles("/invoices/new", ["owner", "office_admin", "technician"]);
+  await requireServerPermission("/invoices/new", "invoices.manage");
 
   const resolvedSearchParams = await searchParams;
   const customerId = (firstValue(resolvedSearchParams.customerId) ?? "").trim();

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 
 import { requireActorProfile } from "../auth/permissions";
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -33,7 +34,7 @@ type FinalizeTranslationPayload = {
 };
 
 @Controller("api/language-store/customer-output-translations")
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 export class CustomerOutputTranslationController {
   constructor(
     private readonly customerOutputTranslationService: CustomerOutputTranslationService,

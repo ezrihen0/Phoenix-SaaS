@@ -46,7 +46,11 @@ export const roleModePermissions = [
   "automations.approve",
   "automations.settings.manage",
   "inspections.admin",
+  "billing.view",
   "billing.manage",
+  "team.view",
+  "team.invite",
+  "team.manage",
 ] as const;
 
 export type RoleModePermission = (typeof roleModePermissions)[number];
@@ -64,6 +68,7 @@ const adminPermissions = withoutPermissions(allPermissions, [
   "organizations.manage",
   "billing.manage",
 ]);
+// Admin receives team management and billing visibility without owner-only destructive controls.
 
 const officeAdminPermissions = withoutPermissions(allPermissions, [
   "system.roles.manage",
@@ -75,7 +80,11 @@ const officeAdminPermissions = withoutPermissions(allPermissions, [
   "inventory.assigned.view",
   "automations.manage",
   "automations.settings.manage",
+  "billing.view",
   "billing.manage",
+  "team.view",
+  "team.invite",
+  "team.manage",
 ]);
 
 const rolePermissionMap: Record<RoleModeRole, ReadonlySet<RoleModePermission>> = {
@@ -166,10 +175,36 @@ export function roleHasPermission(
   return normalizedRole ? rolePermissionMap[normalizedRole].has(permission) : false;
 }
 
+export function normalizePermissionKeys(values: unknown): RoleModePermission[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  const allowed = allPermissions;
+  const normalized: RoleModePermission[] = [];
+
+  for (const value of values) {
+    if (typeof value !== "string") {
+      continue;
+    }
+
+    const key = value.trim() as RoleModePermission;
+    if (allowed.has(key) && !normalized.includes(key)) {
+      normalized.push(key);
+    }
+  }
+
+  return normalized;
+}
+
 export function actorHasPermission(
   actor: ActorContext | null | undefined,
   permission: RoleModePermission,
 ) {
+  if (actor?.permissions?.includes(permission)) {
+    return true;
+  }
+
   return roleHasPermission(readActorRole(actor), permission);
 }
 

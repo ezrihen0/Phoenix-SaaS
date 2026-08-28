@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { EntitlementService } from "../billing/entitlement.service";
 import { apiError, apiSuccess } from "../common/api-response";
@@ -33,7 +34,7 @@ import {
   parseUuidParam,
 } from "./validation";
 
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/inventory")
 export class InventoryController {
   constructor(

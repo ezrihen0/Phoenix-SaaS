@@ -91,7 +91,7 @@ export default async function PricingPage({ searchParams }: PricingPageContext) 
         </div>
       </section>
 
-      <p className="mt-10 text-xs text-[color:var(--sem-text-muted)]">
+      <p className="mt-10 text-xs leading-6 text-[color:var(--sem-text-muted)]">
         Activation is confirmed by verified Stripe webhook processing, not by a success-page redirect alone.
       </p>
     </main>

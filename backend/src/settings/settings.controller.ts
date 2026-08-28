@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Put, Req, UseGuards } from "@nestjs/common";
 
 import { requirePermission } from "../auth/permissions";
+import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
@@ -110,15 +111,20 @@ function parseOrganizationSettingsPayload(payload: OrganizationSettingsPayload) 
 }
 
 @Controller("api/settings")
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OperationalAccessGuard)
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
   @Get("organization")
   async getOrganizationSettings(@Req() request: RequestWithActor) {
-    const actor = request.actor;
+    const actor = requirePermission(
+      request.actor,
+      "settings.view",
+      "settings_view_forbidden",
+      "This account cannot view organization settings.",
+    );
 
-    if (!actor?.organization_id) {
+    if (!actor.organization_id) {
       apiError(400, "organization_context_missing", "An active organization is required to load settings.");
     }
 
