@@ -1,8 +1,9 @@
-import { requireServerRoles } from "@/lib/auth/server-session";
+import { requireLeadsRoute } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { getTranslations } from "next-intl/server";
 
-import LeadsWorkspace, { type LeadQueueItem } from "./leads-workspace";
+import LeadsWorkspace from "./leads-workspace";
+import type { LeadQueueItem } from "@/lib/crm/leads-inbox-utils";
 
 type SearchParam = string | string[] | undefined;
 
@@ -45,7 +46,8 @@ function includesQuery(query: string, lead: LeadQueueItem) {
 
 export default async function LeadsPage({ searchParams }: LeadsPageContext) {
   const t = await getTranslations("leads");
-  await requireServerRoles("/leads", ["owner", "office_admin", "dispatcher"]);
+  const session = await requireLeadsRoute("/leads");
+  const permissions = session.permissions ?? [];
 
   const resolvedSearchParams = await searchParams;
   const query = (firstValue(resolvedSearchParams.q) ?? "").trim();
@@ -68,13 +70,15 @@ export default async function LeadsPage({ searchParams }: LeadsPageContext) {
 
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-[color:var(--cmp-surface-canvas)] px-4 py-8 text-[color:var(--text-primary)] sm:px-6 sm:py-10 lg:px-8">
-      <div className="mx-auto max-w-[1520px]">
+      <div className="mx-auto max-w-[920px]">
         {loadError ? (
           <div className="theme-alert-error rounded-[20px] border px-4 py-3 text-sm">{loadError}</div>
         ) : (
           <LeadsWorkspace
             initialLeads={leads}
             initialFocusLeadId={leadId}
+            canManageLeads={permissions.includes("leads.manage")}
+            canCreateJob={permissions.includes("jobs.create")}
             initialIntakePrefill={
               prefillFullName || prefillPhone || prefillDescription || prefillSource
                 ? {
@@ -84,6 +88,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageContext) {
                   recentCallId,
                   source: prefillSource === "website"
                     || prefillSource === "google"
+                    || prefillSource === "facebook"
                     || prefillSource === "referral"
                     || prefillSource === "repeat_customer"
                     || prefillSource === "other"

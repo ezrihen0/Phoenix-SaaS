@@ -4,7 +4,6 @@ import { Brackets, Not, Repository } from "typeorm";
 
 import type { ActorContext } from "../common/request-types";
 import {
-  actorHasPermission,
   canAccessEstimateResource,
   canAccessInvoiceResource,
   canAccessJobResource,
@@ -16,6 +15,10 @@ import { LeadEntity } from "../database/entities/lead.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
 import { openJobStatuses } from "../crm/constants";
 import { endOfLocalDashboardDay, startOfLocalDashboardDay } from "../crm/crm-dashboard-time-window";
+import {
+  applyJobVisibilityToQueryBuilder,
+  isAssignedOnlyJobActor,
+} from "../crm/jobs-access";
 import type { HomeAiRecordLink } from "./home-ai-role-profiles";
 
 export type HomeAiToolExecutionResult =
@@ -37,13 +40,8 @@ export class HomeAiCrmReadService {
     private readonly invoicesRepository: Repository<InvoiceEntity>,
   ) {}
 
-  private technicianId(actor: ActorContext): string | null {
-    return actor.technician?.id ?? null;
-  }
-
   private assignedOnly(actor: ActorContext): boolean {
-    return !actorHasPermission(actor, "jobs.view")
-      && actorHasPermission(actor, "jobs.assigned.view");
+    return isAssignedOnlyJobActor(actor);
   }
 
   async searchCustomers(
@@ -142,25 +140,21 @@ export class HomeAiCrmReadService {
   ): Promise<HomeAiToolExecutionResult> {
     const limit = Math.min(Math.max(input.limit ?? 15, 1), 20);
     const assignedOnly = this.assignedOnly(actor);
-    const technicianId = this.technicianId(actor);
 
     const qb = this.jobsRepository
       .createQueryBuilder("job")
       .leftJoinAndSelect("job.customer", "customer")
       .leftJoinAndSelect("job.technician", "technician")
-      .where("job.organization_id = :organizationId", { organizationId })
       .orderBy("job.scheduled_for", "ASC")
       .addOrderBy("job.created_at", "DESC")
       .take(limit * 2);
+
+    applyJobVisibilityToQueryBuilder(qb, actor, organizationId);
 
     if (input.status?.trim()) {
       qb.andWhere("job.status = :status", { status: input.status.trim() });
     } else {
       qb.andWhere("job.status != :cancelled", { cancelled: "cancelled" });
-    }
-
-    if (assignedOnly && technicianId) {
-      qb.andWhere("job.assigned_technician_id = :technicianId", { technicianId });
     }
 
     const rawJobs = await qb.getMany();
@@ -201,13 +195,11 @@ export class HomeAiCrmReadService {
     const dayStart = input.day ? new Date(`${input.day}T00:00:00`) : startOfLocalDashboardDay();
     const dayEnd = input.day ? new Date(`${input.day}T23:59:59.999`) : endOfLocalDashboardDay();
     const assignedOnly = this.assignedOnly(actor);
-    const technicianId = this.technicianId(actor);
 
     const qb = this.jobsRepository
       .createQueryBuilder("job")
       .leftJoinAndSelect("job.customer", "customer")
       .leftJoinAndSelect("job.technician", "technician")
-      .where("job.organization_id = :organizationId", { organizationId })
       .andWhere("job.scheduled_for IS NOT NULL")
       .andWhere("job.scheduled_for >= :dayStart", { dayStart })
       .andWhere("job.scheduled_for <= :dayEnd", { dayEnd })
@@ -215,9 +207,7 @@ export class HomeAiCrmReadService {
       .orderBy("job.scheduled_for", "ASC")
       .take(limit * 2);
 
-    if (assignedOnly && technicianId) {
-      qb.andWhere("job.assigned_technician_id = :technicianId", { technicianId });
-    }
+    applyJobVisibilityToQueryBuilder(qb, actor, organizationId);
 
     const rawJobs = await qb.getMany();
     const jobs = rawJobs

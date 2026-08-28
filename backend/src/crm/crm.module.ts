@@ -27,6 +27,7 @@ import { LanguageStoreModule } from "../language-store/language-store.module";
 import { MessagingModule } from "../messaging/messaging.module";
 import { CrmController } from "./crm.controller";
 import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
+import { JobsService } from "./jobs.service";
 import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
 import { InvoicePdfService } from "./invoice-pdf.service";
@@ -68,7 +69,8 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
     InvoicePaymentLedgerService,
     CrmOfficeDashboardService,
     InvoicePdfService,
+    JobsService,
   ],
-  exports: [CrmOfficeDashboardService],
+  exports: [CrmOfficeDashboardService, JobsService],
 })
 export class CrmModule {}

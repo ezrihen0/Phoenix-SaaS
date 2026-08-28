@@ -147,6 +147,11 @@ export type Database = {
           customer_id: string | null;
           converted_job_id: string | null;
           created_by_auth_user_id: string | null;
+          disposition: Database["public"]["Enums"]["lead_disposition"] | null;
+          disposition_reason: Database["public"]["Enums"]["lead_disposition_reason"] | null;
+          disposition_note: string | null;
+          disposition_at: string | null;
+          disposition_by_auth_user_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -183,6 +188,7 @@ export type Database = {
           description: string | null;
           lead_source: Database["public"]["Enums"]["lead_source"];
           requested_service_type: Database["public"]["Enums"]["service_type"];
+          job_type: Database["public"]["Enums"]["job_type"];
           status: Database["public"]["Enums"]["job_status"];
           service_address_line_1: string;
           service_address_line_2: string | null;
@@ -213,6 +219,7 @@ export type Database = {
           description?: string | null;
           lead_source: Database["public"]["Enums"]["lead_source"];
           requested_service_type: Database["public"]["Enums"]["service_type"];
+          job_type: Database["public"]["Enums"]["job_type"];
           status?: Database["public"]["Enums"]["job_status"];
           service_address_line_1: string;
           service_address_line_2?: string | null;
@@ -338,10 +345,20 @@ export type Database = {
     Functions: Record<string, never>;
     Enums: {
       profile_role: "owner" | "admin" | "office_admin" | "dispatcher" | "csr" | "technician" | "viewer";
-      lead_source: "phone" | "website" | "google" | "referral" | "repeat_customer" | "other";
+      lead_source: "phone" | "website" | "google" | "facebook" | "referral" | "repeat_customer" | "other";
       customer_lifecycle_status: "prospect" | "active" | "past" | "archived";
       service_type: "inspection" | "cleaning" | "repair" | "rebuild";
+      job_type: "inspection" | "installation_repair" | "callback_warranty";
       lead_status: "new_lead" | "contacted" | "converted";
+      lead_disposition: "not_booked";
+      lead_disposition_reason:
+        | "price"
+        | "no_availability"
+        | "researching"
+        | "no_response"
+        | "outside_area"
+        | "other_company"
+        | "other";
       job_status: "new_lead" | "contacted" | "scheduled" | "on_the_way" | "in_progress" | "waiting_for_approval" | "completed" | "paid" | "cancelled";
       quote_status: "draft" | "sent" | "approved" | "rejected";
       invoice_status: "unpaid" | "paid";

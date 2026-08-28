@@ -11,12 +11,19 @@ import { JobEntity } from "./entities/job.entity";
 import { LeadEntity } from "./entities/lead.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
 import { QuoteEntity } from "./entities/quote.entity";
-import { buildDataSourceOptions } from "./typeorm.config";
+import { readFileSync } from "fs";
+import { join } from "path";
+
 import { HomeAiCrmReadService } from "../ai/home-ai-crm-read.service";
 import type { ActorContext } from "../common/request-types";
+import { normalizeEmail, parseWorkizInvoiceText } from "./workiz/workiz-invoice-parser";
+import { buildDataSourceOptions } from "./typeorm.config";
+
+const pdf = require("pdf-parse") as (buffer: Buffer) => Promise<{ text: string }>;
 
 const PHOENIX_ID = "90137527-3fd0-435c-9032-358f7f670662";
 const IMPORT_SOURCE = "workiz_historical_import";
+const DEFAULT_SOURCE_DIR = process.env.WORKIZ_INVOICE_SOURCE_DIR ?? "C:\\Projects\\workiz invoices";
 
 function isWorkizImport(invoice: InvoiceEntity): boolean {
   if (!invoice.branding_snapshot_json) return false;
@@ -116,8 +123,67 @@ async function main() {
     const workizVisible = (homeAiInvoices.ok ? homeAiInvoices.data.invoices as Array<{ description?: string }> : [])
       .filter((invoice) => (invoice.description ?? "").includes("Workiz Invoice #"));
 
+    const jobRepo = ds.getRepository(JobEntity);
+    const customerRepo = ds.getRepository(CustomerEntity);
+    let workizCustomersWithEmail = 0;
+    let workizCustomersMissingEmail = 0;
+    const manualChecks: Array<{
+      invoiceCode: string;
+      sourceFile: string;
+      sourceEmail: string | null;
+      customerName: string;
+      customerEmail: string | null;
+      match: boolean;
+    }> = [];
+
+    for (const invoice of importedInvoices) {
+      const job = await jobRepo.findOne({ where: { id: invoice.job_id, organization_id: PHOENIX_ID } });
+      if (!job) continue;
+      const customer = await customerRepo.findOne({ where: { id: job.customer_id, organization_id: PHOENIX_ID } });
+      if (!customer) continue;
+      if (customer.email?.trim()) workizCustomersWithEmail += 1;
+      else workizCustomersMissingEmail += 1;
+    }
+
+    const sampleFiles = [
+      "Adlea.no55784.pdf",
+      "Angela.no55813.pdf",
+      "Bob.no55794.pdf",
+      "ChrisAdams.no55768.pdf",
+      "LizBougie.no55830.pdf",
+    ];
+    for (const sourceFile of sampleFiles) {
+      const sourcePath = join(DEFAULT_SOURCE_DIR, sourceFile);
+      const pdfText = (await pdf(readFileSync(sourcePath))).text;
+      const parsed = parseWorkizInvoiceText({ text: pdfText, sourceFile, sourcePath });
+      const invoice = importedInvoices.find((row) => {
+        if (!row.branding_snapshot_json) return false;
+        try {
+          const snapshot = JSON.parse(row.branding_snapshot_json) as { workiz_invoice_code?: string };
+          return snapshot.workiz_invoice_code === parsed.invoiceCode;
+        } catch {
+          return false;
+        }
+      });
+      const job = invoice
+        ? await jobRepo.findOne({ where: { id: invoice.job_id, organization_id: PHOENIX_ID } })
+        : null;
+      const customer = job
+        ? await customerRepo.findOne({ where: { id: job.customer_id, organization_id: PHOENIX_ID } })
+        : null;
+      const sourceEmail = normalizeEmail(parsed.customer?.email);
+      manualChecks.push({
+        invoiceCode: parsed.invoiceCode ?? sourceFile,
+        sourceFile,
+        sourceEmail,
+        customerName: customer?.full_name ?? "missing",
+        customerEmail: normalizeEmail(customer?.email),
+        match: sourceEmail === normalizeEmail(customer?.email),
+      });
+    }
+
     console.log(JSON.stringify({
-      ok: foreignImported === 0 && importedInvoices.length === 58,
+      ok: foreignImported === 0 && importedInvoices.length === 58 && workizCustomersMissingEmail === 0,
       importedInvoices: importedInvoices.length,
       foreignImportedInvoices: foreignImported,
       phoenixCustomers: customers,
@@ -128,6 +194,11 @@ async function main() {
       totalOutstandingBalanceCents,
       totalPaymentsCents,
       recentInvoices,
+      emailVerification: {
+        workizCustomersWithEmail,
+        workizCustomersMissingEmail,
+        manualChecks,
+      },
       homeAiInvoiceTool: {
         ok: homeAiInvoices.ok,
         visibleInvoiceCount: homeAiInvoices.ok ? homeAiInvoices.data.count : 0,

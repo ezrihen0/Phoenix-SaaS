@@ -11,12 +11,24 @@ export const leadSources = [
   "phone",
   "website",
   "google",
+  "facebook",
   "referral",
   "repeat_customer",
   "other",
 ] as const;
+export const leadDispositions = ["not_booked"] as const;
+export const leadDispositionReasons = [
+  "price",
+  "no_availability",
+  "researching",
+  "no_response",
+  "outside_area",
+  "other_company",
+  "other",
+] as const;
 export const customerLifecycleStatuses = ["prospect", "active", "past", "archived"] as const;
 export const serviceTypes = ["inspection", "cleaning", "repair", "rebuild"] as const;
+export const jobTypes = ["inspection", "installation_repair", "callback_warranty"] as const;
 export const leadStatuses = ["new_lead", "contacted", "converted"] as const;
 export const jobStatuses = [
   "new_lead",
@@ -36,8 +48,19 @@ export const invoicePaymentMethods = ["cash", "check", "card_manual", "bank_tran
 
 export type ProfileRole = (typeof profileRoles)[number];
 export type LeadSource = (typeof leadSources)[number];
+export type LeadDisposition = (typeof leadDispositions)[number];
+export type LeadDispositionReason = (typeof leadDispositionReasons)[number];
 export type CustomerLifecycleStatus = (typeof customerLifecycleStatuses)[number];
 export type ServiceType = (typeof serviceTypes)[number];
+export type JobType = (typeof jobTypes)[number];
+
+export function mapServiceTypeToDefaultJobType(serviceType: ServiceType): JobType {
+  if (serviceType === "inspection") {
+    return "inspection";
+  }
+
+  return "installation_repair";
+}
 export type LeadStatus = (typeof leadStatuses)[number];
 export type JobStatus = (typeof jobStatuses)[number];
 export type QuoteStatus = (typeof quoteStatuses)[number];
@@ -166,27 +189,4 @@ export function getJobStatusTimestampUpdates(
   }
 
   return {};
-}
-
-export function canAccessJob(
-  role: ProfileRole | null,
-  technicianId: string | null,
-  assignedTechnicianId: string | null,
-) {
-  if (
-    role === "owner"
-    || role === "admin"
-    || role === "office_admin"
-    || role === "dispatcher"
-    || role === "csr"
-    || role === "viewer"
-  ) {
-    return true;
-  }
-
-  if (!technicianId || !assignedTechnicianId) {
-    return false;
-  }
-
-  return technicianId === assignedTechnicianId;
 }

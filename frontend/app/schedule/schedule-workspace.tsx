@@ -4,17 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
-  AlertTriangle,
   ArrowLeft,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
-  CircleDollarSign,
-  Clock3,
   ExternalLink,
-  Gauge,
   LoaderCircle,
-  MapPin,
   Phone,
   RefreshCw,
   Save,
@@ -24,7 +18,6 @@ import {
 
 import { MobileScheduleDayView } from "@/app/schedule/mobile-schedule-day-view";
 import { BoardShell } from "@/components/board/board-shell";
-import { MetricTile } from "@/components/board/metric-tile";
 import { formatAddress, buildAddressQuery, buildGoogleMapsSearchUrl } from "@/lib/crm/display";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import { getJobStatusLabel, getServiceTypeLabel, type JobStatus } from "@/lib/crm/statuses";
@@ -647,7 +640,14 @@ function ScheduleEditor({
           <FieldInput
             type="time"
             value={scheduleForm.scheduledTime}
-            onChange={(event) => setScheduleForm((current) => ({ ...current, scheduledTime: event.target.value }))}
+            onChange={(event) => {
+              const scheduledTime = event.target.value;
+              setScheduleForm((current) => ({
+                ...current,
+                scheduledTime,
+                scheduledEndTime: deriveEndTimeFromStartTime(scheduledTime),
+              }));
+            }}
           />
         </FieldLabel>
       </div>
@@ -774,24 +774,6 @@ export default function ScheduleWorkspace({
       ),
     )
     : null;
-
-  const controlMetrics = useMemo(() => {
-    const unassignedCount = dayJobs.filter((job) => !job.assigned_technician_id).length + unscheduledJobs.length;
-    const totalMinutes = dayJobs.reduce((sum, job) => sum + getJobDurationMinutes(job), 0);
-    const loadIndex = dayJobs.length > 0
-      ? Math.round(totalMinutes / Math.max(technicians.length, 1) / DAY_CAPACITY_MINUTES * 100)
-      : 0;
-    const scheduleValueCents = dayJobs.reduce((sum, job) => sum + getJobValueCents(job), 0);
-    const routeZones = new Set(dayJobs.map((job) => job.service_city).filter(Boolean));
-
-    return {
-      jobsToday: dayJobs.length,
-      unassignedCount,
-      loadIndex,
-      scheduleValueCents,
-      routeZones: routeZones.size,
-    };
-  }, [dayJobs, unscheduledJobs.length, technicians.length]);
 
   const weekPressure = useMemo(
     () => weekStripDays.map((day) => {
@@ -1076,13 +1058,6 @@ export default function ScheduleWorkspace({
           </div>
         ) : null}
 
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricTile icon={CalendarDays} label={t("jobsToday")} value={controlMetrics.jobsToday} helper={t("jobsTodayHelper")} />
-          <MetricTile icon={AlertTriangle} label={t("unscheduled")} value={controlMetrics.unassignedCount} helper={t("dispatchRiskHelper")} />
-          <MetricTile icon={Clock3} label={t("openWindows")} value={openWindows.length} helper={t("sellableSlotsHelper")} />
-          <MetricTile icon={Gauge} label={t("loadIndex")} value={`${controlMetrics.loadIndex}%`} helper={t("fieldCapacityHelper")} />
-        </div>
-
         <section className={`${schedulePanelClass} mt-5 p-4`}>
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
@@ -1112,13 +1087,6 @@ export default function ScheduleWorkspace({
             ))}
           </div>
         </section>
-
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricTile icon={CircleDollarSign} label={t("scheduleValue")} value={formatCurrency(controlMetrics.scheduleValueCents)} helper={t("scheduleValueHelper")} />
-          <MetricTile icon={MapPin} label={t("routePressure")} value={controlMetrics.routeZones} helper={t("routePressureHelper")} />
-          <MetricTile icon={ShieldAlert} label={t("dispatchRisk")} value={dispatchRisks.length} helper={t("dispatchRiskCountHelper")} />
-          <MetricTile icon={Clock3} label={t("sellableWindows")} value={openWindows.length} helper={t("sellableWindowsHelper")} />
-        </div>
 
         <div className="mt-6 xl:grid xl:grid-cols-[minmax(0,1fr)_400px] xl:items-start xl:gap-6">
           <div className="min-h-0 space-y-4">
@@ -1403,13 +1371,7 @@ function parseTimeLabelToInput(value: string) {
   return `${String(hours).padStart(2, "0")}:${minutePart}`;
 }
 
-function deriveScheduledEndTime(job: JobRecord | null, scheduledTime: string) {
-  const windowEnd = job?.scheduled_window?.match(/-\s*([0-9]{1,2}(?::[0-9]{2})?\s*[AP]M)/i)?.[1];
-
-  if (windowEnd) {
-    return parseTimeLabelToInput(windowEnd);
-  }
-
+function deriveEndTimeFromStartTime(scheduledTime: string) {
   if (!scheduledTime) {
     return "";
   }
@@ -1422,6 +1384,16 @@ function deriveScheduledEndTime(job: JobRecord | null, scheduledTime: string) {
 
   const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
   return end.toTimeString().slice(0, 5);
+}
+
+function deriveScheduledEndTime(job: JobRecord | null, scheduledTime: string) {
+  const windowEnd = job?.scheduled_window?.match(/-\s*([0-9]{1,2}(?::[0-9]{2})?\s*[AP]M)/i)?.[1];
+
+  if (windowEnd) {
+    return parseTimeLabelToInput(windowEnd);
+  }
+
+  return deriveEndTimeFromStartTime(scheduledTime);
 }
 
 function buildScheduledWindow(startTime: string, endTime: string) {

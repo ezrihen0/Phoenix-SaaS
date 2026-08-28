@@ -118,6 +118,7 @@ function createJobInput(organizationId: string, customerId: string, token: strin
     description: null,
     lead_source: "website" as const,
     requested_service_type: "inspection" as const,
+    job_type: "inspection" as const,
     status: "scheduled" as const,
     service_address_line_1: "100 Main Street",
     service_address_line_2: null,

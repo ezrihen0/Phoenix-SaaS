@@ -2651,6 +2651,7 @@ export class InspectionsAdminService {
         description: "Created from inspections modal.",
         lead_source: customer.source ?? "website",
         requested_service_type: this.reportTypeToServiceType(reportType),
+        job_type: "inspection",
         status: "scheduled",
         service_address_line_1: propertyAddress,
         service_address_line_2: null,

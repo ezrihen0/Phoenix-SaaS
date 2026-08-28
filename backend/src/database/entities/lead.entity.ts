@@ -9,9 +9,13 @@ import {
 } from "typeorm";
 
 import {
+  leadDispositions,
+  leadDispositionReasons,
   leadSources,
   leadStatuses,
   serviceTypes,
+  type LeadDisposition,
+  type LeadDispositionReason,
   type LeadSource,
   type LeadStatus,
   type ServiceType,
@@ -83,6 +87,29 @@ export class LeadEntity {
 
   @Column({ type: "varchar", length: 36, nullable: true })
   created_by_auth_user_id!: string | null;
+
+  @Column({
+    type: "enum",
+    enum: leadDispositions,
+    nullable: true,
+  })
+  disposition!: LeadDisposition | null;
+
+  @Column({
+    type: "enum",
+    enum: leadDispositionReasons,
+    nullable: true,
+  })
+  disposition_reason!: LeadDispositionReason | null;
+
+  @Column({ type: "text", nullable: true })
+  disposition_note!: string | null;
+
+  @Column({ type: "datetime", precision: 6, nullable: true })
+  disposition_at!: Date | null;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  disposition_by_auth_user_id!: string | null;
 
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;

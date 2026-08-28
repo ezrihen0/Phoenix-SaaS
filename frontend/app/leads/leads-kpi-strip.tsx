@@ -1,76 +1,72 @@
 "use client";
 
-import { UserPlus } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { Plus } from "lucide-react";
+
+import type { InboxBucket, InboxSummaryCounts } from "@/lib/crm/leads-inbox-utils";
 
 type LeadsKpiStripProps = {
-  newLeadCount: number;
-  contactedCount: number;
-  convertedCount: number;
+  counts: InboxSummaryCounts;
+  activeBucket: InboxBucket;
+  onSelectBucket: (bucket: InboxBucket) => void;
   onAddLead: () => void;
+  canManageLeads: boolean;
 };
 
-export function LeadsKpiStrip({
-  newLeadCount,
-  contactedCount,
-  convertedCount,
-  onAddLead,
-}: LeadsKpiStripProps) {
-  const t = useTranslations("leads");
+const BUCKETS: Array<{ key: InboxBucket; label: string; countKey: keyof InboxSummaryCounts | null }> = [
+  { key: "new", label: "New", countKey: "new" },
+  { key: "contacted", label: "Contacted", countKey: "contacted" },
+  { key: "added_to_job", label: "Added to Job", countKey: "addedToJob" },
+  { key: "not_booked", label: "Not Booked", countKey: "notBooked" },
+];
 
+export function LeadsKpiStrip({
+  counts,
+  activeBucket,
+  onSelectBucket,
+  onAddLead,
+  canManageLeads,
+}: LeadsKpiStripProps) {
   return (
-    <section className="grid gap-4 md:grid-cols-4">
-      <Metric label={t("commandCenter.newCount")} value={newLeadCount} helper={t("newLead")} tone="cyan" />
-      <Metric label={t("commandCenter.contactedCount")} value={contactedCount} helper={t("contacted")} tone="fuchsia" />
-      <Metric label={t("commandCenter.convertedCount")} value={convertedCount} helper={t("converted")} tone="emerald" />
-      <div className="theme-control-surface flex items-center justify-between gap-3 rounded-2xl border p-4">
-        <div>
-          <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
-            {t("commandCenter.intakeAction")}
+    <section className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={() => onSelectBucket("all")}
+        className={chipClass(activeBucket === "all")}
+      >
+        All
+      </button>
+      {BUCKETS.map((bucket) => (
+        <button
+          key={bucket.key}
+          type="button"
+          onClick={() => onSelectBucket(bucket.key)}
+          className={chipClass(activeBucket === bucket.key)}
+        >
+          {bucket.label}
+          <span className="ml-1 opacity-70">
+            {bucket.countKey ? counts[bucket.countKey] : 0}
           </span>
-          <p className="mt-2 text-sm font-semibold text-[color:var(--text-primary)]">{t("commandCenter.manualIntake")}</p>
-          <p className="mt-1 text-xs text-[color:var(--text-secondary)]">{t("commandCenter.manualIntakeHelper")}</p>
-        </div>
+        </button>
+      ))}
+      {canManageLeads ? (
         <button
           type="button"
           onClick={onAddLead}
-          className="theme-btn-primary inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold"
+          className="theme-btn-primary ml-auto inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
         >
-          <UserPlus className="h-3.5 w-3.5" />
-          {t("commandCenter.addLead")}
+          <Plus className="h-4 w-4" />
+          New Lead
         </button>
-      </div>
+      ) : null}
     </section>
   );
 }
 
-function Metric({
-  label,
-  value,
-  helper,
-  tone = "default",
-}: {
-  label: string;
-  value: number;
-  helper: string;
-  tone?: "default" | "cyan" | "fuchsia" | "emerald" | "rose";
-}) {
-  const toneClass =
-    tone === "cyan"
-      ? "text-cyan-700"
-      : tone === "fuchsia"
-        ? "text-fuchsia-700"
-        : tone === "emerald"
-          ? "text-emerald-700"
-          : tone === "rose"
-            ? "text-rose-700"
-            : "text-[color:var(--text-primary)]";
-
-  return (
-    <div className="theme-control-surface rounded-2xl border p-4">
-      <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--text-muted)]">{label}</span>
-      <span className={`mt-2 block font-mono text-2xl font-bold ${toneClass}`}>{value}</span>
-      <p className="mt-2 text-xs leading-5 text-[color:var(--text-secondary)]">{helper}</p>
-    </div>
-  );
+function chipClass(active: boolean) {
+  return [
+    "rounded-full border px-3 py-1.5 text-sm font-medium transition",
+    active
+      ? "border-[color:var(--sem-accent-primary)] bg-[color:color-mix(in_srgb,var(--sem-accent-primary)_12%,transparent)] text-[color:var(--sem-accent-primary)]"
+      : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] text-[color:var(--text-secondary)] hover:border-[color:var(--cmp-border-accent)]",
+  ].join(" ");
 }

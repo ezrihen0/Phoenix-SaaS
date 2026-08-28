@@ -146,3 +146,18 @@ export function buildJobServiceLabel(
 export function buildJobStatusLabel(status: JobStatus, locale?: string | null) {
   return getJobStatusLabel(status, locale ?? undefined);
 }
+
+export type JobTypeValue = "inspection" | "installation_repair" | "callback_warranty";
+
+export function getJobTypeLabel(jobType: JobTypeValue | string | null | undefined) {
+  switch (jobType) {
+    case "inspection":
+      return "Inspection";
+    case "installation_repair":
+      return "Installation / Repair";
+    case "callback_warranty":
+      return "Callback / Warranty";
+    default:
+      return "—";
+  }
+}

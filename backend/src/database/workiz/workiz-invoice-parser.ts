@@ -143,6 +143,11 @@ function parseLineItems(section: string): WorkizParsedLineItem[] {
   return items;
 }
 
+function extractEmailCandidates(section: string): string[] {
+  const matches = section.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? [];
+  return [...new Set(matches.map((candidate) => candidate.trim()))];
+}
+
 function parseBillTo(section: string): WorkizParsedCustomer | null {
   const lines = section.split("\n").map((line) => line.trim()).filter(Boolean);
   if (lines.length === 0) return null;
@@ -154,18 +159,27 @@ function parseBillTo(section: string): WorkizParsedCustomer | null {
 
   for (let index = 1; index < lines.length; index += 1) {
     const line = lines[index];
-    if (normalizeEmail(line)) {
-      email = normalizeEmail(line);
+    const normalizedEmail = normalizeEmail(line);
+    if (normalizedEmail) {
+      email = normalizedEmail;
       continue;
     }
-    const digits = line.replace(/\D/g, "");
     if (looksLikePhoneLine(line)) {
       phone = normalizePhone(line);
       continue;
     }
-    if (/,/.test(line) && /[A-Z]\d[A-Z]/i.test(line)) {
+    if (cityLineIndex < 0 && /,/.test(line) && /[A-Z]\d[A-Z]/i.test(line)) {
       cityLineIndex = index;
-      break;
+    }
+  }
+
+  if (!email) {
+    for (const candidate of extractEmailCandidates(section)) {
+      const normalizedEmail = normalizeEmail(candidate);
+      if (normalizedEmail) {
+        email = normalizedEmail;
+        break;
+      }
     }
   }
 

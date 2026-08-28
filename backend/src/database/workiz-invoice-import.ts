@@ -17,6 +17,7 @@ import {
   type WorkizParsedCustomer,
   type WorkizParsedInvoice,
 } from "./workiz/workiz-invoice-parser";
+import { mapServiceTypeToDefaultJobType } from "../crm/constants";
 import { CustomerEntity } from "./entities/customer.entity";
 import { InvoiceEntity } from "./entities/invoice.entity";
 import { InvoiceLineItemEntity } from "./entities/invoice-line-item.entity";
@@ -54,6 +55,19 @@ export type WorkizImportReport = {
   ambiguousRecords: string[];
   rejectedFiles: Array<{ file: string; reason: string }>;
   failedFiles: Array<{ file: string; error: string }>;
+  invoicesContainingEmail: number;
+  invoicesWithoutEmail: number;
+  invalidEmails: Array<{ invoiceCode: string; rawValue: string }>;
+  customersUpdatedWithEmail: number;
+  customersAlreadyHadSameEmail: number;
+  emailConflicts: Array<{
+    invoiceCode: string;
+    customerId: string;
+    customerName: string;
+    existingEmail: string;
+    sourceEmail: string;
+  }>;
+  duplicateRecordsCreated: number;
 };
 
 type ExistingImportIndex = Map<string, {
@@ -144,6 +158,130 @@ async function loadExistingImportIndex(
   }
 
   return index;
+}
+
+function customerEmailIsEmpty(email: string | null | undefined): boolean {
+  return !email || !email.trim();
+}
+
+function emailsMatch(existing: string | null | undefined, source: string | null): boolean {
+  const normalizedExisting = normalizeEmail(existing);
+  const normalizedSource = normalizeEmail(source);
+  return Boolean(normalizedExisting && normalizedSource && normalizedExisting === normalizedSource);
+}
+
+async function resolveImportedCustomer(
+  dataSource: DataSource,
+  organizationId: string,
+  jobId: string,
+): Promise<CustomerEntity | null> {
+  const job = await dataSource.getRepository(JobEntity).findOne({
+    where: { id: jobId, organization_id: organizationId },
+  });
+  if (!job) return null;
+
+  return dataSource.getRepository(CustomerEntity).findOne({
+    where: { id: job.customer_id, organization_id: organizationId },
+  });
+}
+
+type CustomerEmailSyncResult =
+  | { kind: "updated"; customerId: string; email: string }
+  | { kind: "already_set"; customerId: string; email: string }
+  | { kind: "conflict"; customerId: string; customerName: string; existingEmail: string; sourceEmail: string }
+  | { kind: "no_source_email" }
+  | { kind: "invalid_source_email"; rawValue: string };
+
+async function syncCustomerEmailFromInvoice(input: {
+  dataSource: DataSource;
+  organizationId: string;
+  customer: CustomerEntity;
+  parsedCustomer: WorkizParsedCustomer;
+  invoiceCode: string;
+  execute: boolean;
+}): Promise<CustomerEmailSyncResult> {
+  const sourceEmail = normalizeEmail(input.parsedCustomer.email);
+  if (!input.parsedCustomer.email) {
+    return { kind: "no_source_email" };
+  }
+  if (!sourceEmail) {
+    return { kind: "invalid_source_email", rawValue: input.parsedCustomer.email };
+  }
+
+  if (customerEmailIsEmpty(input.customer.email)) {
+    if (!input.execute) {
+      return { kind: "updated", customerId: input.customer.id, email: sourceEmail };
+    }
+
+    await input.dataSource.getRepository(CustomerEntity).update(
+      { id: input.customer.id, organization_id: input.organizationId },
+      { email: sourceEmail },
+    );
+    return { kind: "updated", customerId: input.customer.id, email: sourceEmail };
+  }
+
+  if (emailsMatch(input.customer.email, sourceEmail)) {
+    return { kind: "already_set", customerId: input.customer.id, email: sourceEmail };
+  }
+
+  return {
+    kind: "conflict",
+    customerId: input.customer.id,
+    customerName: input.customer.full_name,
+    existingEmail: input.customer.email ?? "",
+    sourceEmail,
+  };
+}
+
+function recordEmailSyncOutcome(
+  report: WorkizImportReport,
+  invoiceCode: string,
+  outcome: CustomerEmailSyncResult,
+) {
+  switch (outcome.kind) {
+    case "updated":
+      report.customersUpdatedWithEmail += 1;
+      break;
+    case "already_set":
+      report.customersAlreadyHadSameEmail += 1;
+      break;
+    case "conflict":
+      report.emailConflicts.push({
+        invoiceCode,
+        customerId: outcome.customerId,
+        customerName: outcome.customerName,
+        existingEmail: outcome.existingEmail,
+        sourceEmail: outcome.sourceEmail,
+      });
+      break;
+    case "invalid_source_email":
+      report.invalidEmails.push({ invoiceCode, rawValue: outcome.rawValue });
+      break;
+    default:
+      break;
+  }
+}
+
+function trackParsedInvoiceEmail(
+  report: WorkizImportReport,
+  record: WorkizParsedInvoice,
+) {
+  if (!record.invoiceCode || !record.customer) return;
+
+  if (normalizeEmail(record.customer.email)) {
+    report.invoicesContainingEmail += 1;
+    return;
+  }
+
+  if (record.customer.email) {
+    report.invalidEmails.push({
+      invoiceCode: record.invoiceCode,
+      rawValue: record.customer.email,
+    });
+    return;
+  }
+
+  report.invoicesWithoutEmail += 1;
 }
 
 async function matchCustomer(
@@ -301,6 +439,7 @@ async function upsertImportedInvoice(input: {
       ].filter(Boolean).join("\n"),
       lead_source: "repeat_customer",
       requested_service_type: serviceType,
+      job_type: mapServiceTypeToDefaultJobType(serviceType),
       status: paid ? "paid" : "completed",
       service_address_line_1: customer.service_address_line_1,
       service_address_line_2: customer.service_address_line_2,
@@ -454,6 +593,13 @@ export async function runWorkizInvoiceImport(options: {
     ambiguousRecords: [],
     rejectedFiles: [],
     failedFiles: [],
+    invoicesContainingEmail: 0,
+    invoicesWithoutEmail: 0,
+    invalidEmails: [],
+    customersUpdatedWithEmail: 0,
+    customersAlreadyHadSameEmail: 0,
+    emailConflicts: [],
+    duplicateRecordsCreated: 0,
   };
 
   const { parsed, rejected, failed } = await parseSourceDirectory(sourceDirectory);
@@ -481,9 +627,25 @@ export async function runWorkizInvoiceImport(options: {
     for (const record of parsed) {
       if (!record.invoiceCode || !record.customer) continue;
 
-      if (existingIndex.has(record.invoiceCode)) {
+      trackParsedInvoiceEmail(report, record);
+
+      const existingImport = existingIndex.get(record.invoiceCode);
+      if (existingImport) {
         report.duplicatesDetected += 1;
         report.skippedInvoices += 1;
+
+        const linkedCustomer = await resolveImportedCustomer(dataSource, phoenix.id, existingImport.jobId);
+        if (linkedCustomer) {
+          const emailOutcome = await syncCustomerEmailFromInvoice({
+            dataSource,
+            organizationId: phoenix.id,
+            customer: linkedCustomer,
+            parsedCustomer: record.customer,
+            invoiceCode: record.invoiceCode,
+            execute: options.execute,
+          });
+          recordEmailSyncOutcome(report, record.invoiceCode, emailOutcome);
+        }
         continue;
       }
 
@@ -535,7 +697,7 @@ export async function runWorkizInvoiceImport(options: {
             service_city: pendingCustomer.city,
             service_state_or_region: pendingCustomer.province,
             service_postal_code: pendingCustomer.postalCode,
-            phone: normalizePhone(pendingCustomer.phone),
+            phone: pendingCustomer.phone ? normalizePhone(pendingCustomer.phone) : "",
             legacy_created_at: record.invoiceDate,
             source: "repeat_customer",
             preferred_service_type: inferServiceType(record.lineItems[0]?.description ?? ""),
@@ -544,6 +706,9 @@ export async function runWorkizInvoiceImport(options: {
         );
         customerId = created.id;
         customerCache.set(customerKey, customerId);
+        if (normalizeEmail(pendingCustomer.email)) {
+          report.customersUpdatedWithEmail += 1;
+        }
       }
 
       const result = await upsertImportedInvoice({

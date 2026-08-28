@@ -15,6 +15,7 @@ type MasterTableProps = {
   children: ReactNode;
   colSpan?: number;
   state?: MasterTableState;
+  wrapClassName?: string;
 };
 
 export type MasterTableState = {
@@ -35,9 +36,10 @@ function alignClass(align: MasterTableColumn["align"]) {
   return "text-left";
 }
 
-export function MasterTable({ columns, children, colSpan, state }: MasterTableProps) {
+export function MasterTable({ columns, children, colSpan, state, wrapClassName }: MasterTableProps) {
   const resolvedColSpan = colSpan ?? columns.length;
   const status = state?.status ?? "ready";
+  const wrapClasses = ["master-table-wrap", wrapClassName].filter(Boolean).join(" ");
 
   const tableBodyContent = (() => {
     if (status === "loading") {
@@ -65,7 +67,7 @@ export function MasterTable({ columns, children, colSpan, state }: MasterTablePr
   })();
 
   return (
-    <div className="master-table-wrap">
+    <div className={wrapClasses}>
       <table className="master-table">
         <thead>
           <tr>

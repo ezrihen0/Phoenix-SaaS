@@ -40,6 +40,7 @@ function formatControlPreview(item: DashboardControlItem) {
 
 type MobileHomeBoardProps = {
   role: SessionRole | null;
+  permissions?: string[];
   dashboard: OfficeDashboardResponse | null;
   loadError: string | null;
   showAiChat?: boolean;
@@ -47,6 +48,7 @@ type MobileHomeBoardProps = {
 
 export default async function MobileHomeBoard({
   role,
+  permissions = [],
   dashboard,
   loadError,
   showAiChat = false,
@@ -68,7 +70,7 @@ export default async function MobileHomeBoard({
   const { summary, controls } = dashboard;
   const arExposure = sumAmountCents(controls.unpaidInvoices);
   const followUps = controls.followUpsNeeded.slice(0, 3);
-  const canLeads = canAccessShellHref("/leads", role);
+  const canLeads = canAccessShellHref("/leads", role, permissions);
   const canCalls = canAccessShellHref("/calls", role);
   const canInvoices = canAccessShellHref("/invoices", role);
   const canJobs = canAccessShellHref("/jobs", role);

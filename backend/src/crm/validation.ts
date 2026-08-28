@@ -1,9 +1,12 @@
-import { jobStatuses, leadStatuses } from "./constants";
+import { jobStatuses, jobTypes, leadDispositions, leadDispositionReasons, leadStatuses } from "./constants";
 import type {
   InvoicePaymentEntryType,
   InvoicePaymentMethod,
   InvoiceStatus,
   JobStatus,
+  JobType,
+  LeadDisposition,
+  LeadDispositionReason,
   LeadSource,
   LeadStatus,
   QuoteStatus,
@@ -41,6 +44,12 @@ export type UpdateLeadPayload = {
   status?: LeadStatus;
 };
 
+export type LeadDispositionPayload = {
+  disposition: LeadDisposition;
+  dispositionReason: LeadDispositionReason;
+  dispositionNote: string | null;
+};
+
 export type CreateCustomerPayload = {
   fullName: string;
   phone: string;
@@ -75,20 +84,25 @@ export type ConvertLeadPayload = {
   serviceId: string | null;
   scheduledFor: string | null;
   scheduledWindow: string | null;
+  jobType: JobType | null;
 };
 
 export type CreateJobPayload = {
   customerId: string | null;
   leadId: string | null;
+  jobType: JobType;
   serviceType: ServiceType;
+  serviceId: string | null;
   serviceAddressLine1: string;
   serviceAddressLine2: string | null;
   serviceCity: string;
   serviceStateOrRegion: string | null;
   servicePostalCode: string;
-  scheduledFor: string;
-  assignedTechnicianId: string;
-  internalNotes: string;
+  scheduledFor: string | null;
+  scheduledWindow: string | null;
+  assignedTechnicianId: string | null;
+  customerConcern: string | null;
+  internalNotes: string | null;
 };
 
 export type UpdateJobPayload = {
@@ -98,6 +112,7 @@ export type UpdateJobPayload = {
   serviceId?: string | null;
   scheduledFor?: string | null;
   scheduledWindow?: string | null;
+  jobType?: JobType;
 };
 
 export type JobStatusPayload = {
@@ -384,12 +399,14 @@ const leadSources = [
   "phone",
   "website",
   "google",
+  "facebook",
   "referral",
   "repeat_customer",
   "other",
 ] as const;
 
 const serviceTypes = ["inspection", "cleaning", "repair", "rebuild"] as const;
+const operationalJobTypes = jobTypes;
 const quoteStatuses = ["draft", "sent", "approved", "rejected"] as const;
 const invoiceStatuses = ["unpaid", "paid"] as const;
 const invoicePaymentEntryTypes = ["payment", "refund", "adjustment"] as const;
@@ -475,6 +492,28 @@ export function parseUpdateLeadPayload(jsonBody: unknown): UpdateLeadPayload {
         ? undefined
         : optionalTrimmedString(payload.description, "description", 3000),
     status: optionalEnumValue(payload.status, "status", leadStatuses),
+  };
+}
+
+export function parseLeadDispositionPayload(jsonBody: unknown): LeadDispositionPayload {
+  const payload = requireRecord(jsonBody, "Lead disposition");
+
+  const disposition = requireEnumValue(payload.disposition, "disposition", leadDispositions);
+  const dispositionReason = requireEnumValue(
+    payload.dispositionReason,
+    "dispositionReason",
+    leadDispositionReasons,
+  );
+  const dispositionNote = optionalTrimmedString(payload.dispositionNote, "dispositionNote", 3000);
+
+  if (dispositionReason === "other" && !dispositionNote?.trim()) {
+    throw new Error("dispositionNote is required when dispositionReason is other.");
+  }
+
+  return {
+    disposition,
+    dispositionReason,
+    dispositionNote: dispositionNote ?? null,
   };
 }
 
@@ -570,6 +609,7 @@ export function parseConvertLeadPayload(jsonBody: unknown): ConvertLeadPayload {
     serviceId: optionalUuid(payload.serviceId, "serviceId"),
     scheduledFor: optionalIsoDateTime(payload.scheduledFor, "scheduledFor"),
     scheduledWindow: optionalTrimmedString(payload.scheduledWindow, "scheduledWindow", 120),
+    jobType: optionalEnumValue(payload.jobType, "jobType", operationalJobTypes) ?? null,
   };
 }
 
@@ -582,10 +622,23 @@ export function parseCreateJobPayload(jsonBody: unknown): CreateJobPayload {
     throw new Error("Provide exactly one job source: customerId or leadId.");
   }
 
+  const scheduledFor = optionalIsoDateTime(payload.scheduledFor, "scheduledFor");
+  const assignedTechnicianId = optionalUuid(payload.assignedTechnicianId, "assignedTechnicianId");
+
+  if (!scheduledFor && assignedTechnicianId) {
+    throw new Error("Unscheduled jobs cannot assign a technician.");
+  }
+
+  if (scheduledFor && !assignedTechnicianId) {
+    throw new Error("Scheduled jobs require an assigned technician.");
+  }
+
   return {
     customerId,
     leadId,
+    jobType: requireEnumValue(payload.jobType, "jobType", operationalJobTypes),
     serviceType: requireEnumValue(payload.serviceType, "serviceType", serviceTypes),
+    serviceId: optionalUuid(payload.serviceId, "serviceId"),
     serviceAddressLine1: requireTrimmedString(
       payload.serviceAddressLine1,
       "serviceAddressLine1",
@@ -605,12 +658,11 @@ export function parseCreateJobPayload(jsonBody: unknown): CreateJobPayload {
       "servicePostalCode",
       20,
     ),
-    scheduledFor: requireIsoDateTime(payload.scheduledFor, "scheduledFor"),
-    assignedTechnicianId: requireUuid(
-      payload.assignedTechnicianId,
-      "assignedTechnicianId",
-    ),
-    internalNotes: requireTrimmedString(payload.internalNotes, "internalNotes", 3000),
+    scheduledFor,
+    scheduledWindow: optionalTrimmedString(payload.scheduledWindow, "scheduledWindow", 120),
+    assignedTechnicianId,
+    customerConcern: optionalTrimmedString(payload.customerConcern, "customerConcern", 3000),
+    internalNotes: optionalTrimmedString(payload.internalNotes, "internalNotes", 3000),
   };
 }
 
@@ -642,6 +694,10 @@ export function parseUpdateJobPayload(jsonBody: unknown): UpdateJobPayload {
       payload.scheduledWindow === undefined
         ? undefined
         : optionalTrimmedString(payload.scheduledWindow, "scheduledWindow", 120),
+    jobType:
+      payload.jobType === undefined
+        ? undefined
+        : requireEnumValue(payload.jobType, "jobType", operationalJobTypes),
   };
 }
 

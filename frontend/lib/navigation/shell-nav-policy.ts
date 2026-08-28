@@ -9,8 +9,6 @@ export type ShellNavRole = NonNullable<ClientSession["profile"]>["role"];
 /** Flip to true when the dedicated dispatch route returns to the shell. */
 export const DISPATCH_ROUTE_ENABLED = false;
 
-const ROLES_LEADS: ReadonlySet<ShellNavRole> = new Set(["owner", "office_admin", "dispatcher"]);
-
 const ROLES_CALLS_VIEW: ReadonlySet<ShellNavRole> = new Set([
   "owner",
   "admin",
@@ -64,6 +62,7 @@ export function isShellNavHrefVisible(
   href: string,
   role: ShellNavRole | null,
   roleResolved: boolean,
+  permissions: string[] = [],
 ): boolean {
   if (!roleResolved || role === null) {
     return href === "/home" || href === "/settings";
@@ -77,6 +76,8 @@ export function isShellNavHrefVisible(
       return true;
 
     case "/jobs":
+      return role !== null;
+
     case "/customers":
     case "/schedule":
       return isOfficeCrmNavRole(role);
@@ -85,7 +86,7 @@ export function isShellNavHrefVisible(
       return DISPATCH_ROUTE_ENABLED && isOfficeCrmNavRole(role);
 
     case "/leads":
-      return ROLES_LEADS.has(role);
+      return permissions.includes("leads.view");
 
     case "/calls":
       return ROLES_CALLS_VIEW.has(role);
@@ -112,10 +113,14 @@ export function isShellNavHrefVisible(
 }
 
 /** When role is known: would this href be shown in the shell (same as route access for listed paths). */
-export function canAccessShellHref(href: string, role: ShellNavRole | null): boolean {
+export function canAccessShellHref(
+  href: string,
+  role: ShellNavRole | null,
+  permissions: string[] = [],
+): boolean {
   if (role === null) {
     return false;
   }
 
-  return isShellNavHrefVisible(href, role, true);
+  return isShellNavHrefVisible(href, role, true, permissions);
 }

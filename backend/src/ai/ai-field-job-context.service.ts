@@ -2,8 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
-import { canAccessJobResource } from "../auth/permissions";
-import { apiError } from "../common/api-response";
+import { findJobForActor } from "../crm/jobs-access";
 import type { ActorContext } from "../common/request-types";
 import { JobEntity } from "../database/entities/job.entity";
 
@@ -39,28 +38,12 @@ export class AiFieldJobContextService {
       return null;
     }
 
-    const job = await this.jobsRepository.findOne({
-      where: { id: trimmedJobId, organization_id: organizationId },
-      select: {
-        id: true,
-        organization_id: true,
-        title: true,
-        status: true,
-        requested_service_type: true,
-        scheduled_for: true,
-        service_city: true,
-        description: true,
-        assigned_technician_id: true,
-      },
-    });
-
-    if (!job) {
-      apiError(404, "job_not_found", "The job could not be found in your active workspace.");
-    }
-
-    if (!canAccessJobResource(actor, job.assigned_technician_id)) {
-      apiError(403, "job_forbidden", "You do not have access to this job.");
-    }
+    const job = await findJobForActor(
+      this.jobsRepository,
+      trimmedJobId,
+      organizationId,
+      actor,
+    );
 
     return {
       schema_version: "field_job_v1",

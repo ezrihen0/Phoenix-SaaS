@@ -3,18 +3,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, type ComponentType } from "react";
 import {
-  Briefcase,
-  ClipboardList,
   LogOut,
-  Plus,
-  Receipt,
-  UserRound,
   type LucideProps,
 } from "lucide-react";
 
 import { OrganizationSwitcher } from "@/components/organization-switcher";
+import { QuickCreateTrigger } from "@/components/quick-create-trigger";
 import { handleLogout } from "@/lib/auth/logout";
 import {
   MOBILE_MORE_MENU_SECTIONS,
@@ -23,13 +19,8 @@ import {
 import {
   isRouteActive,
 } from "@/lib/navigation/mobile-shell-nav";
+import { useQuickCreateAvailability } from "@/components/quick-create-menu";
 import { type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
-
-const INSPECTION_CREATE_ROLES: ReadonlySet<ShellNavRole> = new Set([
-  "owner",
-  "admin",
-  "office_admin",
-]);
 
 type ShellNavIcon = ComponentType<LucideProps>;
 
@@ -47,6 +38,7 @@ type MobileShellNavProps = {
   userLabel: string;
   userInitials: string;
   userRole: ShellNavRole | null;
+  permissions: string[];
   moreOpen: boolean;
   onMoreOpen: () => void;
   onMoreClose: () => void;
@@ -142,37 +134,13 @@ function resolveMoreMenuLabel(href: string, fallbackLabel: string) {
   }
 }
 
-function QuickActionLink({
-  href,
-  label,
-  icon: Icon,
-  onNavigate,
-}: {
-  href: string;
-  label: string;
-  icon: ShellNavIcon;
-  onNavigate: () => void;
-}) {
-  return (
-    <Link
-      href={href}
-      onClick={onNavigate}
-      className="theme-control-surface group flex min-h-[44px] items-center gap-2 rounded-[14px] border px-3 py-2.5 text-sm font-medium transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)]"
-    >
-      <span className="theme-control-surface-soft inline-flex h-7 w-7 items-center justify-center rounded-lg border">
-        <Icon className="h-4 w-4" />
-      </span>
-      <span className="truncate">{label}</span>
-    </Link>
-  );
-}
-
 export function MobileShellNav({
   navCatalog,
   roleNavCatalog,
   userLabel,
   userInitials,
   userRole,
+  permissions,
   moreOpen,
   onMoreClose,
 }: MobileShellNavProps) {
@@ -180,7 +148,7 @@ export function MobileShellNav({
   const pathname = usePathname();
   const router = useRouter();
   const workspaceSectionRef = useRef<HTMLDivElement | null>(null);
-  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
+  const quickCreateAvailable = useQuickCreateAvailability(permissions);
 
   const navByHref = useMemo(
     () => new Map(navCatalog.map((item) => [item.href, item])),
@@ -205,52 +173,10 @@ export function MobileShellNav({
 
   const visibleSecondaryMoreLinkCount = visibleSecondaryMoreHrefs.length;
 
-  const canCreateCustomer = navByHref.has("/customers");
-  const canCreateJob = navByHref.has("/jobs");
-  const canCreateInvoice = navByHref.has("/invoices");
-  const canCreateInspection = navByHref.has("/inspections") && userRole !== null && INSPECTION_CREATE_ROLES.has(userRole);
   const homeItem = navByHref.get("/home");
   const scheduleItem = navByHref.get("/schedule");
   const callsItem = navByHref.get("/calls");
   const messagingItem = navByHref.get("/messaging");
-  const quickActions = useMemo(() => {
-    const actions: Array<{ href: string; label: string; icon: ShellNavIcon }> = [];
-
-    if (canCreateJob) {
-      actions.push({
-        href: "/jobs/new",
-        label: "New Job",
-        icon: Briefcase,
-      });
-    }
-
-    if (canCreateCustomer) {
-      actions.push({
-        href: "/customers/new",
-        label: "New Customer",
-        icon: UserRound,
-      });
-    }
-
-    if (canCreateInvoice) {
-      actions.push({
-        href: "/invoices/new",
-        label: "Invoice Job",
-        icon: Receipt,
-      });
-    }
-
-    if (canCreateInspection) {
-      actions.push({
-        href: "/inspections/new",
-        label: "New Inspection",
-        icon: ClipboardList,
-      });
-    }
-
-    return actions;
-  }, [canCreateCustomer, canCreateInvoice, canCreateInspection, canCreateJob]);
-  const canShowQuickActions = quickActions.length > 0;
 
   useEffect(() => {
     if (!moreOpen || typeof document === "undefined") {
@@ -265,44 +191,13 @@ export function MobileShellNav({
     };
   }, [moreOpen]);
 
-  useEffect(() => {
-    setQuickActionsOpen(false);
-  }, [pathname, moreOpen]);
-
   return (
     <>
-      {quickActionsOpen ? (
-        <button
-          type="button"
-          aria-label={t("common.actions.close")}
-          className="fixed inset-0 z-40 bg-transparent lg:hidden"
-          onClick={() => setQuickActionsOpen(false)}
-        />
-      ) : null}
-
       <nav
         aria-label={t("shell.mobile.bottomNavigation")}
         className="fixed inset-x-0 bottom-0 z-40 px-2 pb-[calc(0.6rem+env(safe-area-inset-bottom))] lg:hidden"
       >
         <div className="relative mx-auto max-w-lg rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--sem-board-glass)] shadow-[0_-18px_48px_color-mix(in_srgb,var(--bg-canvas)_52%,transparent)] backdrop-blur-xl">
-          {canShowQuickActions ? (
-            <>
-              {quickActionsOpen ? (
-                <div className="absolute inset-x-4 bottom-[calc(100%+0.75rem)] z-50 space-y-2 rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-modal)] p-3 shadow-[0_20px_50px_color-mix(in_srgb,var(--bg-canvas)_65%,transparent)]">
-                  {quickActions.map((action) => (
-                    <QuickActionLink
-                      key={action.href}
-                      href={action.href}
-                      label={action.label}
-                      icon={action.icon}
-                      onNavigate={() => setQuickActionsOpen(false)}
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </>
-          ) : null}
-
           <div className="mx-auto grid max-w-lg grid-cols-5 items-end gap-0.5 px-1 pb-1 pt-3">
             {homeItem ? (
               <MobileNavTab
@@ -321,53 +216,20 @@ export function MobileShellNav({
               <div className="min-h-11 min-w-11" />
             )}
 
-            <button
-              type="button"
-              disabled={!canShowQuickActions}
-              aria-expanded={quickActionsOpen}
-              aria-haspopup="menu"
-              aria-label="Add"
-              onClick={() => {
-                if (!canShowQuickActions) {
-                  return;
-                }
-                onMoreClose();
-                setQuickActionsOpen((current) => !current);
-              }}
-              className="relative flex min-h-11 min-w-11 flex-col items-center justify-end px-0.5 py-1"
-            >
-              {quickActionsOpen ? (
-                <span
-                  aria-hidden="true"
-                  className="absolute -top-1 h-1 w-5 rounded-full bg-[color:var(--sem-accent-primary)]"
-                />
-              ) : null}
-              <span
-                className={[
-                  "mb-0.5 inline-flex h-9 w-9 items-center justify-center rounded-2xl border shadow-[0_12px_26px_color-mix(in_srgb,var(--bg-canvas)_62%,transparent)] transition",
-                  quickActionsOpen
-                    ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-card)] text-[color:var(--sem-accent-primary)]"
-                    : canShowQuickActions
-                      ? "theme-control-surface text-[color:var(--sem-text-primary)] hover:border-[color:var(--cmp-border-accent)]"
-                      : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-text-muted)] opacity-70",
-                ].join(" ")}
-              >
-                <Plus
-                  aria-hidden="true"
-                  className={["h-5 w-5 shrink-0 transition-transform", quickActionsOpen ? "rotate-45" : ""].join(" ")}
-                />
-              </span>
-              <span
-                className={[
-                  "mt-1 max-w-full truncate text-[10px] font-medium tracking-wide max-[380px]:text-[9px]",
-                  quickActionsOpen
-                    ? "font-semibold text-[color:var(--sem-text-primary)]"
-                    : "text-[color:var(--sem-text-muted)]",
-                ].join(" ")}
-              >
-                Add
-              </span>
-            </button>
+            {quickCreateAvailable ? (
+              <QuickCreateTrigger
+                permissions={permissions}
+                pathname={pathname ?? "/"}
+                variant="mobile-tab"
+                onOpenChange={(open) => {
+                  if (open) {
+                    onMoreClose();
+                  }
+                }}
+              />
+            ) : (
+              <div className="min-h-11 min-w-11" />
+            )}
 
             {callsItem ? (
               <MobileNavTab

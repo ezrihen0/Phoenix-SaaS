@@ -26,6 +26,7 @@ import {
   Workflow,
 } from "lucide-react";
 
+import { QuickCreateTrigger } from "@/components/quick-create-trigger";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { MobileShellNav } from "@/components/mobile-shell-nav";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
@@ -139,6 +140,7 @@ export function AppShell({ children }: AppShellProps) {
   const [searchEnabled, setSearchEnabled] = useState(false);
   const [userLabel, setUserLabel] = useState("WizField User");
   const [shellNavRole, setShellNavRole] = useState<ShellNavRole | null>(null);
+  const [shellNavPermissions, setShellNavPermissions] = useState<string[]>([]);
   const [shellNavRoleResolved, setShellNavRoleResolved] = useState(false);
   const [activationMode, setActivationMode] = useState(false);
   const enabled = shouldShowShell(pathname);
@@ -208,6 +210,7 @@ export function AppShell({ children }: AppShellProps) {
       setUserLabel(nextLabel);
       setSearchEnabled(Boolean(canSearch));
       setShellNavRole(session?.profile?.role ?? null);
+      setShellNavPermissions(session?.permissions ?? []);
       setShellNavRoleResolved(true);
 
       try {
@@ -281,20 +284,20 @@ export function AppShell({ children }: AppShellProps) {
   const visiblePrimaryNav = activationMode
     ? []
     : primaryNavItems.filter((item) =>
-      isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
+      isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved, shellNavPermissions),
     );
 
   const visibleHeaderQuickLinks = activationMode
     ? []
     : headerQuickLinks.filter((item) =>
-      isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
+      isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved, shellNavPermissions),
     );
 
   const mobilePrimaryNav = resolveMobilePrimaryNav(visiblePrimaryNav);
   const visibleMobileSupplementalNav = activationMode
     ? []
     : mobileSupplementalNavItems.filter((item) =>
-      isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved),
+      isShellNavHrefVisible(item.href, shellNavRole, shellNavRoleResolved, shellNavPermissions),
     );
   const mobileNavCatalog = (() => {
     const items = [...visiblePrimaryNav, ...visibleMobileSupplementalNav];
@@ -455,6 +458,14 @@ export function AppShell({ children }: AppShellProps) {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
+                    {!activationMode ? (
+                      <QuickCreateTrigger
+                        permissions={shellNavPermissions}
+                        pathname={pathname ?? "/"}
+                        variant="header"
+                      />
+                    ) : null}
+
                     {visibleHeaderQuickLinks.map((item) => (
                       <HeaderQuickLink
                         key={item.href}
@@ -508,6 +519,7 @@ export function AppShell({ children }: AppShellProps) {
             userLabel={userLabel}
             userInitials={buildInitials(userLabel)}
             userRole={shellNavRole}
+            permissions={shellNavPermissions}
             moreOpen={moreMenuOpen}
             onMoreOpen={() => setMoreMenuOpen(true)}
             onMoreClose={() => setMoreMenuOpen(false)}

@@ -7,7 +7,7 @@ function hrefForRecord(link: HomeAiRecordLink): string | null {
     case "customer":
       return `/customers/${link.id}`;
     case "lead":
-      return `/leads/${link.id}`;
+      return `/leads?leadId=${encodeURIComponent(link.id)}`;
     case "job":
       return `/jobs/${link.id}`;
     case "estimate":

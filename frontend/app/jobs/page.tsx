@@ -1,10 +1,18 @@
-import { redirect } from "next/navigation";
+import { getLocale } from "next-intl/server";
 
-import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
+import { requireJobsListRoute } from "@/lib/auth/server-session";
 
 import JobsWorkspace from "./jobs-workspace";
 
 export default async function JobsPage() {
-  await requireOfficeCrmRoute("/jobs");
-  return <JobsWorkspace />;
+  const session = await requireJobsListRoute("/jobs");
+  const locale = await getLocale();
+
+  return (
+    <JobsWorkspace
+      canViewAllJobs={session.permissions.includes("jobs.view")}
+      canCreateJob={session.permissions.includes("jobs.create")}
+      locale={locale}
+    />
+  );
 }

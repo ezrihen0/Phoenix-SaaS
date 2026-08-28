@@ -12,9 +12,11 @@ import {
 
 import {
   jobStatuses,
+  jobTypes,
   leadSources,
   serviceTypes,
   type JobStatus,
+  type JobType,
   type LeadSource,
   type ServiceType,
 } from "../../crm/constants";
@@ -63,6 +65,13 @@ export class JobEntity {
     enum: serviceTypes,
   })
   requested_service_type!: ServiceType;
+
+  @Column({
+    type: "enum",
+    enum: jobTypes,
+    default: "inspection",
+  })
+  job_type!: JobType;
 
   @Column({
     type: "enum",

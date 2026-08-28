@@ -15,7 +15,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
-import { In, Not, Repository } from "typeorm";
+import { In, Repository } from "typeorm";
 import type { Request, Response } from "express";
 
 import {
@@ -38,10 +38,17 @@ import {
   getJobStatusTimestampUpdates,
   getServiceTypeLabel,
   isOfficeOnlyJobStatus,
+  mapServiceTypeToDefaultJobType,
   openJobStatuses,
   type CustomerLifecycleStatus,
   type InvoiceStatus,
 } from "./constants";
+import {
+  assertCanAccessJob,
+  findJobForActor,
+  requireJobListPermission,
+} from "./jobs-access";
+import { JobsService } from "./jobs.service";
 import {
   customerImportSourceOptions,
   type CustomerImportDuplicateMatch,
@@ -61,6 +68,7 @@ import {
   parseCreateJobPayload,
   parseCreateLeadPayload,
   parseJobStatusPayload,
+  parseLeadDispositionPayload,
   parseRecordInvoicePaymentPayload,
   parseSignDocumentPayload,
   parseUpdateCustomerPayload,
@@ -181,6 +189,7 @@ export class CrmController {
     private readonly documentSnapshotService: DocumentSnapshotService,
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
     private readonly crmOfficeDashboardService: CrmOfficeDashboardService,
+    private readonly jobsService: JobsService,
     private readonly emailService: EmailService,
     private readonly txtService: TxtService,
     private readonly customerPortalService: CustomerPortalService,
@@ -258,6 +267,32 @@ export class CrmController {
     if (!service) {
       apiError(404, "service_not_found", "The service could not be found.");
     }
+  }
+
+  private async searchCustomersInOrganization(rawQuery: string, organizationId: string) {
+    const query = rawQuery.trim().toLowerCase();
+
+    if (query.length < 2) {
+      return [] as Array<{ id: string; full_name: string; phone: string; email: string | null }>;
+    }
+
+    const rows = await this.customersRepository.createQueryBuilder("customer")
+      .select(["customer.id", "customer.full_name", "customer.phone", "customer.email"])
+      .where("customer.organization_id = :organizationId", { organizationId })
+      .andWhere(
+        "(LOWER(customer.full_name) LIKE :query OR LOWER(COALESCE(customer.email, '')) LIKE :query OR LOWER(customer.phone) LIKE :query)",
+        { query: `%${query}%` },
+      )
+      .orderBy("customer.updated_at", "DESC")
+      .take(20)
+      .getMany();
+
+    return rows.map((row) => ({
+      id: row.id,
+      full_name: row.full_name,
+      phone: row.phone,
+      email: row.email,
+    }));
   }
 
   private requireTechnicianActor(request: RequestWithActor) {
@@ -429,23 +464,8 @@ export class CrmController {
           .andWhere("job.status = :status", { status: "completed" })
           .andWhere("job.completed_at >= :todayStart", { todayStart })
           .getCount(),
-        this.jobsRepository.find({
-          where: {
-            organization_id: organizationId,
-            assigned_technician_id: actor.technician.id,
-            status: Not("cancelled"),
-          },
-          relations: {
-            customer: true,
-            service: true,
-            technician: true,
-            quote: true,
-            invoice: true,
-          },
-          order: {
-            scheduled_for: "ASC",
-            created_at: "DESC",
-          },
+        this.jobsService.listJobs(actor, organizationId, {
+          excludeCancelled: true,
         }),
       ]);
 
@@ -482,40 +502,24 @@ export class CrmController {
     @Query("status") status?: string,
     @Query("technicianId") technicianId?: string,
   ) {
-    const actor = this.requireCrmPermissionActor(
-      request,
-      "jobs.view",
-      "job_list_forbidden",
-      "This account cannot view the job board.",
-    );
+    const actor = this.requireActor(request);
     const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
-      const queryBuilder = this.jobsRepository
-        .createQueryBuilder("job")
-        .leftJoinAndSelect("job.customer", "customer")
-        .leftJoinAndSelect("job.service", "service")
-        .leftJoinAndSelect("job.technician", "technician")
-        .leftJoinAndSelect("job.quote", "quote")
-        .leftJoinAndSelect("job.invoice", "invoice")
-        .where("job.organization_id = :organizationId", { organizationId })
-        .orderBy("job.scheduled_for", "ASC")
-        .addOrderBy("job.created_at", "DESC");
-
-      if (status) {
-        queryBuilder.andWhere("job.status = :status", { status });
-      } else {
-        queryBuilder.andWhere("job.status != :cancelled", { cancelled: "cancelled" });
-      }
+      requireJobListPermission(
+        actor,
+        "job_list_forbidden",
+        "This account cannot view the job board.",
+      );
 
       if (technicianId) {
         await this.requireTechnicianInOrganization(technicianId, organizationId);
-        queryBuilder.andWhere("job.assigned_technician_id = :technicianId", {
-          technicianId,
-        });
       }
 
-      const jobs = await queryBuilder.getMany();
+      const jobs = await this.jobsService.listJobs(actor, organizationId, {
+        status,
+        technicianId,
+      });
 
       return apiSuccess(jobs);
     } catch (error) {
@@ -558,6 +562,10 @@ export class CrmController {
           apiError(400, "lead_already_converted", "This lead has already been converted into a job.");
         }
 
+        if (lead.disposition === "not_booked") {
+          apiError(400, "lead_not_booked", "This lead was marked not booked and cannot be converted.");
+        }
+
         const customerResolution = await this.resolveCustomerForLead(organizationId, lead);
         customerId = customerResolution.customer.id;
         customerLabel = customerResolution.customer.full_name;
@@ -586,25 +594,42 @@ export class CrmController {
       }
 
       await this.requireTechnicianInOrganization(payload.assignedTechnicianId, organizationId);
+      await this.requireServiceInOrganization(payload.serviceId, organizationId);
+
+      let jobTitle = `${getServiceTypeLabel(payload.serviceType)} for ${customerLabel}`;
+
+      if (payload.serviceId) {
+        const service = await this.servicesRepository.findOne({
+          where: {
+            id: payload.serviceId,
+            organization_id: organizationId,
+          },
+        });
+
+        if (service) {
+          jobTitle = `${service.name} for ${customerLabel}`;
+        }
+      }
 
       const job = await this.jobsRepository.save(
         this.jobsRepository.create({
           organization_id: organizationId,
           customer_id: customerId,
-          service_id: null,
+          service_id: payload.serviceId,
           assigned_technician_id: payload.assignedTechnicianId,
-          title: `${getServiceTypeLabel(payload.serviceType)} for ${customerLabel}`,
-          description: payload.internalNotes,
+          title: jobTitle,
+          description: payload.customerConcern,
           lead_source: leadSource,
           requested_service_type: payload.serviceType,
+          job_type: payload.jobType,
           status: "scheduled",
           service_address_line_1: payload.serviceAddressLine1,
           service_address_line_2: payload.serviceAddressLine2,
           service_city: payload.serviceCity,
           service_state_or_region: payload.serviceStateOrRegion,
           service_postal_code: payload.servicePostalCode,
-          scheduled_for: new Date(payload.scheduledFor),
-          scheduled_window: null,
+          scheduled_for: payload.scheduledFor ? new Date(payload.scheduledFor) : null,
+          scheduled_window: payload.scheduledWindow,
           requested_at: requestTimestamp,
           created_by_auth_user_id: actor.user.id,
           updated_by_auth_user_id: actor.user.id,
@@ -630,15 +655,27 @@ export class CrmController {
         await this.leadsRepository.save(leadToConvert);
       }
 
+      const statusEventNoteParts = [
+        leadToConvert
+          ? payload.scheduledFor
+            ? "Lead converted to scheduled job."
+            : "Lead converted to unscheduled job."
+          : payload.scheduledFor
+            ? "Job created from customer record."
+            : "Unscheduled job created from customer record.",
+      ];
+
+      if (payload.internalNotes?.trim()) {
+        statusEventNoteParts.push(`Internal: ${payload.internalNotes.trim()}`);
+      }
+
       await this.jobStatusEventsRepository.save(
         this.jobStatusEventsRepository.create({
           organization_id: organizationId,
           job_id: job.id,
           author_profile_id: actor.profile.id,
           status: "scheduled",
-          note: leadToConvert
-            ? "Lead converted to scheduled job."
-            : "Job created from customer record.",
+          note: statusEventNoteParts.join(" "),
         }),
       );
 
@@ -797,9 +834,7 @@ export class CrmController {
         apiError(404, "job_not_found", "The job could not be found.");
       }
 
-      if (!canAccessJobResource(actor, job.assigned_technician_id)) {
-        apiError(403, "job_access_denied", "You do not have access to this job.");
-      }
+      assertCanAccessJob(actor, job.assigned_technician_id);
 
       return apiSuccess(this.buildJobDetailResponse(job));
     } catch (error) {
@@ -864,6 +899,10 @@ export class CrmController {
         updates.scheduled_window = payload.scheduledWindow;
       }
 
+      if (payload.jobType !== undefined) {
+        updates.job_type = payload.jobType;
+      }
+
       await this.jobsRepository.update({ id: jobId, organization_id: organizationId }, updates);
       const detail = await this.loadJobDetail(jobId, organizationId);
 
@@ -884,20 +923,13 @@ export class CrmController {
 
     try {
       const payload = parseJobStatusPayload(body);
-      const job = await this.jobsRepository.findOne({
-        where: {
-          id: jobId,
-          organization_id: organizationId,
-        },
-      });
-
-      if (!job) {
-        apiError(404, "job_not_found", "The job could not be found.");
-      }
-
-      if (!canAccessJobResource(actor, job.assigned_technician_id)) {
-        apiError(403, "job_access_denied", "You do not have access to this job.");
-      }
+      const job = await findJobForActor(
+        this.jobsRepository,
+        jobId,
+        organizationId,
+        actor,
+        {},
+      );
 
       if (
         !actorHasPermission(actor, "jobs.status.update")
@@ -2740,6 +2772,62 @@ export class CrmController {
     }
   }
 
+  @Patch("leads/:leadId/disposition")
+  async setLeadDisposition(
+    @Req() request: RequestWithActor,
+    @Param("leadId") leadId: string,
+    @Body() body: unknown,
+  ) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "leads.manage",
+      "lead_manage_forbidden",
+      "This account cannot change leads.",
+    );
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    try {
+      const payload = parseLeadDispositionPayload(body);
+      const lead = await this.leadsRepository.findOne({
+        where: {
+          id: leadId,
+          organization_id: organizationId,
+        },
+      });
+
+      if (!lead) {
+        apiError(404, "lead_not_found", "The lead could not be found.");
+      }
+
+      if (lead.status === "converted" || lead.converted_job_id) {
+        apiError(
+          400,
+          "lead_already_converted",
+          "Converted leads cannot be marked not booked.",
+        );
+      }
+
+      if (lead.disposition === "not_booked") {
+        apiError(400, "lead_disposition_locked", "This lead is already marked not booked.");
+      }
+
+      lead.disposition = payload.disposition;
+      lead.disposition_reason = payload.dispositionReason;
+      lead.disposition_note = payload.dispositionNote;
+      lead.disposition_at = new Date();
+      lead.disposition_by_auth_user_id = actor.user.id;
+
+      const result = await this.leadsRepository.save(lead);
+
+      return apiSuccess(result);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      apiError(400, "invalid_lead_disposition_payload", "The lead disposition payload is invalid.", error);
+    }
+  }
+
   @Post("leads/:leadId/convert")
   async convertLead(
     @Req() request: RequestWithActor,
@@ -2771,6 +2859,10 @@ export class CrmController {
         apiError(400, "lead_already_converted", "This lead has already been converted into a job.");
       }
 
+      if (lead.disposition === "not_booked") {
+        apiError(400, "lead_not_booked", "This lead was marked not booked and cannot be converted.");
+      }
+
       const customerResolution = await this.resolveCustomerForLead(organizationId, lead);
       const customer = customerResolution.customer;
 
@@ -2787,6 +2879,7 @@ export class CrmController {
           description: payload.description ?? lead.description,
           lead_source: lead.source,
           requested_service_type: lead.service_type,
+          job_type: payload.jobType ?? mapServiceTypeToDefaultJobType(lead.service_type),
           status: "scheduled",
           service_address_line_1: lead.service_address_line_1,
           service_address_line_2: lead.service_address_line_2,
@@ -2841,6 +2934,42 @@ export class CrmController {
         throw error;
       }
       apiError(400, "invalid_lead_conversion_payload", "The lead conversion payload is invalid.", error);
+    }
+  }
+
+  @Get("services")
+  async listServices(@Req() request: RequestWithActor) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "jobs.create",
+      "job_create_forbidden",
+      "This account cannot create jobs.",
+    );
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    try {
+      const services = await this.servicesRepository.find({
+        where: {
+          organization_id: organizationId,
+          is_active: true,
+        },
+        order: {
+          sort_position: "ASC",
+          name: "ASC",
+        },
+      });
+
+      return apiSuccess(
+        services.map((service) => ({
+          id: service.id,
+          name: service.name,
+          service_type: service.service_type,
+          default_price_cents: service.default_price_cents,
+          duration_minutes: service.duration_minutes,
+        })),
+      );
+    } catch (error) {
+      apiError(500, "service_list_failed", "The service catalog could not be loaded.", error);
     }
   }
 
@@ -2907,6 +3036,24 @@ export class CrmController {
         throw error;
       }
       apiError(400, "invalid_customer_payload", "The customer payload is invalid.", error);
+    }
+  }
+
+  @Get("customers/search")
+  async searchCustomers(@Req() request: RequestWithActor, @Query("q") query?: string) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "customers.view",
+      "customer_view_forbidden",
+      "This account cannot view customers.",
+    );
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    try {
+      const rows = await this.searchCustomersInOrganization(query ?? "", organizationId);
+      return apiSuccess(rows);
+    } catch (error) {
+      apiError(500, "customer_search_failed", "Customer search could not be completed.", error);
     }
   }
 

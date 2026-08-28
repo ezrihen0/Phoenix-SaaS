@@ -39,7 +39,6 @@ type SearchParam = string | string[] | undefined;
 
 type InvoiceLifecycleStatus = "sent" | "partial" | "paid" | "refunded" | "overpaid";
 type PipelineFilter = "all" | "open" | "partial" | "paid" | "open-balances";
-type CashSignalTone = "default" | "warning" | "success" | "error";
 
 /** UI-only reference shape for a future backend payment intelligence payload. Not fetched in this slice. */
 type InvoicePaymentInsight = {
@@ -56,12 +55,6 @@ type InvoicePaymentInsight = {
 type InvoicePaymentAiReadyState = {
   mode: "standby" | "connected";
   insights: InvoicePaymentInsight[];
-};
-
-type InvoiceCashSignal = {
-  label: string;
-  detail: string;
-  tone: CashSignalTone;
 };
 
 type InvoiceListItem = {
@@ -198,63 +191,6 @@ function getInvoicePaymentAiReadyState(insights: InvoicePaymentInsight[] = []): 
   return { mode: "standby", insights: [] };
 }
 
-function findInvoicePaymentInsight(invoiceId: string, insights: InvoicePaymentInsight[]) {
-  return insights.find((insight) => insight.invoiceId === invoiceId) ?? null;
-}
-
-function getInvoiceCashSignal(invoice: InvoiceListItem, locale: string): InvoiceCashSignal {
-  if (invoice.lifecycle_status === "refunded") {
-    return {
-      label: "Review refund status",
-      detail: "Confirm whether this refunded invoice should stay closed in AR.",
-      tone: "error",
-    };
-  }
-
-  if (invoice.lifecycle_status === "overpaid") {
-    return {
-      label: "Review overpayment",
-      detail: "Customer paid more than the invoice total. Confirm ledger handling.",
-      tone: "warning",
-    };
-  }
-
-  if (isFullyPaid(invoice) || invoice.balance_cents <= 0) {
-    return {
-      label: "Closed out",
-      detail: "Invoice balance is settled in the current ledger view.",
-      tone: "success",
-    };
-  }
-
-  if (invoice.lifecycle_status === "partial") {
-    return {
-      label: "Collect remaining balance",
-      detail: `${formatCurrency(invoice.balance_cents, locale)} remains after ${formatCurrency(invoice.amount_paid_cents, locale)} collected.`,
-      tone: "warning",
-    };
-  }
-
-  return {
-    label: "Follow up on open invoice",
-    detail: `Issued ${formatDate(invoice.issued_at, locale)}. No payment recorded yet.`,
-    tone: "default",
-  };
-}
-
-function cashSignalToneClass(tone: CashSignalTone) {
-  if (tone === "success") {
-    return "border-[color:var(--cmp-status-success-border)] bg-[color:var(--cmp-status-success-bg)] text-[color:var(--cmp-status-success-text)]";
-  }
-  if (tone === "warning") {
-    return "border-[color:var(--cmp-status-warning-border)] bg-[color:var(--cmp-status-warning-bg)] text-[color:var(--cmp-status-warning-text)]";
-  }
-  if (tone === "error") {
-    return "border-[color:var(--cmp-status-error-border)] bg-[color:var(--cmp-status-error-bg)] text-[color:var(--cmp-status-error-text)]";
-  }
-  return "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/80 text-[color:var(--sem-text-secondary)]";
-}
-
 function applyPipelineFilter(invoices: InvoiceListItem[], pipeline: PipelineFilter) {
   if (pipeline === "open") {
     return invoices.filter((invoice) => isUnpaidOpen(invoice));
@@ -351,42 +287,6 @@ function PaymentProgress({
       ) : (
         <p className="mt-2 text-xs text-[color:var(--cmp-status-success-text)]">{collectedInFullLabel}</p>
       )}
-    </div>
-  );
-}
-
-function InvoiceCashSignalCell({
-  invoice,
-  aiState,
-  statusBasedLabel,
-  locale,
-}: {
-  invoice: InvoiceListItem;
-  aiState: InvoicePaymentAiReadyState;
-  statusBasedLabel: string;
-  locale: string;
-}) {
-  const aiInsight = aiState.mode === "connected" ? findInvoicePaymentInsight(invoice.id, aiState.insights) : null;
-
-  if (aiInsight) {
-    return (
-      <div className="max-w-[310px] rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] px-3 py-2">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-[color:var(--sem-accent-primary)]" />
-          <span className="text-xs font-semibold uppercase tracking-wide text-[color:var(--sem-accent-primary)]">{aiInsight.label}</span>
-        </div>
-        <p className="mt-1 text-xs leading-5 text-[color:var(--sem-text-secondary)]">{aiInsight.summary}</p>
-      </div>
-    );
-  }
-
-  const signal = getInvoiceCashSignal(invoice, locale);
-
-  return (
-    <div className={cx("max-w-[310px] rounded-2xl border px-3 py-2", cashSignalToneClass(signal.tone))}>
-      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-80">{statusBasedLabel}</span>
-      <p className="mt-1 text-xs font-semibold">{signal.label}</p>
-      <p className="mt-1 text-xs leading-5 opacity-80">{signal.detail}</p>
     </div>
   );
 }
@@ -702,9 +602,6 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
             remainingLabel={t("remaining")}
           />
         </td>
-        <td className="px-4 py-4">
-          <InvoiceCashSignalCell invoice={invoice} aiState={aiState} statusBasedLabel={t("statusBased")} locale={locale} />
-        </td>
         <td className="py-4 pl-4 pr-5">{renderInvoiceActions(invoice)}</td>
       </tr>
     );
@@ -735,10 +632,6 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
             collectedInFullLabel={t("collectedInFull")}
             remainingLabel={t("remaining")}
           />
-        </div>
-
-        <div className="mt-4">
-          <InvoiceCashSignalCell invoice={invoice} aiState={aiState} statusBasedLabel={t("statusBased")} locale={locale} />
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -961,7 +854,6 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
                         <th className="px-4 py-4 font-medium">Customer</th>
                         <th className="px-4 py-4 font-medium">Total</th>
                         <th className="px-4 py-4 font-medium">{t("paymentStatus")}</th>
-                        <th className="px-4 py-4 font-medium">{t("cashSignal")}</th>
                         <th className="py-4 pl-4 pr-5 text-right font-medium">Actions</th>
                       </tr>
                     </thead>

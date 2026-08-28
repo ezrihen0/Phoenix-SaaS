@@ -400,6 +400,7 @@ async function runPhoenixWorkflow(
       description: "Annual inspection and cleaning scope",
       lead_source: "phone",
       requested_service_type: "inspection",
+      job_type: "inspection",
       status: "scheduled",
       service_address_line_1: customer.service_address_line_1,
       service_address_line_2: null,

@@ -257,6 +257,7 @@ async function seedOrgContext(
       description: "Inspection smoke test seed.",
       lead_source: "website",
       requested_service_type: "inspection",
+      job_type: "inspection",
       status: "scheduled",
       service_address_line_1: customer.service_address_line_1,
       service_address_line_2: null,

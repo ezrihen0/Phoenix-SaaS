@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "i18n:check": "node scripts/check-i18n-catalog-parity.mjs",
-    "shell-nav-policy:check": "node scripts/check-shell-nav-policy.mjs"
+    "shell-nav-policy:check": "node scripts/check-shell-nav-policy.mjs",
+    "quick-create:check": "node scripts/check-quick-create-registry.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.8.0",

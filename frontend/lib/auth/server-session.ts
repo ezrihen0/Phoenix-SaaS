@@ -102,6 +102,29 @@ export async function getServerDestination() {
   }
 }
 
+export async function requireJobsListRoute(nextPath: string) {
+  const session = await requireServerSession(nextPath);
+
+  if (
+    !session.permissions.includes("jobs.view")
+    && !session.permissions.includes("jobs.assigned.view")
+  ) {
+    const destination = await getServerDestination();
+
+    if (destination) {
+      redirect(destination);
+    }
+
+    redirect("/login?reason=unsupported-account");
+  }
+
+  return session;
+}
+
+export async function requireLeadsRoute(nextPath: string) {
+  return requireServerPermission(nextPath, "leads.view");
+}
+
 export async function requireOfficeCrmRoute(nextPath: string) {
   const session = await requireServerSession(nextPath);
 

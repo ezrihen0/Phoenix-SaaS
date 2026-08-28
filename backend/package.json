@@ -57,6 +57,8 @@
     "team:rbac:smoke": "node -r ts-node/register src/database/team-rbac-smoke.ts",
     "home:ai:contract-check": "node -r ts-node/register src/ai/home-ai-contract-check.ts",
     "home:ai:smoke": "node -r ts-node/register src/database/home-ai-smoke.ts",
+    "jobs:access:check": "node -r ts-node/register src/crm/jobs-access-contract-check.ts",
+    "jobs:rbac:smoke": "node -r ts-node/register src/database/jobs-rbac-smoke.ts",
     "workiz:import:dry-run": "node -r ts-node/register src/database/workiz-invoice-import.ts",
     "workiz:import:execute": "node -r ts-node/register src/database/workiz-invoice-import.ts --execute",
     "workiz:import:verify": "node -r ts-node/register src/database/workiz-import-verify.ts",
