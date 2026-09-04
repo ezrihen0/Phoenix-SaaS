@@ -255,6 +255,61 @@ export class TeamService {
     return this.buildMemberResponse(profile, membership);
   }
 
+  async removeMember(profileId: string, actor: ActorContext) {
+    const organizationId = this.requireOrganizationId(actor);
+
+    const profile = await this.profilesRepository.findOne({
+      where: { id: profileId },
+      relations: { user: true },
+    });
+
+    if (!profile) {
+      apiError(404, "team_member_not_found", "The team member could not be found.");
+    }
+
+    const membership = await this.membershipsRepository.findOne({
+      where: {
+        user_id: profile.auth_user_id,
+        organization_id: organizationId,
+        status: In([...seatOccupyingStatuses, "suspended"]),
+      },
+    });
+
+    if (!membership) {
+      apiError(404, "team_membership_not_found", "The team member is not part of the active organization.");
+    }
+
+    if (profile.id === actor.profile?.id) {
+      apiError(400, "cannot_remove_self", "You cannot remove yourself from the team.");
+    }
+
+    const previousPermissions = listPermissionsForMembership(membership);
+    const previousRole = membership.role;
+
+    if (isProtectedOwnerRole(membership.role)) {
+      await this.assertNotFinalOwner(organizationId, membership.id);
+    }
+
+    await this.membershipsRepository.delete(membership.id);
+
+    await this.recordAudit(this.dataSource.manager, {
+      organizationId,
+      actorUserId: actor.user.id,
+      targetUserId: profile.auth_user_id,
+      action: "member_removed",
+      previousRole,
+      newRole: null,
+      previousPermissions,
+      newPermissions: null,
+      metadata: {
+        membership_id: membership.id,
+        status: membership.status,
+      },
+    });
+
+    return { removed: true, profileId: profile.id };
+  }
+
   async recommendRole(responsibilities: unknown) {
     const parsed = parseTeamResponsibilities(responsibilities);
     const recommendation = recommendRoleFromResponsibilities(parsed);

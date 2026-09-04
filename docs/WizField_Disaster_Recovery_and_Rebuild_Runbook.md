@@ -1,5 +1,22 @@
 # WizField Disaster Recovery and Rebuild Runbook
 
+## Recovery verification state (September 2026)
+
+Current production closeout evidence: [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md)
+
+| Item | Classification |
+|---|---|
+| DB backup procedure | **DOCUMENTED** — this runbook |
+| DB restore procedure | **DOCUMENTED** — this runbook |
+| Uploaded-files backup (`uploads/invoice-documents`, `uploads/inspection-photos`, warranty PDFs) | **DOCUMENTED** — owner must execute and record location/retention |
+| Uploaded-files restore | **DOCUMENTED** |
+| Secrets recovery | **DOCUMENTED** — owner secret store |
+| Provider recovery (hosting, Telnyx, AI keys) | **DOCUMENTED** — owner-controlled |
+| Actual backup execution / evidence | **NOT TESTED** — remaining owner activation item |
+| Destructive / production restore test | **NOT TESTED / NOT VERIFIED** |
+
+Do **not** state that production restore is proven. Stripe checkout/webhook credentials are not required for Phoenix recovery. Historical Stripe schema may exist after migrations; that is lineage, not an active billing provider.
+
 ## 1. Purpose
 
 This document is **operational disaster recovery guidance**, not product or architecture truth.
@@ -54,8 +71,7 @@ Do **not** proceed with recovery until the operator can locate or restore all re
 | Frontend environment file | Public/client config | Copy from `frontend/.env.example` → `frontend/.env.local` or deployment env; populate from `<OWNER_SECRET_STORE>` |
 | Docker MySQL env (if used locally) | Local database bootstrap | Copy from `docker/mysql/.env.example` → `docker/mysql/.env` |
 | Deployment provider access | If recovering hosted environment | `<DEPLOYMENT_PROVIDER>` — e.g. hosting panel, CI/CD, container platform; **UNCERTAIN in repo docs** |
-| Stripe credentials | Billing checkout/webhook sync | `<STRIPE_SECRET_KEY>`, `<STRIPE_WEBHOOK_SECRET>`, price IDs — names in `backend/.env.example`; values from Stripe dashboard / owner secret store |
-| Stripe publishable key | Frontend checkout surfaces | `<NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY>` — name in `frontend/.env.example` |
+| SaaS billing provider credentials | Not required for active Phoenix runtime | Stripe checkout/webhook credentials are intentionally absent unless a future owner-approved reactivation adds them back |
 | Telnyx credentials | Telephony, SMS, voice webhooks/tools | `<TELNYX_API_KEY>`, `<TELNYX_PUBLIC_KEY>`, `<TELNYX_OUTBOUND_FROM_NUMBER>`, WebRTC vars as required — referenced in backend code/config; **not fully enumerated in `.env.example`** — confirm from owner secret store |
 | SMTP / email provider | If outbound email is required for recovered environment | `<SMTP_*>` or provider-specific vars — **UNCERTAIN in repo `.env.example`** — confirm from owner/deployment config |
 | AI provider credentials | Brain/Copilot/Language Store when enabled | `<OPENAI_API_KEY>`, `<GEMINI_API_KEY>`, AI flag bundle — names in `backend/.env.example`; see `WizField_AI_Master_Source_of_Truth.md` |
@@ -240,7 +256,7 @@ Expected result:
 - Part 3 static checks pass
 - billing/operational-access smokes return `ok: true` (requires MySQL + `DB_SMOKE_DROP=true` for disposable DB)
 - `GET /api/health` returns process + database checks without secrets
-- Stripe webhook receipts table exists after migrations (`stripe_webhook_event_receipts`)
+- Historical Stripe webhook receipts table exists after migrations (`stripe_webhook_event_receipts`)
 
 **Launch constraint:** Inspection photos and warranty PDFs use local `backend/uploads` unless owner configures durable shared storage. Single-instance persistent disk or shared storage backup is required for multi-instance production.
 
@@ -326,7 +342,7 @@ Source: `WizField_Reverification_Runbook.md` §1, §7–§10 and `WizField_Engin
 7. Replay public booking flows (§9).
 8. Replay self-serve signup/add-business checks if in scope (§10).
 9. Record evidence using the runbook result template (`WizField_Reverification_Runbook.md` §11).
-10. For owner launch/billing recovery, follow `WizField_Owner_Launch_Activation_Checklist.md` — live Stripe/webhook proof remains owner scope.
+10. For owner launch/billing recovery, follow `WizField_Owner_Launch_Activation_Checklist.md` — live Stripe/webhook proof is not current scope.
 
 ---
 
@@ -336,7 +352,7 @@ The following require owner/external systems and cannot be inferred safely from 
 
 - Real `.env` secret values
 - Production/staging database contents
-- Stripe customer/subscription state unless restored from Stripe + DB together
+- Historical Stripe customer/subscription state unless restored from Stripe + DB together
 - Telnyx number ownership, webhook URLs, and provider-side configuration
 - SMTP/provider delivery configuration
 - Deployment provider infrastructure state

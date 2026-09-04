@@ -1,22 +1,22 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 
 import { requirePermission } from "../auth/permissions";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
-import { parseBillingPlanKey } from "./billing.constants";
-import { BillingOrchestrationService } from "./billing-orchestration.service";
+import { BillingCouponService } from "./billing-coupon.service";
 import { OrganizationBillingService } from "./organization-billing.service";
-import { resolveStripePriceIdForPlan } from "./stripe/stripe-price-catalog";
+
+type RedeemCouponPayload = {
+  code?: unknown;
+};
 
 @Controller("api/billing")
 @UseGuards(SessionGuard)
 export class BillingController {
   constructor(
-    private readonly configService: ConfigService,
     private readonly organizationBillingService: OrganizationBillingService,
-    private readonly billingOrchestrationService: BillingOrchestrationService,
+    private readonly billingCouponService: BillingCouponService,
   ) {}
 
   @Get("summary")
@@ -31,34 +31,42 @@ export class BillingController {
     const row = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
     return apiSuccess({
       billing: this.organizationBillingService.getPublicSummary(row),
-      active_provider: this.billingOrchestrationService.getActiveProviderName(),
-      provider_checkout_configured: this.billingOrchestrationService.isActiveProviderConfigured(),
-      checkout_urls_configured: this.billingOrchestrationService.getStripeCheckoutUrlsConfigured(),
-      webhook_verification_configured: Boolean(this.configService.get<string>("STRIPE_WEBHOOK_SECRET")?.trim()),
-      stripe_price_env_configured: {
-        starter: Boolean(resolveStripePriceIdForPlan(this.configService, "starter")),
-        pro: Boolean(resolveStripePriceIdForPlan(this.configService, "pro")),
-        business: Boolean(resolveStripePriceIdForPlan(this.configService, "business")),
-      },
+      platform_billing_enabled: false,
+      active_provider: null,
+      provider_checkout_configured: false,
+      checkout_urls_configured: false,
+      webhook_verification_configured: false,
+      checkout_disabled_reason: "WizField SaaS subscription billing is disabled for the active Phoenix runtime.",
     });
   }
 
-  @Post("checkout-session")
-  async checkoutSession(@Req() request: RequestWithActor, @Body() body: unknown) {
+  @Post("redeem-coupon")
+  async redeemCoupon(@Req() request: RequestWithActor, @Body() body: RedeemCouponPayload) {
     const actor = requirePermission(
+      request.actor,
+      "billing.manage",
+      "billing_manage_forbidden",
+      "Only an organization owner can apply billing coupon codes for this workspace.",
+    );
+    const organizationId = this.requireOrganizationId(actor);
+    const code = typeof body?.code === "string" ? body.code : "";
+    const result = await this.billingCouponService.redeemCoupon(actor, organizationId, code);
+    return apiSuccess(result);
+  }
+
+  @Post("checkout-session")
+  async checkoutSession(@Req() request: RequestWithActor) {
+    requirePermission(
       request.actor,
       "billing.manage",
       "billing_manage_forbidden",
       "Only an organization owner can start WizField billing checkout for this workspace.",
     );
-    const organizationId = this.requireOrganizationId(actor);
-    const planKey = readPlanKeyFromBody(body);
-    return apiSuccess(await this.billingOrchestrationService.createCheckoutSessionForOrganization({
-      organizationId,
-      userId: actor.user.id,
-      userEmail: actor.user.email ?? null,
-      planKey,
-    }));
+    apiError(
+      410,
+      "platform_subscription_billing_disabled",
+      "WizField SaaS subscription checkout is disabled for this runtime. Phoenix operational access does not require Stripe.",
+    );
   }
 
   private requireOrganizationId(actor: RequestWithActor["actor"]) {
@@ -68,16 +76,4 @@ export class BillingController {
     }
     return organizationId;
   }
-}
-
-function readPlanKeyFromBody(body: unknown): NonNullable<ReturnType<typeof parseBillingPlanKey>> {
-  if (!body || typeof body !== "object") {
-    apiError(400, "billing_payload_invalid", "Expected a JSON object.");
-  }
-  const o = body as Record<string, unknown>;
-  const planKey = parseBillingPlanKey(o.plan_key);
-  if (!planKey) {
-    apiError(400, "billing_plan_key_invalid", "Field plan_key must be starter, pro, or business.");
-  }
-  return planKey;
 }

@@ -5,7 +5,10 @@
 const BACKEND = process.env.WIZFIELD_BACKEND_URL ?? "http://127.0.0.1:4000";
 const FRONTEND = process.env.WIZFIELD_FRONTEND_URL ?? "http://127.0.0.1:3000";
 const ADMIN_EMAIL = process.env.WIZFIELD_ADMIN_EMAIL ?? "admin@phoenixcrm.local";
-const ADMIN_PASSWORD = process.env.WIZFIELD_ADMIN_PASSWORD ?? "Admin12345!";
+const ADMIN_PASSWORD = process.env.WIZFIELD_ADMIN_PASSWORD?.trim();
+if (!ADMIN_PASSWORD) {
+  throw new Error("WIZFIELD_ADMIN_PASSWORD must be set to run p0-core-crm-walkthrough.mjs.");
+}
 
 const runId = Date.now().toString(36);
 const signupEmail = `p0walk.${runId}@wizfield.test`;

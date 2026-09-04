@@ -3,6 +3,8 @@
 **Status:** Implemented (framework layer)  
 **Parent doc:** [`WizField_AI_Master_Source_of_Truth.md`](./WizField_AI_Master_Source_of_Truth.md)
 
+Home AI V1 (`/api/ai/home/*`, read-only tools, persisted conversations) is current conversational truth in the AI Master SoT. This map remains the Actions framework layer and must not be read as adding AI write actions.
+
 ---
 
 ## Purpose

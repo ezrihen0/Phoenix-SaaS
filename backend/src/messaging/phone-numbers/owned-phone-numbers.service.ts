@@ -226,6 +226,63 @@ export class OwnedPhoneNumbersService implements OnModuleInit {
     return this.getOwnedPhoneNumberById(id);
   }
 
+  async listDialableVoiceNumbersForOrganization(organizationId: string) {
+    const numbers = await this.listOwnedPhoneNumbers(organizationId);
+    return numbers.filter((number) => number.isActive && number.voiceEnabled);
+  }
+
+  async findActiveVoiceOwnedNumberForOrganization(organizationId: string, phoneNumberRaw: string) {
+    await this.ensureSchema();
+
+    const scopedOrganizationId = organizationId.trim();
+    if (!scopedOrganizationId) {
+      return null;
+    }
+
+    const phoneNumberNormalized = this.normalizePhone(phoneNumberRaw);
+    if (!phoneNumberNormalized) {
+      return null;
+    }
+
+    const rows = await this.dataSource.query(
+      `
+        SELECT
+          id,
+          provider,
+          provider_number_id,
+          phone_number,
+          phone_number_normalized,
+          label,
+          market_key,
+          market_label,
+          default_source,
+          source_mapping_id,
+          campaign_name,
+          purpose,
+          sms_enabled,
+          voice_enabled,
+          is_active,
+          tenant_id,
+          company_id,
+          created_at,
+          updated_at
+        FROM owned_phone_numbers
+        WHERE tenant_id = ?
+          AND phone_number_normalized = ?
+          AND is_active = 1
+          AND voice_enabled = 1
+        LIMIT 1
+      `,
+      [scopedOrganizationId, phoneNumberNormalized],
+    ) as Array<Record<string, unknown>>;
+
+    if (!rows[0]) {
+      return null;
+    }
+
+    return this.toOwnedPhoneNumber(rows[0]);
+  }
+
   async listOwnedPhoneNumbers(organizationId: string) {
     await this.ensureSchema();
 

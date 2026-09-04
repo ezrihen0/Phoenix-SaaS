@@ -15,6 +15,7 @@ import { DocumentBrandingSnapshotService } from "../documents/pdf/document-brand
 import { WarrantyCertificatesService } from "../warranty/warranty-certificates.service";
 import { WarrantyPdfService } from "../warranty/warranty-pdf.service";
 import { CustomerEntity } from "./entities/customer.entity";
+import { InvoiceDocumentEntity } from "./entities/invoice-document.entity";
 import { InvoiceEntity } from "./entities/invoice.entity";
 import { JobEntity } from "./entities/job.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
@@ -170,6 +171,7 @@ function buildPortalService(dataSource: DataSource) {
     dataSource.getRepository(PortalSessionEntity),
     dataSource.getRepository(PortalAccessEventEntity),
     dataSource.getRepository(WarrantyCertificateEntity),
+    dataSource.getRepository(InvoiceDocumentEntity),
     new SmokeConfigService() as ConfigService,
   );
 }

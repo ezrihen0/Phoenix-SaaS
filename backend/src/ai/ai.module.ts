@@ -11,9 +11,11 @@ import { AiRecommendationRunEntity } from "../database/entities/ai-recommendatio
 import { HomeAiConversationEntity } from "../database/entities/home-ai-conversation.entity";
 import { HomeAiMessageEntity } from "../database/entities/home-ai-message.entity";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
+import { InvoiceServiceIntelligenceEntity } from "../database/entities/invoice-service-intelligence.entity";
 import { LeadEntity } from "../database/entities/lead.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
+import { WarrantyCertificateEntity } from "../database/entities/warranty-certificate.entity";
 import { RecentCallEntity } from "../database/entities/recent-call.entity";
 import { AiBrainBriefService } from "./ai-brain-brief.service";
 import { AiCallIntakeService } from "./ai-call-intake.service";
@@ -56,6 +58,8 @@ import { BrainRulesEngine } from "./brain-rules.engine";
       LeadEntity,
       QuoteEntity,
       InvoiceEntity,
+      InvoiceServiceIntelligenceEntity,
+      WarrantyCertificateEntity,
       OrganizationEntity,
       HomeAiConversationEntity,
       HomeAiMessageEntity,

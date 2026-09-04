@@ -2,9 +2,18 @@
 
 ## Purpose
 
-This is the single consolidated engineering closeout record for the completed WizField foundation and Gate 11-14 phase.
+This is the consolidated engineering closeout record for the completed WizField foundation and Gate 11-14 phase.
 
-It preserves the final successful engineering evidence, removes duplicated superseded bodies, and keeps historical reversals only as short notes.
+It is **historical foundation evidence**. It does not replace current production operating truth.
+
+**Current production verification and verdict:** [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md) — **CONDITIONAL GO**.  
+**Current product truth:** [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md).
+
+Findings recorded below remain as originally closed for Gate 11–14. Later P0/P1/P2 production-audit findings were closed in the September 2026 closeout; do not treat this file as the current blocker list.
+
+## Historical status of this record
+
+This document preserves the final successful Gate 11–14 engineering evidence, removes duplicated superseded bodies, and keeps historical reversals only as short notes.
 
 ## 1. Final statuses
 
@@ -67,12 +76,11 @@ Historical note only:
 - Schema verification passed.
 - `billing_accounts` is the authoritative payer / subscription layer.
 - `organization_billing` remains coverage / linkage only.
-- Stripe is the active provider implementation behind a provider abstraction boundary.
-- Clover remains parked historical provider trace only; Stripe is the active billing-provider truth.
-- Owner-authenticated checkout exists and, without live Stripe secrets configured, fails safely with `billing_provider_not_configured`.
-- The Stripe webhook endpoint exists and invalid signatures fail safely.
+- The active Phoenix runtime has no live SaaS subscription billing provider.
+- Stripe checkout, webhook handling, and SDK wiring have been removed from active runtime registration.
+- Historical provider/schema artifacts remain for migration history and possible future owner-approved reactivation.
 - Shared billing entitlement behavior passed locally: starter blocked a second business; after safe local plan expansion, a second organization could be added under the same `billing_account_id`.
-- Live Stripe checkout execution and live webhook delivery were intentionally not part of the completed engineering evidence and remain owner activation scope.
+- Live SaaS billing provider selection is intentionally outside the current Phoenix operating runtime.
 
 ## 6. Gate 14 route, build, and launch-surface verification summary
 
@@ -87,8 +95,8 @@ Historical note only:
   - `/privacy`
   - `/contact`
   - `/login`
-- Pricing and settings copy align with the Stripe-first shared billing model.
-- The success page explicitly does not claim activation from redirect alone.
+- Pricing and settings copy align with local access state and business-count entitlements.
+- The old billing success page explicitly states subscription checkout is not active.
 - Backend build, frontend build, and schema verification passed for the final engineering closeout.
 - Program/public launch `GO` remains outside the engineering-complete verdict and is deferred to owner launch activation.
 
@@ -209,7 +217,7 @@ The bounded correction pass closes:
 
 - role/navigation affordance alignment for `/calls` against current `calls.view` permission truth
 - active documentation topology cleanup for signup and Growth Center planning artifacts
-- Clover clarification as parked historical provider trace while Stripe remains active billing truth
+- Stripe/Clover clarification as historical provider trace while no SaaS billing provider is active
 - Language Store IA clarification as a Settings / add-on-oriented surface for now, not primary shell navigation
 
 This pass does not reopen Gate 11-14, Growth Center V1, Language Store V1, Portal V1, or AI Phase 0-4.
@@ -220,7 +228,7 @@ WizField completed the internal engineering foundation through Gate 14 with:
 
 - tenant-safe multi-org UX confirmed
 - Gate 12 dev/test rerun closed successfully
-- Stripe-first shared billing engineering complete but live activation intentionally parked
+- Shared billing-account engineering remains intact with SaaS provider activation parked
 - launch-surface engineering complete with final program/public launch still deferred to owner activation
 
-This document is the canonical engineering closeout reference for the completed foundation phase.
+This document remains the canonical **foundation-phase** engineering closeout reference. Current production readiness is owned by the Master SoT and the September 2026 production closeout.

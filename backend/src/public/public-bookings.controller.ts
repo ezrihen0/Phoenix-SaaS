@@ -1,6 +1,8 @@
-import { Body, Controller, Param, Post } from "@nestjs/common";
+import { Body, Controller, Headers, Param, Post, Req } from "@nestjs/common";
+import type { Request } from "express";
 
 import { apiError, apiSuccess } from "../common/api-response";
+import { hashClientIp, normalizePublicBookingIdempotencyKey } from "./public-booking-idempotency";
 import { PublicBookingsService, type PublicBookingInput } from "./public-bookings.service";
 
 type BookingPayload = {
@@ -17,6 +19,19 @@ type BookingPayload = {
   source?: unknown;
 };
 
+function resolveClientIp(request: Request) {
+  const forwarded = request.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0]?.trim() ?? null;
+  }
+
+  if (Array.isArray(forwarded) && forwarded[0]) {
+    return forwarded[0].split(",")[0]?.trim() ?? null;
+  }
+
+  return request.ip ?? request.socket.remoteAddress ?? null;
+}
+
 @Controller("api/public")
 export class PublicBookingsController {
   constructor(private readonly publicBookingsService: PublicBookingsService) {}
@@ -25,10 +40,22 @@ export class PublicBookingsController {
   async createBooking(
     @Param("organizationSlug") organizationSlug: string,
     @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKeyHeader: string | undefined,
+    @Req() request: Request,
   ) {
     const organization = await this.publicBookingsService.resolveActiveOrganizationBySlug(organizationSlug);
     const payload = this.parsePayload(body);
-    return apiSuccess(await this.publicBookingsService.createBooking(organization.id, payload));
+
+    if (idempotencyKeyHeader !== undefined && normalizePublicBookingIdempotencyKey(idempotencyKeyHeader) === null) {
+      apiError(400, "invalid_idempotency_key", "Idempotency-Key must be 1-64 URL-safe characters.");
+    }
+
+    return apiSuccess(await this.publicBookingsService.createBooking({
+      organizationId: organization.id,
+      input: payload,
+      idempotencyKeyHeader,
+      clientIpHash: hashClientIp(resolveClientIp(request)),
+    }));
   }
 
   private parsePayload(body: unknown): PublicBookingInput {

@@ -116,7 +116,7 @@ export const AI_PROMPT_VERSION_HOME_AI_V1 = "home_ai_v1";
 
 export const AI_ACTION_KEY_HOME_AI_V1 = "home_ai_v1";
 
-/** Exactly six read-only Home tool families. */
+/** Exactly seven read-only Home tool families. */
 export const HOME_AI_TOOL_KEYS = [
   "search_customers",
   "get_leads",
@@ -124,12 +124,17 @@ export const HOME_AI_TOOL_KEYS = [
   "get_schedule",
   "get_estimates",
   "get_invoices",
+  "search_service_history",
 ] as const;
 
 export type HomeAiToolKey = (typeof HOME_AI_TOOL_KEYS)[number];
 
 export const HOME_AI_MAX_MESSAGE_LENGTH = 4000;
 export const HOME_AI_MAX_CONTEXT_MESSAGES = 20;
+export const HOME_AI_DEFAULT_VISIBLE_MESSAGES = 30;
+export const HOME_AI_MAX_VISIBLE_MESSAGES = 50;
+export const HOME_AI_DEFAULT_HISTORY_LIMIT = 20;
+export const HOME_AI_MAX_HISTORY_LIMIT = 50;
 export const HOME_AI_MAX_TOOL_ITERATIONS = 3;
 export const HOME_AI_DEFAULT_TOOL_RESULT_LIMIT = 15;
 export const HOME_AI_MAX_OUTPUT_TOKENS = 900;

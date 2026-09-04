@@ -159,67 +159,67 @@ async function seedSignupLikeHarness(dataSource: DataSource, token: string): Pro
 async function runCases(summary: SmokeSummary, dataSource: DataSource, seed: Seed) {
   const harness = buildBillingSmokeHarness(dataSource);
 
-  await expectPass(summary, "L1 — signup-like trialing workspace is operationally locked", async () => {
+  await expectPass(summary, "L1 — signup-like trialing workspace is operationally eligible without Stripe", async () => {
     const eligible = await harness.authService.isOrganizationOperationallyEligible(seed.organizationId);
-    if (eligible) throw new Error("Expected unpaid signup-like workspace to remain locked.");
+    if (!eligible) throw new Error("Expected local trialing workspace to be operationally eligible.");
     return { eligible };
   });
 
-  await expectPass(summary, "L2 — stub webhook activation unlocks operational access", async () => {
+  await expectPass(summary, "L2 — local active billing state unlocks operational access", async () => {
     await harness.orchestration.applyProviderSnapshot({
-      provider: "stripe",
+      provider: "clover",
       billingAccountId: seed.billingAccountId,
       organizationId: seed.organizationId,
       providerCustomerId: `cus_${seed.billingAccountId.slice(0, 8)}`,
       providerSubscriptionId: `sub_${seed.billingAccountId.slice(0, 8)}`,
-      providerPriceId: "price_smoke_starter",
+      providerPriceId: null,
       planKey: "starter",
       billingStatus: "active",
       lastProviderSyncAt: new Date(),
-      lastWebhookAt: new Date(),
+      lastWebhookAt: null,
     });
     const eligible = await harness.authService.isOrganizationOperationallyEligible(seed.organizationId);
-    if (!eligible) throw new Error("Expected verified Stripe webhook sync to unlock operational access.");
+    if (!eligible) throw new Error("Expected local active state to unlock operational access.");
     return { eligible };
   });
 
-  await expectPass(summary, "L3 — past_due webhook removes operational access", async () => {
+  await expectPass(summary, "L3 — past_due billing state removes operational access", async () => {
     await harness.orchestration.applyProviderSnapshot({
-      provider: "stripe",
+      provider: "clover",
       billingAccountId: seed.billingAccountId,
       organizationId: seed.organizationId,
       providerCustomerId: `cus_${seed.billingAccountId.slice(0, 8)}`,
       providerSubscriptionId: `sub_${seed.billingAccountId.slice(0, 8)}`,
-      providerPriceId: "price_smoke_starter",
+      providerPriceId: null,
       planKey: "starter",
       billingStatus: "past_due",
       lastProviderSyncAt: new Date(),
-      lastWebhookAt: new Date(),
+      lastWebhookAt: null,
     });
     const eligible = await harness.authService.isOrganizationOperationallyEligible(seed.organizationId);
     if (eligible) throw new Error("Expected past_due billing state to deny operational access.");
     return { eligible };
   });
 
-  await expectPass(summary, "L4 — deactivated webhook keeps workspace locked", async () => {
+  await expectPass(summary, "L4 — deactivated billing state keeps workspace locked", async () => {
     await harness.orchestration.applyProviderSnapshot({
-      provider: "stripe",
+      provider: "clover",
       billingAccountId: seed.billingAccountId,
       organizationId: seed.organizationId,
       providerCustomerId: `cus_${seed.billingAccountId.slice(0, 8)}`,
       providerSubscriptionId: `sub_${seed.billingAccountId.slice(0, 8)}`,
-      providerPriceId: "price_smoke_starter",
+      providerPriceId: null,
       planKey: "starter",
       billingStatus: "deactivated",
       lastProviderSyncAt: new Date(),
-      lastWebhookAt: new Date(),
+      lastWebhookAt: null,
     });
     const eligible = await harness.authService.isOrganizationOperationallyEligible(seed.organizationId);
     if (eligible) throw new Error("Expected deactivated billing state to deny operational access.");
     return { eligible };
   });
 
-  await expectPass(summary, "L5 — controlled access grant unlocks without paid Stripe sync", async () => {
+  await expectPass(summary, "L5 — controlled access grant unlocks without subscription state", async () => {
     const grantRepo = dataSource.getRepository(ControlledAccessGrantEntity);
     const now = new Date();
     await grantRepo.save(

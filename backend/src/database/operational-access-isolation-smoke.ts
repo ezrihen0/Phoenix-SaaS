@@ -112,7 +112,7 @@ async function seedOrganization(dataSource: DataSource, token: string) {
       owner_user_id: null,
       anchor_organization_id: organization.id,
       plan_key: "starter",
-      billing_status: "trialing",
+      billing_status: "unknown",
       organization_limit: 1,
       billing_provider: null,
       provider_customer_id: null,
@@ -161,10 +161,11 @@ async function seedOrganization(dataSource: DataSource, token: string) {
 }
 
 async function runPolicyCases(summary: SmokeSummary) {
-  await expectPass(summary, "O1 — public webhook routes bypass operational access", async () => {
-    assert.equal(isOperationalAccessPublicRoute("/api/billing/webhooks/stripe"), true);
-    assert.equal(requiresOperationalAccess("/api/billing/webhooks/stripe"), false);
-    return { route: "/api/billing/webhooks/stripe" };
+  await expectPass(summary, "O1 — integration webhook routes bypass operational access", async () => {
+    assert.equal(isOperationalAccessPublicRoute("/api/webhooks/example"), true);
+    assert.equal(requiresOperationalAccess("/api/webhooks/example"), false);
+    assert.equal(isOperationalAccessPublicRoute("/api/billing/webhooks/stripe"), false);
+    return { route: "/api/webhooks/example" };
   });
 
   await expectPass(summary, "O2 — auth and pre-activation billing routes bypass operational access", async () => {
@@ -180,7 +181,9 @@ async function runPolicyCases(summary: SmokeSummary) {
   await expectPass(summary, "O3 — protected staff CRM routes require operational access", async () => {
     assert.equal(requiresOperationalAccess("/api/customers"), true);
     assert.equal(requiresOperationalAccess("/api/jobs"), true);
-    return { customers: true, jobs: true };
+    assert.equal(requiresOperationalAccess("/api/team/summary"), true);
+    assert.equal(requiresOperationalAccess("/api/team/members"), true);
+    return { customers: true, jobs: true, teamSummary: true, teamMembers: true };
   });
 }
 
@@ -193,21 +196,21 @@ async function runDbCases(summary: SmokeSummary, dataSource: DataSource, seed: {
     return { eligible };
   });
 
-  await expectPass(summary, "O5 — verified paid webhook unlocks operational access", async () => {
+  await expectPass(summary, "O5 — local active billing state unlocks operational access", async () => {
     await harness.orchestration.applyProviderSnapshot({
-      provider: "stripe",
+      provider: "clover",
       billingAccountId: seed.billingAccountId,
       organizationId: seed.organizationId,
       providerCustomerId: `cus_${seed.billingAccountId.slice(0, 8)}`,
       providerSubscriptionId: `sub_${seed.billingAccountId.slice(0, 8)}`,
-      providerPriceId: "price_smoke_starter",
+      providerPriceId: null,
       planKey: "starter",
       billingStatus: "active",
       lastProviderSyncAt: new Date(),
-      lastWebhookAt: new Date(),
+      lastWebhookAt: null,
     });
     const eligible = await harness.authService.isOrganizationOperationallyEligible(seed.organizationId);
-    if (!eligible) throw new Error("Verified paid workspace must pass operational access.");
+    if (!eligible) throw new Error("Local active workspace must pass operational access.");
     return { eligible };
   });
 

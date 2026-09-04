@@ -72,6 +72,8 @@ type SettingsWorkspaceProps = {
   profileEmail: string | null;
   activeOrganizationName: string | null;
   initialTopic?: SettingsTopicId | null;
+  platformCapabilities: string[];
+  permissions: string[];
 };
 
 function formatRoleLabel(role: string) {
@@ -115,6 +117,8 @@ type SettingsPanelContext = {
   profileEmail: string | null;
   activeOrganizationName: string | null;
   t: ReturnType<typeof useTranslations<"settings">>;
+  platformCapabilities: string[];
+  permissions: string[];
 };
 
 function SettingsLockedState({
@@ -246,7 +250,7 @@ function SettingsAppearancePanel({ ctx }: { ctx: SettingsPanelContext }) {
 }
 
 function renderSettingsPanel(sectionId: SettingsTopicId, ctx: SettingsPanelContext): ReactNode {
-  const { ownerMode, currentProfileId, staffLoadError, staffProfiles, organizationSettings, billingSummary, billingLoadError, aiUsageSummary, aiUsageLoadError, role, t } = ctx;
+  const { ownerMode, currentProfileId, staffLoadError, staffProfiles, organizationSettings, billingSummary, billingLoadError, aiUsageSummary, aiUsageLoadError, role, platformCapabilities, permissions, t } = ctx;
 
   switch (sectionId) {
     case "business":
@@ -255,6 +259,8 @@ function renderSettingsPanel(sectionId: SettingsTopicId, ctx: SettingsPanelConte
           initialSettings={organizationSettings}
           ownerMode={ownerMode}
           billingSummary={billingSummary}
+          platformCapabilities={platformCapabilities}
+          permissions={permissions}
         />
       );
     case "profile":
@@ -352,6 +358,8 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
     profileEmail,
     activeOrganizationName,
     initialTopic = null,
+    platformCapabilities,
+    permissions,
   } = props;
 
   const t = useTranslations("settings");
@@ -413,6 +421,8 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
     profileEmail,
     activeOrganizationName,
     t,
+    platformCapabilities,
+    permissions,
   };
 
   function selectTopic(topic: SettingsTopicId) {
@@ -563,6 +573,8 @@ function LegacySettingsWorkspace(props: SettingsWorkspaceProps) {
     billingSummary,
     billingLoadError,
     initialTopic = null,
+    platformCapabilities,
+    permissions,
   } = props;
 
   const t = useTranslations("settings");
@@ -730,6 +742,8 @@ function LegacySettingsWorkspace(props: SettingsWorkspaceProps) {
                   initialSettings={organizationSettings}
                   ownerMode={ownerMode}
                   billingSummary={billingSummary}
+                  platformCapabilities={platformCapabilities}
+                  permissions={permissions}
                 />
               ) : null}
 

@@ -17,6 +17,7 @@ import type { RequestWithActor } from "../common/request-types";
 import { profileRoles, type ProfileRole } from "../crm/constants";
 import { AuthService } from "./auth.service";
 import { normalizeRole, requirePermission } from "./permissions";
+import { requirePlatformCapability } from "../platform/platform-operator.policy";
 import { SessionGuard } from "./session.guard";
 
 type LoginPayload = {
@@ -54,6 +55,7 @@ type ActiveOrganizationPayload = {
 
 type CreateOrganizationPayload = {
   organizationName?: unknown;
+  mode?: unknown;
 };
 
 function parseLoginPayload(payload: LoginPayload) {
@@ -162,8 +164,19 @@ function parseCreateOrganizationPayload(payload: CreateOrganizationPayload) {
     apiError(400, "organization_name_required", "organizationName is required.");
   }
 
+  let mode: "standalone" | "shared" = "shared";
+  if (typeof payload.mode === "string" && payload.mode.trim()) {
+    const normalized = payload.mode.trim().toLowerCase();
+    if (normalized === "standalone" || normalized === "shared") {
+      mode = normalized;
+    } else {
+      apiError(400, "invalid_organization_mode", "mode must be standalone or shared.");
+    }
+  }
+
   return {
     organizationName: payload.organizationName.trim(),
+    mode,
   };
 }
 
@@ -282,17 +295,40 @@ export class AuthController {
     @Body() payload: CreateOrganizationPayload,
     @Req() request: RequestWithActor,
   ) {
-    const actor = requirePermission(
-      request.actor,
+    const actor = request.actor;
+
+    if (!actor) {
+      throw new UnauthorizedException({
+        error: {
+          code: "unauthenticated",
+          message: "Sign in to continue.",
+        },
+      });
+    }
+
+    const parsed = parseCreateOrganizationPayload(payload);
+
+    if (parsed.mode === "standalone") {
+      requirePlatformCapability(
+        actor,
+        "organizations.create_standalone",
+        "platform_capability_required",
+        "Standalone organization creation requires a platform operator grant.",
+      );
+    }
+
+    requirePermission(
+      actor,
       "organizations.manage",
       "organizations_manage_forbidden",
       "Only an organization owner can add another business.",
     );
 
-    const nextActor = await this.authService.createOrganizationForActiveAccount(
+    const nextActor = await this.authService.createOrganizationForActor(
       actor,
-      parseCreateOrganizationPayload(payload).organizationName,
+      parsed.organizationName,
       request,
+      parsed.mode,
     );
 
     return apiSuccess(this.authService.buildSessionResponse(nextActor));

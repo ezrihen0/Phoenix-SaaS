@@ -27,7 +27,7 @@ function formatCoverage(organizationLimit: number | null) {
 
 export const BILLING_HONESTY_FOOTNOTE =
   process.env.NEXT_PUBLIC_BILLING_HONESTY_FOOTNOTE?.trim()
-  || "All plans bill monthly through Stripe Checkout. Displayed prices are per month; taxes may apply. Activation is confirmed by verified webhook sync, not by checkout redirect alone.";
+  || "Plan tiers currently describe workspace access and business-count entitlements. SaaS subscription checkout is disabled for the active WizField runtime.";
 
 export const PLAN_DISPLAY_CATALOG: PlanDisplayInfo[] = [
   {

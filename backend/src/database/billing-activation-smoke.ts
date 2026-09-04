@@ -115,7 +115,7 @@ async function runCases(summary: SmokeSummary, dataSource: DataSource) {
   let billingAccountId = "";
   let actor = null as Awaited<ReturnType<typeof harness.authService.register>> | null;
 
-  await expectPass(summary, "A1 — signup creates locked workspace and routes to /pricing", async () => {
+  await expectPass(summary, "A1 — signup creates trialing workspace and routes to /home without Stripe", async () => {
     actor = await harness.authService.register(
       {
         email,
@@ -135,57 +135,72 @@ async function runCases(summary: SmokeSummary, dataSource: DataSource) {
     billingAccountId = billingContext.account.id;
 
     const destination = await harness.authService.resolveClientDestination(actor);
-    if (destination !== "/pricing") {
-      throw new Error(`Expected /pricing destination after signup, got ${destination ?? "null"}.`);
+    if (destination !== "/home") {
+      throw new Error(`Expected /home destination after signup, got ${destination ?? "null"}.`);
     }
 
     const eligible = await harness.authService.isOrganizationOperationallyEligible(organizationId);
-    if (eligible) throw new Error("Signup must not unlock operational access before verified webhook sync.");
+    if (!eligible) throw new Error("Signup trialing state must unlock operational access without Stripe.");
 
     return { destination, billing_status: billingContext.account.billing_status };
   });
 
-  await expectPass(summary, "A2 — abandoned checkout state remains locked", async () => {
+  await expectPass(summary, "A2 — signup has no provider subscription requirement", async () => {
     const context = await harness.organizationBillingService.getOrCreateContextForOrganization(organizationId);
     if (context.account.provider_subscription_id) {
-      throw new Error("Abandoned checkout should not create provider subscription locally.");
+      throw new Error("Signup should not create a provider subscription locally.");
     }
     const eligible = await harness.authService.isOrganizationOperationallyEligible(organizationId);
-    if (eligible) throw new Error("Abandoned checkout must remain locked.");
+    if (!eligible) throw new Error("Local trialing billing state should remain operationally eligible.");
     return { eligible };
   });
 
-  await expectPass(summary, "A3 — stub webhook unlocks workspace and routes to /home", async () => {
+  await expectPass(summary, "A3 — local active billing state routes to /home without webhook", async () => {
     await harness.orchestration.applyProviderSnapshot({
-      provider: "stripe",
+      provider: "clover",
       billingAccountId,
       organizationId,
       providerCustomerId: `cus_${token}`,
       providerSubscriptionId: `sub_${token}`,
-      providerPriceId: "price_smoke_starter",
+      providerPriceId: null,
       planKey: "starter",
       billingStatus: "active",
       lastProviderSyncAt: new Date(),
-      lastWebhookAt: new Date(),
+      lastWebhookAt: null,
     });
 
     if (!actor) throw new Error("Missing actor from signup step.");
     const destination = await harness.authService.resolveClientDestination(actor);
     if (destination !== "/home") {
-      throw new Error(`Expected /home destination after webhook unlock, got ${destination ?? "null"}.`);
+      throw new Error(`Expected /home destination after local activation, got ${destination ?? "null"}.`);
     }
 
     const eligible = await harness.authService.isOrganizationOperationallyEligible(organizationId);
-    if (!eligible) throw new Error("Verified webhook sync must unlock operational access.");
+    if (!eligible) throw new Error("Local active billing status must unlock operational access.");
 
     const billingRepo = dataSource.getRepository(BillingAccountEntity);
     const account = await billingRepo.findOne({ where: { id: billingAccountId } });
-    if (!account?.last_webhook_at) throw new Error("Webhook application must persist last_webhook_at.");
+    if (!account) throw new Error("Billing account could not be reloaded.");
+    if (account?.last_webhook_at) throw new Error("Non-Stripe local activation must not require a webhook timestamp.");
 
     return { destination, billing_status: account.billing_status };
   });
 
-  await expectPass(summary, "A4 — duplicate signup email rejected without extra billing rows", async () => {
+  await expectPass(summary, "A4 — password login routes to /home without Stripe", async () => {
+    const loginActor = await harness.authService.login(
+      email,
+      "StrongPass123!",
+      mockRequest(),
+      mockResponse(),
+    );
+    const destination = await harness.authService.resolveClientDestination(loginActor);
+    if (destination !== "/home") {
+      throw new Error(`Expected /home destination after login, got ${destination ?? "null"}.`);
+    }
+    return { destination, organization_id: loginActor.organization_id };
+  });
+
+  await expectPass(summary, "A5 — duplicate signup email rejected without extra billing rows", async () => {
     const beforeUsers = await dataSource.getRepository(UserEntity).count();
     const beforeBilling = await dataSource.getRepository(BillingAccountEntity).count();
 

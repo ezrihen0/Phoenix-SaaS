@@ -8,17 +8,32 @@ import {
   type PricebookItemType,
   type PricebookUnitOfMeasure,
 } from "./constants";
+import { parseOptionalPricebookImage, type PricebookImageInput } from "./pricebook-image";
 
 type RecordValue = Record<string, unknown>;
 
 export type PricebookItemListQuery = {
   q: string;
   itemType?: PricebookItemType;
+  systemId?: string;
+  categoryId?: string;
   tradeArea?: string;
   activeState: PricebookActiveState;
   popularOnly: boolean;
   page: number;
   pageSize: number;
+};
+
+export type PricebookCategoryListQuery = {
+  systemId?: string;
+};
+
+export type PricebookNavigationSummaryQuery = {
+  q: string;
+  itemType?: PricebookItemType;
+  tradeArea?: string;
+  activeState: PricebookActiveState;
+  popularOnly: boolean;
 };
 
 export type PricebookBundleListQuery = {
@@ -29,11 +44,14 @@ export type PricebookBundleListQuery = {
 };
 
 export type CreatePricebookItemPayload = {
-  internalSku: string;
+  internalSku: string | null;
   name: string;
   customerDescription: string | null;
   internalDescription: string | null;
   itemType: PricebookItemType;
+  systemId: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
   tradeArea: string | null;
   serviceArea: string | null;
   tags: string[];
@@ -53,6 +71,7 @@ export type CreatePricebookItemPayload = {
   isPopular: boolean;
   isActive: boolean;
   sortOrder: number;
+  image: PricebookImageInput | null;
 };
 
 export type UpdatePricebookItemPayload = {
@@ -61,6 +80,9 @@ export type UpdatePricebookItemPayload = {
   customerDescription?: string | null;
   internalDescription?: string | null;
   itemType?: PricebookItemType;
+  systemId?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
   tradeArea?: string | null;
   serviceArea?: string | null;
   tags?: string[];
@@ -105,6 +127,20 @@ export type UpdatePricebookBundleItemPayload = {
   sortOrder?: number;
 };
 
+export type CreatePricebookBundleRequirementPayload = {
+  label: string;
+  categoryId: string;
+  defaultQuantity: string;
+  sortOrder: number;
+};
+
+export type UpdatePricebookBundleRequirementPayload = {
+  label?: string;
+  categoryId?: string;
+  defaultQuantity?: string;
+  sortOrder?: number;
+};
+
 function isRecord(value: unknown): value is RecordValue {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -122,6 +158,10 @@ function firstQueryValue(value: unknown) {
 }
 
 function requireTrimmedString(value: unknown, fieldName: string, maxLength = 255) {
+  if (value === undefined || value === null || value === "") {
+    throw new Error(`${fieldName} is required.`);
+  }
+
   if (typeof value !== "string") {
     throw new Error(`${fieldName} must be a string.`);
   }
@@ -165,6 +205,98 @@ function optionalNonNegativeInteger(value: unknown, fieldName: string) {
   }
 
   return requireNonNegativeInteger(value, fieldName);
+}
+
+export function parseWarrantyMonths(value: unknown, fieldName = "warrantyMonths") {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new Error(`${fieldName} must be a positive whole number of months, or null when warranty is off.`);
+  }
+
+  if (value === 0) {
+    return null;
+  }
+
+  if (value < 1) {
+    throw new Error(`${fieldName} must be a positive whole number of months.`);
+  }
+
+  return value;
+}
+
+export function persistWarrantyMonths(value: number | null | undefined) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return typeof value === "number" && value > 0 ? value : null;
+}
+
+export function parseCreateWarrantyMonths(payload: RecordValue) {
+  const warrantyEnabled = optionalBoolean(payload.warrantyEnabled, "warrantyEnabled");
+
+  if (warrantyEnabled === false) {
+    return null;
+  }
+
+  if (warrantyEnabled === true) {
+    const months = parseWarrantyMonths(payload.warrantyMonths);
+
+    if (months == null) {
+      throw new Error("warrantyMonths is required when warranty is on.");
+    }
+
+    return months;
+  }
+
+  return parseWarrantyMonths(payload.warrantyMonths) ?? null;
+}
+
+function optionalUuid(value: unknown, fieldName: string) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  return requireUuid(value, fieldName);
+}
+
+function parseOptionalCategoryName(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  return requireTrimmedString(value, "category", 120);
+}
+
+function parseCreateCategoryRef(payload: RecordValue) {
+  const categoryId = optionalUuid(payload.categoryId, "categoryId");
+  const categoryName = parseOptionalCategoryName(payload.category);
+  const systemId = optionalUuid(payload.systemId, "systemId");
+
+  if (!categoryId && !categoryName) {
+    throw new Error("category is required.");
+  }
+
+  if (categoryName && !categoryId && !systemId) {
+    throw new Error("systemId is required when creating a category by name.");
+  }
+
+  return { categoryId, categoryName, systemId };
+}
+
+function parseOptionalInternalSku(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  return requireTrimmedString(value, "internalSku", 128);
 }
 
 function requireBoolean(value: unknown, fieldName: string) {
@@ -330,11 +462,37 @@ export function parsePricebookItemListQuery(queryValue: unknown): PricebookItemL
   return {
     q: parseOptionalQueryString(query.q, "q", 255) ?? "",
     itemType,
+    systemId: parseOptionalQueryString(firstQueryValue(query.systemId), "systemId", 64),
+    categoryId: parseOptionalQueryString(firstQueryValue(query.categoryId), "categoryId", 64),
     tradeArea: parseOptionalQueryString(query.tradeArea, "tradeArea", 120),
     activeState,
     popularOnly: parseBooleanQuery(query.popularOnly, "popularOnly"),
     page: parseIntegerQuery(query.page, "page", 1, 1, 100000),
     pageSize: parseIntegerQuery(query.pageSize, "pageSize", 25, 1, 100),
+  };
+}
+
+export function parsePricebookCategoryListQuery(queryValue: unknown): PricebookCategoryListQuery {
+  const query = requireRecord(queryValue, "Pricebook category list query");
+
+  return {
+    systemId: parseOptionalQueryString(firstQueryValue(query.systemId), "systemId", 64),
+  };
+}
+
+export function parsePricebookNavigationSummaryQuery(queryValue: unknown): PricebookNavigationSummaryQuery {
+  const query = requireRecord(queryValue, "Pricebook navigation summary query");
+  const itemType = optionalEnumValue(firstQueryValue(query.itemType), "itemType", pricebookItemTypes);
+  const activeState = firstQueryValue(query.activeState) === undefined
+    ? "active"
+    : requireEnumValue(firstQueryValue(query.activeState), "activeState", pricebookActiveStates);
+
+  return {
+    q: parseOptionalQueryString(query.q, "q", 255) ?? "",
+    itemType,
+    tradeArea: parseOptionalQueryString(query.tradeArea, "tradeArea", 120),
+    activeState,
+    popularOnly: parseBooleanQuery(query.popularOnly, "popularOnly"),
   };
 }
 
@@ -360,22 +518,33 @@ export function parseCreatePricebookItemPayload(jsonBody: unknown): CreatePriceb
   validateMinimumPrice(minimumPriceCents, customerPriceCents);
 
   return {
-    internalSku: requireTrimmedString(payload.internalSku, "internalSku", 128),
+    internalSku: parseOptionalInternalSku(payload.internalSku),
     name: requireTrimmedString(payload.name, "name", 255),
     customerDescription: optionalTrimmedString(payload.customerDescription, "customerDescription", 4000),
     internalDescription: optionalTrimmedString(payload.internalDescription, "internalDescription", 4000),
-    itemType: requireEnumValue(payload.itemType, "itemType", pricebookItemTypes),
+    itemType: payload.itemType === undefined
+      ? "product"
+      : requireEnumValue(payload.itemType, "itemType", pricebookItemTypes),
+    ...parseCreateCategoryRef(payload),
     tradeArea: optionalTrimmedString(payload.tradeArea, "tradeArea", 120),
     serviceArea: optionalTrimmedString(payload.serviceArea, "serviceArea", 120),
     tags: optionalStringArray(payload.tags, "tags"),
-    unitOfMeasure: requireEnumValue(payload.unitOfMeasure, "unitOfMeasure", pricebookUnitOfMeasures),
-    baseCostCents: requireNonNegativeInteger(payload.baseCostCents, "baseCostCents"),
-    materialCostCents: requireNonNegativeInteger(payload.materialCostCents, "materialCostCents"),
-    laborCostCents: requireNonNegativeInteger(payload.laborCostCents, "laborCostCents"),
+    unitOfMeasure: payload.unitOfMeasure === undefined
+      ? "each"
+      : requireEnumValue(payload.unitOfMeasure, "unitOfMeasure", pricebookUnitOfMeasures),
+    baseCostCents: payload.baseCostCents === undefined
+      ? 0
+      : requireNonNegativeInteger(payload.baseCostCents, "baseCostCents"),
+    materialCostCents: payload.materialCostCents === undefined
+      ? 0
+      : requireNonNegativeInteger(payload.materialCostCents, "materialCostCents"),
+    laborCostCents: payload.laborCostCents === undefined
+      ? 0
+      : requireNonNegativeInteger(payload.laborCostCents, "laborCostCents"),
     customerPriceCents,
     minimumPriceCents: minimumPriceCents ?? null,
     estimatedLaborMinutes: optionalNonNegativeInteger(payload.estimatedLaborMinutes, "estimatedLaborMinutes") ?? null,
-    warrantyMonths: optionalNonNegativeInteger(payload.warrantyMonths, "warrantyMonths") ?? null,
+    warrantyMonths: parseCreateWarrantyMonths(payload),
     requiresPermit: payload.requiresPermit === undefined
       ? false
       : requireBoolean(payload.requiresPermit, "requiresPermit"),
@@ -388,6 +557,7 @@ export function parseCreatePricebookItemPayload(jsonBody: unknown): CreatePriceb
     isPopular: payload.isPopular === undefined ? false : requireBoolean(payload.isPopular, "isPopular"),
     isActive: payload.isActive === undefined ? true : requireBoolean(payload.isActive, "isActive"),
     sortOrder: payload.sortOrder === undefined ? 0 : requireNonNegativeInteger(payload.sortOrder, "sortOrder"),
+    image: parseOptionalPricebookImage(payload.imageDataUrl),
   };
 }
 
@@ -413,6 +583,21 @@ export function parseUpdatePricebookItemPayload(jsonBody: unknown): UpdatePriceb
 
   if (payload.itemType !== undefined) {
     nextPayload.itemType = requireEnumValue(payload.itemType, "itemType", pricebookItemTypes);
+  }
+
+  if (payload.categoryId !== undefined || payload.category !== undefined) {
+    nextPayload.categoryId = payload.categoryId === undefined
+      ? undefined
+      : optionalUuid(payload.categoryId, "categoryId");
+    nextPayload.categoryName = payload.category === undefined
+      ? undefined
+      : parseOptionalCategoryName(payload.category);
+  }
+
+  if (payload.systemId !== undefined) {
+    nextPayload.systemId = payload.systemId === undefined
+      ? undefined
+      : optionalUuid(payload.systemId, "systemId");
   }
 
   if (payload.tradeArea !== undefined) {
@@ -456,7 +641,7 @@ export function parseUpdatePricebookItemPayload(jsonBody: unknown): UpdatePriceb
   }
 
   if (payload.warrantyMonths !== undefined) {
-    nextPayload.warrantyMonths = optionalNonNegativeInteger(payload.warrantyMonths, "warrantyMonths");
+    nextPayload.warrantyMonths = parseWarrantyMonths(payload.warrantyMonths) ?? null;
   }
 
   if (payload.requiresPermit !== undefined) {
@@ -543,6 +728,42 @@ export function parseCreatePricebookBundleItemPayload(jsonBody: unknown): Create
 export function parseUpdatePricebookBundleItemPayload(jsonBody: unknown): UpdatePricebookBundleItemPayload {
   const payload = requireRecord(jsonBody, "Pricebook bundle item update");
   const nextPayload: UpdatePricebookBundleItemPayload = {};
+
+  if (payload.defaultQuantity !== undefined) {
+    nextPayload.defaultQuantity = normalizeQuantity(payload.defaultQuantity, "defaultQuantity");
+  }
+
+  if (payload.sortOrder !== undefined) {
+    nextPayload.sortOrder = requireNonNegativeInteger(payload.sortOrder, "sortOrder");
+  }
+
+  return nextPayload;
+}
+
+export function parseCreatePricebookBundleRequirementPayload(jsonBody: unknown): CreatePricebookBundleRequirementPayload {
+  const payload = requireRecord(jsonBody, "Pricebook bundle requirement");
+
+  return {
+    label: requireTrimmedString(payload.label, "label", 255),
+    categoryId: requireUuid(payload.categoryId, "categoryId"),
+    defaultQuantity: payload.defaultQuantity === undefined
+      ? "1.000"
+      : normalizeQuantity(payload.defaultQuantity, "defaultQuantity"),
+    sortOrder: payload.sortOrder === undefined ? 0 : requireNonNegativeInteger(payload.sortOrder, "sortOrder"),
+  };
+}
+
+export function parseUpdatePricebookBundleRequirementPayload(jsonBody: unknown): UpdatePricebookBundleRequirementPayload {
+  const payload = requireRecord(jsonBody, "Pricebook bundle requirement update");
+  const nextPayload: UpdatePricebookBundleRequirementPayload = {};
+
+  if (payload.label !== undefined) {
+    nextPayload.label = requireTrimmedString(payload.label, "label", 255);
+  }
+
+  if (payload.categoryId !== undefined) {
+    nextPayload.categoryId = requireUuid(payload.categoryId, "categoryId");
+  }
 
   if (payload.defaultQuantity !== undefined) {
     nextPayload.defaultQuantity = normalizeQuantity(payload.defaultQuantity, "defaultQuantity");

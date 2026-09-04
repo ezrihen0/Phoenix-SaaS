@@ -10,7 +10,10 @@
     "lint": "eslint",
     "i18n:check": "node scripts/check-i18n-catalog-parity.mjs",
     "shell-nav-policy:check": "node scripts/check-shell-nav-policy.mjs",
-    "quick-create:check": "node scripts/check-quick-create-registry.mjs"
+    "quick-create:check": "node scripts/check-quick-create-registry.mjs",
+    "pricebook-warranty:check": "node scripts/check-pricebook-warranty.mjs",
+    "pricebook-add-item:check": "node scripts/check-pricebook-add-item.mjs",
+    "pricebook-navigation:check": "node scripts/check-pricebook-navigation.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.8.0",
@@ -26,6 +29,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   },

@@ -49,7 +49,16 @@ export async function crmApiFetch<T>(input: string, init?: RequestInit) {
   }
 
   if (!response.ok) {
-    throw new Error(payload?.error?.message ?? "The request could not be completed.");
+    const message = payload?.error?.message?.trim();
+    if (message) {
+      throw new Error(message);
+    }
+
+    throw new Error(
+      response.status >= 500
+        ? `The request could not be completed. The backend returned HTTP ${response.status}. Ensure the API server is running on port 4000.`
+        : `The request could not be completed (HTTP ${response.status}).`,
+    );
   }
 
   return payload?.data as T;

@@ -197,6 +197,7 @@ function buildActor(org: OrganizationEntity, user: UserEntity, profile: ProfileE
     organization_id: org.id,
     role: "admin",
     permissions: listPermissionsForRole("admin"),
+    platform_capabilities: [],
   };
 }
 

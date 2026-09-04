@@ -4,6 +4,7 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import { apiError } from "../common/api-response";
+import { OwnedPhoneNumbersService } from "../messaging/phone-numbers/owned-phone-numbers.service";
 import type { CallFlowSettings, CallFlowIvrOption } from "./call-flow-settings.service";
 
 type CommandResult = {
@@ -77,7 +78,10 @@ export type WebrtcClientConfig = {
 
 @Injectable()
 export class TelephonyExecutionService {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly ownedPhoneNumbersService: OwnedPhoneNumbersService,
+  ) {}
 
   getWebrtcClientConfig(): WebrtcClientConfig {
     const login = (this.configService.get<string>("TELNYX_WEBRTC_SIP_USERNAME") ?? "").trim() || null;
@@ -108,92 +112,50 @@ export class TelephonyExecutionService {
     };
   }
 
-  async getOutboundDialerOptions(): Promise<OutboundDialerOptions> {
-    const configuredFrom = this.normalizeDialNumber(this.configService.get<string>("TELNYX_OUTBOUND_FROM_NUMBER") ?? null)
-      ?? this.normalizeDialNumber(this.configService.get<string>("TWILIO_FROM_NUMBER") ?? null);
-    const apiKey = (this.configService.get<string>("TELNYX_API_KEY") ?? "").trim();
-
-    if (!apiKey) {
-      return {
-        fromNumbers: configuredFrom ? [configuredFrom] : [],
-        defaultFrom: configuredFrom,
-      };
-    }
-
-    const response = await fetch("https://api.telnyx.com/v2/phone_numbers?page[size]=100", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-    }).catch(() => null);
-
-    if (!response?.ok) {
-      return {
-        fromNumbers: configuredFrom ? [configuredFrom] : [],
-        defaultFrom: configuredFrom,
-      };
-    }
-
-    const responseBody = await response.json().catch(() => null) as Record<string, unknown> | null;
-    const rows = Array.isArray(responseBody?.data) ? responseBody.data : [];
-
-    const fromNumbers = rows
-      .map((row) => {
-        if (typeof row !== "object" || row === null) {
-          return null;
-        }
-
-        const record = row as Record<string, unknown>;
-        const messagingRecord = typeof record.messaging === "object" && record.messaging !== null
-          ? record.messaging as Record<string, unknown>
-          : null;
-        const candidate = typeof record.phone_number === "string"
-          ? record.phone_number
-          : typeof messagingRecord?.phone_number === "string"
-            ? messagingRecord.phone_number
-            : null;
-
-        return this.normalizeDialNumber(candidate);
-      })
-      .filter((value): value is string => Boolean(value));
-
-    const uniqueFromNumbers = [...new Set(fromNumbers)];
-    if (configuredFrom && !uniqueFromNumbers.includes(configuredFrom)) {
-      uniqueFromNumbers.unshift(configuredFrom);
-    }
+  async getOutboundDialerOptions(organizationId: string): Promise<OutboundDialerOptions> {
+    const ownedNumbers = await this.ownedPhoneNumbersService.listDialableVoiceNumbersForOrganization(organizationId);
+    const fromNumbers = [...new Set(
+      ownedNumbers
+        .map((number) => this.normalizeDialNumber(number.phoneNumber))
+        .filter((value): value is string => Boolean(value)),
+    )];
 
     return {
-      fromNumbers: uniqueFromNumbers,
-      defaultFrom: configuredFrom ?? uniqueFromNumbers[0] ?? null,
+      fromNumbers,
+      defaultFrom: fromNumbers[0] ?? null,
     };
   }
 
   async createOutboundDial(input: {
+    organizationId: string;
     to: string;
     from: string | null;
     connectionId: string | null;
     clientState: string | null;
   }): Promise<OutboundDialResult> {
+    const organizationId = input.organizationId.trim();
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required for outbound dialing.");
+    }
+
     const to = this.normalizeDialNumber(input.to);
 
     if (!to) {
       apiError(400, "dial_to_invalid", "Destination phone number must be in E.164 format, for example +18259945336.");
     }
 
-    const from = this.normalizeDialNumber(input.from)
-      ?? this.normalizeDialNumber(this.configService.get<string>("TELNYX_OUTBOUND_FROM_NUMBER") ?? null)
-      ?? this.normalizeDialNumber(this.configService.get<string>("TWILIO_FROM_NUMBER") ?? null);
+    const authorizedFrom = await this.resolveAuthorizedOutboundFromNumber(organizationId, input.from);
+    const from = this.normalizeDialNumber(authorizedFrom.phoneNumber);
+    if (!from) {
+      apiError(403, "dial_from_forbidden", "The selected caller ID is not registered to your organization.");
+    }
+
     const connectionId = (
       input.connectionId
       ?? this.configService.get<string>("TELNYX_CALL_CONTROL_APP_ID")
       ?? this.configService.get<string>("TELNYX_CONNECTION_ID")
       ?? ""
     ).trim() || null;
-
-    if (!from) {
-      apiError(500, "dial_from_not_configured", "Dialer caller ID is not configured. Set TELNYX_OUTBOUND_FROM_NUMBER.");
-    }
 
     if (!connectionId) {
       apiError(500, "dial_connection_not_configured", "Dialer Call Control App is not configured. Set TELNYX_CALL_CONTROL_APP_ID.");
@@ -639,6 +601,38 @@ export class TelephonyExecutionService {
       commandId,
       detail: detail ?? `${action} requested successfully.`,
     };
+  }
+
+  private async resolveAuthorizedOutboundFromNumber(organizationId: string, requestedFrom: string | null) {
+    if (requestedFrom?.trim()) {
+      const ownedNumber = await this.ownedPhoneNumbersService.findActiveVoiceOwnedNumberForOrganization(
+        organizationId,
+        requestedFrom,
+      );
+
+      if (!ownedNumber) {
+        apiError(
+          403,
+          "dial_from_forbidden",
+          "The selected caller ID is not registered to your organization.",
+        );
+      }
+
+      return ownedNumber;
+    }
+
+    const dialableNumbers = await this.ownedPhoneNumbersService.listDialableVoiceNumbersForOrganization(organizationId);
+    const defaultNumber = dialableNumbers[0] ?? null;
+
+    if (!defaultNumber) {
+      apiError(
+        403,
+        "dial_from_not_configured",
+        "No active voice caller ID is registered for this organization.",
+      );
+    }
+
+    return defaultNumber;
   }
 
   private normalizeDialNumber(value: string | null | undefined) {

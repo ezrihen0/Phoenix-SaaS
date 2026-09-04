@@ -1,5 +1,4 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 
@@ -16,7 +15,6 @@ export class BillingOrchestrationService {
   private readonly logger = new Logger(BillingOrchestrationService.name);
 
   constructor(
-    private readonly configService: ConfigService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly organizationBillingService: OrganizationBillingService,
@@ -25,15 +23,15 @@ export class BillingOrchestrationService {
   ) {}
 
   isActiveProviderConfigured(): boolean {
-    return this.billingProviderRegistryService.getActiveProvider().isConfigured();
+    return this.billingProviderRegistryService.isActiveProviderConfigured();
   }
 
   getActiveProviderName() {
-    return this.billingProviderRegistryService.getActiveProvider().provider;
+    return this.billingProviderRegistryService.getActiveProviderName();
   }
 
-  getStripeCheckoutUrlsConfigured() {
-    return Boolean(this.successUrl().trim() && this.cancelUrl().trim());
+  getCheckoutUrlsConfigured() {
+    return false;
   }
 
   async createCheckoutSessionForOrganization(input: {
@@ -42,41 +40,12 @@ export class BillingOrchestrationService {
     userEmail: string | null;
     planKey: BillingPlanKey;
   }) {
-    const context = await this.organizationBillingService.getOrCreateContextForOrganization(input.organizationId);
-    const provider = this.billingProviderRegistryService.getActiveProvider();
-
-    if (context.account.owner_user_id !== input.userId) {
-      await this.organizationBillingService.setBillingAccountOwner(context.account.id, input.userId);
-    }
-
-    if (!provider.isConfigured()) {
-      apiError(
-        503,
-        "billing_provider_not_configured",
-        `${provider.provider} is not configured on the server yet.`,
-      );
-    }
-
-    const result = await provider.createCheckoutSession({
-      billingAccountId: context.account.id,
-      organizationId: input.organizationId,
-      userId: input.userId,
-      userEmail: input.userEmail,
-      planKey: input.planKey,
-      existingProviderCustomerId:
-        context.account.billing_provider === provider.provider
-          ? (context.account.provider_customer_id ?? null)
-          : null,
-      successUrl: this.successUrl(),
-      cancelUrl: this.cancelUrl(),
-    });
-
-    return {
-      provider: result.provider,
-      billing_account_id: context.account.id,
-      session_id: result.sessionId,
-      url: result.checkoutUrl,
-    };
+    void input;
+    apiError(
+      410,
+      "platform_subscription_billing_disabled",
+      "WizField SaaS subscription checkout is disabled for this runtime.",
+    );
   }
 
   async applyProviderSnapshot(snapshot: ProviderSubscriptionSnapshot) {
@@ -130,19 +99,6 @@ export class BillingOrchestrationService {
     return null;
   }
 
-  private successUrl() {
-    return (
-      this.configService.get<string>("STRIPE_CHECKOUT_SUCCESS_URL")?.trim()
-      ?? "http://localhost:3000/billing/success?session_id={CHECKOUT_SESSION_ID}"
-    );
-  }
-
-  private cancelUrl() {
-    return (
-      this.configService.get<string>("STRIPE_CHECKOUT_CANCEL_URL")?.trim()
-      ?? "http://localhost:3000/pricing?checkout=cancelled"
-    );
-  }
 }
 
 function buildBillingAccountPatch(

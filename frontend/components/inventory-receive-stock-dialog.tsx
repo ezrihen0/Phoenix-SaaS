@@ -12,6 +12,11 @@ type InventoryReceiveStockDialogProps = {
   locations: InventoryLocation[];
   onClose: () => void;
   onSaved: (createdCount: number) => void;
+  prefillLine?: {
+    inventoryItemId: string;
+    unitCostBeforeTax?: string;
+    supplierName?: string;
+  } | null;
 };
 
 type ReceiveLine = {
@@ -64,6 +69,7 @@ export function InventoryReceiveStockDialog({
   locations,
   onClose,
   onSaved,
+  prefillLine = null,
 }: InventoryReceiveStockDialogProps) {
   const [supplierName, setSupplierName] = useState("");
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
@@ -78,13 +84,17 @@ export function InventoryReceiveStockDialog({
       return;
     }
 
-    setSupplierName("");
+    setSupplierName(prefillLine?.supplierName ?? "");
     setSupplierInvoiceNumber("");
     setOccurredAt("");
     setToLocationId(locations.find((location) => location.is_active)?.id ?? "");
-    setLines([buildLine()]);
+    setLines([{
+      ...buildLine(),
+      inventoryItemId: prefillLine?.inventoryItemId ?? "",
+      unitCostBeforeTax: prefillLine?.unitCostBeforeTax ?? "",
+    }]);
     setErrorMessage(null);
-  }, [locations, open]);
+  }, [locations, open, prefillLine]);
 
   const activeItems = useMemo(() => items.filter((item) => item.is_active), [items]);
   const activeLocations = useMemo(() => locations.filter((location) => location.is_active), [locations]);

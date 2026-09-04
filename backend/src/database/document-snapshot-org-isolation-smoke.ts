@@ -171,6 +171,7 @@ function createMinimalPricebookItem(input: {
     customer_description: null,
     internal_description: null,
     item_type: "service" as const,
+    category_id: null,
     trade_area: null,
     service_area: null,
     tags: [],
@@ -381,6 +382,46 @@ async function runSnapshotChecks(summary: SmokeSummary, service: DocumentSnapsho
       throw new Error(`Expected unit_price_cents_snapshot 5000, got ${d.unit_price_cents_snapshot}.`);
     }
     return { draftCount: drafts.length, warranty_months_snapshot: d.warranty_months_snapshot };
+  });
+
+  await expectPass(summary, "Warranty override and bundle metadata persist on item snapshot", async () => {
+    const lines: DocumentLineItemInput[] = [
+      {
+        kind: "pricebook_item",
+        documentLineKey: "bundle-resolved-item",
+        pricebookItemId: catalog.itemA.id,
+        quantity: "1",
+        sortOrder: 1,
+        unitPriceCentsOverride: 0,
+        warrantyMonthsOverride: 36,
+        pricebookBundleId: catalog.bundleGoodA.id,
+        bundleRequirementId: null,
+        catalogUnitPriceCentsSnapshot: 5_000,
+      },
+    ];
+    const drafts = await service.buildLineDrafts(lines, quoteContextForOrgA);
+    if (drafts.length !== 1) {
+      throw new Error(`Expected 1 draft line, got ${drafts.length}.`);
+    }
+    const draft = drafts[0];
+    if (draft.warranty_months_snapshot !== 36) {
+      throw new Error(`Expected warranty_months_snapshot 36, got ${draft.warranty_months_snapshot}.`);
+    }
+    if (draft.unit_price_cents_snapshot !== 0) {
+      throw new Error(`Expected unit_price_cents_snapshot 0, got ${draft.unit_price_cents_snapshot}.`);
+    }
+    if (draft.catalog_unit_price_cents_snapshot !== 5_000) {
+      throw new Error(
+        `Expected catalog_unit_price_cents_snapshot 5000, got ${draft.catalog_unit_price_cents_snapshot}.`,
+      );
+    }
+    if (draft.pricebook_bundle_id !== catalog.bundleGoodA.id) {
+      throw new Error("Expected pricebook_bundle_id to match resolved bundle.");
+    }
+    return {
+      warranty_months_snapshot: draft.warranty_months_snapshot,
+      catalog_unit_price_cents_snapshot: draft.catalog_unit_price_cents_snapshot,
+    };
   });
 
   await expectApiError(

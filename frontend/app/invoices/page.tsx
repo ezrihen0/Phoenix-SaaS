@@ -68,13 +68,9 @@ type InvoiceListItem = {
   lifecycle_status: InvoiceLifecycleStatus;
   status: "unpaid" | "paid";
   issued_at: string;
+  customer_id?: string | null;
   customer_name: string;
   job_title: string;
-};
-
-type InvoiceCustomerListItem = {
-  id: string;
-  full_name: string;
 };
 
 type InvoicesPageContext = {
@@ -291,16 +287,18 @@ function PaymentProgress({
   );
 }
 
+function invoiceCustomerHref(invoice: InvoiceListItem) {
+  return invoice.customer_id ? `/customers/${invoice.customer_id}` : "/customers";
+}
+
 function PaymentAssistantPanel({
   invoices,
   aiState,
-  customerHrefByName,
   locale,
   labels,
 }: {
   invoices: InvoiceListItem[];
   aiState: InvoicePaymentAiReadyState;
-  customerHrefByName: Map<string, string>;
   locale: string;
   labels: {
     title: string;
@@ -370,7 +368,7 @@ function PaymentAssistantPanel({
                     {labels.openInvoice}
                   </Link>
                   <Link
-                    href={customerHrefByName.get(invoice.customer_name.trim().toLowerCase()) ?? "/customers"}
+                    href={invoiceCustomerHref(invoice)}
                     className="theme-btn-secondary rounded-xl px-3 py-2 text-xs font-semibold"
                   >
                     {labels.openCustomer}
@@ -416,7 +414,6 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
 
   let invoices: InvoiceListItem[] = [];
   let loadError: string | null = null;
-  let customerHrefByName = new Map<string, string>();
 
   try {
     const response = await serverApiFetch<InvoiceListItem[]>("/api/invoices");
@@ -427,18 +424,6 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
     }
   } catch (error) {
     loadError = error instanceof Error ? error.message : t("listUnavailable");
-  }
-
-  try {
-    const customers = await serverApiFetch<InvoiceCustomerListItem[]>("/api/customers");
-    customerHrefByName = new Map(
-      (Array.isArray(customers) ? customers : []).map((customer) => [
-        customer.full_name.trim().toLowerCase(),
-        `/customers/${customer.id}`,
-      ]),
-    );
-  } catch {
-    customerHrefByName = new Map();
   }
 
   const filteredInvoices = applyPipelineFilter(
@@ -514,7 +499,7 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
   };
 
   function renderInvoiceActions(invoice: InvoiceListItem) {
-    const customerHref = customerHrefByName.get(invoice.customer_name.trim().toLowerCase()) ?? "/customers";
+    const customerHref = invoiceCustomerHref(invoice);
 
     return (
       <div className="flex items-center justify-end gap-2 opacity-85 transition group-hover:opacity-100">
@@ -608,7 +593,7 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
   }
 
   function renderInvoiceMobileCard(invoice: InvoiceListItem) {
-    const customerHref = customerHrefByName.get(invoice.customer_name.trim().toLowerCase()) ?? "/customers";
+    const customerHref = invoiceCustomerHref(invoice);
 
     return (
       <article key={invoice.id} className="rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/80 p-4 shadow-[0_20px_60px_color-mix(in_srgb,var(--sem-board-glow)_22%,transparent)]">
@@ -711,7 +696,7 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
                     <td className="master-table-cell master-table-actions-cell align-middle">
                       <div className="inline-flex items-center justify-center gap-2">
                         <Link href={`/invoices/${invoice.id}`} className={invoiceOpenIconClass}><Receipt className="h-[0.8rem] w-[0.8rem]" /></Link>
-                        <Link href={customerHrefByName.get(invoice.customer_name.trim().toLowerCase()) ?? "/customers"} className={invoiceCustomerIconClass}><UserRound className="h-[0.8rem] w-[0.8rem]" /></Link>
+                        <Link href={invoiceCustomerHref(invoice)} className={invoiceCustomerIconClass}><UserRound className="h-[0.8rem] w-[0.8rem]" /></Link>
                         {invoice.job_id ? <Link href={`/jobs/${invoice.job_id}`} className={invoiceJobIconClass}><Briefcase className="h-[0.8rem] w-[0.8rem]" /></Link> : null}
                       </div>
                     </td>
@@ -887,7 +872,6 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
             <PaymentAssistantPanel
               invoices={filteredInvoices}
               aiState={aiState}
-              customerHrefByName={customerHrefByName}
               locale={locale}
               labels={assistantLabels}
             />

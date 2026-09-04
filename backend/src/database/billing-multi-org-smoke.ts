@@ -150,23 +150,12 @@ async function seedPaidAccount(
 
   const organizationId = actor.organization_id ?? "";
   const context = await harness.organizationBillingService.getOrCreateContextForOrganization(organizationId);
-  await harness.orchestration.applyProviderSnapshot({
-    provider: "stripe",
-    billingAccountId: context.account.id,
-    organizationId,
-    providerCustomerId: `cus_${input.token}`,
-    providerSubscriptionId: `sub_${input.token}`,
-    providerPriceId: `price_smoke_${input.planKey}`,
-    planKey: input.planKey,
-    billingStatus: "active",
-    lastProviderSyncAt: new Date(),
-    lastWebhookAt: new Date(),
-  });
 
   await dataSource.getRepository(BillingAccountEntity).update(
     { id: context.account.id },
     {
       plan_key: input.planKey,
+      billing_status: "active",
       organization_limit: input.organizationLimit,
     },
   );

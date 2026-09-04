@@ -2,9 +2,11 @@
 
 ## Purpose
 
-Engineering closeout record for **AI Program Phases 0–4**. Product truth: [`WizField_AI_Master_Source_of_Truth.md`](WizField_AI_Master_Source_of_Truth.md).
+Engineering closeout record for **AI Program Phases 0–4**. This file is **historical Phase 0–4 evidence**. Current AI product truth, including Home AI V1, lives in [`WizField_AI_Master_Source_of_Truth.md`](WizField_AI_Master_Source_of_Truth.md).
 
-**Program verdict:** **B — CLOSED WITH NON-BLOCKING GAPS** (owner audit approved 2026-05-15). Gap closure pass **implemented** (webhook flag coherence, canonical docs, copilot smoke, ops hygiene).
+Current Home AI verification: [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md) (`home:ai:smoke`, `home:ai:contract-check`).
+
+**Program verdict (Phases 0–4):** **B — CLOSED WITH NON-BLOCKING GAPS** (owner audit approved 2026-05-15). Gap closure pass **implemented** (webhook flag coherence, canonical docs, copilot smoke, ops hygiene). Do not treat the closed gaps below as current production blockers.
 
 ---
 

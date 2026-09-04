@@ -5,6 +5,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { BillingModule } from "../billing/billing.module";
 import { AuthSessionEntity } from "../database/entities/auth-session.entity";
 import { ControlledAccessGrantEntity } from "../database/entities/controlled-access-grant.entity";
+import { PlatformOperatorGrantEntity } from "../database/entities/platform-operator-grant.entity";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
 import { ProfileEntity } from "../database/entities/profile.entity";
@@ -27,6 +28,7 @@ import { SessionGuard } from "./session.guard";
       MembershipEntity,
       AuthSessionEntity,
       ControlledAccessGrantEntity,
+      PlatformOperatorGrantEntity,
     ]),
   ],
   controllers: [AuthController],

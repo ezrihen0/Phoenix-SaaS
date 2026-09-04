@@ -137,6 +137,10 @@ export type PricebookItemDocumentLineInput = {
   descriptionOverride?: string | null;
   nameTranslationRecordId?: string | null;
   descriptionTranslationRecordId?: string | null;
+  warrantyMonthsOverride?: number | null;
+  pricebookBundleId?: string | null;
+  bundleRequirementId?: string | null;
+  catalogUnitPriceCentsSnapshot?: number | null;
 };
 
 export type PricebookBundleDocumentLineInput = {
@@ -180,6 +184,7 @@ export type UpsertInvoicePayload = {
 };
 
 export type RecordInvoicePaymentPayload = {
+  idempotencyKey: string;
   entryType: InvoicePaymentEntryType;
   amountCents: number;
   method: InvoicePaymentMethod;
@@ -268,6 +273,18 @@ function requireNonNegativeInteger(value: unknown, fieldName: string) {
 function optionalNonNegativeInteger(value: unknown, fieldName: string) {
   if (value === undefined || value === null || value === "") {
     return undefined;
+  }
+
+  return requireNonNegativeInteger(value, fieldName);
+}
+
+function optionalNullableNonNegativeInteger(value: unknown, fieldName: string) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
   }
 
   return requireNonNegativeInteger(value, fieldName);
@@ -775,6 +792,28 @@ function parseDocumentLineItems(value: unknown): DocumentLineItemInput[] | undef
                 lineItem.descriptionTranslationRecordId,
                 `lineItems[${index}].descriptionTranslationRecordId`,
               ),
+        warrantyMonthsOverride:
+          lineItem.warrantyMonthsOverride === undefined
+            ? undefined
+            : optionalNullableNonNegativeInteger(
+                lineItem.warrantyMonthsOverride,
+                `lineItems[${index}].warrantyMonthsOverride`,
+              ),
+        pricebookBundleId:
+          lineItem.pricebookBundleId === undefined
+            ? undefined
+            : optionalUuid(lineItem.pricebookBundleId, `lineItems[${index}].pricebookBundleId`),
+        bundleRequirementId:
+          lineItem.bundleRequirementId === undefined
+            ? undefined
+            : optionalUuid(lineItem.bundleRequirementId, `lineItems[${index}].bundleRequirementId`),
+        catalogUnitPriceCentsSnapshot:
+          lineItem.catalogUnitPriceCentsSnapshot === undefined
+            ? undefined
+            : optionalNullableNonNegativeInteger(
+                lineItem.catalogUnitPriceCentsSnapshot,
+                `lineItems[${index}].catalogUnitPriceCentsSnapshot`,
+              ),
       };
     }
 
@@ -844,6 +883,7 @@ export function parseRecordInvoicePaymentPayload(jsonBody: unknown): RecordInvoi
   const payload = requireRecord(jsonBody, "Invoice payment");
 
   return {
+    idempotencyKey: requireTrimmedString(payload.idempotencyKey, "idempotencyKey", 64),
     entryType: requireEnumValue(payload.entryType, "entryType", invoicePaymentEntryTypes),
     amountCents: requireNonNegativeInteger(payload.amountCents, "amountCents"),
     method: requireEnumValue(payload.method ?? "other", "method", invoicePaymentMethods),

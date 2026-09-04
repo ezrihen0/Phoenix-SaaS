@@ -4,17 +4,34 @@ import { IsNull, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import { PricebookBundleItemEntity } from "../database/entities/pricebook-bundle-item.entity";
+import { PricebookBundleRequirementEntity } from "../database/entities/pricebook-bundle-requirement.entity";
 import { PricebookBundleEntity } from "../database/entities/pricebook-bundle.entity";
+import { PricebookCategoryEntity } from "../database/entities/pricebook-category.entity";
 import { PricebookItemEntity } from "../database/entities/pricebook-item.entity";
-import type {
-  CreatePricebookBundleItemPayload,
-  CreatePricebookBundlePayload,
-  CreatePricebookItemPayload,
-  PricebookBundleListQuery,
-  PricebookItemListQuery,
-  UpdatePricebookBundleItemPayload,
-  UpdatePricebookBundlePayload,
-  UpdatePricebookItemPayload,
+import { PricebookSystemEntity } from "../database/entities/pricebook-system.entity";
+import { createReadStream } from "node:fs";
+import { join } from "node:path";
+
+import {
+  DEFAULT_PRICEBOOK_SYSTEMS,
+  GAS_PRICEBOOK_CATEGORIES,
+  GAS_SAMPLE_ITEMS,
+} from "./pricebook-catalog-bootstrap";
+import { pricebookImageUploadsRoot, writePricebookImageFile } from "./pricebook-image";
+import {
+  persistWarrantyMonths,
+  type CreatePricebookBundleItemPayload,
+  type CreatePricebookBundlePayload,
+  type CreatePricebookBundleRequirementPayload,
+  type CreatePricebookItemPayload,
+  type PricebookBundleListQuery,
+  type PricebookCategoryListQuery,
+  type PricebookItemListQuery,
+  type PricebookNavigationSummaryQuery,
+  type UpdatePricebookBundleItemPayload,
+  type UpdatePricebookBundlePayload,
+  type UpdatePricebookBundleRequirementPayload,
+  type UpdatePricebookItemPayload,
 } from "./validation";
 
 @Injectable()
@@ -22,47 +39,32 @@ export class PricebookService {
   constructor(
     @InjectRepository(PricebookItemEntity)
     private readonly pricebookItemRepository: Repository<PricebookItemEntity>,
+    @InjectRepository(PricebookCategoryEntity)
+    private readonly pricebookCategoryRepository: Repository<PricebookCategoryEntity>,
+    @InjectRepository(PricebookSystemEntity)
+    private readonly pricebookSystemRepository: Repository<PricebookSystemEntity>,
     @InjectRepository(PricebookBundleEntity)
     private readonly pricebookBundleRepository: Repository<PricebookBundleEntity>,
     @InjectRepository(PricebookBundleItemEntity)
     private readonly pricebookBundleItemRepository: Repository<PricebookBundleItemEntity>,
+    @InjectRepository(PricebookBundleRequirementEntity)
+    private readonly pricebookBundleRequirementRepository: Repository<PricebookBundleRequirementEntity>,
   ) {}
 
   async listItems(organizationId: string, query: PricebookItemListQuery) {
     const itemQuery = this.pricebookItemRepository.createQueryBuilder("item");
+    itemQuery.leftJoinAndSelect("item.category", "category");
+    itemQuery.leftJoinAndSelect("category.system", "system");
     itemQuery.where("item.organization_id = :organizationId", { organizationId });
 
-    if (query.activeState === "active") {
-      itemQuery.andWhere("item.is_active = :isActive", { isActive: true });
-      itemQuery.andWhere("item.archived_at IS NULL");
-    } else if (query.activeState === "archived") {
-      itemQuery.andWhere("item.is_active = :isActive", { isActive: false });
-      itemQuery.andWhere("item.archived_at IS NOT NULL");
+    this.applySharedItemFilters(itemQuery, query);
+
+    if (query.systemId) {
+      itemQuery.andWhere("category.system_id = :systemId", { systemId: query.systemId });
     }
 
-    if (query.itemType) {
-      itemQuery.andWhere("item.item_type = :itemType", { itemType: query.itemType });
-    }
-
-    if (query.tradeArea) {
-      itemQuery.andWhere("item.trade_area = :tradeArea", { tradeArea: query.tradeArea });
-    }
-
-    if (query.popularOnly) {
-      itemQuery.andWhere("item.is_popular = :isPopular", { isPopular: true });
-    }
-
-    if (query.q) {
-      itemQuery.andWhere(
-        `(
-          item.internal_sku LIKE :search
-          OR item.name LIKE :search
-          OR COALESCE(item.customer_description, '') LIKE :search
-          OR COALESCE(item.internal_description, '') LIKE :search
-          OR CAST(item.tags AS CHAR) LIKE :search
-        )`,
-        { search: `%${query.q}%` },
-      );
+    if (query.categoryId) {
+      itemQuery.andWhere("item.category_id = :categoryId", { categoryId: query.categoryId });
     }
 
     itemQuery
@@ -82,16 +84,199 @@ export class PricebookService {
     };
   }
 
+  async listNavigationSummary(organizationId: string, query: PricebookNavigationSummaryQuery) {
+    const totalCount = await this.createFilteredItemCountQuery(organizationId, query).getCount();
+
+    const systemCountRows = await this.createFilteredItemCountQuery(organizationId, query)
+      .leftJoin("item.category", "category")
+      .leftJoin("category.system", "system")
+      .select("system.id", "id")
+      .addSelect("COUNT(item.id)", "itemCount")
+      .groupBy("system.id")
+      .getRawMany<{ id: string; itemCount: string }>();
+
+    const categoryCountRows = await this.createFilteredItemCountQuery(organizationId, query)
+      .leftJoin("item.category", "category")
+      .select("category.id", "id")
+      .addSelect("COUNT(item.id)", "itemCount")
+      .groupBy("category.id")
+      .getRawMany<{ id: string; itemCount: string }>();
+
+    const systemCountById = new Map(
+      systemCountRows.map((row) => [row.id, Number.parseInt(row.itemCount, 10) || 0]),
+    );
+    const categoryCountById = new Map(
+      categoryCountRows.map((row) => [row.id, Number.parseInt(row.itemCount, 10) || 0]),
+    );
+
+    const systems = (await this.listSystems(organizationId)).systems.map((system) => ({
+      ...system,
+      item_count: systemCountById.get(system.id) ?? 0,
+    }));
+
+    const categories = (await this.listCategories(organizationId, {})).categories.map((category) => ({
+      ...category,
+      item_count: categoryCountById.get(category.id) ?? 0,
+    }));
+
+    return {
+      total_count: totalCount,
+      systems,
+      categories,
+    };
+  }
+
+  async listSystems(organizationId: string) {
+    const rows = await this.pricebookSystemRepository.find({
+      where: {
+        organization_id: organizationId,
+        archived_at: IsNull(),
+      },
+      order: { name: "ASC" },
+    });
+
+    return {
+      systems: rows.map((system) => this.toPricebookSystemResponse(system)),
+    };
+  }
+
+  async bootstrapCatalog(organizationId: string, actorUserId: string | null) {
+    const result = await this.bootstrapCatalogStructuresOnly(organizationId, actorUserId);
+    const gasSystem = result.systems.find((system) => system.code === "gas");
+
+    if (!gasSystem) {
+      apiError(500, "pricebook_bootstrap_failed", "Gas system could not be created.");
+    }
+
+    const categoryByName = new Map(result.categories.map((category) => [category.name, category]));
+    let itemsCreated = 0;
+
+    for (const sample of GAS_SAMPLE_ITEMS) {
+      const category = categoryByName.get(sample.category);
+
+      if (!category) {
+        continue;
+      }
+
+      const existingItem = await this.pricebookItemRepository.findOne({
+        where: {
+          organization_id: organizationId,
+          name: sample.name,
+          category_id: category.id,
+        },
+        select: { id: true },
+      });
+
+      if (existingItem) {
+        continue;
+      }
+
+      await this.createItem(organizationId, {
+        internalSku: null,
+        name: sample.name,
+        customerDescription: null,
+        internalDescription: null,
+        itemType: sample.category === "Gas Labor & Services" ? "service" : "product",
+        systemId: gasSystem.id,
+        categoryId: category.id,
+        categoryName: null,
+        tradeArea: null,
+        serviceArea: null,
+        tags: [],
+        unitOfMeasure: "each",
+        baseCostCents: 0,
+        materialCostCents: 0,
+        laborCostCents: 0,
+        customerPriceCents: sample.customerPriceCents,
+        minimumPriceCents: null,
+        estimatedLaborMinutes: null,
+        warrantyMonths: null,
+        requiresPermit: false,
+        inventoryTrackingMode: sample.category === "Gas Labor & Services" ? "none" : "future_tracked",
+        supplierName: null,
+        supplierSku: null,
+        inventoryNotes: null,
+        isPopular: false,
+        isActive: true,
+        sortOrder: 0,
+        image: null,
+      }, actorUserId);
+      itemsCreated += 1;
+    }
+
+    return {
+      systems: result.systems.map((system) => this.toPricebookSystemResponse(system)),
+      categoriesCreated: result.categories.length,
+      itemsCreated,
+    };
+  }
+
+  async bootstrapCatalogStructuresOnly(organizationId: string, actorUserId: string | null) {
+    const systems: PricebookSystemEntity[] = [];
+
+    for (const definition of DEFAULT_PRICEBOOK_SYSTEMS) {
+      systems.push(await this.findOrCreateSystem(organizationId, definition.code, definition.name, actorUserId));
+    }
+
+    const gasSystem = systems.find((system) => system.code === "gas");
+
+    if (!gasSystem) {
+      apiError(500, "pricebook_bootstrap_failed", "Gas system could not be created.");
+    }
+
+    const categories: PricebookCategoryEntity[] = [];
+
+    for (const categoryName of GAS_PRICEBOOK_CATEGORIES) {
+      categories.push(await this.findOrCreateCategory(organizationId, gasSystem.id, categoryName, actorUserId));
+    }
+
+    return { systems, categories };
+  }
+
+  async listCategories(organizationId: string, query: PricebookCategoryListQuery) {
+    const categoryQuery = this.pricebookCategoryRepository.createQueryBuilder("category");
+    categoryQuery.leftJoinAndSelect("category.system", "system");
+    categoryQuery.where("category.organization_id = :organizationId", { organizationId });
+    categoryQuery.andWhere("category.archived_at IS NULL");
+
+    if (query.systemId) {
+      categoryQuery.andWhere("category.system_id = :systemId", { systemId: query.systemId });
+    }
+
+    categoryQuery.orderBy("category.name", "ASC");
+
+    const rows = await categoryQuery.getMany();
+
+    return {
+      categories: rows.map((category) => this.toPricebookCategoryResponse(category)),
+    };
+  }
+
   async createItem(organizationId: string, payload: CreatePricebookItemPayload, actorUserId: string | null) {
-    await this.ensureSkuIsUnique(organizationId, payload.internalSku);
+    let internalSku = payload.internalSku;
+
+    if (internalSku) {
+      await this.ensureSkuIsUnique(organizationId, internalSku);
+    } else {
+      internalSku = await this.generateCatalogSku(organizationId, payload.name);
+    }
+
+    const category = await this.resolveCategory(
+      organizationId,
+      payload.systemId,
+      payload.categoryId,
+      payload.categoryName,
+      actorUserId,
+    );
 
     const item = this.pricebookItemRepository.create({
       organization_id: organizationId,
-      internal_sku: payload.internalSku,
+      internal_sku: internalSku,
       name: payload.name,
       customer_description: payload.customerDescription,
       internal_description: payload.internalDescription,
       item_type: payload.itemType,
+      category_id: category.id,
       trade_area: payload.tradeArea,
       service_area: payload.serviceArea,
       tags: payload.tags,
@@ -102,12 +287,13 @@ export class PricebookService {
       customer_price_cents: payload.customerPriceCents,
       minimum_price_cents: payload.minimumPriceCents,
       estimated_labor_minutes: payload.estimatedLaborMinutes,
-      warranty_months: payload.warrantyMonths,
+      warranty_months: persistWarrantyMonths(payload.warrantyMonths) ?? null,
       requires_permit: payload.requiresPermit,
       inventory_tracking_mode: payload.inventoryTrackingMode,
       supplier_name: payload.supplierName,
       supplier_sku: payload.supplierSku,
       inventory_notes: payload.inventoryNotes,
+      image_storage_key: null,
       is_popular: payload.isPopular,
       is_active: payload.isActive,
       sort_order: payload.sortOrder,
@@ -117,11 +303,39 @@ export class PricebookService {
       archived_at: payload.isActive ? null : new Date(),
     });
 
-    return this.toPricebookItemResponse(await this.pricebookItemRepository.save(item));
+    const saved = await this.pricebookItemRepository.save(item);
+
+    if (payload.image) {
+      saved.image_storage_key = await writePricebookImageFile(organizationId, saved.id, payload.image);
+      await this.pricebookItemRepository.save(saved);
+    }
+
+    saved.category = category;
+    return this.toPricebookItemResponse(saved);
   }
 
   async getItem(organizationId: string, itemId: string) {
     return this.toPricebookItemResponse(await this.loadItemOrFail(organizationId, itemId));
+  }
+
+  async getItemImage(organizationId: string, itemId: string) {
+    const item = await this.loadItemOrFail(organizationId, itemId);
+    const storageKey = item.image_storage_key;
+
+    if (!storageKey || storageKey.includes("..") || storageKey.startsWith("/") || storageKey.includes("\\")) {
+      apiError(404, "pricebook_item_image_not_found", "This pricebook item does not have an image.");
+    }
+
+    const contentType = storageKey.endsWith(".png")
+      ? "image/png"
+      : storageKey.endsWith(".webp")
+        ? "image/webp"
+        : "image/jpeg";
+
+    return {
+      stream: createReadStream(join(pricebookImageUploadsRoot(), storageKey)),
+      contentType,
+    };
   }
 
   async updateItem(organizationId: string, itemId: string, payload: UpdatePricebookItemPayload, actorUserId: string | null) {
@@ -146,6 +360,23 @@ export class PricebookService {
 
     if (payload.itemType !== undefined) {
       item.item_type = payload.itemType;
+    }
+
+    if (payload.categoryId !== undefined || payload.categoryName !== undefined) {
+      if (!payload.categoryId && !payload.categoryName) {
+        item.category_id = null;
+        item.category = null;
+      } else {
+        const category = await this.resolveCategory(
+          organizationId,
+          payload.systemId ?? null,
+          payload.categoryId ?? null,
+          payload.categoryName ?? null,
+          actorUserId,
+        );
+        item.category_id = category.id;
+        item.category = category;
+      }
     }
 
     if (payload.tradeArea !== undefined) {
@@ -189,7 +420,7 @@ export class PricebookService {
     }
 
     if (payload.warrantyMonths !== undefined) {
-      item.warranty_months = payload.warrantyMonths;
+      item.warranty_months = persistWarrantyMonths(payload.warrantyMonths) ?? null;
     }
 
     if (payload.requiresPermit !== undefined) {
@@ -243,6 +474,7 @@ export class PricebookService {
       customer_description: sourceItem.customer_description,
       internal_description: sourceItem.internal_description,
       item_type: sourceItem.item_type,
+      category_id: sourceItem.category_id,
       trade_area: sourceItem.trade_area,
       service_area: sourceItem.service_area,
       tags: Array.isArray(sourceItem.tags) ? [...sourceItem.tags] : [],
@@ -268,7 +500,9 @@ export class PricebookService {
       archived_at: null,
     });
 
-    return this.toPricebookItemResponse(await this.pricebookItemRepository.save(duplicatedItem));
+    const savedDuplicate = await this.pricebookItemRepository.save(duplicatedItem);
+    savedDuplicate.category = sourceItem.category ?? null;
+    return this.toPricebookItemResponse(savedDuplicate);
   }
 
   async archiveItem(organizationId: string, itemId: string, actorUserId: string | null) {
@@ -344,7 +578,7 @@ export class PricebookService {
   }
 
   async getBundle(organizationId: string, bundleId: string) {
-    const bundle = await this.loadBundleWithItemsOrFail(organizationId, bundleId);
+    const bundle = await this.loadBundleWithDetailsOrFail(organizationId, bundleId);
     return this.toPricebookBundleDetailResponse(bundle);
   }
 
@@ -477,8 +711,152 @@ export class PricebookService {
     return this.toPricebookBundleItemResponse(saved, pricebookItem);
   }
 
+  async listBundleRequirements(organizationId: string, bundleId: string) {
+    await this.loadBundleOrFail(organizationId, bundleId);
+
+    const requirements = await this.pricebookBundleRequirementRepository.find({
+      where: {
+        organization_id: organizationId,
+        bundle_id: bundleId,
+        archived_at: IsNull(),
+      },
+      relations: {
+        category: {
+          system: true,
+        },
+      },
+      order: {
+        sort_order: "ASC",
+        created_at: "ASC",
+      },
+    });
+
+    return {
+      requirements: requirements.map((requirement) => this.toPricebookBundleRequirementResponse(requirement)),
+    };
+  }
+
+  async addBundleRequirement(
+    organizationId: string,
+    bundleId: string,
+    payload: CreatePricebookBundleRequirementPayload,
+    actorUserId: string | null,
+  ) {
+    const bundle = await this.loadBundleOrFail(organizationId, bundleId);
+
+    if (!bundle.is_active || bundle.archived_at) {
+      apiError(409, "pricebook_bundle_archived", "Archived bundles cannot be modified.");
+    }
+
+    const category = await this.loadCategoryOrFail(organizationId, payload.categoryId);
+
+    const existingRequirement = await this.pricebookBundleRequirementRepository.findOne({
+      where: {
+        organization_id: organizationId,
+        bundle_id: bundleId,
+        category_id: payload.categoryId,
+        archived_at: IsNull(),
+      },
+    });
+
+    if (existingRequirement) {
+      apiError(409, "pricebook_bundle_requirement_duplicate", "This category is already required by the bundle.");
+    }
+
+    const requirement = this.pricebookBundleRequirementRepository.create({
+      organization_id: organizationId,
+      bundle_id: bundleId,
+      label: payload.label,
+      category_id: payload.categoryId,
+      default_quantity: payload.defaultQuantity,
+      sort_order: payload.sortOrder,
+      created_by_user_id: actorUserId,
+      updated_by_user_id: null,
+      deleted_by_user_id: null,
+      archived_at: null,
+    });
+
+    return this.toPricebookBundleRequirementResponse(
+      await this.pricebookBundleRequirementRepository.save(requirement),
+      category,
+    );
+  }
+
+  async updateBundleRequirement(
+    organizationId: string,
+    bundleId: string,
+    requirementId: string,
+    payload: UpdatePricebookBundleRequirementPayload,
+    actorUserId: string | null,
+  ) {
+    const requirement = await this.loadBundleRequirementOrFail(organizationId, bundleId, requirementId);
+
+    if (payload.label !== undefined) {
+      requirement.label = payload.label;
+    }
+
+    if (payload.categoryId !== undefined) {
+      const category = await this.loadCategoryOrFail(organizationId, payload.categoryId);
+
+      if (payload.categoryId !== requirement.category_id) {
+        const existingRequirement = await this.pricebookBundleRequirementRepository.findOne({
+          where: {
+            organization_id: organizationId,
+            bundle_id: bundleId,
+            category_id: payload.categoryId,
+            archived_at: IsNull(),
+          },
+        });
+
+        if (existingRequirement && existingRequirement.id !== requirementId) {
+          apiError(409, "pricebook_bundle_requirement_duplicate", "This category is already required by the bundle.");
+        }
+      }
+
+      requirement.category_id = payload.categoryId;
+      requirement.category = category;
+    }
+
+    if (payload.defaultQuantity !== undefined) {
+      requirement.default_quantity = payload.defaultQuantity;
+    }
+
+    if (payload.sortOrder !== undefined) {
+      requirement.sort_order = payload.sortOrder;
+    }
+
+    requirement.updated_by_user_id = actorUserId;
+
+    const saved = await this.pricebookBundleRequirementRepository.save(requirement);
+    const category = saved.category ?? await this.loadCategoryOrFail(organizationId, saved.category_id);
+    return this.toPricebookBundleRequirementResponse(saved, category);
+  }
+
+  async removeBundleRequirement(
+    organizationId: string,
+    bundleId: string,
+    requirementId: string,
+    actorUserId: string | null,
+  ) {
+    const requirement = await this.loadBundleRequirementOrFail(organizationId, bundleId, requirementId);
+    requirement.archived_at = requirement.archived_at ?? new Date();
+    requirement.deleted_by_user_id = actorUserId;
+    requirement.updated_by_user_id = actorUserId;
+
+    const saved = await this.pricebookBundleRequirementRepository.save(requirement);
+    const category = saved.category ?? await this.loadCategoryOrFail(organizationId, saved.category_id);
+    return this.toPricebookBundleRequirementResponse(saved, category);
+  }
+
   private async loadItemOrFail(organizationId: string, itemId: string) {
-    const item = await this.pricebookItemRepository.findOne({ where: { id: itemId, organization_id: organizationId } });
+    const item = await this.pricebookItemRepository.findOne({
+      where: { id: itemId, organization_id: organizationId },
+      relations: {
+        category: {
+          system: true,
+        },
+      },
+    });
 
     if (!item) {
       apiError(404, "pricebook_item_not_found", "The requested pricebook item could not be found.");
@@ -497,12 +875,17 @@ export class PricebookService {
     return bundle;
   }
 
-  private async loadBundleWithItemsOrFail(organizationId: string, bundleId: string) {
+  private async loadBundleWithDetailsOrFail(organizationId: string, bundleId: string) {
     const bundle = await this.pricebookBundleRepository.findOne({
       where: { id: bundleId, organization_id: organizationId },
       relations: {
         items: {
           pricebook_item: true,
+        },
+        requirements: {
+          category: {
+            system: true,
+          },
         },
       },
     });
@@ -533,6 +916,42 @@ export class PricebookService {
     return bundleItem;
   }
 
+  private async loadCategoryOrFail(organizationId: string, categoryId: string) {
+    const category = await this.pricebookCategoryRepository.findOne({
+      where: { id: categoryId, organization_id: organizationId },
+      relations: {
+        system: true,
+      },
+    });
+
+    if (!category || category.archived_at) {
+      apiError(404, "pricebook_category_not_found", "The requested pricebook category could not be found.");
+    }
+
+    return category;
+  }
+
+  private async loadBundleRequirementOrFail(organizationId: string, bundleId: string, requirementId: string) {
+    const requirement = await this.pricebookBundleRequirementRepository.findOne({
+      where: {
+        id: requirementId,
+        organization_id: organizationId,
+        bundle_id: bundleId,
+      },
+      relations: {
+        category: {
+          system: true,
+        },
+      },
+    });
+
+    if (!requirement || requirement.archived_at) {
+      apiError(404, "pricebook_bundle_requirement_not_found", "The requested bundle requirement could not be found.");
+    }
+
+    return requirement;
+  }
+
   private async ensureSkuIsUnique(organizationId: string, internalSku: string, excludeItemId?: string) {
     const existingItem = await this.pricebookItemRepository.findOne({
       where: { internal_sku: internalSku, organization_id: organizationId },
@@ -541,6 +960,175 @@ export class PricebookService {
 
     if (existingItem && existingItem.id !== excludeItemId) {
       apiError(409, "pricebook_item_sku_conflict", "A pricebook item with that SKU already exists.");
+    }
+  }
+
+  private async generateCatalogSku(organizationId: string, name: string) {
+    const slug = name
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 32) || "ITEM";
+
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+      const candidateSku = `PB-${slug}-${suffix}`.slice(0, 128);
+      const existingCandidate = await this.pricebookItemRepository.findOne({
+        where: { internal_sku: candidateSku, organization_id: organizationId },
+        select: { id: true },
+      });
+
+      if (!existingCandidate) {
+        return candidateSku;
+      }
+    }
+
+    apiError(409, "pricebook_item_sku_exhausted", "Unable to generate a unique catalog SKU.");
+  }
+
+  private async resolveCategory(
+    organizationId: string,
+    systemId: string | null,
+    categoryId: string | null,
+    categoryName: string | null,
+    actorUserId: string | null,
+  ) {
+    if (categoryId) {
+      const existingById = await this.pricebookCategoryRepository.findOne({
+        where: { id: categoryId, organization_id: organizationId },
+        relations: { system: true },
+      });
+
+      if (!existingById || existingById.archived_at) {
+        apiError(404, "pricebook_category_not_found", "The requested pricebook category could not be found.");
+      }
+
+      if (systemId && existingById.system_id !== systemId) {
+        apiError(400, "pricebook_category_system_mismatch", "The category does not belong to the selected system.");
+      }
+
+      return existingById;
+    }
+
+    if (!categoryName) {
+      apiError(400, "pricebook_category_invalid", "category is required.");
+    }
+
+    if (!systemId) {
+      apiError(400, "pricebook_system_required", "systemId is required when creating a category by name.");
+    }
+
+    await this.loadSystemOrFail(organizationId, systemId);
+
+    return this.findOrCreateCategory(organizationId, systemId, categoryName, actorUserId);
+  }
+
+  private async loadSystemOrFail(organizationId: string, systemId: string) {
+    const system = await this.pricebookSystemRepository.findOne({
+      where: { id: systemId, organization_id: organizationId, archived_at: IsNull() },
+    });
+
+    if (!system) {
+      apiError(404, "pricebook_system_not_found", "The requested pricebook system could not be found.");
+    }
+
+    return system;
+  }
+
+  private async findOrCreateSystem(
+    organizationId: string,
+    code: string,
+    name: string,
+    actorUserId: string | null,
+  ) {
+    const existing = await this.pricebookSystemRepository.findOne({
+      where: { organization_id: organizationId, code },
+    });
+
+    if (existing) {
+      if (existing.archived_at) {
+        existing.archived_at = null;
+        existing.deleted_by_user_id = null;
+        existing.updated_by_user_id = actorUserId;
+        return this.pricebookSystemRepository.save(existing);
+      }
+
+      return existing;
+    }
+
+    const created = this.pricebookSystemRepository.create({
+      organization_id: organizationId,
+      code,
+      name,
+      created_by_user_id: actorUserId,
+      updated_by_user_id: null,
+      deleted_by_user_id: null,
+      archived_at: null,
+    });
+
+    try {
+      return await this.pricebookSystemRepository.save(created);
+    } catch {
+      const raced = await this.pricebookSystemRepository.findOne({
+        where: { organization_id: organizationId, code },
+      });
+
+      if (raced) {
+        return raced;
+      }
+
+      throw new Error("Unable to create pricebook system.");
+    }
+  }
+
+  private async findCategoryByName(organizationId: string, systemId: string, name: string) {
+    return this.pricebookCategoryRepository
+      .createQueryBuilder("category")
+      .where("category.organization_id = :organizationId", { organizationId })
+      .andWhere("category.system_id = :systemId", { systemId })
+      .andWhere("LOWER(category.name) = :name", { name: name.toLowerCase() })
+      .getOne();
+  }
+
+  private async findOrCreateCategory(
+    organizationId: string,
+    systemId: string,
+    name: string,
+    actorUserId: string | null,
+  ) {
+    const existing = await this.findCategoryByName(organizationId, systemId, name);
+
+    if (existing) {
+      if (existing.archived_at) {
+        existing.archived_at = null;
+        existing.deleted_by_user_id = null;
+        existing.updated_by_user_id = actorUserId;
+        return this.pricebookCategoryRepository.save(existing);
+      }
+
+      return existing;
+    }
+
+    const created = this.pricebookCategoryRepository.create({
+      organization_id: organizationId,
+      system_id: systemId,
+      name,
+      created_by_user_id: actorUserId,
+      updated_by_user_id: null,
+      deleted_by_user_id: null,
+      archived_at: null,
+    });
+
+    try {
+      return await this.pricebookCategoryRepository.save(created);
+    } catch {
+      const raced = await this.findCategoryByName(organizationId, systemId, name);
+
+      if (raced) {
+        return raced;
+      }
+
+      throw new Error("Unable to create pricebook category.");
     }
   }
 
@@ -564,7 +1152,79 @@ export class PricebookService {
     apiError(409, "pricebook_item_duplicate_sku_exhausted", "Unable to generate a unique duplicate SKU.");
   }
 
+  private createFilteredItemCountQuery(
+    organizationId: string,
+    query: PricebookNavigationSummaryQuery,
+  ) {
+    const itemQuery = this.pricebookItemRepository.createQueryBuilder("item");
+    itemQuery.where("item.organization_id = :organizationId", { organizationId });
+    this.applySharedItemFilters(itemQuery, query);
+    return itemQuery;
+  }
+
+  private applySharedItemFilters(
+    itemQuery: ReturnType<Repository<PricebookItemEntity>["createQueryBuilder"]>,
+    query: Pick<
+      PricebookItemListQuery,
+      "activeState" | "itemType" | "tradeArea" | "popularOnly" | "q"
+    > | PricebookNavigationSummaryQuery,
+  ) {
+    if (query.activeState === "active") {
+      itemQuery.andWhere("item.is_active = :isActive", { isActive: true });
+      itemQuery.andWhere("item.archived_at IS NULL");
+    } else if (query.activeState === "archived") {
+      itemQuery.andWhere("item.is_active = :isActive", { isActive: false });
+      itemQuery.andWhere("item.archived_at IS NOT NULL");
+    }
+
+    if (query.itemType) {
+      itemQuery.andWhere("item.item_type = :itemType", { itemType: query.itemType });
+    }
+
+    if (query.tradeArea) {
+      itemQuery.andWhere("item.trade_area = :tradeArea", { tradeArea: query.tradeArea });
+    }
+
+    if (query.popularOnly) {
+      itemQuery.andWhere("item.is_popular = :isPopular", { isPopular: true });
+    }
+
+    if (query.q) {
+      itemQuery.andWhere(
+        `(
+          item.internal_sku LIKE :search
+          OR COALESCE(item.supplier_sku, '') LIKE :search
+          OR COALESCE(item.supplier_name, '') LIKE :search
+          OR item.name LIKE :search
+          OR COALESCE(item.customer_description, '') LIKE :search
+          OR COALESCE(item.internal_description, '') LIKE :search
+          OR CAST(item.tags AS CHAR) LIKE :search
+        )`,
+        { search: `%${query.q}%` },
+      );
+    }
+  }
+
+  private toPricebookSystemResponse(system: PricebookSystemEntity) {
+    return {
+      id: system.id,
+      name: system.name,
+      code: system.code,
+    };
+  }
+
+  private toPricebookCategoryResponse(category: PricebookCategoryEntity) {
+    return {
+      id: category.id,
+      name: category.name,
+      system_id: category.system_id,
+      system: category.system ? this.toPricebookSystemResponse(category.system) : null,
+    };
+  }
+
   private toPricebookItemResponse(item: PricebookItemEntity) {
+    const categoryResponse = item.category ? this.toPricebookCategoryResponse(item.category) : null;
+
     return {
       id: item.id,
       internal_sku: item.internal_sku,
@@ -572,6 +1232,10 @@ export class PricebookService {
       customer_description: item.customer_description,
       internal_description: item.internal_description,
       item_type: item.item_type,
+      category_id: item.category_id,
+      category: categoryResponse,
+      system_id: categoryResponse?.system_id ?? null,
+      system: categoryResponse?.system ?? null,
       trade_area: item.trade_area,
       service_area: item.service_area,
       tags: Array.isArray(item.tags) ? item.tags : [],
@@ -588,6 +1252,7 @@ export class PricebookService {
       supplier_name: item.supplier_name,
       supplier_sku: item.supplier_sku,
       inventory_notes: item.inventory_notes,
+      image_url: item.image_storage_key ? `/api/pricebook/items/${item.id}/image` : null,
       is_popular: item.is_popular,
       is_active: item.is_active,
       sort_order: item.sort_order,
@@ -632,15 +1297,47 @@ export class PricebookService {
     };
   }
 
+  private toPricebookBundleRequirementResponse(
+    requirement: PricebookBundleRequirementEntity,
+    category?: PricebookCategoryEntity,
+  ) {
+    const categoryEntity = category ?? requirement.category;
+
+    return {
+      id: requirement.id,
+      bundle_id: requirement.bundle_id,
+      label: requirement.label,
+      category_id: requirement.category_id,
+      default_quantity: requirement.default_quantity,
+      sort_order: requirement.sort_order,
+      created_by_user_id: requirement.created_by_user_id,
+      updated_by_user_id: requirement.updated_by_user_id,
+      deleted_by_user_id: requirement.deleted_by_user_id,
+      created_at: requirement.created_at,
+      updated_at: requirement.updated_at,
+      archived_at: requirement.archived_at,
+      category: categoryEntity ? this.toPricebookCategoryResponse(categoryEntity) : null,
+    };
+  }
+
   private toPricebookBundleDetailResponse(bundle: PricebookBundleEntity) {
     const bundleItems = (bundle.items ?? [])
       .filter((item) => !item.archived_at)
       .sort((left, right) => left.sort_order - right.sort_order || left.created_at.getTime() - right.created_at.getTime())
       .map((item) => this.toPricebookBundleItemResponse(item, item.pricebook_item));
 
+    const bundleRequirements = (bundle.requirements ?? [])
+      .filter((requirement) => !requirement.archived_at)
+      .sort(
+        (left, right) => left.sort_order - right.sort_order
+          || left.created_at.getTime() - right.created_at.getTime(),
+      )
+      .map((requirement) => this.toPricebookBundleRequirementResponse(requirement, requirement.category));
+
     return {
       ...this.toPricebookBundleResponse(bundle),
       items: bundleItems,
+      requirements: bundleRequirements,
     };
   }
 }

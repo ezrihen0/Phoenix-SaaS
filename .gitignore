@@ -67,6 +67,8 @@ pnpm-debug.log*
 **/.env.test.local
 **/.env.production.local
 
+.phoenix-ui-auth.json
+
 # Keep examples committed
 !.env.example
 !**/.env.example
@@ -113,6 +115,7 @@ Thumbs.db
 .tmp-automations-cookies.txt
 search_results*.txt
 tsc_output.txt
+backend/uploads/
 Phoenix-CRM_recovered/backend/uploads/
 Phoenix-CRM_recovered/docs/
 Phoenix-CRM_recovered/

@@ -1,9 +1,12 @@
 import type { Database } from "@/lib/types/database";
 import type {
+  PricebookBundle,
   PricebookBundleDetail,
   PricebookBundleItem,
+  PricebookBundleRequirement,
   PricebookItem,
 } from "@/lib/crm/pricebook-model";
+import { itemHasWarranty } from "@/lib/crm/pricebook-model";
 import type {
   CustomerOutputTranslationStatus,
 } from "@/lib/language-store/client-customer-output-translations";
@@ -31,6 +34,9 @@ export type PersistedInvoiceLineItem = {
   labor_cost_cents_snapshot: number | null;
   estimated_labor_minutes_snapshot: number | null;
   warranty_months_snapshot: number | null;
+  pricebook_bundle_id: string | null;
+  bundle_requirement_id: string | null;
+  catalog_unit_price_cents_snapshot: number | null;
   quantity: string;
   line_subtotal_cents: number;
   sort_order: number;
@@ -65,6 +71,12 @@ export type InvoiceBuilderLine = {
   descriptionTranslationStatus: CustomerOutputTranslationStatus | null;
   descriptionTranslationSourceText: string | null;
   descriptionTranslationSourceLanguageCode: string | null;
+  warrantyEnabled: boolean;
+  warrantyMonthsInput: string;
+  warrantyMonths: number | null;
+  pricebookBundleId: string | null;
+  bundleRequirementId: string | null;
+  catalogUnitPriceCents: number | null;
 };
 
 export type InvoicePreviewTotals = {
@@ -86,6 +98,10 @@ export type InvoiceUpsertPayloadLineItem =
       descriptionOverride?: string | null;
       nameTranslationRecordId?: string | null;
       descriptionTranslationRecordId?: string | null;
+      warrantyMonthsOverride?: number | null;
+      pricebookBundleId?: string | null;
+      bundleRequirementId?: string | null;
+      catalogUnitPriceCentsSnapshot?: number | null;
     }
   | {
       kind: "manual";
@@ -111,6 +127,25 @@ function nextDocumentLineKey(prefix: string) {
   documentLineKeyCounter += 1;
   const randomSuffix = Math.random().toString(36).slice(2, 10);
   return `${prefix}-${Date.now().toString(36)}-${documentLineKeyCounter}-${randomSuffix}`;
+}
+
+export function warrantyFieldsFromSnapshot(warrantyMonths: number | null | undefined) {
+  const enabled = itemHasWarranty(warrantyMonths);
+
+  return {
+    warrantyEnabled: enabled,
+    warrantyMonthsInput: enabled ? String(warrantyMonths) : "",
+    warrantyMonths: enabled ? (warrantyMonths as number) : null,
+  };
+}
+
+export function emptyInvoiceLineBundleMetadata() {
+  return {
+    pricebookBundleId: null,
+    bundleRequirementId: null,
+    catalogUnitPriceCents: null,
+    ...warrantyFieldsFromSnapshot(null),
+  };
 }
 
 export function formatCurrencyFromCents(cents: number | null | undefined) {
@@ -239,6 +274,7 @@ export function createManualInvoiceLine(): InvoiceBuilderLine {
     itemType: "manual",
     unitOfMeasure: null,
     ...createEmptyDocumentLineTranslationFields(),
+    ...emptyInvoiceLineBundleMetadata(),
   };
 }
 
@@ -261,6 +297,40 @@ export function invoiceLineFromPricebookItem(item: PricebookItem): InvoiceBuilde
     itemType: item.item_type,
     unitOfMeasure: item.unit_of_measure,
     ...createEmptyDocumentLineTranslationFields(),
+    pricebookBundleId: null,
+    bundleRequirementId: null,
+    catalogUnitPriceCents: item.customer_price_cents,
+    ...warrantyFieldsFromSnapshot(item.warranty_months),
+  };
+}
+
+export function invoiceLineFromResolvedRequirement(
+  bundle: PricebookBundle,
+  requirement: PricebookBundleRequirement,
+  item: PricebookItem,
+): InvoiceBuilderLine {
+  return {
+    clientId: nextClientId("bundle-req"),
+    documentLineKey: nextDocumentLineKey("invoice-bundle-req"),
+    kind: "pricebook_item",
+    pricebookItemId: item.id,
+    sourceLabel: bundle.name,
+    sku: item.internal_sku,
+    name: item.name,
+    originalName: item.name,
+    description: item.customer_description ?? "",
+    quantity: normalizeQuantityInput(requirement.default_quantity, "Bundle quantity"),
+    unitPriceInput: formatCentsInput(0),
+    unitPriceCents: 0,
+    originalUnitPriceCents: item.customer_price_cents,
+    originalDescription: item.customer_description,
+    itemType: item.item_type,
+    unitOfMeasure: item.unit_of_measure,
+    ...createEmptyDocumentLineTranslationFields(),
+    pricebookBundleId: bundle.id,
+    bundleRequirementId: requirement.id,
+    catalogUnitPriceCents: item.customer_price_cents,
+    ...warrantyFieldsFromSnapshot(item.warranty_months),
   };
 }
 
@@ -289,6 +359,10 @@ function invoiceLineFromBundleItem(bundleName: string, bundleItem: PricebookBund
     itemType: item.item_type,
     unitOfMeasure: item.unit_of_measure,
     ...createEmptyDocumentLineTranslationFields(),
+    pricebookBundleId: bundleItem.bundle_id,
+    bundleRequirementId: null,
+    catalogUnitPriceCents: item.customer_price_cents,
+    ...warrantyFieldsFromSnapshot(item.warranty_months),
   };
 }
 
@@ -319,11 +393,18 @@ export function invoiceLinesFromPersistedSnapshot(
         quantity: normalizeQuantityInput(line.quantity, "Quantity"),
         unitPriceInput: formatCentsInput(line.unit_price_cents_snapshot),
         unitPriceCents: line.unit_price_cents_snapshot,
-        originalUnitPriceCents: line.pricebook_item_id ? line.unit_price_cents_snapshot : null,
+        originalUnitPriceCents: line.pricebook_item_id
+          ? (line.catalog_unit_price_cents_snapshot ?? line.unit_price_cents_snapshot)
+          : null,
         originalDescription: line.pricebook_item_id ? line.description_snapshot : null,
         itemType: line.item_type_snapshot,
         unitOfMeasure: line.unit_of_measure_snapshot,
         ...createEmptyDocumentLineTranslationFields(),
+        pricebookBundleId: line.pricebook_bundle_id,
+        bundleRequirementId: line.bundle_requirement_id,
+        catalogUnitPriceCents: line.catalog_unit_price_cents_snapshot
+          ?? (line.pricebook_item_id ? line.unit_price_cents_snapshot : null),
+        ...warrantyFieldsFromSnapshot(line.warranty_months_snapshot),
       }));
   }
 
@@ -374,16 +455,21 @@ export function buildInvoiceLineItemPayload(lines: InvoiceBuilderLine[]): Invoic
     );
 
     if (line.kind === "pricebook_item" && line.pricebookItemId) {
+      const needsUnitPriceOverride =
+        (line.originalUnitPriceCents !== null && line.originalUnitPriceCents !== unitPriceCents)
+        || (
+          line.catalogUnitPriceCents !== null
+          && line.catalogUnitPriceCents === line.originalUnitPriceCents
+          && unitPriceCents === 0
+        );
+
       return {
         kind: "pricebook_item",
         documentLineKey: line.documentLineKey,
         pricebookItemId: line.pricebookItemId,
         quantity,
         sortOrder: index,
-        unitPriceCentsOverride:
-          line.originalUnitPriceCents !== null && line.originalUnitPriceCents !== unitPriceCents
-            ? unitPriceCents
-            : undefined,
+        unitPriceCentsOverride: needsUnitPriceOverride ? unitPriceCents : undefined,
         nameOverride:
           line.originalName !== null && line.originalName !== normalizedName
             ? normalizedName
@@ -394,6 +480,10 @@ export function buildInvoiceLineItemPayload(lines: InvoiceBuilderLine[]): Invoic
             : undefined,
         nameTranslationRecordId,
         descriptionTranslationRecordId,
+        warrantyMonthsOverride: line.warrantyEnabled ? line.warrantyMonths : null,
+        pricebookBundleId: line.pricebookBundleId ?? undefined,
+        bundleRequirementId: line.bundleRequirementId ?? undefined,
+        catalogUnitPriceCentsSnapshot: line.catalogUnitPriceCents ?? undefined,
       };
     }
 

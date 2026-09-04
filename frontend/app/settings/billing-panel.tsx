@@ -1,10 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { WalletCards } from "lucide-react";
-
-import { createStripeCheckoutSession } from "@/lib/billing/client-billing";
+import { ShieldCheck, Tag } from "lucide-react";
 
 export type BillingSummaryPayload = {
   billing: {
@@ -35,15 +34,12 @@ export type BillingSummaryPayload = {
     provider_price_id: string | null;
     attention_reason: string | null;
   };
-  active_provider: string;
+  platform_billing_enabled?: boolean;
+  active_provider: string | null;
   provider_checkout_configured: boolean;
   checkout_urls_configured: boolean;
   webhook_verification_configured: boolean;
-  stripe_price_env_configured?: {
-    starter: boolean;
-    pro: boolean;
-    business: boolean;
-  };
+  checkout_disabled_reason?: string;
 };
 
 type BillingPanelProps = {
@@ -51,13 +47,41 @@ type BillingPanelProps = {
   loadError: string | null;
 };
 
-const planOptions = ["starter", "pro", "business"] as const;
+type ApiEnvelope<T> = {
+  data?: T;
+  error?: { message?: string };
+};
+
+type RedeemCouponResponse = {
+  coupon_code: string;
+  message: string;
+  billing: BillingSummaryPayload["billing"];
+};
+
+async function billingFetch<T>(input: string, init?: RequestInit) {
+  const headers = new Headers(init?.headers);
+  if (init?.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(input, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
+  const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
+
+  if (!response.ok) {
+    throw new Error(payload?.error?.message ?? "The billing request could not be completed.");
+  }
+
+  return payload?.data as T;
+}
 
 type BillingStatusPresentation = {
   tone: "healthy" | "attention" | "waiting" | "retry";
   title: string;
   body: string;
-  showRetry: boolean;
 };
 
 function getBillingStatusPresentation(
@@ -69,22 +93,20 @@ function getBillingStatusPresentation(
   if (billingStatus === "past_due") {
     return {
       tone: "retry",
-      title: "Payment past due",
+      title: "Access attention required",
       body: attentionReason
-        ? `Stripe reported a payment problem: ${attentionReason}. Retry checkout or update payment in Stripe to restore access.`
-        : "Stripe reported a payment problem on this subscription. Retry checkout or update payment in Stripe to restore access.",
-      showRetry: true,
+        ? `Billing status requires owner attention: ${attentionReason}.`
+        : "Billing status requires owner attention before access should be restored.",
     };
   }
 
   if (billingStatus === "canceled") {
     return {
       tone: "retry",
-      title: cancelAtPeriodEnd ? "Subscription ending" : "Subscription canceled",
+      title: cancelAtPeriodEnd ? "Access ending" : "Access canceled",
       body: cancelAtPeriodEnd
-        ? "This subscription is set to cancel at the end of the current billing period. Start a new checkout if you need to reactivate before access is removed."
-        : "This shared billing account no longer has an active paid subscription. Start checkout again to reactivate workspace access.",
-      showRetry: true,
+        ? "This billing account is set to end at the close of the current period."
+        : "This shared billing account is no longer marked active for workspace access.",
     };
   }
 
@@ -92,19 +114,17 @@ function getBillingStatusPresentation(
     return {
       tone: "retry",
       title: "Billing account deactivated",
-      body: "Workspace access is blocked until a paid subscription is active again. Start checkout to reactivate this billing account.",
-      showRetry: true,
+      body: "Workspace access is blocked until this local billing account is reactivated.",
     };
   }
 
   if (billingStatus === "unknown") {
     return {
       tone: "waiting",
-      title: "Waiting for billing confirmation",
+      title: "Waiting for local access confirmation",
       body: lastProviderSyncAt
-        ? "Local billing state has not been confirmed yet. If you recently completed checkout, wait for verified Stripe webhook sync or retry checkout."
-        : "No verified provider sync has been recorded yet. Complete Stripe Checkout and wait for webhook confirmation before expecting CRM access.",
-      showRetry: true,
+        ? "Local billing state has provider history but is not currently marked active or trialing."
+        : "No active or trialing access state has been recorded yet.",
     };
   }
 
@@ -113,7 +133,6 @@ function getBillingStatusPresentation(
       tone: "healthy",
       title: "Trial in progress",
       body: "This billing account is in a trial window. CRM access follows the current trial entitlement until the trial ends or converts to paid billing.",
-      showRetry: false,
     };
   }
 
@@ -122,36 +141,23 @@ function getBillingStatusPresentation(
       tone: "attention",
       title: "Billing attention required",
       body: `Status: ${billingStatus} — ${attentionReason}`,
-      showRetry: billingStatus !== "active",
     };
   }
 
   return {
     tone: "healthy",
     title: `Billing status: ${billingStatus}`,
-    body: "Checkout and plan changes remain controlled through the existing Stripe flow.",
-    showRetry: false,
+    body: "Workspace access is controlled by local billing state and controlled access grants.",
   };
 }
 
 export function BillingPanel({ initial, loadError }: BillingPanelProps) {
-  const [payload] = useState<BillingSummaryPayload | null>(initial);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<(typeof planOptions)[number]>("starter");
-
-  async function startCheckout() {
-    setBusy(true);
-    setMessage(null);
-
-    try {
-      const session = await createStripeCheckoutSession(selectedPlan);
-      window.location.assign(session.url);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Stripe checkout could not be started.");
-      setBusy(false);
-    }
-  }
+  const router = useRouter();
+  const [payload, setPayload] = useState<BillingSummaryPayload | null>(initial);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
+  const [couponSubmitting, setCouponSubmitting] = useState(false);
 
   if (loadError) {
     return (
@@ -170,10 +176,9 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
   }
 
   const { billing } = payload;
-  const planEnv = payload.stripe_price_env_configured;
-  const selectedPlanConfigured = Boolean(planEnv?.[selectedPlan]);
-  const checkoutReady = payload.provider_checkout_configured && payload.checkout_urls_configured;
-  const activeProvider = billing.billing_provider ?? payload.active_provider;
+  const activeProvider = payload.platform_billing_enabled
+    ? (billing.billing_provider ?? payload.active_provider ?? "None")
+    : "None";
   const statusPresentation = getBillingStatusPresentation(
     billing.billing_status,
     billing.attention_reason,
@@ -199,13 +204,50 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
         ? "text-sky-100/90"
         : "text-amber-100/90";
 
+  async function handleRedeemCoupon(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedCode = couponCode.trim();
+    if (!trimmedCode) {
+      setCouponError("Enter a coupon code.");
+      setCouponSuccess(null);
+      return;
+    }
+
+    setCouponSubmitting(true);
+    setCouponError(null);
+    setCouponSuccess(null);
+
+    try {
+      const result = await billingFetch<RedeemCouponResponse>("/api/billing/redeem-coupon", {
+        method: "POST",
+        body: JSON.stringify({ code: trimmedCode }),
+      });
+
+      setPayload((current) =>
+        current
+          ? {
+              ...current,
+              billing: result.billing,
+            }
+          : current,
+      );
+      setCouponCode("");
+      setCouponSuccess(result.message);
+      router.refresh();
+    } catch (error) {
+      setCouponError(error instanceof Error ? error.message : "The coupon could not be applied.");
+    } finally {
+      setCouponSubmitting(false);
+    }
+  }
+
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
       <section className="rounded-[30px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)]">
       <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">WizField billing</p>
       <h2 className="mt-3 text-2xl font-semibold text-[color:var(--sem-display-headline)]">Shared billing account</h2>
       <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-        The active workspace belongs to a shared WizField billing account. One subscription can cover multiple
+        The active workspace belongs to a shared WizField billing account. One access profile can cover multiple
         businesses according to the current plan entitlement, while tenant invoice payments stay separate.
       </p>
 
@@ -215,11 +257,6 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
         </p>
         <h4 className={`mt-2 text-lg font-semibold ${statusTitleClassName}`}>{statusPresentation.title}</h4>
         <p className={`mt-2 text-sm leading-6 ${statusBodyClassName}`}>{statusPresentation.body}</p>
-        {statusPresentation.showRetry ? (
-          <p className={`mt-3 text-sm leading-6 ${statusBodyClassName}`}>
-            Use Stripe checkout below to retry activation or start a new subscription.
-          </p>
-        ) : null}
       </div>
 
       <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
@@ -239,7 +276,7 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
           <dd className="mt-1 font-semibold text-[color:var(--sem-text-primary)]">{billing.billing_status}</dd>
         </div>
         <div className="theme-control-surface-soft rounded-[16px] border px-4 py-3">
-          <dt className="text-[color:var(--sem-text-muted)]">Active provider</dt>
+          <dt className="text-[color:var(--sem-text-muted)]">Payment provider</dt>
           <dd className="mt-1 font-semibold capitalize text-[color:var(--sem-text-primary)]">{activeProvider}</dd>
         </div>
         <div className="theme-control-surface-soft rounded-[16px] border px-4 py-3">
@@ -251,16 +288,8 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
           </dd>
         </div>
         <div className="theme-control-surface-soft rounded-[16px] border px-4 py-3">
-          <dt className="text-[color:var(--sem-text-muted)]">Last provider sync</dt>
-          <dd className="mt-1 text-[color:var(--sem-text-primary)]">{billing.last_provider_sync_at ?? "—"}</dd>
-        </div>
-        <div className="theme-control-surface-soft rounded-[16px] border px-4 py-3">
-          <dt className="text-[color:var(--sem-text-muted)]">Provider customer (suffix)</dt>
-          <dd className="mt-1 font-mono text-xs text-[color:var(--sem-text-primary)]">{billing.provider_customer_id_suffix ?? "—"}</dd>
-        </div>
-        <div className="theme-control-surface-soft rounded-[16px] border px-4 py-3">
-          <dt className="text-[color:var(--sem-text-muted)]">Provider subscription (suffix)</dt>
-          <dd className="mt-1 font-mono text-xs text-[color:var(--sem-text-primary)]">{billing.provider_subscription_id_suffix ?? "—"}</dd>
+          <dt className="text-[color:var(--sem-text-muted)]">SaaS checkout</dt>
+          <dd className="mt-1 font-semibold text-[color:var(--sem-text-primary)]">Disabled</dd>
         </div>
       </dl>
 
@@ -286,62 +315,63 @@ export function BillingPanel({ initial, loadError }: BillingPanelProps) {
 
       <aside className="space-y-5">
         <div className="rounded-[30px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)]">
-          <WalletCards className="h-8 w-8 text-[color:var(--sem-accent-primary)]" />
-          <h4 className="mt-4 text-xl font-semibold text-[color:var(--sem-display-headline)]">Stripe checkout</h4>
+          <Tag className="h-8 w-8 text-[color:var(--sem-accent-primary)]" />
+          <h4 className="mt-4 text-xl font-semibold text-[color:var(--sem-display-headline)]">Promotional access</h4>
           <p className="mt-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-            Launch Stripe Checkout for the shared billing account. Covered businesses inherit the same plan after verified
-            Stripe webhook events update the local billing account.
+            Apply a Phoenix owner coupon to unlock Business plan features such as inventory management and automations.
           </p>
 
-          {!checkoutReady ? (
-            <p className="mt-3 text-sm text-[color:var(--sem-text-muted)]">
-              Stripe checkout is not fully configured on the server yet. Set `STRIPE_SECRET_KEY` and ensure the success
-              / cancel redirect URLs are configured for this environment.
-            </p>
-          ) : null}
-
-          {!payload.webhook_verification_configured ? (
-            <p className="mt-2 text-xs text-amber-200/80">
-              Stripe webhook signature verification is not configured yet. A Checkout success redirect alone does not
-              activate the plan.
-            </p>
-          ) : null}
-
-          <div className="mt-4 space-y-4">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-[color:var(--sem-text-muted)]">Plan for checkout</span>
-              <select
-                value={selectedPlan}
-                onChange={(event) => setSelectedPlan(event.target.value as (typeof planOptions)[number])}
-                className="theme-control-surface-soft rounded-[14px] border px-3 py-2 text-sm capitalize text-[color:var(--sem-text-primary)]"
-              >
-                {planOptions.map((key) => (
-                  <option key={key} value={key} disabled={planEnv ? !planEnv[key] : false}>
-                    {key}
-                    {planEnv && !planEnv[key] ? " (env missing)" : ""}
-                  </option>
-                ))}
-              </select>
+          <form className="mt-4 space-y-3" onSubmit={handleRedeemCoupon}>
+            <label className="block text-xs uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">
+              Coupon code
+              <input
+                className="theme-control-surface mt-2 w-full rounded-[14px] border px-3 py-2 text-sm normal-case tracking-normal text-[color:var(--sem-text-primary)]"
+                value={couponCode}
+                onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
+                placeholder="PHOENIXFIREPLACE0"
+                autoComplete="off"
+                spellCheck={false}
+                disabled={couponSubmitting}
+              />
             </label>
             <button
-              type="button"
-              disabled={busy || !checkoutReady || !selectedPlanConfigured}
-              onClick={() => void startCheckout()}
-              className="w-full rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--sem-accent-primary)] px-4 py-3 text-sm font-semibold text-[color:var(--cmp-surface-canvas)] disabled:cursor-not-allowed disabled:opacity-40"
+              type="submit"
+              className="theme-button-primary w-full rounded-[14px] px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              disabled={couponSubmitting}
             >
-              {busy
-                ? "Redirecting…"
-                : statusPresentation.showRetry
-                  ? "Retry Stripe checkout"
-                  : "Start Stripe checkout"}
+              {couponSubmitting ? "Applying…" : "Apply coupon"}
             </button>
+          </form>
+
+          {couponError ? (
+            <p className="mt-3 text-sm text-amber-200">{couponError}</p>
+          ) : null}
+          {couponSuccess ? (
+            <p className="mt-3 text-sm text-[color:var(--sem-accent-primary)]">{couponSuccess}</p>
+          ) : null}
+        </div>
+
+        <div className="rounded-[30px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)]">
+          <ShieldCheck className="h-8 w-8 text-[color:var(--sem-accent-primary)]" />
+          <h4 className="mt-4 text-xl font-semibold text-[color:var(--sem-display-headline)]">Workspace access</h4>
+          <p className="mt-3 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+            SaaS subscription checkout is disabled for the active WizField runtime. Covered businesses inherit the current
+            local plan and access state from this shared billing account.
+          </p>
+
+          <div className="mt-4 rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-4">
+            <p className="text-xs uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Current runtime</p>
+            <p className="mt-2 text-sm font-semibold text-[color:var(--sem-text-primary)]">
+              No payment provider configured
+            </p>
+            <p className="mt-2 text-xs leading-5 text-[color:var(--sem-text-muted)]">
+              {payload.checkout_disabled_reason ?? "Operational access does not require Stripe configuration or subscription state."}
+            </p>
           </div>
 
           <p className="mt-5 text-xs leading-6 text-[color:var(--sem-text-muted)]">
-            In-app Stripe plan change and cancellation controls are intentionally not exposed in this pass.
+            CRM invoices and tenant customer payments remain separate operating records and are not processed here.
           </p>
-
-          {message ? <p className="mt-3 text-sm text-[color:var(--sem-text-secondary)]">{message}</p> : null}
         </div>
       </aside>
     </div>

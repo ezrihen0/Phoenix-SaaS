@@ -77,6 +77,7 @@ function buildActor(input: {
     organization_id: input.organizationId,
     role: input.membership.role,
     permissions: listPermissionsForMembership(input.membership),
+    platform_capabilities: [],
   };
 }
 

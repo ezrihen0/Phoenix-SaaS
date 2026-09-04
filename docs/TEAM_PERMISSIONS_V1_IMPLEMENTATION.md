@@ -1,5 +1,8 @@
 # Team & Permissions V1 — Implementation Summary
 
+Current RBAC / operational-access operating truth: [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md) §5.  
+`TeamController` is protected by session plus global `GlobalOperationalAccessGuard` (`APP_GUARD`). This file remains implementation detail, not a second SoT.
+
 ## Existing RBAC findings
 
 See [TEAM_PERMISSIONS_V1_RBAC_AUDIT.md](./TEAM_PERMISSIONS_V1_RBAC_AUDIT.md).

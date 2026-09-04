@@ -98,8 +98,8 @@ export default function SignupPage() {
               Create your WizField workspace.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-[color:var(--sem-text-secondary)] md:text-lg">
-              Create your owner account and your first business. Your workspace will be prepared for activation through
-              WizField&apos;s shared billing flow with Stripe as the checkout provider.
+              Create your owner account and your first business. Your workspace opens directly with local WizField
+              access state; SaaS subscription checkout is disabled in the active runtime.
             </p>
 
             <div className="mt-10 grid gap-4 sm:grid-cols-3">

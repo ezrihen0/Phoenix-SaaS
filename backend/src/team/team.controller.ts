@@ -126,6 +126,12 @@ export class TeamController {
     );
   }
 
+  @Delete("members/:profileId")
+  async removeMember(@Param("profileId") profileId: string, @Req() request: RequestWithActor) {
+    requirePermission(request.actor, "team.manage", "team_manage_forbidden", "You cannot manage team access.");
+    return apiSuccess(await this.teamService.removeMember(profileId, request.actor!));
+  }
+
   @Post("recommend-role")
   async recommendRole(@Body() payload: { responsibilities?: unknown }, @Req() request: RequestWithActor) {
     requirePermission(request.actor, "team.invite", "team_invite_forbidden", "You cannot add team members.");

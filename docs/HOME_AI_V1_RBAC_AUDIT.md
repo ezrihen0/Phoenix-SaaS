@@ -1,5 +1,10 @@
 # HOME AI V1 — Pre-Implementation Audit
 
+> **HISTORICAL — pre-implementation audit.**  
+> Current Home AI truth is [WizField_AI_Master_Source_of_Truth.md](WizField_AI_Master_Source_of_Truth.md) §1A.  
+> Verification: [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md).  
+> Do not treat the gaps below as open product work.
+
 ## Current `/home`
 
 - Route: `frontend/app/home/page.tsx`

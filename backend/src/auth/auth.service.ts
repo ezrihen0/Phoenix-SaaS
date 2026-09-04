@@ -18,6 +18,16 @@ import {
   shouldAutoAttachDefaultOrganizationMembership,
   shouldWarnAboutDefaultBootstrapCredentials,
 } from "./bootstrap-auth.policy";
+import {
+  rankMembershipsForDefaultSelection,
+  shouldBlockBootstrapOrganizationSwitch,
+  shouldRepairBootstrapOrganizationPreference,
+} from "./organization-resolution.policy";
+import {
+  hasPlatformCapability,
+  isPlatformCapability,
+  type PlatformCapability,
+} from "../platform/platform-operator.policy";
 import { listPermissionsForRole } from "./permissions";
 import { listPermissionsForMembership } from "../team/membership-permissions";
 import { assertOrganizationSeatAvailable } from "../team/team-seat-enforcement";
@@ -26,6 +36,7 @@ import { ControlledAccessGrantEntity } from "../database/entities/controlled-acc
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
 import { OrganizationBillingEntity } from "../database/entities/organization-billing.entity";
+import { PlatformOperatorGrantEntity } from "../database/entities/platform-operator-grant.entity";
 import { ProfileEntity } from "../database/entities/profile.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
 import { UserEntity } from "../database/entities/user.entity";
@@ -54,6 +65,8 @@ export class AuthService {
     private readonly sessionsRepository: Repository<AuthSessionEntity>,
     @InjectRepository(ControlledAccessGrantEntity)
     private readonly controlledAccessGrantsRepository: Repository<ControlledAccessGrantEntity>,
+    @InjectRepository(PlatformOperatorGrantEntity)
+    private readonly platformOperatorGrantsRepository: Repository<PlatformOperatorGrantEntity>,
     private readonly organizationBillingService: OrganizationBillingService,
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
@@ -315,7 +328,8 @@ export class AuthService {
       }
 
       const organizationLimit = billingAccount.organization_limit ?? resolveOrganizationLimitForPlan(billingAccount.plan_key);
-      if (organizationLimit !== null) {
+      const bypassOrganizationLimit = hasPlatformCapability(actor, "organizations.create_unlimited");
+      if (organizationLimit !== null && !bypassOrganizationLimit) {
         const coveredCount = await billingRepository.count({
           where: { billing_account_id: billingAccount.id },
         });
@@ -346,6 +360,82 @@ export class AuthService {
     });
 
     return this.switchActiveOrganization(request, actor.user.id, created);
+  }
+
+  async createStandaloneOrganizationForPlatformOperator(
+    actor: ActorContext,
+    organizationName: string,
+    request: Request,
+  ) {
+    if (!hasPlatformCapability(actor, "organizations.create_standalone")) {
+      apiError(
+        403,
+        "platform_capability_required",
+        "Standalone organization creation requires a platform operator grant.",
+      );
+    }
+
+    const createdOrganizationId = await this.dataSource.transaction(async (manager) => {
+      const billingAccountsRepository = manager.getRepository(BillingAccountEntity);
+      const billingRepository = manager.getRepository(OrganizationBillingEntity);
+      const organization = await this.createOrganization(manager, organizationName);
+      await this.ensureMembershipForUser(actor.user.id, "owner", organization.id, manager);
+
+      const billingAccount = await billingAccountsRepository.save(
+        billingAccountsRepository.create({
+          owner_user_id: actor.user.id,
+          anchor_organization_id: organization.id,
+          plan_key: "starter",
+          billing_status: "trialing",
+          organization_limit: resolveOrganizationLimitForPlan("starter"),
+          billing_provider: null,
+          provider_customer_id: null,
+          provider_subscription_id: null,
+          provider_price_id: null,
+          clover_customer_id: null,
+          clover_plan_id: null,
+          clover_subscription_id: null,
+          trial_starts_at: null,
+          trial_ends_at: null,
+          current_period_start: null,
+          current_period_end: null,
+          cancel_at_period_end: false,
+          canceled_at: null,
+          deactivated_at: null,
+          last_clover_sync_at: null,
+          last_provider_sync_at: null,
+          last_webhook_at: null,
+          attention_reason: null,
+        }),
+      );
+
+      await billingRepository.save(
+        billingRepository.create(
+          this.buildOrganizationBillingCoverage(organization.id, billingAccount),
+        ),
+      );
+
+      if (this.isPlatformDevOrgGrantEnabled()) {
+        await this.ensureDevControlledAccessGrant(manager, organization.id, actor.user.id);
+      }
+
+      return organization.id;
+    });
+
+    return this.switchActiveOrganization(request, actor.user.id, createdOrganizationId);
+  }
+
+  async createOrganizationForActor(
+    actor: ActorContext,
+    organizationName: string,
+    request: Request,
+    mode: "standalone" | "shared" = "shared",
+  ) {
+    if (mode === "standalone") {
+      return this.createStandaloneOrganizationForPlatformOperator(actor, organizationName, request);
+    }
+
+    return this.createOrganizationForActiveAccount(actor, organizationName, request);
   }
 
   async logout(request: Request, response: Response) {
@@ -584,12 +674,25 @@ export class AuthService {
       return null;
     }
 
-    if (!session.active_organization_id && actor.organization_id) {
-      session.active_organization_id = actor.organization_id;
+    const repairedActor = await this.repairBootstrapOrganizationActor(
+      session.user_id,
+      actor,
+      session,
+    );
+
+    if (!session.active_organization_id && repairedActor.organization_id) {
+      session.active_organization_id = repairedActor.organization_id;
+      await this.sessionsRepository.save(session);
+    } else if (
+      session.active_organization_id
+      && repairedActor.organization_id
+      && session.active_organization_id !== repairedActor.organization_id
+    ) {
+      session.active_organization_id = repairedActor.organization_id;
       await this.sessionsRepository.save(session);
     }
 
-    return actor;
+    return repairedActor;
   }
 
   async switchActiveOrganization(request: Request, userId: string, organizationId: string) {
@@ -615,6 +718,16 @@ export class AuthService {
 
     if (!actor?.organization_id) {
       apiError(403, "organization_access_forbidden", "This account cannot switch to the requested organization.");
+    }
+
+    if (
+      shouldBlockBootstrapOrganizationSwitch(actor.organization, actor.memberships ?? [])
+    ) {
+      apiError(
+        403,
+        "bootstrap_organization_switch_forbidden",
+        "The bootstrap development workspace cannot be selected while an operating workspace is available.",
+      );
     }
 
     const session = await this.sessionsRepository.findOne({
@@ -715,6 +828,7 @@ export class AuthService {
           : null,
       })),
       permissions: actor.permissions,
+      platform_capabilities: actor.platform_capabilities,
     };
   }
 
@@ -752,11 +866,12 @@ export class AuthService {
     if (preferredOrganizationId) {
       const preferredActor = await this.loadActorContextByUserId(userId, preferredOrganizationId);
       if (preferredActor?.organization_id) {
-        return preferredActor;
+        return this.repairBootstrapOrganizationActor(userId, preferredActor);
       }
     }
 
-    return this.loadActorContextByUserId(userId);
+    const actor = await this.loadActorContextByUserId(userId);
+    return actor ? this.repairBootstrapOrganizationActor(userId, actor) : null;
   }
 
   clearSessionCookie(response: Response) {
@@ -766,6 +881,49 @@ export class AuthService {
       secure: this.isSessionCookieSecure(),
       path: "/",
     });
+  }
+
+  private async repairBootstrapOrganizationActor(
+    userId: string,
+    actor: ActorContext,
+    session: AuthSessionEntity | null = null,
+  ): Promise<ActorContext> {
+    if (
+      !shouldRepairBootstrapOrganizationPreference(
+        actor.organization,
+        actor.memberships ?? [],
+      )
+    ) {
+      return actor;
+    }
+
+    const ranked = rankMembershipsForDefaultSelection(
+      (actor.memberships ?? []).filter((membership) => membership.status === "active"),
+    );
+    const replacement = ranked.find(
+      (membership) => membership.organization_id !== actor.organization_id,
+    );
+
+    if (!replacement?.organization_id) {
+      return actor;
+    }
+
+    const repaired = await this.loadActorContextByUserId(userId, replacement.organization_id);
+    if (!repaired?.organization_id) {
+      return actor;
+    }
+
+    if (session && session.active_organization_id !== repaired.organization_id) {
+      session.active_organization_id = repaired.organization_id;
+      await this.sessionsRepository.save(session);
+    }
+
+    this.logger.warn(
+      `Repaired bootstrap organization session for user ${userId}: `
+      + `${actor.organization?.slug ?? actor.organization_id} → ${repaired.organization?.slug ?? repaired.organization_id}`,
+    );
+
+    return repaired;
   }
 
   private async loadActorContextByUserId(
@@ -779,6 +937,10 @@ export class AuthService {
     ]);
 
     if (!user) {
+      return null;
+    }
+
+    if (!user.is_active) {
       return null;
     }
 
@@ -837,7 +999,7 @@ export class AuthService {
     }
 
     const membership = preferredMembership
-      ?? defaultMemberships[0]
+      ?? rankMembershipsForDefaultSelection(defaultMemberships)[0]
       ?? null;
     const organization = membership?.organization ?? null;
     const role = membership?.role ?? null;
@@ -864,7 +1026,75 @@ export class AuthService {
       organization_id: membership?.organization_id ?? null,
       role,
       permissions: listPermissionsForMembership(membership),
+      platform_capabilities: await this.loadPlatformCapabilitiesForUser(userId),
     };
+  }
+
+  private async loadPlatformCapabilitiesForUser(userId: string): Promise<PlatformCapability[]> {
+    const grants = await this.platformOperatorGrantsRepository.find({
+      where: {
+        user_id: userId,
+        revoked_at: IsNull(),
+      },
+      order: {
+        granted_at: "ASC",
+      },
+    });
+
+    const capabilities = new Set<PlatformCapability>();
+    for (const grant of grants) {
+      if (isPlatformCapability(grant.capability)) {
+        capabilities.add(grant.capability);
+      }
+    }
+
+    return [...capabilities];
+  }
+
+  private isPlatformDevOrgGrantEnabled() {
+    const raw = this.configService.get<string>("PLATFORM_DEV_ORG_GRANT_ENABLED")
+      ?? process.env.PLATFORM_DEV_ORG_GRANT_ENABLED
+      ?? "true";
+    const normalized = raw.trim().toLowerCase();
+    return ["true", "1", "yes", "on"].includes(normalized);
+  }
+
+  private async ensureDevControlledAccessGrant(
+    manager: EntityManager,
+    organizationId: string,
+    createdByUserId: string | null,
+  ) {
+    const grantRepo = manager.getRepository(ControlledAccessGrantEntity);
+    const now = new Date();
+    const existing = await grantRepo.findOne({
+      where: {
+        organization_id: organizationId,
+        starts_at: LessThanOrEqual(now),
+        expires_at: MoreThan(now),
+        revoked_at: IsNull(),
+      },
+      order: { created_at: "DESC" },
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    const startsAt = new Date(now.getTime() - 60_000);
+    const expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+
+    return grantRepo.save(
+      grantRepo.create({
+        organization_id: organizationId,
+        grant_type: "owner_internal",
+        reason_code: "platform_operator_standalone_org",
+        starts_at: startsAt,
+        expires_at: expiresAt,
+        revoked_at: null,
+        notes: "Development workspace created by platform operator",
+        created_by_user_id: createdByUserId,
+      }),
+    );
   }
 
   private async loadLastActiveOrganizationPreference(userId: string): Promise<string | null> {
@@ -1058,14 +1288,8 @@ export class AuthService {
   async isOrganizationOperationallyEligible(organizationId: string) {
     const context = await this.organizationBillingService.getOrCreateContextForOrganization(organizationId);
     const billingStatus = context.account.billing_status;
-    const hasVerifiedStripeSync = Boolean(
-      context.account.provider_subscription_id?.trim()
-      && context.account.provider_price_id?.trim()
-      && context.account.last_webhook_at,
-    );
-    const hasVerifiedStripeAccess = accessEligibleBillingStatuses.has(billingStatus) && hasVerifiedStripeSync;
 
-    if (hasVerifiedStripeAccess) {
+    if (accessEligibleBillingStatuses.has(billingStatus)) {
       return true;
     }
 

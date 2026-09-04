@@ -23,6 +23,7 @@ import { PublicBookingsModule } from "./public/public-bookings.module";
 import { SearchModule } from "./search/search.module";
 import { SettingsModule } from "./settings/settings.module";
 import { TelephonyModule } from "./telephony/telephony.module";
+import { InvoiceDocumentsModule } from "./documents/invoice-documents/invoice-documents.module";
 import { WarrantyModule } from "./warranty/warranty.module";
 import { TeamModule } from "./team/team.module";
 
@@ -46,6 +47,7 @@ import { TeamModule } from "./team/team.module";
     PublicBookingsModule,
     InspectionsModule,
     CustomerPortalModule,
+    InvoiceDocumentsModule,
     MessagingModule,
     MarketingModule,
     LanguageStoreModule,

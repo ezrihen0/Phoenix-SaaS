@@ -4,21 +4,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Building2, ChevronDown, Loader2 } from "lucide-react";
+import { Building2, ChevronDown, Loader2, Plus } from "lucide-react";
 
 import type { ClientSession } from "@/lib/auth/client-auth";
-import { getClientSession, setClientActiveOrganization } from "@/lib/auth/client-auth";
+import {
+  createClientOrganization,
+  getClientSession,
+  setClientActiveOrganization,
+} from "@/lib/auth/client-auth";
+import {
+  canCreateOrganization,
+  canCreateStandaloneOrganization,
+  filterSwitchableMemberships,
+} from "@/lib/auth/organization-resolution";
 
 const POST_SWITCH_PATH = "/home";
-
-function listSwitchableMemberships(session: ClientSession) {
-  return session.memberships.filter(
-    (membership) =>
-      membership.status === "active"
-      && membership.organization
-      && membership.organization.is_active,
-  );
-}
 
 type OrganizationSwitcherProps = {
   menuPlacement?: "bottom" | "top";
@@ -37,6 +37,10 @@ export function OrganizationSwitcher({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [switchingToId, setSwitchingToId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const loadSession = useCallback(async () => {
@@ -62,6 +66,7 @@ export function OrganizationSwitcher({
     function handlePointerDown(event: MouseEvent) {
       if (!menuRef.current?.contains(event.target as Node)) {
         setMenuOpen(false);
+        setCreateOpen(false);
       }
     }
 
@@ -71,7 +76,22 @@ export function OrganizationSwitcher({
     };
   }, [menuOpen]);
 
-  const switchable = useMemo(() => (session ? listSwitchableMemberships(session) : []), [session]);
+  const switchable = useMemo(
+    () => (session ? filterSwitchableMemberships(session.memberships) : []),
+    [session],
+  );
+
+  const canCreate = useMemo(() => {
+    if (!session) {
+      return false;
+    }
+
+    return canCreateOrganization(
+      session.permissions,
+      session.platform_capabilities,
+      false,
+    );
+  }, [session]);
 
   const activeLabel = session?.active_organization?.name?.trim()
     || session?.memberships.find((membership) => membership.organization_id === session?.active_membership?.organization_id)
@@ -107,6 +127,121 @@ export function OrganizationSwitcher({
       setMenuOpen(false);
       setLoadError(error instanceof Error ? error.message : t("switchError"));
     }
+  }
+
+  async function handleCreateOrganization() {
+    const trimmed = createName.trim();
+    if (!trimmed || !session) {
+      return;
+    }
+
+    setCreating(true);
+    setCreateError(null);
+
+    try {
+      const mode = canCreateStandaloneOrganization(session.platform_capabilities)
+        ? "standalone"
+        : "shared";
+      await createClientOrganization(trimmed, mode);
+      window.location.assign(POST_SWITCH_PATH);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : t("switchError"));
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  function renderCreateSection() {
+    if (!canCreate) {
+      return null;
+    }
+
+    if (createOpen) {
+      return (
+        <div className="border-t border-[color:var(--cmp-border-subtle)] px-3 py-2">
+          <input
+            value={createName}
+            onChange={(event) => setCreateName(event.target.value)}
+            placeholder={t("createOrganizationPlaceholder")}
+            className="theme-control-surface mb-2 w-full rounded-xl border px-3 py-2 text-sm text-[color:var(--sem-text-primary)] outline-none"
+          />
+          {createError ? (
+            <p className="mb-2 text-xs text-rose-600 dark:text-rose-300">{createError}</p>
+          ) : null}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={creating || !createName.trim()}
+              className="rounded-full bg-[color:var(--sem-accent-primary)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+              onClick={() => {
+                void handleCreateOrganization();
+              }}
+            >
+              {creating ? t("creatingOrganization") : t("createOrganizationSubmit")}
+            </button>
+            <button
+              type="button"
+              className="text-xs text-[color:var(--sem-text-muted)]"
+              onClick={() => {
+                setCreateOpen(false);
+                setCreateName("");
+                setCreateError(null);
+              }}
+            >
+              {t("createOrganizationCancel")}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="border-t border-[color:var(--cmp-border-subtle)] px-2 py-1">
+        <button
+          type="button"
+          className={`${optionClass} text-[color:var(--sem-accent-primary)]`}
+          onClick={() => {
+            setCreateOpen(true);
+          }}
+        >
+          <span className="inline-flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            {t("createOrganization")}
+          </span>
+        </button>
+      </div>
+    );
+  }
+
+  function renderOrganizationMenu() {
+    return (
+      <>
+        {switchable.map((membership) => {
+          const org = membership.organization;
+          const label = org?.name?.trim() || t("unnamedOrganization");
+          const isActive = membership.organization_id === session?.active_organization?.id;
+          const busy = switchingToId === membership.organization_id;
+
+          return (
+            <button
+              key={membership.id}
+              type="button"
+              role="option"
+              aria-selected={isActive}
+              disabled={Boolean(switchingToId)}
+              className={`${optionClass} ${isActive ? "bg-[color:var(--cmp-hover-surface)]" : ""}`}
+              onClick={() => {
+                void handleSelectOrganization(membership.organization_id);
+              }}
+            >
+              <span className="truncate">{label}</span>
+              {busy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : null}
+            </button>
+          );
+        })}
+        {renderCreateSection()}
+      </>
+    );
   }
 
   if (loadError && !session) {
@@ -153,12 +288,30 @@ export function OrganizationSwitcher({
         <p className={`${labelClass} text-amber-700 dark:text-amber-200`}>
           {t("unavailable")}
         </p>
-        <Link
-          href="/settings"
-          className="mt-1 inline-block text-xs text-[color:var(--sem-accent-primary)] underline-offset-4 hover:underline"
-        >
-          {t("openSettings")}
-        </Link>
+        {canCreate ? (
+          <div className="relative mt-2" ref={menuRef}>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 text-xs text-[color:var(--sem-accent-primary)] underline-offset-4 hover:underline"
+              onClick={() => setCreateOpen((open) => !open)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t("createOrganization")}
+            </button>
+            {createOpen ? (
+              <div className={`${panelClass} left-0 right-auto mt-2`}>
+                {renderCreateSection()}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <Link
+            href="/settings"
+            className="mt-1 inline-block text-xs text-[color:var(--sem-accent-primary)] underline-offset-4 hover:underline"
+          >
+            {t("openSettings")}
+          </Link>
+        )}
       </div>
     );
   }
@@ -167,7 +320,7 @@ export function OrganizationSwitcher({
     ?? switchable[0]?.organization?.name?.trim()
     ?? t("currentOrganization");
 
-  if (switchable.length === 1) {
+  if (switchable.length === 1 && !canCreate) {
     if (variant === "compact") {
       const content = (
         <>
@@ -230,29 +383,7 @@ export function OrganizationSwitcher({
 
         {menuOpen ? (
           <div className={panelClass} role="listbox">
-            {switchable.map((membership) => {
-              const org = membership.organization;
-              const label = org?.name?.trim() || t("unnamedOrganization");
-              const isActive = membership.organization_id === session.active_organization?.id;
-              const busy = switchingToId === membership.organization_id;
-
-              return (
-                <button
-                  key={membership.id}
-                  type="button"
-                  role="option"
-                  aria-selected={isActive}
-                  disabled={Boolean(switchingToId)}
-                  className={`${optionClass} ${isActive ? "bg-[color:var(--cmp-hover-surface)]" : ""}`}
-                  onClick={() => {
-                    void handleSelectOrganization(membership.organization_id);
-                  }}
-                >
-                  <span className="truncate">{label}</span>
-                  {busy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : null}
-                </button>
-              );
-            })}
+            {renderOrganizationMenu()}
           </div>
         ) : null}
       </div>
@@ -284,29 +415,7 @@ export function OrganizationSwitcher({
 
       {menuOpen ? (
         <div className={panelClass} role="listbox">
-          {switchable.map((membership) => {
-            const org = membership.organization;
-            const label = org?.name?.trim() || t("unnamedOrganization");
-            const isActive = membership.organization_id === session.active_organization?.id;
-            const busy = switchingToId === membership.organization_id;
-
-            return (
-              <button
-                key={membership.id}
-                type="button"
-                role="option"
-                aria-selected={isActive}
-                disabled={Boolean(switchingToId)}
-                className={`${optionClass} ${isActive ? "bg-[color:var(--cmp-hover-surface)]" : ""}`}
-                onClick={() => {
-                  void handleSelectOrganization(membership.organization_id);
-                }}
-              >
-                <span className="truncate">{label}</span>
-                {busy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : null}
-              </button>
-            );
-          })}
+          {renderOrganizationMenu()}
         </div>
       ) : null}
     </div>

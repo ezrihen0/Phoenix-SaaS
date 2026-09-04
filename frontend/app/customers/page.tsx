@@ -5,12 +5,6 @@ import {
   Briefcase,
   BriefcaseBusiness,
   CheckCircle2,
-  ChevronRight,
-  ClipboardList,
-  Mail,
-  MapPin,
-  MessageSquare,
-  Phone,
   Search,
   UserRound,
   UsersRound,
@@ -18,9 +12,9 @@ import {
 
 import { BoardShell } from "@/components/board/board-shell";
 import { MetricTile } from "@/components/board/metric-tile";
+import { CustomersDirectoryTable } from "@/components/customers-directory-table";
 import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
 import {
-  MasterMobileList,
   MasterTable,
   MasterTablePagination,
   MasterTableRow,
@@ -28,9 +22,14 @@ import {
 } from "@/components/master-table";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
+import {
+  customerLifecycleBadgeClass,
+  customerLifecycleLabel,
+  resolveCustomerLifecycleStatus,
+  type CustomerListItem,
+} from "@/lib/crm/customer-directory-display";
 import { openJobStatuses } from "@/lib/crm/data";
-import { formatAddress, formatDate } from "@/lib/crm/display";
-import type { Database } from "@/lib/types/database";
+import { formatDate } from "@/lib/crm/display";
 
 const SHOW_LEGACY_CUSTOMERS_LIST = false;
 
@@ -48,24 +47,24 @@ type CustomersPageContext = {
   }>;
 };
 
-type CustomerRecord = Database["public"]["Tables"]["customers"]["Row"];
-type CustomerLifecycleStatus = Database["public"]["Enums"]["customer_lifecycle_status"];
-type CustomerJobSummary = Pick<
-  Database["public"]["Tables"]["jobs"]["Row"],
-  | "id"
-  | "customer_id"
-  | "title"
-  | "description"
-  | "requested_service_type"
-  | "status"
-  | "scheduled_for"
-  | "scheduled_window"
-  | "created_at"
-  | "updated_at"
->;
-
-type CustomerListItem = CustomerRecord & {
-  relatedJobs: CustomerJobSummary[];
+type CustomersLedgerResponse = {
+  items: CustomerListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+  };
+  aggregates: {
+    totalCustomers: number;
+    withOpenJobs: number;
+    newThisMonth: number;
+    relatedJobs: number;
+  };
+  cityOptions: CityOption[];
 };
 
 type CityOption = {
@@ -100,119 +99,8 @@ function normalizeCityKey(city: string) {
   return city.trim().toLowerCase();
 }
 
-function hasCompanyOnFile(customer: CustomerListItem) {
-  return Boolean(customer.company_name?.trim());
-}
-
 function activeJobCount(customer: CustomerListItem) {
   return customer.relatedJobs.filter((job) => openJobStatuses.includes(job.status)).length;
-}
-
-function isNewThisMonth(createdAt: string) {
-  const created = new Date(createdAt);
-  const now = new Date();
-  return created.getFullYear() === now.getFullYear() && created.getMonth() === now.getMonth();
-}
-
-function customerMatchesSearch(customer: CustomerListItem, query: string) {
-  if (!query) {
-    return true;
-  }
-
-  const haystack = [
-    customer.full_name,
-    customer.company_name ?? "",
-    customer.phone,
-    customer.email ?? "",
-    customer.service_address_line_1,
-    customer.service_address_line_2 ?? "",
-    customer.service_city,
-    customer.service_state_or_region ?? "",
-    customer.service_postal_code,
-    customer.notes ?? "",
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  return haystack.includes(query);
-}
-
-function resolveCustomerLifecycleStatus(customer: CustomerListItem): CustomerLifecycleStatus {
-  if (
-    customer.lifecycle_status === "prospect" ||
-    customer.lifecycle_status === "active" ||
-    customer.lifecycle_status === "past" ||
-    customer.lifecycle_status === "archived"
-  ) {
-    return customer.lifecycle_status;
-  }
-
-  return activeJobCount(customer) > 0 ? "active" : "past";
-}
-
-function customerLifecycleBadgeClass(status: CustomerLifecycleStatus) {
-  if (status === "prospect") {
-    return "theme-status-warning inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em]";
-  }
-
-  if (status === "active") {
-    return "theme-status-success inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em]";
-  }
-
-  if (status === "past") {
-    return "theme-control-surface inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-secondary)]";
-  }
-
-  return "theme-alert-error inline-flex rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.2em]";
-}
-
-function customerLifecycleLabel(status: CustomerLifecycleStatus) {
-  if (status === "prospect") {
-    return "Prospect";
-  }
-
-  if (status === "active") {
-    return "Active";
-  }
-
-  if (status === "past") {
-    return "Past";
-  }
-
-  return "Archived";
-}
-
-function getCustomerInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
-    return "?";
-  }
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-  return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
-}
-
-function buildCityOptions(customers: CustomerListItem[]): CityOption[] {
-  const cityMap = new Map<string, CityOption>();
-
-  for (const customer of customers) {
-    const city = customer.service_city.trim();
-    if (!city) {
-      continue;
-    }
-
-    const key = normalizeCityKey(city);
-    const existing = cityMap.get(key);
-    if (existing) {
-      existing.count += 1;
-      continue;
-    }
-
-    cityMap.set(key, { key, label: city, count: 1 });
-  }
-
-  return Array.from(cityMap.values()).sort((left, right) => left.label.localeCompare(right.label));
 }
 
 function parseSegment(value: string | undefined): CustomerSegment {
@@ -228,64 +116,59 @@ function segmentFilterClass(active: boolean) {
     : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70 text-[color:var(--sem-text-secondary)] hover:bg-[color:var(--cmp-surface-soft)] hover:text-[color:var(--sem-text-primary)]";
 }
 
-function companyBadgeClass(hasCompany: boolean) {
-  return hasCompany
-    ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-accent-primary)]"
-    : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/80 text-[color:var(--sem-text-secondary)]";
-}
-
 export default async function CustomersPage({ searchParams }: CustomersPageContext) {
-  await requireOfficeCrmRoute("/customers");
+  const session = await requireOfficeCrmRoute("/customers");
   const locale = await getLocale();
   const t = await getTranslations("customers");
   const resolvedSearchParams = await searchParams;
   const pageValue = Number.parseInt((firstValue(resolvedSearchParams.page) ?? "1").trim(), 10);
-  const pageSizeValue = Number.parseInt((firstValue(resolvedSearchParams.pageSize) ?? "10").trim(), 10);
+  const pageSizeValue = Number.parseInt((firstValue(resolvedSearchParams.pageSize) ?? "50").trim(), 10);
   const query = (firstValue(resolvedSearchParams.q) ?? "").trim().toLowerCase();
   const segment = parseSegment((firstValue(resolvedSearchParams.segment) ?? "").trim().toLowerCase());
   const regionParam = (firstValue(resolvedSearchParams.region) ?? "").trim();
   const regionKey = regionParam ? normalizeCityKey(decodeURIComponent(regionParam)) : "";
   const page = Number.isFinite(pageValue) && pageValue > 0 ? pageValue : 1;
-  const pageSize = Number.isFinite(pageSizeValue) && [10, 25, 50, 100].includes(pageSizeValue) ? pageSizeValue : 10;
+  const pageSize = Number.isFinite(pageSizeValue) && [10, 25, 50, 100].includes(pageSizeValue) ? pageSizeValue : 50;
 
-  let customers: CustomerListItem[] = [];
+  let pagedCustomers: CustomerListItem[] = [];
+  let cityOptions: CityOption[] = [];
+  let totalCount = 0;
+  let totalPages = 1;
+  let currentPage = page;
+  let activeCustomerCount = 0;
+  let newThisMonthCount = 0;
+  let relatedJobsCount = 0;
+  let ledgerTotal = 0;
   let loadError: string | null = null;
 
   try {
-    customers = await serverApiFetch<CustomerListItem[]>("/api/customers");
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    if (query) {
+      params.set("q", query);
+    }
+    if (segment !== "all") {
+      params.set("segment", segment);
+    }
+    if (regionKey) {
+      params.set("region", regionKey);
+    }
+
+    const result = await serverApiFetch<CustomersLedgerResponse>(`/api/customers?${params.toString()}`);
+    pagedCustomers = result.items ?? [];
+    cityOptions = result.cityOptions ?? [];
+    totalCount = result.total ?? result.pagination?.totalCount ?? 0;
+    totalPages = result.pagination?.totalPages ?? Math.max(1, Math.ceil(totalCount / pageSize));
+    currentPage = result.page ?? result.pagination?.page ?? page;
+    ledgerTotal = result.aggregates?.totalCustomers ?? totalCount;
+    activeCustomerCount = result.aggregates?.withOpenJobs ?? 0;
+    newThisMonthCount = result.aggregates?.newThisMonth ?? 0;
+    relatedJobsCount = result.aggregates?.relatedJobs ?? 0;
   } catch (error) {
     loadError = error instanceof Error ? error.message : t("listUnavailable");
   }
-
-  const searchMatchedCustomers = customers.filter((customer) => customerMatchesSearch(customer, query));
-  const cityOptions = buildCityOptions(searchMatchedCustomers);
-
-  const segmentFilteredCustomers = searchMatchedCustomers.filter((customer) => {
-    if (segment === "company") {
-      return hasCompanyOnFile(customer);
-    }
-    if (segment === "individual") {
-      return !hasCompanyOnFile(customer);
-    }
-    return true;
-  });
-
-  const filteredCustomers = segmentFilteredCustomers.filter((customer) => {
-    if (!regionKey) {
-      return true;
-    }
-    return normalizeCityKey(customer.service_city) === regionKey;
-  });
-
-  const relatedJobs = filteredCustomers.flatMap((customer) => customer.relatedJobs ?? []);
-  const activeCustomerCount = filteredCustomers.filter((customer) =>
-    customer.relatedJobs.some((job) => openJobStatuses.includes(job.status)),
-  ).length;
-  const newThisMonthCount = filteredCustomers.filter((customer) => isNewThisMonth(customer.created_at)).length;
-  const totalCount = filteredCustomers.length;
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const pagedCustomers = filteredCustomers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   function listQuery(overrides: Record<string, string | null | undefined> = {}) {
     return buildQueryString({
@@ -311,202 +194,6 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
     { key: "company", label: t("segmentHasCompany") },
     { key: "individual", label: t("segmentIndividual") },
   ];
-
-  function renderCustomerTableRow(customer: CustomerListItem) {
-    const lifecycleStatus = resolveCustomerLifecycleStatus(customer);
-    const openJobs = activeJobCount(customer);
-    const hasCompany = hasCompanyOnFile(customer);
-    const isNew = isNewThisMonth(customer.created_at);
-    const formattedAddress = formatAddress(
-      customer.service_address_line_1,
-      customer.service_address_line_2,
-      customer.service_city,
-      customer.service_state_or_region,
-      customer.service_postal_code,
-    );
-
-    return (
-      <tr key={customer.id} className="group border-b border-[color:var(--cmp-border-subtle)] transition hover:bg-[color:var(--cmp-surface-soft)]">
-        <td className="py-4 pl-5 pr-4">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] text-sm font-semibold text-[color:var(--sem-accent-primary)]">
-              {getCustomerInitials(customer.full_name)}
-              {openJobs > 0 ? (
-                <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[color:var(--cmp-surface-canvas)] bg-[color:var(--sem-state-warning)]" />
-              ) : null}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="truncate font-semibold text-[color:var(--sem-text-primary)]">{customer.full_name}</p>
-                {isNew ? (
-                  <span className="rounded-full border border-[color:var(--cmp-status-success-border)] bg-[color:var(--cmp-status-success-bg)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[color:var(--cmp-status-success-text)]">
-                    {t("newThisMonth")}
-                  </span>
-                ) : null}
-              </div>
-              <p className="mt-1 truncate text-sm text-[color:var(--sem-text-secondary)]">
-                {customer.company_name?.trim() || formattedAddress}
-              </p>
-            </div>
-          </div>
-        </td>
-        <td className="px-4 py-4">
-          <div className="space-y-1.5 text-sm">
-            <a className="flex items-center gap-2 text-[color:var(--sem-text-primary)] hover:text-[color:var(--sem-accent-primary)]" href={`tel:${customer.phone}`}>
-              <Phone className="h-3.5 w-3.5 text-[color:var(--sem-text-muted)]" />
-              {customer.phone}
-            </a>
-            {customer.email ? (
-              <a className="flex items-center gap-2 text-[color:var(--sem-text-secondary)] hover:text-[color:var(--sem-accent-primary)]" href={`mailto:${customer.email}`}>
-                <Mail className="h-3.5 w-3.5 text-[color:var(--sem-text-muted)]" />
-                {customer.email}
-              </a>
-            ) : (
-              <span className="flex items-center gap-2 text-[color:var(--sem-text-muted)]">
-                <Mail className="h-3.5 w-3.5" />
-                {t("noEmail")}
-              </span>
-            )}
-          </div>
-        </td>
-        <td className="px-4 py-4">
-          <div className="flex max-w-[310px] items-start gap-2 text-sm text-[color:var(--sem-text-secondary)]">
-            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
-            <span className="line-clamp-2">{formattedAddress}</span>
-          </div>
-        </td>
-        <td className="px-4 py-4">
-          <div className="flex flex-wrap gap-2">
-            <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${companyBadgeClass(hasCompany)}`}>
-              {hasCompany ? t("hasCompanyBadge") : t("individualBadge")}
-            </span>
-            <span className={customerLifecycleBadgeClass(lifecycleStatus)}>{customerLifecycleLabel(lifecycleStatus)}</span>
-          </div>
-        </td>
-        <td className="px-4 py-4">
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/80 px-2.5 py-1 text-xs text-[color:var(--sem-text-secondary)]">
-              {openJobs} {t("open")}
-            </span>
-            <span className="rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/80 px-2.5 py-1 text-xs text-[color:var(--sem-text-secondary)]">
-              {customer.relatedJobs.length} {t("columns.totalJobs").toLowerCase()}
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">
-            {t("lastUpdated")}: {formatDate(customer.updated_at, locale)}
-          </p>
-        </td>
-        <td className="py-4 pl-4 pr-5">
-          <div className="flex items-center justify-end gap-2 opacity-80 transition group-hover:opacity-100">
-            <a
-              href={`tel:${customer.phone}`}
-              title={t("callCustomer")}
-              aria-label={t("callCustomer")}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70 text-[color:var(--sem-text-secondary)] transition hover:border-[color:var(--cmp-border-accent)] hover:text-[color:var(--sem-accent-primary)]"
-            >
-              <Phone className="h-4 w-4" />
-            </a>
-            <Link
-              href={`/messaging?lane=customers&customerId=${customer.id}`}
-              title={t("sendSms")}
-              aria-label={t("sendSms")}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70 text-[color:var(--sem-text-secondary)] transition hover:border-[color:var(--cmp-border-accent)] hover:text-[color:var(--sem-accent-primary)]"
-            >
-              <MessageSquare className="h-4 w-4" />
-            </Link>
-            <Link
-              href={`/customers/${customer.id}`}
-              className="flex h-9 items-center gap-2 rounded-xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] px-3 text-sm font-semibold text-[color:var(--sem-accent-primary)] transition hover:bg-[color:var(--cmp-surface-soft)]"
-            >
-              {t("openProfile")}
-              <ChevronRight className="h-4 w-4" />
-            </Link>
-          </div>
-        </td>
-      </tr>
-    );
-  }
-
-  function renderCustomerMobileCard(customer: CustomerListItem) {
-    const lifecycleStatus = resolveCustomerLifecycleStatus(customer);
-    const openJobs = activeJobCount(customer);
-    const hasCompany = hasCompanyOnFile(customer);
-    const formattedAddress = formatAddress(
-      customer.service_address_line_1,
-      customer.service_address_line_2,
-      customer.service_city,
-      customer.service_state_or_region,
-      customer.service_postal_code,
-    );
-
-    return (
-      <article key={customer.id} className="rounded-[26px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/80 p-4 shadow-[0_20px_60px_color-mix(in_srgb,var(--sem-board-glow)_22%,transparent)]">
-        <div className="flex items-start gap-3">
-          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] text-sm font-semibold text-[color:var(--sem-accent-primary)]">
-            {getCustomerInitials(customer.full_name)}
-            {openJobs > 0 ? (
-              <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[color:var(--cmp-surface-canvas)] bg-[color:var(--sem-state-warning)]" />
-            ) : null}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="truncate font-semibold text-[color:var(--sem-text-primary)]">{customer.full_name}</h3>
-                <p className="truncate text-sm text-[color:var(--sem-text-secondary)]">{customer.company_name?.trim() || formattedAddress}</p>
-              </div>
-              <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs ${companyBadgeClass(hasCompany)}`}>
-                {hasCompany ? t("hasCompanyBadge") : t("individualBadge")}
-              </span>
-            </div>
-
-            <div className="mt-4 space-y-2 text-sm text-[color:var(--sem-text-secondary)]">
-              <p className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
-                {customer.phone}
-              </p>
-              <p className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
-                {customer.email ?? t("noEmail")}
-              </p>
-              <p className="flex items-start gap-2">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--sem-text-muted)]" />
-                <span>{formattedAddress}</span>
-              </p>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/80 px-2.5 py-1 text-xs text-[color:var(--sem-text-secondary)]">
-                {openJobs} {t("open")}
-              </span>
-              <span className={customerLifecycleBadgeClass(lifecycleStatus)}>{customerLifecycleLabel(lifecycleStatus)}</span>
-            </div>
-
-            <div className="mt-4 rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/50 px-4 py-3">
-              <p className="inline-flex items-start gap-2 text-sm">
-                <ClipboardList className="mt-0.5 h-4 w-4 text-[color:var(--sem-accent-primary)]" />
-                <span className="whitespace-pre-line">{customer.notes?.trim() || t("noCustomerNotes")}</span>
-              </p>
-              <p className="mt-3 text-xs text-[color:var(--sem-text-muted)]">
-                {t("totalLinkedJobs", { count: customer.relatedJobs.length })} • {t("lastUpdated")}: {formatDate(customer.updated_at, locale)}
-              </p>
-            </div>
-
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <a href={`tel:${customer.phone}`} className="rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/50 px-3 py-2 text-center text-sm font-medium text-[color:var(--sem-text-secondary)]">
-                {t("callCustomer")}
-              </a>
-              <Link href={`/messaging?lane=customers&customerId=${customer.id}`} className="rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/50 px-3 py-2 text-center text-sm font-medium text-[color:var(--sem-text-secondary)]">
-                {t("sendSms")}
-              </Link>
-              <Link href={`/customers/${customer.id}`} className="rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] px-3 py-2 text-center text-sm font-semibold text-[color:var(--sem-accent-primary)]">
-                {t("openProfile")}
-              </Link>
-            </div>
-          </div>
-        </div>
-      </article>
-    );
-  }
 
   if (SHOW_LEGACY_CUSTOMERS_LIST) {
     return (
@@ -647,10 +334,10 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
         </header>
 
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricTile icon={UsersRound} label={t("totalCustomers")} value={totalCount} helper={t("totalCustomersHelper")} />
+          <MetricTile icon={UsersRound} label={t("totalCustomers")} value={ledgerTotal} helper={t("totalCustomersHelper")} />
           <MetricTile icon={BriefcaseBusiness} label={t("openJobsTitle")} value={activeCustomerCount} helper={t("openJobsHelper")} />
           <MetricTile icon={CheckCircle2} label={t("newThisMonth")} value={newThisMonthCount} helper={t("newThisMonthHelper")} />
-          <MetricTile icon={Briefcase} label={t("relatedJobsTitle")} value={relatedJobs.length} helper={t("relatedJobsHelper")} />
+          <MetricTile icon={Briefcase} label={t("relatedJobsTitle")} value={relatedJobsCount} helper={t("relatedJobsHelper")} />
         </section>
 
         <section className="mt-6 rounded-[34px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_30px_90px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)] backdrop-blur-xl">
@@ -751,27 +438,10 @@ export default async function CustomersPage({ searchParams }: CustomersPageConte
           ) : null}
 
           {totalCount > 0 ? (
-            <>
-              <div className="mt-6 hidden overflow-hidden rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/30 lg:block">
-                <table className="w-full border-collapse text-left text-sm">
-                  <thead className="border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70 text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">
-                    <tr>
-                      <th className="py-4 pl-5 pr-4 font-medium">{t("columns.customerName")}</th>
-                      <th className="px-4 py-4 font-medium">{t("columns.phone")}</th>
-                      <th className="px-4 py-4 font-medium">{t("columns.email")}</th>
-                      <th className="px-4 py-4 font-medium">Status</th>
-                      <th className="px-4 py-4 font-medium">Summary</th>
-                      <th className="py-4 pl-4 pr-5 text-right font-medium">{t("columns.actions")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>{pagedCustomers.map((customer) => renderCustomerTableRow(customer))}</tbody>
-                </table>
-              </div>
-
-              <div className="mt-6 grid gap-4 lg:hidden">
-                <MasterMobileList items={pagedCustomers} emptyState={t("noCustomers")} renderItem={renderCustomerMobileCard} />
-              </div>
-            </>
+            <CustomersDirectoryTable
+              customers={pagedCustomers}
+              canManageCustomers={session.permissions.includes("customers.manage")}
+            />
           ) : loadError ? null : (
             <div className="theme-surface-card mt-6 rounded-[28px] border border-dashed border-[color:var(--cmp-border-subtle)] px-6 py-10 text-center text-sm text-[color:var(--sem-text-secondary)]">
               <div className="mx-auto flex max-w-md flex-col items-center">

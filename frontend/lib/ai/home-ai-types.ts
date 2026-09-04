@@ -29,12 +29,37 @@ export type HomeAiConversationMessage = {
 };
 
 export type HomeAiConversationResponse = {
+  conversationId: string | null;
+  title: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  lastMessageAt: string | null;
+  messages: HomeAiConversationMessage[];
+  hasOlder: boolean;
+};
+
+export type HomeAiConversationSummary = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt: string;
+};
+
+export type HomeAiConversationListResponse = {
+  conversations: HomeAiConversationSummary[];
+  nextCursor: string | null;
+};
+
+export type HomeAiMessagesPageResponse = {
   conversationId: string;
   messages: HomeAiConversationMessage[];
+  hasOlder: boolean;
 };
 
 export type HomeAiPostMessageResponse = {
   conversationId: string;
+  title: string;
   message: HomeAiConversationMessage;
   userMessage: HomeAiConversationMessage;
 };
@@ -52,6 +77,7 @@ export type HomeAiWidgetsResponse = {
     today?: HomeAiWidgetPayload;
     leads?: HomeAiWidgetPayload;
     jobs?: HomeAiWidgetPayload;
+    customers?: HomeAiWidgetPayload;
     money?: HomeAiWidgetPayload;
   };
 };

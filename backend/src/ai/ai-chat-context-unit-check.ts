@@ -47,6 +47,7 @@ const summary = buildActorCapabilitySummary({
   organization_id: "org-a",
   role: "owner",
   permissions: ["invoices.view", "jobs.view", "calls.view", "leads.view"],
+  platform_capabilities: [],
 });
 
 assert.equal(summary.role, "owner");

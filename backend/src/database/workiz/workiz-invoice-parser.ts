@@ -15,6 +15,7 @@ export type WorkizParsedLineItem = {
 
 export type WorkizParsedCustomer = {
   name: string;
+  company: string | null;
   addressLine1: string;
   addressLine2: string | null;
   city: string;
@@ -42,6 +43,8 @@ export type WorkizParsedInvoice = {
   totalCents: number | null;
   payments: WorkizParsedPayment[];
   notes: string | null;
+  terms: string | null;
+  warrantySection: string | null;
   parseWarnings: string[];
   parseErrors: string[];
 };
@@ -91,6 +94,14 @@ function extractSection(text: string, startMarker: string, endMarkers: string[])
     if (idx >= 0) end = Math.min(end, idx);
   }
   return text.slice(from, end).trim();
+}
+
+function looksLikeAddressLine(line: string): boolean {
+  if (/\b(Road|Street|Avenue|Ave|Place|Drive|Dr|St|Range|Boulevard|Blvd|Court|Ct|Lane|Ln|Way|Trail|Crescent|Cres|Close|Bay|Heights|Circle|Cir)\b/i.test(line)) {
+    return true;
+  }
+  if (/,/.test(line) && /[A-Z]\d[A-Z]/i.test(line)) return true;
+  return /^\d+\s/.test(line);
 }
 
 function looksLikePhoneLine(line: string): boolean {
@@ -153,11 +164,18 @@ function parseBillTo(section: string): WorkizParsedCustomer | null {
   if (lines.length === 0) return null;
 
   const name = lines[0] ?? "Unknown Customer";
+  let company: string | null = null;
   let email: string | null = null;
   let phone = "";
   let cityLineIndex = -1;
+  let addressStartIndex = 1;
 
-  for (let index = 1; index < lines.length; index += 1) {
+  if (lines.length > 2 && lines[1] && !looksLikeAddressLine(lines[1]) && !looksLikePhoneLine(lines[1]) && !normalizeEmail(lines[1])) {
+    company = lines[1];
+    addressStartIndex = 2;
+  }
+
+  for (let index = addressStartIndex; index < lines.length; index += 1) {
     const line = lines[index];
     const normalizedEmail = normalizeEmail(line);
     if (normalizedEmail) {
@@ -186,7 +204,8 @@ function parseBillTo(section: string): WorkizParsedCustomer | null {
   if (cityLineIndex < 0) {
     return {
       name,
-      addressLine1: lines[1] ?? "Address unknown",
+      company,
+      addressLine1: lines[addressStartIndex] ?? "Address unknown",
       addressLine2: null,
       city: "",
       province: null,
@@ -198,11 +217,14 @@ function parseBillTo(section: string): WorkizParsedCustomer | null {
 
   const cityLine = lines[cityLineIndex];
   const cityMatch = cityLine.match(/^(.+?),\s*(.+?)\s+([A-Z0-9 ]+)$/i);
-  const addressLine1 = lines[1] ?? "Address unknown";
-  const addressLine2 = cityLineIndex > 2 ? lines.slice(2, cityLineIndex).join(", ") || null : null;
+  const addressLine1 = lines[addressStartIndex] ?? "Address unknown";
+  const addressLine2 = cityLineIndex > addressStartIndex + 1
+    ? lines.slice(addressStartIndex + 1, cityLineIndex).join(", ") || null
+    : null;
 
   return {
     name,
+    company,
     addressLine1,
     addressLine2,
     city: cityMatch?.[1]?.trim() ?? "",
@@ -211,6 +233,21 @@ function parseBillTo(section: string): WorkizParsedCustomer | null {
     phone: phone || "",
     email,
   };
+}
+
+function isPaymentDateLine(line: string): boolean {
+  if (/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/i.test(line)) return true;
+  if (/^\d{1,2}:\d{2}(AM|PM)$/i.test(line)) return true;
+  if (/^\d{4}$/.test(line)) return true;
+  if (/^\d{4}\s+\d{1,2}:\d{2}(AM|PM)$/i.test(line)) return true;
+  if (/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+.+\d{4}/i.test(line)) return true;
+  return false;
+}
+
+function parsePaymentDate(rawDateLines: string[]): Date | null {
+  if (rawDateLines.length === 0) return null;
+  const combined = rawDateLines.join(" ").replace(/\s+/g, " ").trim();
+  return parseWorkizDate(combined);
 }
 
 function parsePayments(section: string): WorkizParsedPayment[] {
@@ -222,7 +259,7 @@ function parsePayments(section: string): WorkizParsedPayment[] {
     const paymentMatch = line.match(/^(.+?)\$([\d,]+(?:\.\d{2})?)(Paid|Partial|Unpaid)?$/i);
     if (paymentMatch && /credit|cash|check|card|offline|e-transfer|etransfer|debit|visa|master/i.test(paymentMatch[1])) {
       payments.push({
-        occurredAt: dateBuffer.length > 0 ? parseWorkizDate(dateBuffer.join(" ")) : null,
+        occurredAt: parsePaymentDate(dateBuffer),
         methodLabel: paymentMatch[1].trim(),
         amountCents: parseMoneyToCents(paymentMatch[2]) ?? 0,
         statusLabel: paymentMatch[3]?.trim() ?? "Paid",
@@ -232,7 +269,7 @@ function parsePayments(section: string): WorkizParsedPayment[] {
       continue;
     }
 
-    if (/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/i.test(line) || /^\d{1,2}:\d{2}(AM|PM)$/i.test(line) || /^\d{4}$/.test(line)) {
+    if (isPaymentDateLine(line)) {
       dateBuffer.push(line);
     }
   }
@@ -296,7 +333,15 @@ export function parseWorkizInvoiceText(input: {
   ]);
   const payments = paymentSection ? parsePayments(paymentSection) : [];
 
-  const notes = extractSection(text, "Notes:", ["Terms:", "INVOICE"]) ?? null;
+  const notes = extractSection(text, "Notes:", ["Terms:", "INVOICE", "Signature"]) ?? null;
+  const terms = extractSection(text, "Terms:", ["Notes:", "INVOICE", "Signature"]) ?? null;
+  const warrantySection = extractSection(text, "Warranty", [
+    "Terms:",
+    "Notes:",
+    "INVOICE",
+    "DescriptionQTYPriceAmount",
+    "Sub total",
+  ]) ?? null;
 
   if (subtotalCents != null && lineItems.length > 0) {
     const lineSum = lineItems.reduce((sum, item) => sum + item.amountCents, 0);
@@ -339,6 +384,8 @@ export function parseWorkizInvoiceText(input: {
     totalCents,
     payments,
     notes,
+    terms,
+    warrantySection,
     parseWarnings: warnings,
     parseErrors: errors,
   };

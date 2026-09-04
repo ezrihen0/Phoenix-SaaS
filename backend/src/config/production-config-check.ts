@@ -26,16 +26,9 @@ const validProduction = validateProductionConfig({
   DB_NAME: "wizfield",
   DB_TYPE: "mysql",
   DB_SYNCHRONIZE: "false",
-  STRIPE_SECRET_KEY: "sk_live_example",
-  STRIPE_WEBHOOK_SECRET: "whsec_example",
-  STRIPE_PRICE_STARTER: "price_starter",
-  STRIPE_PRICE_PRO: "price_pro",
-  STRIPE_PRICE_BUSINESS: "price_business",
-  STRIPE_CHECKOUT_SUCCESS_URL: "https://app.wizfield.com/billing/success?session_id={CHECKOUT_SESSION_ID}",
-  STRIPE_CHECKOUT_CANCEL_URL: "https://app.wizfield.com/pricing?checkout=cancelled",
   BACKEND_BOOTSTRAP_ENABLED: "false",
 });
-assert.equal(validProduction.ok, true, "Valid production fixture should pass.");
+assert.equal(validProduction.ok, true, "Valid production fixture should pass without Stripe configuration.");
 
 const insecureProduction = validateProductionConfig({
   NODE_ENV: "production",
@@ -45,7 +38,6 @@ const insecureProduction = validateProductionConfig({
   DB_USERNAME: "wizfield",
   DB_NAME: "wizfield",
   DB_SYNCHRONIZE: "true",
-  STRIPE_SECRET_KEY: "sk_live_example",
 });
 assert.equal(insecureProduction.ok, false);
 assert.ok(insecureProduction.errors.some((issue) => issue.code === "session_cookie_insecure"));
@@ -68,6 +60,22 @@ const bootstrapProduction = validateProductionConfig({
 assert.equal(bootstrapProduction.ok, false);
 assert.ok(bootstrapProduction.errors.some((issue) => issue.code === "bootstrap_enabled_in_production"));
 
+const bootstrapDefaultProduction = validateProductionConfig({
+  NODE_ENV: "production",
+  SESSION_COOKIE_SECURE: "true",
+  CORS_ORIGIN: "https://app.wizfield.com",
+  DB_HOST: "db.internal",
+  DB_USERNAME: "wizfield",
+  DB_NAME: "wizfield",
+  DB_TYPE: "mysql",
+  DB_SYNCHRONIZE: "false",
+  BACKEND_BOOTSTRAP_ENABLED: "false",
+  BACKEND_BOOTSTRAP_ADMIN_EMAIL: "admin@wizfield.local",
+  BACKEND_BOOTSTRAP_ADMIN_PASSWORD: "Admin12345!",
+});
+assert.equal(bootstrapDefaultProduction.ok, false);
+assert.ok(bootstrapDefaultProduction.errors.some((issue) => issue.code === "bootstrap_default_credentials_present"));
+
 assert.doesNotThrow(() => assertProductionConfigValid({
   NODE_ENV: "production",
   SESSION_COOKIE_SECURE: "true",
@@ -77,13 +85,6 @@ assert.doesNotThrow(() => assertProductionConfigValid({
   DB_NAME: "wizfield",
   DB_TYPE: "mysql",
   DB_SYNCHRONIZE: "false",
-  STRIPE_SECRET_KEY: "sk_live_example",
-  STRIPE_WEBHOOK_SECRET: "whsec_example",
-  STRIPE_PRICE_STARTER: "price_starter",
-  STRIPE_PRICE_PRO: "price_pro",
-  STRIPE_PRICE_BUSINESS: "price_business",
-  STRIPE_CHECKOUT_SUCCESS_URL: "https://app.wizfield.com/billing/success",
-  STRIPE_CHECKOUT_CANCEL_URL: "https://app.wizfield.com/pricing",
   BACKEND_BOOTSTRAP_ENABLED: "false",
 }));
 

@@ -7,7 +7,7 @@ import { PricingPlans } from "./pricing-plans";
 
 export const metadata: Metadata = {
   title: "Pricing — WizField",
-  description: "Shared billing-account plans for Stripe Checkout and multi-business WizField entitlements.",
+  description: "Shared WizField access plans and multi-business entitlement tiers.",
 };
 
 type PricingPageContext = {
@@ -32,8 +32,8 @@ export default async function PricingPage({ searchParams }: PricingPageContext) 
       </h1>
       <p className="mt-5 text-base leading-7 text-[color:var(--sem-text-secondary)]">
         {activationMode
-          ? "Activate your subscription to start running your business with WizField. Your account and first workspace are already prepared, but live CRM access stays locked until billing is confirmed."
-          : "WizField uses one shared billing account per payer, and one subscription can cover multiple businesses under the same entitlement. Stripe Checkout is the active subscription checkout path; tenant invoice payments remain separate from WizField platform billing."}
+          ? "Your account and first workspace are ready. WizField operational access is handled directly in the product while SaaS subscription billing remains disabled."
+          : "WizField uses one shared access profile per payer, and one entitlement can cover multiple businesses. Tenant invoice payments remain separate from WizField platform access."}
       </p>
 
       <section className="mt-10 space-y-4 rounded-[28px] border border-[color:var(--cmp-border-subtle)] bg-white/[0.04] p-6 sm:p-8">
@@ -43,15 +43,13 @@ export default async function PricingPage({ searchParams }: PricingPageContext) 
         <ul className="list-disc space-y-2 pl-5 text-sm leading-7 text-[color:var(--sem-text-secondary)]">
           <li>
             <strong className="text-[color:var(--sem-text-primary)]">Shared payer authority:</strong>{" "}
-            your subscription and payer identity live on one WizField billing profile—the same profile Stripe Checkout updates when payment succeeds.
+            plan ownership and business coverage live on one WizField billing profile for the account owner.
           </li>
           <li>
-            <strong className="text-[color:var(--sem-text-primary)]">Checkout:</strong> owner-authenticated Stripe Checkout Sessions create the
-            hosted subscription flow without collecting raw card details inside WizField.
+            <strong className="text-[color:var(--sem-text-primary)]">Access:</strong> live workspace access is controlled by local billing state and controlled access grants.
           </li>
           <li>
-            <strong className="text-[color:var(--sem-text-primary)]">Webhook activation:</strong> WizField waits for verified Stripe webhook
-            events before local billing state is treated as active.
+            <strong className="text-[color:var(--sem-text-primary)]">No SaaS checkout:</strong> subscription checkout and webhook activation are disabled for the active product runtime.
           </li>
           <li>
             <strong className="text-[color:var(--sem-text-primary)]">Business-count entitlements:</strong> Starter covers 1 business, Pro
@@ -73,8 +71,8 @@ export default async function PricingPage({ searchParams }: PricingPageContext) 
         </h2>
         <p className="mt-3 text-sm leading-7 text-[color:var(--sem-text-secondary)]">
           {activationMode
-            ? "Choose a plan and complete Stripe Checkout to activate this workspace. If checkout is interrupted, return here and continue from the same activation page."
-            : "Choose a plan and complete Stripe Checkout to activate this workspace. Activation usually completes within a minute after payment via verified webhook sync."}
+            ? "Open the workspace to continue setup. No Stripe configuration or subscription sync is required for operational use."
+            : "Current rollout access is handled by WizField directly. SaaS subscription billing can be reconsidered later without affecting CRM invoices."}
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           {activationMode ? null : (
@@ -92,7 +90,7 @@ export default async function PricingPage({ searchParams }: PricingPageContext) 
       </section>
 
       <p className="mt-10 text-xs leading-6 text-[color:var(--sem-text-muted)]">
-        Activation is confirmed by verified Stripe webhook processing, not by a success-page redirect alone.
+        CRM invoices and customer payments are tenant operating records. They are not WizField SaaS subscription billing.
       </p>
     </main>
   );

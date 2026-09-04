@@ -13,7 +13,20 @@ function canFetchItemCatalog(role: string | null) {
   return role === "owner" || role === "admin" || role === "office_admin";
 }
 
-export default async function InventoryPage() {
+type InventoryPageContext = {
+  searchParams: Promise<{
+    receiveSku?: string | string[];
+  }>;
+};
+
+function firstValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function InventoryPage({ searchParams }: InventoryPageContext) {
+  const resolvedSearchParams = await searchParams;
+  const receiveSku = (firstValue(resolvedSearchParams.receiveSku) ?? "").trim();
+
   const session = await requireServerRoles("/inventory", [
     "owner",
     "admin",
@@ -88,6 +101,7 @@ export default async function InventoryPage() {
       initialStockResult={stockResult}
       initialMovementResult={movementResult}
       initialTechnicians={technicians}
+      initialReceiveSku={receiveSku || undefined}
       loadError={loadError}
       catalogLoadError={catalogLoadError}
     />

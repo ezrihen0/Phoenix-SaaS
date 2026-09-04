@@ -58,6 +58,7 @@ type SessionData = {
     } | null;
   }>;
   permissions: string[];
+  platform_capabilities: string[];
 };
 
 function backendBaseUrl() {

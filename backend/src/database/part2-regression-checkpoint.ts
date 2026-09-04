@@ -50,6 +50,8 @@ expectIncludes("telephony/twilio-messages-webhook.controller.ts", "verifyTwilioS
 
 expectIncludes("public/public-bookings.service.ts", "findOrCreateCustomerForBooking", "Public booking must create or link same-org prospect customers.");
 expectIncludes("public/public-bookings.service.ts", "findRecentDuplicateLead", "Public booking must suppress duplicate/replayed requests.");
+expectIncludes("public/public-bookings.service.ts", "PublicBookingSubmissionEntity", "Public booking must persist durable submission receipts.");
+expectIncludes("public/public-bookings.controller.ts", "idempotency-key", "Public booking must accept Idempotency-Key header.");
 expectIncludes("customer-portal/customer-portal.service.ts", "setLock(\"pessimistic_write\")", "Portal magic-link redemption must lock against replay races.");
 expectExcludes("customer-portal/customer-portal.service.ts", "organization_id: IsNull()", "Portal home must not read legacy org-null records.");
 expectExcludes("warranty/warranty-certificates.service.ts", "organization_id: IsNull()", "Portal warranty reads must be strict-org scoped.");

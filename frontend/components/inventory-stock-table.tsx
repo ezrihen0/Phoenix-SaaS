@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -21,7 +21,7 @@ import {
 
 import { BoardShell } from "@/components/board/board-shell";
 import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
-import { MetricTile } from "@/components/board/metric-tile";
+import { MetricTile, metricTileHoverClassName } from "@/components/board/metric-tile";
 import {
   MasterMobileList,
   MasterTable,
@@ -60,6 +60,7 @@ type InventoryStockTableProps = {
   initialStockResult: InventoryStockResult;
   initialMovementResult: InventoryMovementListResult;
   initialTechnicians: InventoryTechnicianOption[];
+  initialReceiveSku?: string;
   loadError?: string | null;
   catalogLoadError?: string | null;
 };
@@ -230,6 +231,7 @@ function InventoryControlDesk({
   initialStockResult,
   initialMovementResult,
   initialTechnicians,
+  initialReceiveSku,
   loadError = null,
   catalogLoadError = null,
 }: InventoryStockTableProps) {
@@ -249,10 +251,39 @@ function InventoryControlDesk({
   const [locationFormMode, setLocationFormMode] = useState<"create" | "edit" | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<InventoryLocation | null>(null);
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [receivePrefill, setReceivePrefill] = useState<{
+    inventoryItemId: string;
+    unitCostBeforeTax?: string;
+    supplierName?: string;
+  } | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [movementDialogMode, setMovementDialogMode] = useState<"used" | "adjustment" | "damaged" | "returned" | null>(null);
   const [isSettingUpDefaults, setIsSettingUpDefaults] = useState(false);
   const [inspectorRow, setInspectorRow] = useState<InventoryStockRow | null>(null);
+
+  useEffect(() => {
+    if (!initialReceiveSku || !canManage) {
+      return;
+    }
+
+    const matchedItem = initialItems.find((item) => item.internal_sku === initialReceiveSku);
+
+    if (!matchedItem) {
+      setActionError(`Inventory item ${initialReceiveSku} was not found. Create it from the pricebook first.`);
+      return;
+    }
+
+    const defaultCost = matchedItem.default_cost_before_tax_cents > 0
+      ? (matchedItem.default_cost_before_tax_cents / 100).toFixed(2)
+      : undefined;
+
+    setReceivePrefill({
+      inventoryItemId: matchedItem.id,
+      unitCostBeforeTax: defaultCost,
+      supplierName: matchedItem.supplier_name ?? undefined,
+    });
+    setReceiveOpen(true);
+  }, [canManage, initialItems, initialReceiveSku]);
 
   const filteredItems = useMemo(
     () => initialItems.filter((item) => {
@@ -453,7 +484,7 @@ function InventoryControlDesk({
                   <Warehouse className="h-4 w-4" />
                   Add location
                 </button>
-                <button type="button" onClick={() => setReceiveOpen(true)} className="theme-btn-secondary inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold">
+                <button type="button" onClick={() => { setReceivePrefill(null); setReceiveOpen(true); }} className="theme-btn-secondary inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold">
                   <Package className="h-4 w-4" />
                   Receive
                 </button>
@@ -797,7 +828,20 @@ function InventoryControlDesk({
 
       <InventoryItemForm open={itemFormMode !== null} mode={itemFormMode ?? "create"} initialItem={selectedItem} onClose={() => { setItemFormMode(null); setSelectedItem(null); }} onSaved={handleDialogSaved} />
       <InventoryLocationForm open={locationFormMode !== null} mode={locationFormMode ?? "create"} initialLocation={selectedLocation} technicians={initialTechnicians} onClose={() => { setLocationFormMode(null); setSelectedLocation(null); }} onSaved={handleDialogSaved} />
-      <InventoryReceiveStockDialog open={receiveOpen} items={initialItems} locations={initialLocations} onClose={() => setReceiveOpen(false)} onSaved={handleDialogSaved} />
+      <InventoryReceiveStockDialog
+        open={receiveOpen}
+        items={initialItems}
+        locations={initialLocations}
+        prefillLine={receivePrefill}
+        onClose={() => {
+          setReceiveOpen(false);
+          setReceivePrefill(null);
+          if (initialReceiveSku) {
+            router.replace("/inventory");
+          }
+        }}
+        onSaved={handleDialogSaved}
+      />
       <InventoryTransferStockDialog open={transferOpen} items={initialItems} locations={initialLocations} onClose={() => setTransferOpen(false)} onSaved={handleDialogSaved} />
       <InventoryUseStockDialog open={movementDialogMode !== null} mode={movementDialogMode ?? "used"} items={initialItems} locations={initialLocations} onClose={() => setMovementDialogMode(null)} onSaved={handleDialogSaved} />
     </BoardShell>
@@ -988,10 +1032,10 @@ function LegacyInventoryStockTable({
           </div>
           {/* Tables and sections identical to pre-redesign — see git history at SHOW_LEGACY_INVENTORY rollback */}
           <div className="mt-8 grid gap-4 md:grid-cols-4">
-            <article className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5"><p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Inventory items</p><p className="mt-3 text-3xl font-semibold">{initialItems.length}</p></article>
-            <article className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5"><p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Locations</p><p className="mt-3 text-3xl font-semibold">{initialLocations.length}</p></article>
-            <article className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5"><p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Stock rows</p><p className="mt-3 text-3xl font-semibold">{initialStockResult.rows.length}</p></article>
-            <article className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5"><p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Low stock</p><p className="mt-3 text-3xl font-semibold">{initialStockResult.lowStockRows.length}</p></article>
+            <article className={`theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5 ${metricTileHoverClassName}`}><p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Inventory items</p><p className="mt-3 text-3xl font-semibold">{initialItems.length}</p></article>
+            <article className={`theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5 ${metricTileHoverClassName}`}><p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Locations</p><p className="mt-3 text-3xl font-semibold">{initialLocations.length}</p></article>
+            <article className={`theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5 ${metricTileHoverClassName}`}><p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Stock rows</p><p className="mt-3 text-3xl font-semibold">{initialStockResult.rows.length}</p></article>
+            <article className={`theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5 ${metricTileHoverClassName}`}><p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Low stock</p><p className="mt-3 text-3xl font-semibold">{initialStockResult.lowStockRows.length}</p></article>
           </div>
           {isOfficeRole ? (
             <section className="mt-8">
@@ -1046,7 +1090,13 @@ function LegacyInventoryStockTable({
       </div>
       <InventoryItemForm open={itemFormMode !== null} mode={itemFormMode ?? "create"} initialItem={selectedItem} onClose={() => { setItemFormMode(null); setSelectedItem(null); }} onSaved={handleDialogSaved} />
       <InventoryLocationForm open={locationFormMode !== null} mode={locationFormMode ?? "create"} initialLocation={selectedLocation} technicians={initialTechnicians} onClose={() => { setLocationFormMode(null); setSelectedLocation(null); }} onSaved={handleDialogSaved} />
-      <InventoryReceiveStockDialog open={receiveOpen} items={initialItems} locations={initialLocations} onClose={() => setReceiveOpen(false)} onSaved={handleDialogSaved} />
+      <InventoryReceiveStockDialog
+        open={receiveOpen}
+        items={initialItems}
+        locations={initialLocations}
+        onClose={() => setReceiveOpen(false)}
+        onSaved={handleDialogSaved}
+      />
       <InventoryTransferStockDialog open={transferOpen} items={initialItems} locations={initialLocations} onClose={() => setTransferOpen(false)} onSaved={handleDialogSaved} />
       <InventoryUseStockDialog open={movementDialogMode !== null} mode={movementDialogMode ?? "used"} items={initialItems} locations={initialLocations} onClose={() => setMovementDialogMode(null)} onSaved={handleDialogSaved} />
     </main>

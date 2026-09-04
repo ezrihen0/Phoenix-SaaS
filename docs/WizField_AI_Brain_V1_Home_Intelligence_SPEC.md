@@ -4,6 +4,8 @@
 **Primary surface:** Authenticated [`/home`](../frontend/app/home/page.tsx) for **office roles** (owner, admin, office_admin, dispatcher, viewer per current home gating)  
 **North star:** Translate **deterministic** CRM dashboard truth into a **grounded daily brief** and **ranked action list** — no autonomous execution in V1.
 
+**Not Home AI.** Brain V1 is the deterministic intelligence strip (`GET /api/ai/brain/home-brief`). Current conversational Home AI (persisted chat, read-only tools) is owned by [WizField_AI_Master_Source_of_Truth.md](WizField_AI_Master_Source_of_Truth.md) §1A. Do not treat this spec as the Home AI implementation.
+
 ---
 
 ## Out of scope (V1)

@@ -11,6 +11,7 @@ import {
 
 import { OrganizationEntity } from "./organization.entity";
 import { PricebookBundleItemEntity } from "./pricebook-bundle-item.entity";
+import { PricebookBundleRequirementEntity } from "./pricebook-bundle-requirement.entity";
 
 @Entity({ name: "pricebook_bundles" })
 export class PricebookBundleEntity {
@@ -49,6 +50,9 @@ export class PricebookBundleEntity {
 
   @OneToMany(() => PricebookBundleItemEntity, (bundleItem) => bundleItem.bundle)
   items?: PricebookBundleItemEntity[];
+
+  @OneToMany(() => PricebookBundleRequirementEntity, (requirement) => requirement.bundle)
+  requirements?: PricebookBundleRequirementEntity[];
 
   @ManyToOne(() => OrganizationEntity, {
     nullable: true,

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 
 import { HOME_AI_TOOL_KEYS } from "./ai.constants";
+import {
+  generateHomeAiConversationTitle,
+  HOME_AI_DEFAULT_CONVERSATION_TITLE,
+} from "./home-ai-conversation-title";
 import { resolveHomeAiRoleProfile } from "./home-ai-role-profiles";
 import { HomeAiToolRegistryService, listRegisteredHomeAiToolKeys } from "./home-ai-tool-registry.service";
 
@@ -17,9 +21,19 @@ function expect(name: string, run: () => void) {
 const registry = new HomeAiToolRegistryService(null as never);
 const definitions = registry.listToolDefinitions();
 
-expect("exactly six home tools registered", () => {
-  assert.equal(listRegisteredHomeAiToolKeys().length, 6);
+expect("exactly seven home tools registered", () => {
+  assert.equal(listRegisteredHomeAiToolKeys().length, 7);
   assert.deepEqual(listRegisteredHomeAiToolKeys(), [...HOME_AI_TOOL_KEYS]);
+  assert.ok(HOME_AI_TOOL_KEYS.includes("search_service_history"));
+});
+
+expect("search_service_history is the historical service tool", () => {
+  const tool = definitions.find((item) => item.key === "search_service_history");
+  assert.ok(tool);
+  assert.equal(tool.readOnly, true);
+  const description = tool.openAiTool.function.description.toLowerCase();
+  assert.ok(description.includes("service intelligence") || description.includes("historical"));
+  assert.ok(description.includes("wett"));
 });
 
 expect("all home tools are read-only", () => {
@@ -58,6 +72,19 @@ expect("quick prompts exist for core roles", () => {
   } as never);
   assert.equal(customProfile.profileKey, "custom");
   assert.ok(customProfile.quickPrompts.length > 0);
+});
+
+expect("conversation titles stay short and useful", () => {
+  assert.equal(generateHomeAiConversationTitle("Show me the September schedule"), "September Schedule");
+  assert.equal(generateHomeAiConversationTitle("What invoices are outstanding?"), "Invoices Outstanding");
+  assert.equal(generateHomeAiConversationTitle("What jobs do we have this week"), "Jobs This Week");
+  assert.equal(
+    generateHomeAiConversationTitle("Show me customers who had gas fireplace repairs"),
+    "Customers Gas Fireplace Repairs",
+  );
+  assert.equal(generateHomeAiConversationTitle("Hey"), HOME_AI_DEFAULT_CONVERSATION_TITLE);
+  assert.equal(generateHomeAiConversationTitle(""), HOME_AI_DEFAULT_CONVERSATION_TITLE);
+  assert.ok(generateHomeAiConversationTitle("a".repeat(200)).length <= 48);
 });
 
 expect("no forbidden mutation tools registered", () => {

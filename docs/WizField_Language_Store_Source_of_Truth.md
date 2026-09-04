@@ -5,7 +5,8 @@
 **Project:** WizField  
 **Scope:** Billing architecture, entitlement scope, V1 product contract, and execution guardrails for Language Store  
 **Not a reopen of foundation work:** This document builds on the already-closed Gate 0-14 foundation and does not reopen tenancy, multi-org UX, billing-account authority, or document snapshot rules.
-**Companion docs:** `WizField_Reverification_Runbook.md` for replay procedure and `WizField_Engineering_Closeout_and_Verification.md` for final closeout evidence  
+**Companion docs:** `WizField_Reverification_Runbook.md` for replay procedure and `WizField_Engineering_Closeout_and_Verification.md` for Language Store V1 evidence  
+**Current production verification:** [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md) — Language Store product rules unchanged; SaaS Stripe billing remains disabled  
 **Retired planning detail:** preserved in git history only
 
 ---
@@ -16,9 +17,9 @@ WizField already closed the foundation that Language Store must sit on top of:
 
 - organizations are the tenant boundary
 - active organization is session-backed
-- `billing_accounts` is the authoritative payer / subscription layer
+- `billing_accounts` is the authoritative local access and entitlement layer
 - `organization_billing` is coverage / linkage only
-- Stripe is webhook-authoritative
+- SaaS subscription billing is disabled in the active Phoenix runtime
 - immutable document snapshots are already a locked product rule
 
 Language Store is therefore a controlled product-extension initiative, not a new SaaS-foundation project.
@@ -64,25 +65,23 @@ Language Store must inherit these rules exactly from the current WizField canoni
 
 # 4. Locked commercial architecture
 
-## 4.1 Final production billing rule
+## 4.1 Current billing rule
 
 Language Store will use:
 
 ```text
 One customer billing relationship with WizField
 -> one shared billing account
--> one Stripe customer
--> one Stripe subscription
--> one base plan item
--> optional recurring Language Store add-on items
+-> local plan and entitlement state
+-> optional local Language Store entitlement records
 -> internal entitlement projection to covered organizations
 ```
 
 Language Store must **not** create:
 
 - a second subscription for the same customer
-- a second invoice stream outside the main WizField subscription
-- a separate standalone checkout that behaves like a disconnected product
+- a second invoice stream outside the main WizField access relationship
+- a separate standalone checkout while SaaS subscription billing is disabled
 
 ## 4.2 Authority model
 
@@ -95,15 +94,15 @@ Language Store must **not** create:
 Language Store add-ons must be represented:
 
 1. internally as local entitlement records used by the application
-2. externally as recurring Stripe subscription items on the same Stripe subscription
+2. externally only if a future owner-approved SaaS billing provider is reactivated
 
-This is the required production model because internal-only paid add-ons would create local-versus-provider drift, while separate subscriptions would violate the one-relationship billing rule.
+This preserves the one-relationship billing rule without creating a runtime dependency on Stripe.
 
 ## 4.4 Customer experience rule
 
 The customer still has one consolidated WizField billing relationship.
 
-The invoice may show multiple subscription line items internally through Stripe, but commercially it remains one WizField subscription relationship managed through one shared billing account.
+Future SaaS billing may represent multiple subscription line items through a provider, but the active runtime keeps one WizField access relationship managed through one shared billing account.
 
 ---
 
@@ -310,6 +309,7 @@ must not rewrite the already-snapshotted customer document.
   - expanded bundle-derived line `name`
   - expanded bundle-derived line `description`
 - Bundle-derived translation applies to the expanded customer-facing line items that land in quote/invoice snapshot history, not to a separate hidden bundle label.
+- Optional persisted bundle metadata on invoice/quote lines (`pricebook_bundle_id`, `bundle_requirement_id`) is analytics-only and must not appear as customer-facing snapshot text.
 
 ---
 

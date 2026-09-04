@@ -73,7 +73,10 @@ function isNon555PhoneNumber(value) {
 
 const BACKEND_URL = readConfigValue('SMS_SMOKE_BACKEND_URL', 'http://localhost:4000').replace(/\/$/, '');
 const OFFICE_EMAIL = readConfigValue('SMS_SMOKE_OFFICE_EMAIL', 'admin@wizfield.local');
-const OFFICE_PASSWORD = readConfigValue('SMS_SMOKE_OFFICE_PASSWORD', 'Admin12345!');
+const OFFICE_PASSWORD = readConfigValue('SMS_SMOKE_OFFICE_PASSWORD');
+if (!OFFICE_PASSWORD) {
+  throw new Error('SMS_SMOKE_OFFICE_PASSWORD must be set (env or backend/.env) to run step8-sms-smoke.js.');
+}
 const TECH_EMAIL = readConfigValue('SMS_SMOKE_TECH_EMAIL');
 const TECH_PASSWORD = readConfigValue('SMS_SMOKE_TECH_PASSWORD');
 const CONVERSATION_ID = readConfigValue('SMS_SMOKE_CONVERSATION_ID');

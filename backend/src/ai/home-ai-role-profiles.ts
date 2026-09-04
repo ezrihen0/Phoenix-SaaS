@@ -33,7 +33,14 @@ const BASE_SYSTEM_GUARDRAILS =
   + "Use only data returned by tools. Never invent records, amounts, or schedules. "
   + "Never perform writes, bookings, payments, or permission changes. "
   + "When data is unavailable due to permissions, say so plainly. "
-  + "Keep answers concise and actionable.";
+  + "Keep answers concise and actionable. "
+  + "For historical work or service questions — WETT inspections, chimney sweeps, gas cleaning, "
+  + "pilot/valve/blower replacements, or documented warranty evidence — use search_service_history. "
+  + "Do not use get_invoices or get_jobs for historical service-type lookups; those only return a recent window. "
+  + "Use get_invoices only for financial amounts, balances, and payment status. "
+  + "Service Intelligence is derived. Respect HIGH/MEDIUM/LOW confidence and review reasons. UNKNOWN must remain UNKNOWN. "
+  + "Do not claim an official WizField Warranty Certificate exists unless the tool says officialWizFieldWarrantyCertificate.exists is true. "
+  + "If a customer name matches more than one person, ask which one. Do not guess.";
 
 function officeQuickPrompts(): HomeAiQuickPrompt[] {
   return [
@@ -41,6 +48,7 @@ function officeQuickPrompts(): HomeAiQuickPrompt[] {
     { id: "open-leads", label: "Open leads", message: "Show me new and contacted leads that need follow-up." },
     { id: "active-jobs", label: "Active jobs", message: "What active jobs are in progress right now?" },
     { id: "unpaid-invoices", label: "Unpaid invoices", message: "Which invoices are unpaid or overdue?" },
+    { id: "wett-history", label: "WETT history", message: "When was the last time we had a WETT inspection done?" },
   ];
 }
 
@@ -74,7 +82,7 @@ const ROLE_PROFILES: Record<string, Omit<HomeAiRoleProfile, "profileKey">> = {
     greeting: "Here's your operational snapshot.",
     priorities: ["revenue", "schedule", "leads", "team load"],
     responseStyle: "Executive summary with numbers and next actions.",
-    preferredDomains: ["invoices", "jobs", "leads", "estimates"],
+    preferredDomains: ["invoices", "jobs", "leads", "estimates", "service history"],
     deprioritizedDomains: ["inventory"],
     quickPrompts: officeQuickPrompts(),
   },
@@ -83,7 +91,7 @@ const ROLE_PROFILES: Record<string, Omit<HomeAiRoleProfile, "profileKey">> = {
     greeting: "Ready to help you run the business.",
     priorities: ["operations", "billing", "schedule", "leads"],
     responseStyle: "Clear operational briefing.",
-    preferredDomains: ["jobs", "invoices", "leads", "customers"],
+    preferredDomains: ["jobs", "invoices", "leads", "customers", "service history"],
     deprioritizedDomains: ["marketing"],
     quickPrompts: officeQuickPrompts(),
   },
@@ -92,7 +100,7 @@ const ROLE_PROFILES: Record<string, Omit<HomeAiRoleProfile, "profileKey">> = {
     greeting: "Let's keep the front office moving.",
     priorities: ["leads", "customers", "schedule", "estimates"],
     responseStyle: "Front-desk friendly and specific.",
-    preferredDomains: ["leads", "customers", "jobs", "estimates"],
+    preferredDomains: ["leads", "customers", "jobs", "estimates", "service history"],
     deprioritizedDomains: ["billing deep dives"],
     quickPrompts: csrQuickPrompts(),
   },
@@ -101,7 +109,7 @@ const ROLE_PROFILES: Record<string, Omit<HomeAiRoleProfile, "profileKey">> = {
     greeting: "How can I help with customers and leads?",
     priorities: ["leads", "customers", "messaging follow-ups"],
     responseStyle: "Customer-service oriented.",
-    preferredDomains: ["leads", "customers", "jobs"],
+    preferredDomains: ["leads", "customers", "jobs", "service history"],
     deprioritizedDomains: ["financial admin"],
     quickPrompts: csrQuickPrompts(),
   },
@@ -152,7 +160,9 @@ function deriveCustomPreferredDomains(permissions: RoleModePermission[]): string
   if (permissions.includes("leads.view")) domains.push("leads");
   if (permissions.includes("jobs.view") || permissions.includes("jobs.assigned.view")) domains.push("jobs");
   if (permissions.includes("estimates.view") || permissions.includes("estimates.assigned.view")) domains.push("estimates");
-  if (permissions.includes("invoices.view") || permissions.includes("invoices.assigned.view")) domains.push("invoices");
+  if (permissions.includes("invoices.view") || permissions.includes("invoices.assigned.view")) {
+    domains.push("invoices", "service history");
+  }
   return domains;
 }
 
@@ -246,6 +256,8 @@ export function actorCanUseHomeAiTool(
     case "get_estimates":
       return permissions.has("estimates.view") || permissions.has("estimates.assigned.view");
     case "get_invoices":
+      return permissions.has("invoices.view") || permissions.has("invoices.assigned.view");
+    case "search_service_history":
       return permissions.has("invoices.view") || permissions.has("invoices.assigned.view");
     default:
       return false;

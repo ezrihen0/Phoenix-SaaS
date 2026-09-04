@@ -2,11 +2,11 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
-  Unique,
   UpdateDateColumn,
 } from "typeorm";
 
@@ -15,7 +15,7 @@ import { UserEntity } from "./user.entity";
 import { HomeAiMessageEntity } from "./home-ai-message.entity";
 
 @Entity({ name: "home_ai_conversations" })
-@Unique("ux_home_ai_conversations_user_org", ["user_id", "organization_id"])
+@Index("IDX_home_ai_conversations_user_org_last_message", ["user_id", "organization_id", "last_message_at"])
 export class HomeAiConversationEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
@@ -25,6 +25,12 @@ export class HomeAiConversationEntity {
 
   @Column({ type: "varchar", length: 36 })
   organization_id!: string;
+
+  @Column({ type: "varchar", length: 80, default: "New conversation" })
+  title!: string;
+
+  @Column({ type: "datetime", precision: 6 })
+  last_message_at!: Date;
 
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;

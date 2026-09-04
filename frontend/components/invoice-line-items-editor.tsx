@@ -17,6 +17,7 @@ type InvoiceLineItemsEditorProps = {
   taxRateInput?: string;
   onTaxRateInputChange?: (value: string) => void;
   onLineChange?: (clientId: string, field: keyof InvoiceBuilderLine, value: string) => void;
+  onLineBooleanChange?: (clientId: string, field: "warrantyEnabled", value: boolean) => void;
   onLineTranslationChange?: (
     clientId: string,
     field: "name" | "description",
@@ -31,6 +32,7 @@ type InvoiceLineItemsEditorProps = {
   onRemoveLine?: (clientId: string) => void;
   onAddManualLine?: () => void;
   onOpenPricebook?: () => void;
+  addCatalogLabel?: string;
   readOnly?: boolean;
   persistedLines?: PersistedInvoiceLineItem[];
   documentId?: string | null;
@@ -56,10 +58,12 @@ export default function InvoiceLineItemsEditor({
   taxRateInput = "0",
   onTaxRateInputChange,
   onLineChange,
+  onLineBooleanChange,
   onLineTranslationChange,
   onRemoveLine,
   onAddManualLine,
   onOpenPricebook,
+  addCatalogLabel = "+ Add to Invoice",
   readOnly = false,
   persistedLines,
   documentId,
@@ -84,7 +88,7 @@ export default function InvoiceLineItemsEditor({
               onClick={onOpenPricebook}
               className="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-[0.18em] text-white/74 transition hover:border-white/20 hover:text-white"
             >
-              Add from Pricebook
+              {addCatalogLabel}
             </button>
             <button
               type="button"
@@ -163,6 +167,12 @@ export default function InvoiceLineItemsEditor({
                       onChange={(event) => onLineChange(line.clientId, "unitPriceInput", event.target.value)}
                       className="w-full rounded-[16px] border border-white/10 bg-black/35 px-3 py-2.5 text-sm normal-case tracking-normal text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
                     />
+                    {line.originalUnitPriceCents !== null
+                      && line.originalUnitPriceCents !== line.unitPriceCents ? (
+                      <span className="block text-[11px] normal-case tracking-normal text-white/42">
+                        Catalog price {formatCurrencyFromCents(line.originalUnitPriceCents)}
+                      </span>
+                    ) : null}
                   </label>
                   <div className="space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
                     <span>Line Total</span>
@@ -171,6 +181,37 @@ export default function InvoiceLineItemsEditor({
                     </div>
                   </div>
                 </div>
+
+                {onLineBooleanChange ? (
+                  <div className="rounded-[18px] border border-white/10 bg-white/[0.03] p-4">
+                    <label className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-white/38">
+                      <span>Warranty</span>
+                      <input
+                        type="checkbox"
+                        checked={line.warrantyEnabled}
+                        onChange={(event) =>
+                          onLineBooleanChange(line.clientId, "warrantyEnabled", event.target.checked)
+                        }
+                        className="h-4 w-4"
+                      />
+                    </label>
+                    {line.warrantyEnabled ? (
+                      <label className="mt-3 block space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
+                        <span>Months</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={line.warrantyMonthsInput}
+                          onChange={(event) =>
+                            onLineChange(line.clientId, "warrantyMonthsInput", event.target.value)
+                          }
+                          className="w-full rounded-[16px] border border-white/10 bg-black/35 px-3 py-2.5 text-sm normal-case tracking-normal text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
+                          placeholder="e.g. 12"
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {onLineTranslationChange ? (
                   <div className="grid gap-3 xl:grid-cols-2">
@@ -219,6 +260,9 @@ export default function InvoiceLineItemsEditor({
                 <DetailValue label="Quantity" value={line.quantity} />
                 <DetailValue label="Unit Price" value={formatCurrencyFromCents(line.unitPriceCents)} />
                 <DetailValue label="Line Total" value={formatCurrencyFromCents(lineSubtotalCents(line))} />
+                {line.warrantyEnabled && line.warrantyMonths ? (
+                  <DetailValue label="Warranty" value={`${line.warrantyMonths} months`} />
+                ) : null}
               </div>
             )}
           </article>

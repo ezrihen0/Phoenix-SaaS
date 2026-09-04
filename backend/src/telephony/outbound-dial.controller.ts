@@ -4,6 +4,7 @@ import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
+import { requireTelephonyOrganizationId } from "./telephony-org-scope";
 import { canDialFromTelephony } from "./telephony-role";
 import { TelephonyExecutionService } from "./telephony-execution.service";
 
@@ -31,7 +32,8 @@ export class OutboundDialController {
       apiError(403, "forbidden", "Only office users can access dialer options.");
     }
 
-    return apiSuccess(await this.telephonyExecutionService.getOutboundDialerOptions());
+    const organizationId = requireTelephonyOrganizationId(actor);
+    return apiSuccess(await this.telephonyExecutionService.getOutboundDialerOptions(organizationId));
   }
 
   @Get("webrtc-config")
@@ -59,7 +61,9 @@ export class OutboundDialController {
       apiError(400, "dial_to_required", "Destination phone number is required.");
     }
 
+    const organizationId = requireTelephonyOrganizationId(actor);
     const result = await this.telephonyExecutionService.createOutboundDial({
+      organizationId,
       to,
       from: typeof body.from === "string" ? body.from : null,
       connectionId: typeof body.connectionId === "string" ? body.connectionId : null,

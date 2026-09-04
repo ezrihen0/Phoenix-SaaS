@@ -30,6 +30,7 @@ import { QuickCreateTrigger } from "@/components/quick-create-trigger";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { MobileShellNav } from "@/components/mobile-shell-nav";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
+import { WorkspaceContextBanner } from "@/components/workspace-context-banner";
 import { ThemeRuntime } from "@/components/theme-runtime";
 import { GlobalSearchShell } from "@/features/global-search/global-search-shell";
 import { getClientDestination, getClientSession } from "@/lib/auth/client-auth";
@@ -502,6 +503,8 @@ export function AppShell({ children }: AppShellProps) {
               </div>
             </div>
           </header>
+
+          <WorkspaceContextBanner />
 
           <div className={[
             "min-w-0 flex-1",

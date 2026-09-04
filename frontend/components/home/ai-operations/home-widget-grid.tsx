@@ -1,6 +1,6 @@
 "use client";
 
-import { BriefcaseBusiness, CalendarDays, CircleDollarSign, ClipboardList } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, CircleDollarSign, ClipboardList, Users } from "lucide-react";
 import Link from "next/link";
 
 import { formatCurrencyFromCents } from "@/lib/crm/invoice-line-model";
@@ -94,6 +94,19 @@ export function HomeWidgetGrid({ widgets }: { widgets: HomeAiWidgetsResponse["wi
         value={String(widgets.jobs.count ?? 0)}
         helper="active"
         href={widgets.jobs.href}
+      />,
+    );
+  }
+
+  if (widgets.customers?.visible) {
+    cards.push(
+      <WidgetCard
+        key="customers"
+        icon={Users}
+        label={widgets.customers.label ?? "Total customers"}
+        value={String(widgets.customers.count ?? 0)}
+        helper="full ledger"
+        href={widgets.customers.href}
       />,
     );
   }

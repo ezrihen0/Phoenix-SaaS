@@ -532,8 +532,8 @@ const messages = {
     },
     billing: {
       label: "Rozliczenia",
-      title: "Subskrypcja WizField",
-      helper: "Zobacz plan, limit firm i uruchom Stripe Checkout dla wspolnego konta rozliczeniowego.",
+      title: "Dostep WizField",
+      helper: "Zobacz plan, limit firm i lokalny stan dostepu dla wspolnego konta rozliczeniowego.",
       loadError: "Nie mozna zaladowac podsumowania rozliczen.",
     },
     pageLoadError: "Nie mozna zaladowac rol personelu.",

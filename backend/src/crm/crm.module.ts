@@ -27,11 +27,14 @@ import { LanguageStoreModule } from "../language-store/language-store.module";
 import { MessagingModule } from "../messaging/messaging.module";
 import { CrmController } from "./crm.controller";
 import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
+import { CustomerLedgerService } from "./customer-ledger.service";
+import { CustomerDeletionService } from "./customer-deletion.service";
 import { JobsService } from "./jobs.service";
 import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
 import { InvoicePdfService } from "./invoice-pdf.service";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
+import { InvoicePaymentRecordingService } from "./invoice-payment-recording.service";
 
 @Module({
   imports: [
@@ -67,10 +70,13 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
     DocumentPricingService,
     DocumentSnapshotService,
     InvoicePaymentLedgerService,
+    InvoicePaymentRecordingService,
     CrmOfficeDashboardService,
+    CustomerLedgerService,
+    CustomerDeletionService,
     InvoicePdfService,
     JobsService,
   ],
-  exports: [CrmOfficeDashboardService, JobsService],
+  exports: [CrmOfficeDashboardService, CustomerLedgerService, JobsService],
 })
 export class CrmModule {}

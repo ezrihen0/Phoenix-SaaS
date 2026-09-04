@@ -4,7 +4,10 @@
  */
 const BACKEND = process.env.WIZFIELD_BACKEND_URL ?? "http://127.0.0.1:4000";
 const ADMIN_EMAIL = process.env.WIZFIELD_ADMIN_EMAIL ?? "admin@phoenixcrm.local";
-const ADMIN_PASSWORD = process.env.WIZFIELD_ADMIN_PASSWORD ?? "Admin12345!";
+const ADMIN_PASSWORD = process.env.WIZFIELD_ADMIN_PASSWORD?.trim();
+if (!ADMIN_PASSWORD) {
+  throw new Error("WIZFIELD_ADMIN_PASSWORD must be set to run gate12-reverification-automated.mjs.");
+}
 
 const results = [];
 

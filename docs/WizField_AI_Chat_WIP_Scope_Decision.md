@@ -1,8 +1,12 @@
 # WizField AI Chat WIP — Scope Decision (Owner Record)
 
+> **HISTORICAL — May 2026 scope decision.**  
+> Superseded as current product truth by Home AI V1 in [WizField_AI_Master_Source_of_Truth.md](WizField_AI_Master_Source_of_Truth.md) §1A.  
+> The May 2026 “exclude untracked AI chat panel” decision is retained for audit traceability. It is not the current Home AI status.
+
 **Date:** 2026-05-29  
 **Branch:** `SaaS-master` @ `fbcc5b7`  
-**Decision status:** **EXCLUDE from shipped product map until owner explicitly commits**
+**Decision status (at the time):** **EXCLUDE from shipped product map until owner explicitly commits**
 
 ---
 

@@ -24,6 +24,7 @@ import { HomeAiConversationEntity } from "./entities/home-ai-conversation.entity
 import { HomeAiMessageEntity } from "./entities/home-ai-message.entity";
 import { AuthSessionEntity } from "./entities/auth-session.entity";
 import { ControlledAccessGrantEntity } from "./entities/controlled-access-grant.entity";
+import { PlatformOperatorGrantEntity } from "./entities/platform-operator-grant.entity";
 import { CustomerOutputTranslationRecordEntity } from "./entities/customer-output-translation-record.entity";
 import { CrmTaskEntity } from "./entities/crm-task.entity";
 import { CustomerEntity } from "./entities/customer.entity";
@@ -67,8 +68,12 @@ import { PortalMagicLinkEntity } from "./entities/portal-magic-link.entity";
 import { PortalSessionEntity } from "./entities/portal-session.entity";
 import { PricebookBundleEntity } from "./entities/pricebook-bundle.entity";
 import { PricebookBundleItemEntity } from "./entities/pricebook-bundle-item.entity";
+import { PricebookBundleRequirementEntity } from "./entities/pricebook-bundle-requirement.entity";
+import { PricebookCategoryEntity } from "./entities/pricebook-category.entity";
 import { PricebookItemEntity } from "./entities/pricebook-item.entity";
+import { PricebookSystemEntity } from "./entities/pricebook-system.entity";
 import { ProfileEntity } from "./entities/profile.entity";
+import { PublicBookingSubmissionEntity } from "./entities/public-booking-submission.entity";
 import { QuoteEntity } from "./entities/quote.entity";
 import { QuoteLineItemEntity } from "./entities/quote-line-item.entity";
 import { RecentCallEntity } from "./entities/recent-call.entity";
@@ -79,6 +84,10 @@ import { TranslationUsageLedgerEntity } from "./entities/translation-usage-ledge
 import { UserEntity } from "./entities/user.entity";
 import { UserOrganizationLanguagePreferenceEntity } from "./entities/user-organization-language-preference.entity";
 import { VoiceFlowEntity } from "./entities/voice-flow.entity";
+import { InvoiceDocumentEntity } from "./entities/invoice-document.entity";
+import { InvoiceServiceIntelligenceEntity } from "./entities/invoice-service-intelligence.entity";
+import { InvoiceServiceIntelligenceComponentEntity } from "./entities/invoice-service-intelligence-component.entity";
+import { InvoiceServiceIntelligenceWarrantyEntity } from "./entities/invoice-service-intelligence-warranty.entity";
 import { WarrantyCertificateEntity } from "./entities/warranty-certificate.entity";
 
 type ConfigLookup = Pick<ConfigService, "get">;
@@ -95,6 +104,7 @@ export const typeOrmEntities = [
   StripeWebhookEventReceiptEntity,
   CustomerEntity,
   LeadEntity,
+  PublicBookingSubmissionEntity,
   MarketingProfileEntity,
   MarketingConnectedChannelEntity,
   MarketingCampaignEntity,
@@ -128,6 +138,7 @@ export const typeOrmEntities = [
   JobStatusEventEntity,
   AuthSessionEntity,
   ControlledAccessGrantEntity,
+  PlatformOperatorGrantEntity,
   AiRecommendationRunEntity,
   AiOperatorDraftEntity,
   HomeAiConversationEntity,
@@ -151,13 +162,20 @@ export const typeOrmEntities = [
   CrmTaskEntity,
   RecentCallEntity,
   PricebookItemEntity,
+  PricebookCategoryEntity,
+  PricebookSystemEntity,
   PricebookBundleEntity,
   PricebookBundleItemEntity,
+  PricebookBundleRequirementEntity,
   OwnedPhoneNumberEntity,
   VoiceFlowEntity,
   TxtConversationEntity,
   TxtMessageEntity,
   WarrantyCertificateEntity,
+  InvoiceDocumentEntity,
+  InvoiceServiceIntelligenceEntity,
+  InvoiceServiceIntelligenceComponentEntity,
+  InvoiceServiceIntelligenceWarrantyEntity,
 ];
 
 function readBooleanFlag(value: string | undefined, fallback: boolean) {

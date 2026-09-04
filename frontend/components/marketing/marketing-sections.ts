@@ -326,7 +326,7 @@ export const FALLBACK_SUMMARY_CARDS: MarketingFoundationData["summaryCards"] = [
 export const LATER_GROWTH_ROADMAP = [
   "Instagram outbound publishing (Growth Center V1.5)",
   "Scheduled or scanner-based automation triggers beyond opportunity V1",
-  "Growth Center commercial entitlements (Stripe plan ↔ capability matrix)",
+  "Growth Center commercial entitlements (future billing-provider capability matrix)",
   "Analytics exports or rollups if operational scale demands them",
 ];
 

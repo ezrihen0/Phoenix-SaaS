@@ -8,18 +8,13 @@ import { BillingAccountSubscriptionItemEntity } from "../database/entities/billi
 import { OrganizationEntity } from "../database/entities/organization.entity";
 import { OrganizationBillingEntity } from "../database/entities/organization-billing.entity";
 import { OrganizationLanguageEntitlementEntity } from "../database/entities/organization-language-entitlement.entity";
-import { StripeWebhookEventReceiptEntity } from "../database/entities/stripe-webhook-event-receipt.entity";
 import { BillingController } from "./billing.controller";
+import { BillingCouponService } from "./billing-coupon.service";
 import { BillingOrchestrationService } from "./billing-orchestration.service";
 import { BillingProviderRegistryService } from "./billing-provider-registry.service";
-import { BillingWebhookController } from "./billing-webhook.controller";
 import { EntitlementService } from "./entitlement.service";
 import { LanguageStoreEntitlementService } from "./language-store-entitlement.service";
 import { OrganizationBillingService } from "./organization-billing.service";
-import { StripeBillingProvider } from "./stripe/stripe-billing.provider";
-import { StripeClient } from "./stripe/stripe.client";
-import { StripeWebhookReceiptService } from "./stripe/stripe-webhook-receipt.service";
-import { StripeWebhookService } from "./stripe/stripe-webhook.service";
 
 @Module({
   imports: [
@@ -31,17 +26,13 @@ import { StripeWebhookService } from "./stripe/stripe-webhook.service";
       OrganizationBillingEntity,
       OrganizationEntity,
       OrganizationLanguageEntitlementEntity,
-      StripeWebhookEventReceiptEntity,
     ]),
   ],
-  controllers: [BillingController, BillingWebhookController],
+  controllers: [BillingController],
   providers: [
-    StripeClient,
-    StripeBillingProvider,
-    StripeWebhookService,
-    StripeWebhookReceiptService,
     BillingProviderRegistryService,
     BillingOrchestrationService,
+    BillingCouponService,
     OrganizationBillingService,
     LanguageStoreEntitlementService,
     EntitlementService,

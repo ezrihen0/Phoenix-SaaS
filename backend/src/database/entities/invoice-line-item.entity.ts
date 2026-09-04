@@ -59,6 +59,15 @@ export class InvoiceLineItemEntity {
   @Column({ type: "int", nullable: true })
   warranty_months_snapshot!: number | null;
 
+  @Column({ type: "varchar", length: 36, nullable: true })
+  pricebook_bundle_id!: string | null;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  bundle_requirement_id!: string | null;
+
+  @Column({ type: "int", nullable: true })
+  catalog_unit_price_cents_snapshot!: number | null;
+
   @Column({ type: "decimal", precision: 10, scale: 3, default: 1 })
   quantity!: string;
 

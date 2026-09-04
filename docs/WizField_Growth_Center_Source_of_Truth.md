@@ -36,7 +36,7 @@ Growth Center is **organization-scoped** marketing operations inside WizField: m
 ### Explicitly out of scope (not product bugs)
 
 - **Instagram outbound publishing** (V1.5 deferral); IG copy **variants** may exist as seeded studio tracks.
-- **Growth Center monetization / plan entitlements** at runtime (`EntitlementService` and Stripe capability gates are **not** wired into `backend/src/marketing`). Commercial packaging is future architecture only.
+- **Growth Center monetization / plan entitlements** at runtime (`EntitlementService` capability gates are **not** wired into `backend/src/marketing`). Commercial packaging is future architecture only. Active Stripe runtime has been removed; Growth Center must not be documented as Stripe-gated.
 - **AI copy generation runtime** inside Growth Center.
 - **Warehouse / nightly marketing analytics rollup** infra.
 - **Provider engagement metrics** (reach, impressions, clicks) unless later persisted intentionally.
@@ -185,7 +185,7 @@ All tables are **`organization_id` scoped** (plus user stamps where applicable).
 
 ## 10. Billing and monetization stance
 
-Growth Center capabilities today are **RBAC-derived** from foundation (`can_manage_channels`, `can_enqueue_publishing`, etc.), **not** from `OrganizationBillingService` or Stripe SKUs.
+Growth Center capabilities today are **RBAC-derived** from foundation (`can_manage_channels`, `can_enqueue_publishing`, etc.), **not** from `OrganizationBillingService` or any SaaS billing SKU. Stripe is not an active runtime dependency.
 
 Future monetization options (bundled vs add-on vs hybrid) remain **architecture-only** until explicitly implemented.
 

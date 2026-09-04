@@ -11,6 +11,7 @@ import { PortalSessionEntity } from "../database/entities/portal-session.entity"
 import { QuoteEntity } from "../database/entities/quote.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
 import { WarrantyCertificateEntity } from "../database/entities/warranty-certificate.entity";
+import { InvoiceDocumentEntity } from "../database/entities/invoice-document.entity";
 import { CustomerPortalAuthController } from "./customer-portal.auth.controller";
 import { CustomerPortalReadController } from "./customer-portal.read.controller";
 import { CustomerPortalStaffController } from "./customer-portal.staff.controller";
@@ -30,6 +31,7 @@ import { PortalSessionGuard } from "./portal-session.guard";
       PortalSessionEntity,
       PortalAccessEventEntity,
       WarrantyCertificateEntity,
+      InvoiceDocumentEntity,
     ]),
   ],
   controllers: [CustomerPortalAuthController, CustomerPortalReadController, CustomerPortalStaffController],

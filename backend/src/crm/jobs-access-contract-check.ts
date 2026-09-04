@@ -40,6 +40,7 @@ function buildActor(input: {
     role: input.role,
     permissions: input.permissions,
     technician,
+    platform_capabilities: [],
   };
 }
 

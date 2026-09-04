@@ -6,6 +6,7 @@ import type { ProfileEntity } from "../database/entities/profile.entity";
 import type { PortalSessionEntity } from "../database/entities/portal-session.entity";
 import type { TechnicianEntity } from "../database/entities/technician.entity";
 import type { UserEntity } from "../database/entities/user.entity";
+import type { PlatformCapability } from "../platform/platform-operator.policy";
 
 export type ActorContext = {
   user: UserEntity;
@@ -18,6 +19,7 @@ export type ActorContext = {
   organization_id: string | null;
   role: string | null;
   permissions: string[];
+  platform_capabilities: PlatformCapability[];
 };
 
 export type RequestWithActor = Request & {

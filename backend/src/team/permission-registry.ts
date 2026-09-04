@@ -51,6 +51,7 @@ export const PERMISSION_REGISTRY: PermissionRegistryEntry[] = [
   { key: "invoices.manage", label: "Manage invoices", group: "invoices_payments" },
   { key: "invoices.payment.manage", label: "Record payments & refunds", group: "invoices_payments", sensitive: true },
   { key: "invoices.assigned.view", label: "View assigned invoices", group: "invoices_payments" },
+  { key: "invoices.assigned.manage", label: "Manage assigned job invoices", group: "invoices_payments" },
   { key: "pricebook.view", label: "View pricebook", group: "documents" },
   { key: "pricebook.manage", label: "Manage pricebook", group: "documents" },
   { key: "inventory.view", label: "View inventory", group: "documents" },

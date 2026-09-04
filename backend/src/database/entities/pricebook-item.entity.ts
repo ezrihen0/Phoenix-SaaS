@@ -20,8 +20,10 @@ import {
 } from "../../pricebook/constants";
 import { OrganizationEntity } from "./organization.entity";
 import { PricebookBundleItemEntity } from "./pricebook-bundle-item.entity";
+import { PricebookCategoryEntity } from "./pricebook-category.entity";
 
 @Index("ux_pricebook_items_org_sku", ["organization_id", "internal_sku"], { unique: true })
+@Index("ix_pricebook_items_category_id", ["category_id"])
 @Entity({ name: "pricebook_items" })
 export class PricebookItemEntity {
   @PrimaryGeneratedColumn("uuid")
@@ -47,6 +49,9 @@ export class PricebookItemEntity {
     enum: pricebookItemTypes,
   })
   item_type!: PricebookItemType;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  category_id!: string | null;
 
   @Column({ type: "varchar", length: 120, nullable: true })
   trade_area!: string | null;
@@ -103,6 +108,9 @@ export class PricebookItemEntity {
   @Column({ type: "text", nullable: true })
   inventory_notes!: string | null;
 
+  @Column({ type: "varchar", length: 255, nullable: true })
+  image_storage_key!: string | null;
+
   @Column({ type: "boolean", default: false })
   is_popular!: boolean;
 
@@ -132,6 +140,13 @@ export class PricebookItemEntity {
 
   @OneToMany(() => PricebookBundleItemEntity, (bundleItem) => bundleItem.pricebook_item)
   bundle_items?: PricebookBundleItemEntity[];
+
+  @ManyToOne(() => PricebookCategoryEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "category_id", referencedColumnName: "id" })
+  category?: PricebookCategoryEntity | null;
 
   @ManyToOne(() => OrganizationEntity, {
     nullable: true,

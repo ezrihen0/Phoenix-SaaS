@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "system": "Gas",
+      "category": "Pilot Assemblies",
+      "name": "Example item name — replace with approved catalog entry",
+      "customerDescription": "Optional customer-facing description.",
+      "oemCrossReference": "Optional OEM / cross-reference numbers stored as internalDescription.",
+      "supplierName": "Fire-Parts",
+      "supplierSku": "FP0000",
+      "materialCostCents": 9316,
+      "customerPriceCents": 0,
+      "warrantyEnabled": false,
+      "warrantyMonths": null,
+      "imagePath": null
+    }
+  ]
+}

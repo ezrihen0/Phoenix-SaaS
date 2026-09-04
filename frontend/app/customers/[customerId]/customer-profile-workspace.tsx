@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 
 import { BoardShell } from "@/components/board/board-shell";
-import { MetricTile } from "@/components/board/metric-tile";
+import { MetricTile, metricTileHoverClassName } from "@/components/board/metric-tile";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import { openJobStatuses } from "@/lib/crm/data";
 import { formatAddress, formatDate, formatDateTime } from "@/lib/crm/display";
@@ -643,11 +643,11 @@ function CustomerContextSidebar({
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70 p-3">
+        <div className={`rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70 p-3 ${metricTileHoverClassName}`}>
           <p className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">{t("totalRevenue")}</p>
           <p className="mt-1 text-lg font-semibold text-[color:var(--sem-text-primary)]">{formatCurrency(metrics.totalRevenueCents, locale)}</p>
         </div>
-        <div className={cx("rounded-2xl border p-3", metrics.openBalanceCents > 0 ? "border-[color:var(--cmp-status-warning-border)] bg-[color:var(--cmp-status-warning-bg)]" : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70")}>
+        <div className={cx("rounded-2xl border p-3", metricTileHoverClassName, metrics.openBalanceCents > 0 ? "border-[color:var(--cmp-status-warning-border)] bg-[color:var(--cmp-status-warning-bg)]" : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70")}>
           <p className="text-[10px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">{t("openBalance")}</p>
           <p className="mt-1 text-lg font-semibold text-[color:var(--sem-text-primary)]">{formatCurrency(metrics.openBalanceCents, locale)}</p>
         </div>

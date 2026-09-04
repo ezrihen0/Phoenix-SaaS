@@ -1,6 +1,8 @@
 import {
   Body,
+  Catch,
   Controller,
+  ExceptionFilter,
   Get,
   Param,
   Patch,
@@ -10,8 +12,10 @@ import {
   Res,
   StreamableFile,
   UploadedFiles,
+  UseFilters,
   UseGuards,
   UseInterceptors,
+  ArgumentsHost,
 } from "@nestjs/common";
 import { FilesInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
@@ -24,7 +28,15 @@ import type { ActorContext, RequestWithActor } from "../common/request-types";
 import { type InspectionItemStatus, inspectionItemStatuses } from "../database/entities/inspection-item.entity";
 import { type InspectionReportType, inspectionReportTypes } from "../database/entities/inspection.entity";
 import { ProfileEntity } from "../database/entities/profile.entity";
-import { InspectionsAdminService } from "./inspections.admin.service";
+import {
+  INSPECTION_PHOTO_MAX_FILE_SIZE_BYTES,
+  INSPECTION_PHOTO_MAX_FILES_PER_REQUEST,
+  INSPECTION_PHOTO_MAX_PHOTOS_PER_INSPECTION,
+  INSPECTION_PHOTO_MAX_REQUEST_BYTES,
+  InspectionsAdminService,
+  validateInspectionPhotoUploadBatch,
+  type InspectionPhotoUploadFile,
+} from "./inspections.admin.service";
 
 type CreateInspectionPayload = {
   source?: string;
@@ -71,6 +83,40 @@ type AssignPhotoPayload = {
   assignment_type?: "required_photo" | "unsatisfactory_evidence" | null;
   make_primary?: boolean;
 };
+
+@Catch()
+class InspectionPhotoMulterExceptionFilter implements ExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    if (
+      !exception
+      || typeof exception !== "object"
+      || !("code" in exception)
+      || typeof (exception as { code: unknown }).code !== "string"
+      || !(exception as { code: string }).code.startsWith("LIMIT_")
+    ) {
+      throw exception;
+    }
+
+    const response = host.switchToHttp().getResponse<Response>();
+    const multerCode = (exception as { code: string }).code;
+    const code = multerCode === "LIMIT_FILE_SIZE"
+      ? "inspection_photo_too_large"
+      : multerCode === "LIMIT_FILE_COUNT" || multerCode === "LIMIT_UNEXPECTED_FILE"
+        ? "inspection_photo_count_exceeded"
+        : "inspection_photo_upload_failed";
+    const message = code === "inspection_photo_too_large"
+      ? "Inspection photo exceeds the maximum allowed size."
+      : code === "inspection_photo_count_exceeded"
+        ? "Too many inspection photos were uploaded in one request."
+        : "Inspection photo upload failed.";
+    response.status(400).json({
+      error: {
+        code,
+        message,
+      },
+    });
+  }
+}
 
 @UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/inspections")
@@ -281,7 +327,13 @@ export class InspectionsAdminController {
   }
 
   @Post(":inspectionId/photos/upload")
-  @UseInterceptors(FilesInterceptor("files", 20))
+  @UseFilters(InspectionPhotoMulterExceptionFilter)
+  @UseInterceptors(FilesInterceptor("files", INSPECTION_PHOTO_MAX_FILES_PER_REQUEST, {
+    limits: {
+      fileSize: INSPECTION_PHOTO_MAX_FILE_SIZE_BYTES,
+      files: INSPECTION_PHOTO_MAX_FILES_PER_REQUEST,
+    },
+  }))
   async uploadPhotos(
     @Req() request: RequestWithActor,
     @Param("inspectionId") inspectionId: string,
@@ -305,7 +357,6 @@ export class InspectionsAdminController {
     const lower = fileName.toLowerCase();
     if (lower.endsWith(".png")) response.setHeader("content-type", "image/png");
     else if (lower.endsWith(".webp")) response.setHeader("content-type", "image/webp");
-    else if (lower.endsWith(".gif")) response.setHeader("content-type", "image/gif");
     else response.setHeader("content-type", "image/jpeg");
     return new StreamableFile(stream);
   }

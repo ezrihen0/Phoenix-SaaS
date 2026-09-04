@@ -145,11 +145,7 @@ async function expectApiError(
 }
 
 function buildPublicBookingService(dataSource: DataSource) {
-  return new PublicBookingsService(
-    dataSource.getRepository(LeadEntity),
-    dataSource.getRepository(CustomerEntity),
-    dataSource.getRepository(OrganizationEntity),
-  );
+  return new PublicBookingsService(dataSource);
 }
 
 function minimalBookingPayload() {
@@ -215,7 +211,7 @@ async function runChecks(summary: SmokeSummary, dataSource: DataSource, seed: Se
 
   await expectPass(summary, "A — Org A slug booking creates lead with organization_id = Org A", async () => {
     const org = await service.resolveActiveOrganizationBySlug(seed.slugA);
-    const result = await service.createBooking(org.id, input);
+    const result = await service.createBooking({ organizationId: org.id, input });
     const rows = await dataSource.query(
       `SELECT organization_id, customer_id FROM leads WHERE id = ? LIMIT 1`,
       [result.leadId],
@@ -231,7 +227,7 @@ async function runChecks(summary: SmokeSummary, dataSource: DataSource, seed: Se
 
   await expectPass(summary, "A1 — Replay of same Org A booking returns existing lead", async () => {
     const before = await countLeads(dataSource);
-    const result = await service.createBooking(seed.orgAId, input);
+    const result = await service.createBooking({ organizationId: seed.orgAId, input });
     const after = await countLeads(dataSource);
     if (!result.duplicate) {
       throw new Error("Expected duplicate=true for replayed public booking.");
@@ -244,10 +240,13 @@ async function runChecks(summary: SmokeSummary, dataSource: DataSource, seed: Se
 
   await expectPass(summary, "A2 — Org B slug booking creates lead with organization_id = Org B", async () => {
     const org = await service.resolveActiveOrganizationBySlug(seed.slugB);
-    const result = await service.createBooking(org.id, {
-      ...input,
-      fullName: "Smoke Patron B",
-      phone: "5559876543",
+    const result = await service.createBooking({
+      organizationId: org.id,
+      input: {
+        ...input,
+        fullName: "Smoke Patron B",
+        phone: "5559876543",
+      },
     });
     const rows = await dataSource.query(
       `SELECT organization_id FROM leads WHERE id = ? LIMIT 1`,

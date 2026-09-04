@@ -17,6 +17,7 @@ import {
   Wrench,
 } from "lucide-react";
 
+import { metricTileHoverClassName } from "@/components/board/metric-tile";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import { formatAddress, formatDateTime } from "@/lib/crm/display";
 import {
@@ -218,7 +219,7 @@ function SectionFrame({ title, subtitle, children }: { title: string; subtitle: 
 
 function MetricCard({ icon: Icon, label, value }: { icon: typeof Flame; label: string; value: number }) {
   return (
-    <article className="theme-control-surface-soft rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-4">
+    <article className={`group theme-control-surface-soft rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-4 ${metricTileHoverClassName}`}>
       <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:color-mix(in_srgb,var(--sem-accent-primary)_12%,transparent)] text-[color:var(--sem-accent-primary)]">
         <Icon className="h-4 w-4" />
       </span>

@@ -14,7 +14,6 @@ import {
   RotateCcw,
   Save,
   ShieldCheck,
-  Tag,
   Trash2,
   Undo2,
 } from "lucide-react";
@@ -30,9 +29,13 @@ import {
   getInventoryTrackingLabel,
   getPricebookItemTypeLabel,
   getPricebookUnitLabel,
+  itemHasWarranty,
+  parseWarrantyDurationMonths,
+  type PricebookCategory,
   type PricebookInventoryTrackingMode,
   type PricebookItem,
   type PricebookItemType,
+  type PricebookSystem,
   type PricebookUnitOfMeasure,
 } from "@/lib/crm/pricebook-model";
 
@@ -42,6 +45,8 @@ type PricebookFormProps = {
   mode: "create" | "edit";
   initialItem?: PricebookItem | null;
   sessionRole?: SessionRole | null;
+  systems?: PricebookSystem[];
+  categories?: PricebookCategory[];
 };
 
 type FormState = {
@@ -50,6 +55,8 @@ type FormState = {
   customerDescription: string;
   internalDescription: string;
   itemType: PricebookItemType;
+  systemId: string;
+  categoryId: string;
   tradeArea: string;
   serviceArea: string;
   tags: string;
@@ -60,6 +67,7 @@ type FormState = {
   customerPrice: string;
   minimumPrice: string;
   estimatedLaborMinutes: string;
+  warrantyEnabled: boolean;
   warrantyMonths: string;
   requiresPermit: boolean;
   inventoryTrackingMode: PricebookInventoryTrackingMode;
@@ -75,6 +83,8 @@ type PricebookFormViewProps = {
   mode: "create" | "edit";
   formState: FormState;
   currentItem: PricebookItem | null;
+  systems: PricebookSystem[];
+  categories: PricebookCategory[];
   costPreview: { combinedCostsCents: number; spreadCents: number };
   errorMessage: string | null;
   successMessage: string | null;
@@ -85,6 +95,7 @@ type PricebookFormViewProps = {
   canView: boolean;
   fieldsDisabled: boolean;
   updateField: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  onWarrantyEnabledChange: (enabled: boolean) => void;
   onSave: () => void;
   onDuplicate: () => void;
   onArchiveToggle: () => void;
@@ -122,6 +133,8 @@ function buildInitialState(item?: PricebookItem | null): FormState {
     customerDescription: item?.customer_description ?? "",
     internalDescription: item?.internal_description ?? "",
     itemType: item?.item_type ?? "service",
+    systemId: item?.system_id ?? item?.category?.system_id ?? "",
+    categoryId: item?.category_id ?? "",
     tradeArea: item?.trade_area ?? "",
     serviceArea: item?.service_area ?? "",
     tags: item?.tags?.join(", ") ?? "",
@@ -132,7 +145,8 @@ function buildInitialState(item?: PricebookItem | null): FormState {
     customerPrice: formatMoneyInput(item?.customer_price_cents ?? 0),
     minimumPrice: formatMoneyInput(item?.minimum_price_cents),
     estimatedLaborMinutes: item?.estimated_labor_minutes ? String(item.estimated_labor_minutes) : "",
-    warrantyMonths: item?.warranty_months ? String(item.warranty_months) : "",
+    warrantyEnabled: itemHasWarranty(item?.warranty_months),
+    warrantyMonths: itemHasWarranty(item?.warranty_months) ? String(item?.warranty_months) : "",
     requiresPermit: item?.requires_permit ?? false,
     inventoryTrackingMode: item?.inventory_tracking_mode ?? "none",
     supplierName: item?.supplier_name ?? "",
@@ -358,6 +372,8 @@ function PricebookItemBuilderView({
   mode,
   formState,
   currentItem,
+  systems,
+  categories,
   costPreview,
   errorMessage,
   successMessage,
@@ -367,11 +383,11 @@ function PricebookItemBuilderView({
   canManage,
   fieldsDisabled,
   updateField,
+  onWarrantyEnabledChange,
   onSave,
   onDuplicate,
   onArchiveToggle,
 }: PricebookFormViewProps) {
-  const parsedTags = useMemo(() => normalizeTags(formState.tags), [formState.tags]);
   const isLaborSide = formState.itemType === "labor" || formState.unitOfMeasure === "hour";
   const isMaterialSide = formState.itemType === "product" || formState.itemType === "part";
   const actionsBusy = isSaving || isDuplicating || isChangingArchiveState;
@@ -397,6 +413,16 @@ function PricebookItemBuilderView({
   const inputClass = "theme-input-control h-11 w-full rounded-xl px-3 text-sm disabled:cursor-not-allowed disabled:opacity-60";
   const monoInputClass = `${inputClass} font-[family:var(--font-geist-mono)]`;
   const textareaClass = "theme-input-control min-h-[120px] w-full resize-none rounded-xl px-3 py-3 text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-60";
+  const sortedSystems = useMemo(
+    () => [...systems].sort((left, right) => left.name.localeCompare(right.name)),
+    [systems],
+  );
+  const categoriesForSystem = useMemo(
+    () => categories
+      .filter((category) => category.system_id === formState.systemId)
+      .sort((left, right) => left.name.localeCompare(right.name)),
+    [categories, formState.systemId],
+  );
 
   return (
     <BoardShell gridOpacity="subtle">
@@ -432,6 +458,11 @@ function PricebookItemBuilderView({
                 <StatusBadge>{getPricebookItemTypeLabel(formState.itemType)}</StatusBadge>
                 <StatusBadge>{getPricebookUnitLabel(formState.unitOfMeasure)}</StatusBadge>
                 {formState.isPopular ? <StatusBadge tone="violet">Popular</StatusBadge> : null}
+                {formState.warrantyEnabled ? (
+                  <StatusBadge tone="amber">
+                    {formState.warrantyMonths.trim() ? `Warranty · ${formState.warrantyMonths.trim()} mo` : "Warranty"}
+                  </StatusBadge>
+                ) : null}
                 {formState.requiresPermit ? <StatusBadge tone="amber">Permit</StatusBadge> : null}
               </div>
             </div>
@@ -453,10 +484,39 @@ function PricebookItemBuilderView({
             <SectionCard
               eyebrow="Zone 1"
               title="Item Identity"
-              description="SKU, naming, type, and customer/internal descriptions."
+              description="System, category, SKU, naming, type, and descriptions."
               icon={FileText}
             >
               <div className="grid gap-4 lg:grid-cols-2">
+                <Field label="System">
+                  <select
+                    value={formState.systemId}
+                    onChange={(event) => {
+                      updateField("systemId", event.target.value);
+                      updateField("categoryId", "");
+                    }}
+                    disabled={fieldsDisabled}
+                    className={inputClass}
+                  >
+                    <option value="">Select system</option>
+                    {sortedSystems.map((system) => (
+                      <option key={system.id} value={system.id}>{system.name}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Category">
+                  <select
+                    value={formState.categoryId}
+                    onChange={(event) => updateField("categoryId", event.target.value)}
+                    disabled={fieldsDisabled || !formState.systemId}
+                    className={inputClass}
+                  >
+                    <option value="">Select category</option>
+                    {categoriesForSystem.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                  </select>
+                </Field>
                 <div className="grid gap-3 sm:grid-cols-2 lg:col-span-2">
                   <Toggle
                     checked={isLaborSide}
@@ -537,60 +597,6 @@ function PricebookItemBuilderView({
                       placeholder="Internal notes for staff"
                     />
                   </Field>
-                </div>
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              eyebrow="Zone 3"
-              title="Catalog Classification"
-              description="Trade area, service area, and catalog tags."
-              icon={Tag}
-            >
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Field label="Trade Area">
-                  <input
-                    value={formState.tradeArea}
-                    onChange={(event) => updateField("tradeArea", event.target.value)}
-                    disabled={fieldsDisabled}
-                    className={inputClass}
-                    placeholder="HVAC, Plumbing, Electrical"
-                  />
-                </Field>
-                <Field label="Service Area">
-                  <input
-                    value={formState.serviceArea}
-                    onChange={(event) => updateField("serviceArea", event.target.value)}
-                    disabled={fieldsDisabled}
-                    className={inputClass}
-                    placeholder="Panel Work, Water Heaters"
-                  />
-                </Field>
-                <Field label="Tags" note="Comma-separated. Saving uses existing normalizeTags behavior.">
-                  <input
-                    value={formState.tags}
-                    onChange={(event) => updateField("tags", event.target.value)}
-                    disabled={fieldsDisabled}
-                    className={inputClass}
-                    placeholder="diagnostic, popular"
-                  />
-                </Field>
-                <div className="space-y-2">
-                  <span className="text-sm font-medium text-[color:var(--sem-text-secondary)]">Popular Item</span>
-                  <Toggle
-                    checked={formState.isPopular}
-                    onChange={(value) => updateField("isPopular", value)}
-                    label="Feature in catalog"
-                    description="Keeps the existing isPopular field only."
-                    disabled={fieldsDisabled}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2 rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-3 lg:col-span-2">
-                  {parsedTags.length > 0 ? parsedTags.map((tag) => (
-                    <StatusBadge key={tag}>{tag}</StatusBadge>
-                  )) : (
-                    <span className="text-sm text-[color:var(--sem-text-muted)]">No tags configured.</span>
-                  )}
                 </div>
               </div>
             </SectionCard>
@@ -712,46 +718,32 @@ function PricebookItemBuilderView({
             <SectionCard
               eyebrow="Zone 4"
               title="Warranty & Compliance"
-              description="Per-item warranty and permit flags."
+              description="Warranty is off unless a duration is set."
               icon={ShieldCheck}
             >
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                <Field label="Warranty Months">
-                  <input
-                    value={formState.warrantyMonths}
-                    onChange={(event) => updateField("warrantyMonths", event.target.value)}
-                    inputMode="numeric"
-                    disabled={fieldsDisabled}
-                    className={monoInputClass}
-                    placeholder="12"
-                  />
-                </Field>
-                <Field label="Sort Order">
-                  <input
-                    value={formState.sortOrder}
-                    onChange={(event) => updateField("sortOrder", event.target.value)}
-                    inputMode="numeric"
-                    disabled={fieldsDisabled}
-                    className={monoInputClass}
-                    placeholder="0"
-                  />
-                </Field>
-              </div>
-              <div className="mt-4 space-y-3">
+              <div className="space-y-3">
                 <Toggle
-                  checked={formState.requiresPermit}
-                  onChange={(value) => updateField("requiresPermit", value)}
-                  label="Requires Permit"
-                  description="Flags regulatory work in the catalog."
+                  checked={formState.warrantyEnabled}
+                  onChange={onWarrantyEnabledChange}
+                  label="Warranty"
+                  description="Off by default. Turn on only when this catalog item includes a warranty."
                   disabled={fieldsDisabled}
                 />
-                <Toggle
-                  checked={formState.isActive}
-                  onChange={(value) => updateField("isActive", value)}
-                  label="Active Item"
-                  description="Controls active/archive state metadata."
-                  disabled={fieldsDisabled}
-                />
+                {formState.warrantyEnabled ? (
+                  <Field label="Warranty Duration" note="Required. Positive whole number of months, for example 3, 12, or 36.">
+                    <div className="flex h-11 items-center rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)]">
+                      <input
+                        value={formState.warrantyMonths}
+                        onChange={(event) => updateField("warrantyMonths", event.target.value)}
+                        inputMode="numeric"
+                        disabled={fieldsDisabled}
+                        className="h-full min-w-0 flex-1 bg-transparent px-3 font-[family:var(--font-geist-mono)] text-sm text-[color:var(--sem-text-primary)] outline-none disabled:cursor-not-allowed"
+                        placeholder="12"
+                      />
+                      <span className="border-l border-[color:var(--cmp-border-subtle)] px-3 font-[family:var(--font-geist-mono)] text-sm text-[color:var(--sem-text-muted)]">months</span>
+                    </div>
+                  </Field>
+                ) : null}
               </div>
             </SectionCard>
           </aside>
@@ -829,6 +821,7 @@ function LegacyPricebookFormView({
   isDuplicating,
   isChangingArchiveState,
   updateField,
+  onWarrantyEnabledChange,
   onSave,
   onDuplicate,
   onArchiveToggle,
@@ -941,10 +934,13 @@ function LegacyPricebookFormView({
                 <h2 className="text-lg font-semibold text-[color:var(--sem-text-primary)]">Flags</h2>
                 <div className="mt-5 grid gap-4">
                   <label className="theme-control-surface flex items-center justify-between gap-4 rounded-[20px] px-4 py-3 text-sm text-[color:var(--sem-text-secondary)]"><span>Popular item</span><input type="checkbox" checked={formState.isPopular} onChange={(event) => updateField("isPopular", event.target.checked)} className="h-4 w-4" /></label>
-                  <label className="theme-control-surface flex items-center justify-between gap-4 rounded-[20px] px-4 py-3 text-sm text-[color:var(--sem-text-secondary)]"><span>Requires permit</span><input type="checkbox" checked={formState.requiresPermit} onChange={(event) => updateField("requiresPermit", event.target.checked)} className="h-4 w-4" /></label>
-                  <label className="theme-control-surface flex items-center justify-between gap-4 rounded-[20px] px-4 py-3 text-sm text-[color:var(--sem-text-secondary)]"><span>Active item</span><input type="checkbox" checked={formState.isActive} onChange={(event) => updateField("isActive", event.target.checked)} className="h-4 w-4" /></label>
-                  <label className="block space-y-2"><span className="text-sm text-[color:var(--sem-text-secondary)]">Warranty months</span><input inputMode="numeric" value={formState.warrantyMonths} onChange={(event) => updateField("warrantyMonths", event.target.value)} className="theme-input-control h-12 w-full rounded-[18px] px-4 text-sm" placeholder="Optional" /></label>
-                  <label className="block space-y-2"><span className="text-sm text-[color:var(--sem-text-secondary)]">Sort order</span><input inputMode="numeric" value={formState.sortOrder} onChange={(event) => updateField("sortOrder", event.target.value)} className="theme-input-control h-12 w-full rounded-[18px] px-4 text-sm" /></label>
+                  <label className="theme-control-surface flex items-center justify-between gap-4 rounded-[20px] px-4 py-3 text-sm text-[color:var(--sem-text-secondary)]"><span>Warranty</span><input type="checkbox" checked={formState.warrantyEnabled} onChange={(event) => onWarrantyEnabledChange(event.target.checked)} className="h-4 w-4" /></label>
+                  {formState.warrantyEnabled ? (
+                    <label className="block space-y-2">
+                      <span className="text-sm text-[color:var(--sem-text-secondary)]">Warranty Duration</span>
+                      <input inputMode="numeric" value={formState.warrantyMonths} onChange={(event) => updateField("warrantyMonths", event.target.value)} className="theme-input-control h-12 w-full rounded-[18px] px-4 text-sm" placeholder="Months, e.g. 12" />
+                    </label>
+                  ) : null}
                 </div>
               </div>
             </section>
@@ -955,7 +951,13 @@ function LegacyPricebookFormView({
   );
 }
 
-export function PricebookForm({ mode, initialItem = null, sessionRole = null }: PricebookFormProps) {
+export function PricebookForm({
+  mode,
+  initialItem = null,
+  sessionRole = null,
+  systems = [],
+  categories = [],
+}: PricebookFormProps) {
   const router = useRouter();
   const [currentItem, setCurrentItem] = useState<PricebookItem | null>(initialItem);
   const [formState, setFormState] = useState<FormState>(() => buildInitialState(initialItem));
@@ -1001,6 +1003,14 @@ export function PricebookForm({ mode, initialItem = null, sessionRole = null }: 
     }));
   }
 
+  function handleWarrantyEnabledChange(enabled: boolean) {
+    setFormState((current) => ({
+      ...current,
+      warrantyEnabled: enabled,
+      warrantyMonths: enabled ? current.warrantyMonths : "",
+    }));
+  }
+
   async function handleSave() {
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -1013,6 +1023,8 @@ export function PricebookForm({ mode, initialItem = null, sessionRole = null }: 
         customerDescription: formState.customerDescription.trim() || null,
         internalDescription: formState.internalDescription.trim() || null,
         itemType: formState.itemType,
+        ...(formState.systemId.trim() ? { systemId: formState.systemId.trim() } : {}),
+        ...(formState.categoryId.trim() ? { categoryId: formState.categoryId.trim() } : {}),
         tradeArea: formState.tradeArea.trim() || null,
         serviceArea: formState.serviceArea.trim() || null,
         tags: normalizeTags(formState.tags),
@@ -1023,7 +1035,7 @@ export function PricebookForm({ mode, initialItem = null, sessionRole = null }: 
         customerPriceCents: parseCurrencyToCents(formState.customerPrice, "Customer price"),
         minimumPriceCents: parseCurrencyToCents(formState.minimumPrice, "Minimum price", true),
         estimatedLaborMinutes: parseOptionalInteger(formState.estimatedLaborMinutes),
-        warrantyMonths: parseOptionalInteger(formState.warrantyMonths),
+        warrantyMonths: parseWarrantyDurationMonths(formState.warrantyMonths, formState.warrantyEnabled),
         requiresPermit: formState.requiresPermit,
         inventoryTrackingMode: formState.inventoryTrackingMode,
         supplierName: formState.supplierName.trim() || null,
@@ -1129,6 +1141,8 @@ export function PricebookForm({ mode, initialItem = null, sessionRole = null }: 
     mode,
     formState,
     currentItem,
+    systems,
+    categories,
     costPreview,
     errorMessage,
     successMessage,
@@ -1139,6 +1153,7 @@ export function PricebookForm({ mode, initialItem = null, sessionRole = null }: 
     canView,
     fieldsDisabled,
     updateField,
+    onWarrantyEnabledChange: handleWarrantyEnabledChange,
     onSave: () => void handleSave(),
     onDuplicate: () => void handleDuplicate(),
     onArchiveToggle: () => void handleArchiveToggle(),

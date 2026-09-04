@@ -250,8 +250,8 @@ const messages = {
     },
     billing: {
       label: "Facturacion",
-      title: "Suscripcion de WizField",
-      helper: "Ver plan, limite de negocios y abrir Stripe Checkout para la cuenta compartida.",
+      title: "Acceso de WizField",
+      helper: "Ver plan, limite de negocios y estado de acceso local para la cuenta compartida.",
       loadError: "No se pudo cargar el resumen de facturacion.",
     },
     pageLoadError: "No se pudieron cargar los roles del personal.",

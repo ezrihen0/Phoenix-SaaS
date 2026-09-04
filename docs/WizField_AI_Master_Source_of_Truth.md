@@ -2,33 +2,72 @@
 
 ## Purpose
 
-This is the **canonical product and architecture truth** for the WizField AI program **Phases 0–4** (shipped on `SaaS-master`). Read this before any AI discussion, enablement, or future phase planning.
+This is the **canonical product and architecture truth** for WizField AI. Read this before any AI discussion, enablement, or future phase planning.
+
+It covers:
+
+- **Home AI V1** — current conversational `/home` assistant (read-only tools, persisted conversations)
+- **AI Program Phases 0–4** — foundation, Brain V1, voice intake, Operator Copilot
+
+Current production verification: [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md) (`home:ai:smoke`, `home:ai:contract-check`).
 
 **Companion docs:**
 
-- Engineering evidence and verification: [`WizField_AI_Engineering_Closeout_and_Gap_Register.md`](WizField_AI_Engineering_Closeout_and_Gap_Register.md)
+- Engineering evidence for Phases 0–4: [`WizField_AI_Engineering_Closeout_and_Gap_Register.md`](WizField_AI_Engineering_Closeout_and_Gap_Register.md)
 - Brain V1 UX and rules detail: [`WizField_AI_Brain_V1_Home_Intelligence_SPEC.md`](WizField_AI_Brain_V1_Home_Intelligence_SPEC.md)
 - External messaging guardrails: [`WizField_AI_Sales_Enablement_Risk_Register.md`](WizField_AI_Sales_Enablement_Risk_Register.md)
 - Execution process: [`AI_WORKFLOW_RULES.md`](AI_WORKFLOW_RULES.md)
-- Production replay: [`WizField_Reverification_Runbook.md`](WizField_Reverification_Runbook.md) §6B
+- Production replay: [`WizField_Reverification_Runbook.md`](WizField_Reverification_Runbook.md) §6B / §6C
 
-Historical phase execution prompts live under [`docs/archive/ai/`](../archive/ai/) for audit only — **not** authoritative.
+Historical phase execution prompts live under [`docs/archive/ai/`](archive/ai/) for audit only — **not** authoritative.
+
+`docs/HOME_AI_V1_RBAC_AUDIT.md` and `WizField_AI_Chat_WIP_Scope_Decision.md` are **historical pre-implementation / May 2026 scope records**. They do not describe current Home AI.
 
 ---
 
-## 1. Shipped scope (Phases 0–4)
+## 1. Shipped scope
+
+### 1A. Home AI V1 (current conversational home)
+
+Home AI is the current `/home` conversational assistant. It is **not** Brain V1 and **not** the older `POST /api/ai/chat` general chat.
+
+| Fact | Current implementation |
+|------|------------------------|
+| Persistence | One conversation stream per user + organization (`home_ai_conversations`, `home_ai_messages`) |
+| Role awareness | Role profiles change prioritization and copy; they do **not** replace authorization |
+| Tenant / permission | Server-side only — `request.actor.organization_id` and membership permissions. Client `orgId` is ignored for scope |
+| Write policy | **Read-only tools. No AI write actions.** Home AI cannot create, update, or send CRM records |
+| Flags | `AI_FOUNDATION_ENABLED` + `AI_HOME_V1_ENABLED` |
+| API | `/api/ai/home/*` (`HomeAiController`) |
+| Verification | `home:ai:smoke` PASS; `home:ai:contract-check` PASS |
+
+Supported read-only CRM tools:
+
+| Tool | Permission | Purpose |
+|------|------------|---------|
+| `search_customers` | `customers.view` | Name / email / phone search in the active org |
+| `get_leads` | `leads.view` | Recent leads |
+| `get_jobs` | `jobs.view` or `jobs.assigned.view` | Jobs; technicians stay assigned-scoped |
+| `get_schedule` | `jobs.view` or `jobs.assigned.view` | Day schedule (org timezone) |
+| `get_estimates` | `estimates.view` or `estimates.assigned.view` | Quotes / estimates |
+| `get_invoices` | `invoices.view` or `invoices.assigned.view` | Invoice balances and payment statuses (financial amounts only) |
+| `search_service_history` | `invoices.view` or `invoices.assigned.view` | Historical Service Intelligence V1 meaning — not financial totals |
+
+Financial vs historical-service context must stay correctly represented: invoice tools for money; `search_service_history` for classified historical work. Do not describe write tools, autonomous CRM mutation, or future agents as shipped.
+
+### 1B. AI Program Phases 0–4
 
 | Phase | Product capability |
 |-------|-------------------|
 | **0** | AI foundation: tool registry, bounded context, `ai_recommendation_runs` audit, noop model path |
-| **1** | Business Brain V1: deterministic home brief on `/home` |
+| **1** | Business Brain V1: deterministic home brief on `/home` (separate from Home AI chat) |
 | **1.5A** | Voice intake foundation: staff `call_intake.*` envelope dry-run over `recent_calls` |
 | **1.5B** | Telnyx live voice pilot: AI attach, conversation ingest, post-call finalize, hybrid CRM |
 | **2** | Operator Copilot: `/calls` SMS follow-up **drafts** (no send) |
 | **3** | Guarded human-confirmed customer SMS send from Copilot |
 | **4** | Copilot SMS outcome observation (thread reply after outbound; read-only) |
 
-**Out of scope here:** Phase 5+ product work, autonomous send, drip/sequences, CRM mutation from outcomes, self-learning claims.
+**Out of scope as shipped product:** Phase 5+ work, autonomous send, drip/sequences, CRM mutation from Home AI or Copilot outcomes, self-learning claims, HEIC-era mobile AI capture, telephony activation (deferred at platform level).
 
 ---
 
@@ -36,10 +75,12 @@ Historical phase execution prompts live under [`docs/archive/ai/`](../archive/ai
 
 | Store | Role | Must not |
 |-------|------|----------|
+| `home_ai_conversations` / `home_ai_messages` | Persisted Home AI V1 conversation per user + organization | Accept client org ids; store write-action intent as if executed |
 | `ai_recommendation_runs` | Generation / audit trail (`tool_trace_json`, provider metadata) | Hold editable draft text, send state, or outcome state |
 | `ai_operator_drafts` | Mutable operator product lifecycle (`active` / `dismissed` / `sent`) | Replace messaging execution truth |
 | `recent_calls` | Telephony + voice intake truth | Act as org boundary without scope SQL |
 | `txt_messages` | Messaging execution truth (inbound/outbound rows) | Be written by Phase 4 outcome code |
+| Service Intelligence tables | Historical classified meaning for `search_service_history` | Be treated as invoice financial truth |
 
 **Copilot send proof:** `ai_operator_drafts.outbound_txt_message_id` → `txt_messages.id` (Phase 3).
 
@@ -57,6 +98,7 @@ Enabling tokens (case-insensitive): `true`, `1`, `yes`, `on`. Non-enabling → f
 
 ```text
 AI_FOUNDATION_ENABLED
+├── AI_HOME_V1_ENABLED                     → /api/ai/home/*  (Home AI V1 chat)
 ├── AI_BRAIN_V1_ENABLED                    → GET /api/ai/brain/home-brief
 ├── AI_VOICE_INTAKE_FOUNDATION_ENABLED
 │   ├── POST /api/ai/intake/call-envelope/dry-run
@@ -74,6 +116,7 @@ AI_FOUNDATION_ENABLED
 | Variable | Gates |
 |----------|--------|
 | `AI_FOUNDATION_ENABLED` | All `/api/ai/*` parent gate (`ai_foundation_disabled`) |
+| `AI_HOME_V1_ENABLED` | Home AI V1 conversational APIs (`ai_home_v1_disabled`) |
 | `AI_BRAIN_V1_ENABLED` | Brain home brief (`ai_brain_v1_disabled`) |
 | `AI_VOICE_INTAKE_FOUNDATION_ENABLED` | Staff intake dry-run; **post-call finalize** (see §4) |
 | `AI_VOICE_INTAKE_LIVE_PILOT_ENABLED` | Live Telnyx AI attach on inbound calls |
@@ -108,8 +151,9 @@ AI_FOUNDATION_ENABLED
 
 | Method | Path | Permissions | Notes |
 |--------|------|-------------|-------|
+| GET/POST | `home/*` | Session + operational access; tools enforce per-permission | Home AI V1; read-only |
 | POST | `tools/dry-run` | `dashboard.office.view` | Phase 0 |
-| GET | `brain/home-brief` | `dashboard.office.view` | Phase 1 |
+| GET | `brain/home-brief` | `dashboard.office.view` | Phase 1 Brain — not Home AI chat |
 | POST | `intake/call-envelope/dry-run` | `calls.view` | Phase 1.5A |
 | POST | `copilot/calls/sms-draft/generate` | `calls.view` | Phase 2 |
 | GET | `copilot/calls/sms-draft?recentCallId=` | `calls.view` | Active draft first, else latest `sent` |
@@ -125,6 +169,7 @@ AI_FOUNDATION_ENABLED
 
 | Surface | Permission |
 |---------|------------|
+| Home AI V1 | Session + operational access; each tool checks its own CRM permission |
 | Brain V1 | `dashboard.office.view` |
 | Calls / Copilot read-edit-dismiss | `calls.view` |
 | Copilot guarded send | `calls.view` + `messaging.send` |
@@ -137,18 +182,21 @@ Viewer role: excluded from `/calls` (no `calls.view`); may see Brain when office
 ## 7. Tenant isolation
 
 - Org scope from **`request.actor.organization_id`** — never trust client-supplied org ids for AI context.
+- Home AI conversations and messages are scoped by user + organization. Cross-org conversation ids fail closed.
+- Home AI tools execute through org-scoped CRM reads and membership permissions.
 - `recent_calls`: org via owned DID / matched customer / matched lead SQL (`recentCallBelongsToOrgSql`).
 - Drafts, customers on send, and outcome hydration: `organization_id` checks on draft, customer, and conversation join.
 - Copilot send: `TxtService.sendMessage` with `organizationIdForCustomerScope` = active org.
 
 ---
 
-## 8. No-autonomy boundaries
+## 8. No-autonomy / no-write boundaries
 
+- Home AI tools are **read-only**. There is no shipped AI write-action path.
 - No auto-send, background send, drip, sequences, or retries triggered by AI outcomes.
 - No CRM mutation from Phase 4 outcome observation.
 - No telephony customer SMS bypass for Copilot (`TxtService` only; enforced by `operator-copilot:contract-check`).
-- Hybrid voice CRM lead creation on webhook is **policy-bound intake**, not Copilot autonomy.
+- Hybrid voice CRM lead creation on webhook is **policy-bound intake**, not Copilot or Home AI autonomy.
 - Phase 4 outcome is **temporal correlation** in thread, not causal attribution or self-learning.
 
 ---
@@ -166,5 +214,6 @@ Viewer role: excluded from `/calls` (no `calls.view`); may see Brain when office
 
 ## 10. Global platform alignment
 
-- Tenant rules: [`WizField_Master_Source_of_Truth.md`](WizField_Master_Source_of_Truth.md)
-- Gate 11–14 closeout unchanged; AI is additive program on same org/session model.
+- Tenant rules and production verdict: [`WizField_Master_Source_of_Truth.md`](WizField_Master_Source_of_Truth.md)
+- Gate 11–14 foundation closeout unchanged; AI remains additive on the same org/session model.
+- Telephony activation remains deferred at the platform level even though Copilot/voice code exists.

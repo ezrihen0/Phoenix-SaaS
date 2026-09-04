@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, Receipt, Save, ShieldCheck, Sparkles } from "lucide-react";
 
-import DocumentPricebookPicker from "@/components/document-pricebook-picker";
+import JobInvoiceCatalogPicker from "@/components/job-invoice-catalog-picker";
 import InvoiceLineItemsEditor from "@/components/invoice-line-items-editor";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import {
@@ -17,11 +17,10 @@ import {
   buildInvoiceLineItemPayload,
   calculateInvoicePreviewTotals,
   createManualInvoiceLine,
+  emptyInvoiceLineBundleMetadata,
   formatCentsInput,
   formatCurrencyFromCents,
   formatDateTime,
-  invoiceLineFromPricebookItem,
-  invoiceLinesFromBundle,
   invoiceLinesFromPersistedSnapshot,
   normalizeQuantityInput,
   taxRateInputToBps,
@@ -31,7 +30,6 @@ import {
 } from "@/lib/crm/invoice-line-model";
 import { getJobStatusLabel, type JobStatus } from "@/lib/crm/statuses";
 import type { PersistedQuoteLineItem } from "@/lib/crm/quote-line-model";
-import type { PricebookBundleDetail, PricebookItem } from "@/lib/crm/pricebook-model";
 
 type ToastTone = "success" | "error" | "warning";
 type InvoiceLifecycleStatus = "sent" | "partial" | "paid" | "refunded" | "overpaid";
@@ -138,6 +136,7 @@ function invoiceLinesFromQuoteDetail(
         itemType: line.item_type_snapshot,
         unitOfMeasure: line.unit_of_measure_snapshot,
         ...createEmptyDocumentLineTranslationFields(),
+        ...emptyInvoiceLineBundleMetadata(),
       }));
   }
 
@@ -169,10 +168,11 @@ export default function JobInvoiceSection({
     invoiceLinesFromPersistedSnapshot(invoice?.line_items ?? [], invoice?.amount_cents),
   );
   const [taxRateInput, setTaxRateInput] = useState(() => bpsToTaxRateInput(invoice?.tax_rate_bps_snapshot));
-  const [showPricebookPicker, setShowPricebookPicker] = useState(false);
+  const [showCatalogPicker, setShowCatalogPicker] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingInvoice, setIsLoadingInvoice] = useState(false);
+  const paymentIdempotencyKeyRef = useRef<string | null>(null);
   const [sourceLanguageCode, setSourceLanguageCode] = useState<string | null>(null);
 
   const canReflectPaidOnJob = currentJobStatus === "completed" || currentJobStatus === "paid";
@@ -244,6 +244,16 @@ export default function JobInvoiceSection({
   }, [invoice?.id]);
 
   async function saveInvoice(nextStatus: InvoiceStatus, successText: string) {
+    if (previewTotals.totalCents === 0) {
+      const confirmed = window.confirm(
+        "This invoice total is $0.00. Save anyway?",
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
     setErrorMessage(null);
     setIsSaving(true);
 
@@ -292,16 +302,22 @@ export default function JobInvoiceSection({
 
     setIsSaving(true);
 
+    const idempotencyKey = paymentIdempotencyKeyRef.current ?? crypto.randomUUID();
+    paymentIdempotencyKeyRef.current = idempotencyKey;
+
     try {
       await crmApiFetch(`/api/invoices/${targetInvoiceId}/payments`, {
         method: "POST",
         body: JSON.stringify({
+          idempotencyKey,
           entryType: "payment",
           amountCents: remainingBalanceCents,
           method: "other",
           note: "Recorded from job invoice workflow.",
         }),
       });
+
+      paymentIdempotencyKeyRef.current = null;
 
       const finalInvoice = await loadInvoiceDetailById(targetInvoiceId);
       setStatus(finalInvoice.status);
@@ -355,6 +371,17 @@ export default function JobInvoiceSection({
           };
         }
 
+        if (field === "warrantyMonthsInput") {
+          const trimmed = value.trim();
+          const parsed = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
+
+          return {
+            ...line,
+            warrantyMonthsInput: value,
+            warrantyMonths: parsed && parsed > 0 ? parsed : null,
+          };
+        }
+
         return { ...line, [field]: value };
       }),
     );
@@ -382,6 +409,27 @@ export default function JobInvoiceSection({
     );
   }
 
+  function updateLineBoolean(clientId: string, field: "warrantyEnabled", value: boolean) {
+    setLines((current) =>
+      current.map((line) => {
+        if (line.clientId !== clientId) {
+          return line;
+        }
+
+        if (field === "warrantyEnabled") {
+          return {
+            ...line,
+            warrantyEnabled: value,
+            warrantyMonthsInput: value ? line.warrantyMonthsInput : "",
+            warrantyMonths: value ? line.warrantyMonths : null,
+          };
+        }
+
+        return line;
+      }),
+    );
+  }
+
   function removeLine(clientId: string) {
     setLines((current) => current.filter((line) => line.clientId !== clientId));
   }
@@ -390,14 +438,9 @@ export default function JobInvoiceSection({
     setLines((current) => [...current, createManualInvoiceLine()]);
   }
 
-  function addPricebookItem(item: PricebookItem) {
-    setLines((current) => [...current, invoiceLineFromPricebookItem(item)]);
-    setShowPricebookPicker(false);
-  }
-
-  function addPricebookBundle(bundle: PricebookBundleDetail) {
-    setLines((current) => [...current, ...invoiceLinesFromBundle(bundle)]);
-    setShowPricebookPicker(false);
+  function addCatalogLines(nextLines: InvoiceBuilderLine[]) {
+    setLines((current) => [...current, ...nextLines]);
+    setShowCatalogPicker(false);
   }
 
   const canMarkPaid = Boolean(invoiceDetail?.id) && outstandingBalanceCents > 0;
@@ -433,20 +476,20 @@ export default function JobInvoiceSection({
             taxRateInput={taxRateInput}
             onTaxRateInputChange={setTaxRateInput}
             onLineChange={updateLine}
+            onLineBooleanChange={updateLineBoolean}
             onLineTranslationChange={updateLineTranslation}
             onRemoveLine={removeLine}
             onAddManualLine={addManualLine}
-            onOpenPricebook={() => setShowPricebookPicker((current) => !current)}
+            onOpenPricebook={() => setShowCatalogPicker(true)}
             persistedLines={invoiceDetail?.line_items}
             documentId={invoiceDetail?.id ?? null}
             sourceLanguageCode={sourceLanguageCode}
           />
 
-          {showPricebookPicker ? (
-            <DocumentPricebookPicker
-              documentLabel="invoice"
-              onAddItem={addPricebookItem}
-              onAddBundle={addPricebookBundle}
+          {showCatalogPicker ? (
+            <JobInvoiceCatalogPicker
+              onAddLines={addCatalogLines}
+              onClose={() => setShowCatalogPicker(false)}
             />
           ) : null}
 

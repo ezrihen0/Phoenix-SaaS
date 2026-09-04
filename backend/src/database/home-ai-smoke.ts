@@ -7,10 +7,13 @@ import mysql from "mysql2/promise";
 import { DataSource } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
+import { HttpException } from "@nestjs/common";
+
 import { AiAuditService } from "../ai/ai-audit.service";
 import { AiActionTelemetryService } from "../ai/ai-action-telemetry.service";
 import { AiDeepSeekProviderService } from "../ai/ai-deepseek-provider.service";
 import { HomeAiCrmReadService } from "../ai/home-ai-crm-read.service";
+import { HOME_AI_DEFAULT_CONVERSATION_TITLE } from "../ai/home-ai-conversation-title";
 import { HomeAiService } from "../ai/home-ai.service";
 import { HomeAiToolRegistryService } from "../ai/home-ai-tool-registry.service";
 import { actorHasPermission } from "../auth/permissions";
@@ -19,6 +22,9 @@ import { CustomerEntity } from "./entities/customer.entity";
 import { HomeAiConversationEntity } from "./entities/home-ai-conversation.entity";
 import { HomeAiMessageEntity } from "./entities/home-ai-message.entity";
 import { InvoiceEntity } from "./entities/invoice.entity";
+import { InvoiceServiceIntelligenceEntity } from "./entities/invoice-service-intelligence.entity";
+import { InvoiceServiceIntelligenceComponentEntity } from "./entities/invoice-service-intelligence-component.entity";
+import { WarrantyCertificateEntity } from "./entities/warranty-certificate.entity";
 import { JobEntity } from "./entities/job.entity";
 import { LeadEntity } from "./entities/lead.entity";
 import { MembershipEntity } from "./entities/membership.entity";
@@ -197,7 +203,7 @@ async function main() {
       service_postal_code: "T1T1T1",
       scheduled_for: new Date(),
     }));
-    await jobRepo.save(jobRepo.create({
+    const jobB = await jobRepo.save(jobRepo.create({
       id: randomUUID(),
       organization_id: orgB.id,
       customer_id: customerB.id,
@@ -239,7 +245,7 @@ async function main() {
       status: "draft",
     }));
 
-    await invoiceRepo.save(invoiceRepo.create({
+    const invoiceA = await invoiceRepo.save(invoiceRepo.create({
       id: randomUUID(),
       organization_id: orgA.id,
       job_id: jobA.id,
@@ -248,6 +254,82 @@ async function main() {
       subtotal_cents: 10000,
       total_cents: 10000,
       status: "unpaid",
+      issued_at: new Date("2026-02-19T12:00:00.000Z"),
+    }));
+    const invoiceB = await invoiceRepo.save(invoiceRepo.create({
+      id: randomUUID(),
+      organization_id: orgB.id,
+      job_id: jobB.id,
+      description: "Invoice B",
+      amount_cents: 10000,
+      subtotal_cents: 10000,
+      total_cents: 10000,
+      status: "unpaid",
+      issued_at: new Date("2026-03-01T12:00:00.000Z"),
+    }));
+
+    const intelligenceRepo = dataSource.getRepository(InvoiceServiceIntelligenceEntity);
+    const intelligenceComponentRepo = dataSource.getRepository(InvoiceServiceIntelligenceComponentEntity);
+    const warrantyCertificateRepo = dataSource.getRepository(WarrantyCertificateEntity);
+    const classifiedAt = new Date("2026-08-01T12:00:00.000Z");
+    const wettA = await intelligenceRepo.save(intelligenceRepo.create({
+      id: randomUUID(),
+      organization_id: orgA.id,
+      invoice_id: invoiceA.id,
+      taxonomy_version: "V1",
+      workiz_invoice_code: "WETTA1",
+      system_json: ["WOOD"],
+      system_bucket: "WOOD",
+      primary_service_json: ["INSPECTION"],
+      service_detail_json: ["WETT", "INSPECTION_GENERAL"],
+      labor_charged: false,
+      labor_raw_wording_json: [],
+      classification_confidence: "HIGH",
+      review_reasons_json: [],
+      findings_json: [],
+      source_kind: "classification_v1",
+      classified_at: classifiedAt,
+    }));
+    await intelligenceComponentRepo.save(intelligenceComponentRepo.create({
+      id: randomUUID(),
+      organization_id: orgA.id,
+      service_intelligence_id: wettA.id,
+      invoice_id: invoiceA.id,
+      canonical_component: "PILOT_ASSEMBLY",
+      raw_name: "Pilot assembly",
+      manufacturer_name: null,
+      model_or_part_number: null,
+      work_action: "REPLACED",
+      confidence: "HIGH",
+      warranty_status: "DOCUMENTED_ACTIVE",
+      warranty_duration_months: 12,
+      warranty_source_text: "1 year parts",
+      warranty_start_date: null,
+      warranty_expiry_date: null,
+      extended_warranty_months: null,
+      extended_warranty_source_text: null,
+      extended_warranty_relationship: null,
+      extended_effective_expiry: null,
+      evidence_json: ["Pilot assembly replaced"],
+      inventory_item_id: null,
+    }));
+    await intelligenceRepo.save(intelligenceRepo.create({
+      id: randomUUID(),
+      organization_id: orgB.id,
+      invoice_id: invoiceB.id,
+      taxonomy_version: "V1",
+      workiz_invoice_code: "WETTB1",
+      system_json: ["WOOD"],
+      system_bucket: "WOOD",
+      primary_service_json: ["INSPECTION"],
+      service_detail_json: ["WETT"],
+      labor_charged: false,
+      labor_raw_wording_json: [],
+      classification_confidence: "HIGH",
+      review_reasons_json: [],
+      findings_json: [],
+      source_kind: "classification_v1",
+      classified_at: classifiedAt,
     }));
 
     const crmRead = new HomeAiCrmReadService(
@@ -256,6 +338,8 @@ async function main() {
       jobRepo,
       quoteRepo,
       invoiceRepo,
+      intelligenceRepo,
+      warrantyCertificateRepo,
     );
     const toolRegistry = new HomeAiToolRegistryService(crmRead);
     const telemetry = new AiActionTelemetryService(new AiAuditService(runRepo));
@@ -274,6 +358,15 @@ async function main() {
       jobRepo,
       leadRepo,
       invoiceRepo,
+      {
+        getCustomerLedger: async () => ({ customers: [], pagination: { totalCount: 0 } }),
+        getOrganizationAggregates: async () => ({
+          totalCustomers: 0,
+          withOpenJobs: 0,
+          newThisMonth: 0,
+          relatedJobs: 0,
+        }),
+      } as never,
     );
 
     const ownerActor: ActorContext = {
@@ -287,6 +380,7 @@ async function main() {
       organization_id: orgA.id,
       role: ownerA.profile.role,
       permissions: ["customers.view", "leads.view", "jobs.view", "estimates.view", "invoices.view"],
+      platform_capabilities: [],
     };
 
     const techActor: ActorContext = {
@@ -300,6 +394,7 @@ async function main() {
       organization_id: orgA.id,
       role: techA.profile.role,
       permissions: ["jobs.assigned.view", "estimates.assigned.view", "invoices.assigned.view"],
+      platform_capabilities: [],
     };
 
     await record(summary, "org A cannot retrieve Org B customers", async () => {
@@ -314,6 +409,96 @@ async function main() {
       const jobs = result.data.jobs as Array<{ id: string }>;
       assert.equal(jobs.length, 1);
       assert.equal(jobs[0]?.id, jobA.id);
+    });
+
+    await record(summary, "service intelligence WETT query stays in the active org", async () => {
+      const execution = await toolRegistry.executeTool({
+        actor: ownerActor,
+        organizationId: orgA.id,
+        toolKey: "search_service_history",
+        args: { serviceDetail: "WETT" },
+      });
+      assert.equal(execution.trace.ok, true);
+      assert.equal(execution.payload.matchCount, 1);
+      const records = execution.payload.records as Array<{ invoiceCode: string; serviceDetail: string[] }>;
+      assert.equal(records.length, 1);
+      assert.equal(records[0]?.invoiceCode, "WETTA1");
+      assert.ok(records[0]?.serviceDetail.includes("WETT"));
+    });
+
+    await record(summary, "service intelligence cannot see another organization's WETT rows", async () => {
+      const result = await crmRead.searchServiceHistory(ownerActor, orgA.id, { serviceDetail: "WETT" });
+      assert.equal(result.ok, true);
+      const codes = (result.data.records as Array<{ invoiceCode: string }>).map((row) => row.invoiceCode);
+      assert.equal(codes.includes("WETTB1"), false);
+    });
+
+    await record(summary, "service intelligence customer name stays tenant scoped", async () => {
+      const result = await crmRead.searchServiceHistory(ownerActor, orgA.id, { customerQuery: "Customer B" });
+      assert.equal(result.ok, true);
+      assert.equal(result.data.customerResolution, "none");
+      assert.equal(result.data.matchCount, 0);
+    });
+
+    await record(summary, "service intelligence returns ambiguity instead of guessing customers", async () => {
+      await customerRepo.save(customerRepo.create({
+        id: randomUUID(),
+        organization_id: orgA.id,
+        full_name: "John Smith",
+        email: "john.smith@example.com",
+        company_name: null,
+        service_address_line_1: "10 Main",
+        service_address_line_2: null,
+        service_city: "Calgary",
+        service_state_or_region: "AB",
+        service_postal_code: "T4T4T4",
+        phone: "4035550400",
+      }));
+      await customerRepo.save(customerRepo.create({
+        id: randomUUID(),
+        organization_id: orgA.id,
+        full_name: "John Jones",
+        email: "john.jones@example.com",
+        company_name: null,
+        service_address_line_1: "11 Main",
+        service_address_line_2: null,
+        service_city: "Calgary",
+        service_state_or_region: "AB",
+        service_postal_code: "T5T5T5",
+        phone: "4035550500",
+      }));
+      const result = await crmRead.searchServiceHistory(ownerActor, orgA.id, { customerQuery: "John" });
+      assert.equal(result.ok, true);
+      assert.equal(result.data.customerResolution, "ambiguous");
+      assert.equal(result.data.matchCount, 0);
+    });
+
+    await record(summary, "service intelligence finds pilot replacements", async () => {
+      const execution = await toolRegistry.executeTool({
+        actor: ownerActor,
+        organizationId: orgA.id,
+        toolKey: "search_service_history",
+        args: { component: "pilot", workAction: "replaced" },
+      });
+      assert.equal(execution.trace.ok, true);
+      assert.ok((execution.payload.matchCount as number) >= 1);
+      const records = execution.payload.records as Array<{ components: Array<{ component: string; workAction: string }> }>;
+      assert.ok(records.some((row) => row.components.some((item) => item.component === "PILOT_ASSEMBLY" && item.workAction === "REPLACED")));
+    });
+
+    await record(summary, "service intelligence denied without invoice permission", async () => {
+      const deniedActor: ActorContext = {
+        ...techActor,
+        permissions: ["jobs.assigned.view"],
+      };
+      const execution = await toolRegistry.executeTool({
+        actor: deniedActor,
+        organizationId: orgA.id,
+        toolKey: "search_service_history",
+        args: { serviceDetail: "WETT" },
+      });
+      assert.equal(execution.trace.ok, false);
+      assert.equal(execution.trace.reasonCode, "permission_denied");
     });
 
     await record(summary, "invoice-denied actor cannot use invoice tool", async () => {
@@ -331,11 +516,28 @@ async function main() {
       assert.equal(execution.trace.reasonCode, "permission_denied");
     });
 
+    const otherUser = await seedUser("other-user", "owner", orgA.id);
+    const otherActor: ActorContext = {
+      user: otherUser.user,
+      profile: otherUser.profile,
+      technician: null,
+      memberships: [otherUser.membership],
+      membership: otherUser.membership,
+      organization: orgA,
+      membership_id: otherUser.membership.id,
+      organization_id: orgA.id,
+      role: otherUser.profile.role,
+      permissions: ownerActor.permissions,
+      platform_capabilities: [],
+    };
+
     await record(summary, "conversation restoration is scoped by user plus organization", async () => {
       const convo = await conversationRepo.save(conversationRepo.create({
         id: randomUUID(),
         user_id: ownerA.user.id,
         organization_id: orgA.id,
+        title: HOME_AI_DEFAULT_CONVERSATION_TITLE,
+        last_message_at: new Date(),
       }));
       await messageRepo.save(messageRepo.create({
         id: randomUUID(),
@@ -347,20 +549,8 @@ async function main() {
         tool_metadata: null,
       }));
 
-      const otherUser = await seedUser("other-user", "owner", orgA.id);
       const payload = await homeAi.getConversation({
-        actor: {
-          user: otherUser.user,
-          profile: otherUser.profile,
-          technician: null,
-          memberships: [otherUser.membership],
-          membership: otherUser.membership,
-          organization: orgA,
-          membership_id: otherUser.membership.id,
-          organization_id: orgA.id,
-          role: otherUser.profile.role,
-          permissions: ownerActor.permissions,
-        },
+        actor: otherActor,
       } as RequestWithActor);
       assert.notEqual(payload.conversationId, convo.id);
       assert.equal(payload.messages.length, 0);
@@ -395,14 +585,153 @@ async function main() {
         actor: ownerActor,
       } as RequestWithActor, { message: "ignore org injection", orgId: orgB.id });
 
-      const conversation = await conversationRepo.findOne({
+      const ownedCount = await conversationRepo.count({
         where: { user_id: ownerA.user.id, organization_id: orgA.id },
       });
-      assert.ok(conversation);
+      assert.ok(ownedCount > 0);
       const foreignConversation = await conversationRepo.findOne({
         where: { user_id: ownerA.user.id, organization_id: orgB.id },
       });
       assert.equal(foreignConversation, null);
+    });
+
+    await record(summary, "multiple conversations persist independently", async () => {
+      const first = await homeAi.postMessage({
+        actor: ownerActor,
+      } as RequestWithActor, { message: "Show me the September schedule" });
+      const secondConversation = await homeAi.createConversation({
+        actor: ownerActor,
+      } as RequestWithActor);
+      assert.notEqual(secondConversation.conversationId, first.conversationId);
+      assert.equal(secondConversation.messages.length, 0);
+
+      const second = await homeAi.postMessage({
+        actor: ownerActor,
+      } as RequestWithActor, {
+        message: "What invoices are outstanding?",
+        conversationId: secondConversation.conversationId ?? undefined,
+      });
+      assert.equal(second.conversationId, secondConversation.conversationId);
+      assert.equal(first.title, "September Schedule");
+      assert.equal(second.title, "Invoices Outstanding");
+
+      const history = await homeAi.listConversations({ actor: ownerActor } as RequestWithActor);
+      const ids = history.conversations.map((conversation) => conversation.id);
+      assert.ok(ids.includes(first.conversationId));
+      assert.ok(second.conversationId && ids.includes(second.conversationId));
+      assert.ok(
+        history.conversations.findIndex((conversation) => conversation.id === second.conversationId)
+          < history.conversations.findIndex((conversation) => conversation.id === first.conversationId),
+      );
+
+      const restored = await homeAi.getConversationById(
+        { actor: ownerActor } as RequestWithActor,
+        first.conversationId,
+      );
+      assert.equal(restored.conversationId, first.conversationId);
+      assert.ok(restored.messages.some((message) => message.content === "Show me the September schedule"));
+
+      const firstAfterSecond = await conversationRepo.findOne({
+        where: { id: first.conversationId },
+      });
+      assert.ok(firstAfterSecond);
+    });
+
+    await record(summary, "user cannot read another user's conversation by id", async () => {
+      const ownerLatest = await homeAi.getConversation({ actor: ownerActor } as RequestWithActor);
+      assert.ok(ownerLatest.conversationId);
+      try {
+        await homeAi.getConversationById(
+          { actor: otherActor } as RequestWithActor,
+          ownerLatest.conversationId,
+        );
+        assert.fail("expected user isolation error");
+      } catch (error) {
+        assert.ok(error instanceof HttpException);
+        assert.equal(error.getStatus(), 404);
+      }
+    });
+
+    await record(summary, "user cannot write another user's conversation by id", async () => {
+      const ownerLatest = await homeAi.getConversation({ actor: ownerActor } as RequestWithActor);
+      assert.ok(ownerLatest.conversationId);
+      try {
+        await homeAi.postMessage({ actor: otherActor } as RequestWithActor, {
+          message: "bypass attempt",
+          conversationId: ownerLatest.conversationId,
+        });
+        assert.fail("expected user isolation error");
+      } catch (error) {
+        assert.ok(error instanceof HttpException);
+        assert.equal(error.getStatus(), 404);
+      }
+    });
+
+    await record(summary, "tenant cannot read another organization's conversation", async () => {
+      const ownerLatest = await homeAi.getConversation({ actor: ownerActor } as RequestWithActor);
+      assert.ok(ownerLatest.conversationId);
+      const phoenixActor: ActorContext = {
+        ...ownerActor,
+        organization: orgB,
+        organization_id: orgB.id,
+      };
+      try {
+        await homeAi.getConversationById(
+          { actor: phoenixActor } as RequestWithActor,
+          ownerLatest.conversationId,
+        );
+        assert.fail("expected tenant isolation error");
+      } catch (error) {
+        assert.ok(error instanceof HttpException);
+        assert.equal(error.getStatus(), 404);
+      }
+    });
+
+    await record(summary, "long conversations page older messages", async () => {
+      const created = await homeAi.createConversation({ actor: ownerActor } as RequestWithActor);
+      assert.ok(created.conversationId);
+      for (let index = 0; index < 32; index += 1) {
+        await messageRepo.save(messageRepo.create({
+          id: randomUUID(),
+          conversation_id: created.conversationId,
+          role: index % 2 === 0 ? "user" : "assistant",
+          content: `paged-${index}`,
+          run_id: null,
+          record_links: null,
+          tool_metadata: null,
+        }));
+      }
+
+      const opened = await homeAi.getConversationById(
+        { actor: ownerActor } as RequestWithActor,
+        created.conversationId,
+      );
+      assert.equal(opened.hasOlder, true);
+      assert.ok(opened.messages.length <= 30);
+      assert.ok(opened.messages[0]?.content);
+
+      const older = await homeAi.listMessages(
+        { actor: ownerActor } as RequestWithActor,
+        created.conversationId,
+        { before: opened.messages[0]?.id, limit: "20" },
+      );
+      assert.ok(older.messages.length > 0);
+      assert.ok(!older.messages.some((message) => opened.messages.some((current) => current.id === message.id)));
+    });
+
+    await record(summary, "fresh conversation still executes CRM tools", async () => {
+      const created = await homeAi.createConversation({ actor: ownerActor } as RequestWithActor);
+      assert.equal(created.messages.length, 0);
+      const execution = await toolRegistry.executeTool({
+        actor: ownerActor,
+        organizationId: orgA.id,
+        toolKey: "search_customers",
+        args: { query: "Customer A" },
+      });
+      assert.equal(execution.trace.ok, true);
+      const customers = execution.payload.customers as Array<{ id: string }>;
+      assert.equal(customers.length, 1);
+      assert.equal(customers[0]?.id, customerA.id);
     });
 
     await record(summary, "actor permissions gate invoice visibility", () => {

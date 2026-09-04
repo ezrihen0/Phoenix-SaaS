@@ -5,7 +5,6 @@ export type PlanCatalogEntry = {
   title: string;
   organizationLimit: number | null;
   monthlyPriceEnvKey: string;
-  stripePriceEnvKey: string;
   monthlyDisplayFallback: string;
   features: string[];
 };
@@ -16,7 +15,6 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
     title: "Starter",
     organizationLimit: billingPlanOrganizationLimits.starter,
     monthlyPriceEnvKey: "NEXT_PUBLIC_PLAN_STARTER_MONTHLY",
-    stripePriceEnvKey: "STRIPE_PRICE_STARTER",
     monthlyDisplayFallback: "$79/mo",
     features: ["1 business workspace", "Calls, jobs, and invoicing", "Office + field alignment"],
   },
@@ -25,7 +23,6 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
     title: "Pro",
     organizationLimit: billingPlanOrganizationLimits.pro,
     monthlyPriceEnvKey: "NEXT_PUBLIC_PLAN_PRO_MONTHLY",
-    stripePriceEnvKey: "STRIPE_PRICE_PRO",
     monthlyDisplayFallback: "$149/mo",
     features: ["Up to 3 businesses", "Growth Center publishing", "Priority onboarding support"],
   },
@@ -34,7 +31,6 @@ export const PLAN_CATALOG: PlanCatalogEntry[] = [
     title: "Business",
     organizationLimit: billingPlanOrganizationLimits.business,
     monthlyPriceEnvKey: "NEXT_PUBLIC_PLAN_BUSINESS_MONTHLY",
-    stripePriceEnvKey: "STRIPE_PRICE_BUSINESS",
     monthlyDisplayFallback: "$299/mo",
     features: ["Expanded business coverage", "Multi-brand operations", "Dedicated rollout guidance"],
   },

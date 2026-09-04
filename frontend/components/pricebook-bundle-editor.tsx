@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Archive,
   ArrowLeft,
   Boxes,
-  ClipboardList,
-  Layers3,
   LoaderCircle,
   PackagePlus,
   Plus,
@@ -22,7 +20,6 @@ import {
 } from "lucide-react";
 
 import { BoardShell } from "@/components/board/board-shell";
-import { MetricTile } from "@/components/board/metric-tile";
 import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
 import {
   MasterMobileList,
@@ -44,6 +41,9 @@ import {
   type PricebookBundleFilters,
   type PricebookBundleItem,
   type PricebookBundleListResult,
+  type PricebookBundleRequirement,
+  type PricebookCategory,
+  type PricebookCategoryListResult,
   type PricebookItem,
   type PricebookItemListResult,
 } from "@/lib/crm/pricebook-model";
@@ -328,11 +328,6 @@ function BundleCompositionDeskWorkspace({
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(loadError);
 
-  const activeInView = useMemo(
-    () => initialResult.items.filter((bundle) => bundle.is_active && !bundle.archived_at).length,
-    [initialResult.items],
-  );
-
   const totalPages = Math.max(1, Math.ceil(initialResult.totalCount / initialResult.pageSize));
   const tableEmpty = !loadError && initialResult.items.length === 0;
 
@@ -417,13 +412,6 @@ function BundleCompositionDeskWorkspace({
                 Back to Revenue Control Center
               </Link>
             </div>
-          </div>
-
-          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <MetricTile icon={Layers3} label="Bundles in view" value={initialResult.items.length} helper="Current page rows" />
-            <MetricTile icon={ShieldCheck} label="Active in view" value={activeInView} helper="Current page · is_active" />
-            <MetricTile icon={ClipboardList} label="Filtered total" value={initialResult.totalCount} helper="Matches current filters" />
-            <MetricTile icon={SlidersHorizontal} label="Filter state" value={initialFilters.activeState} helper={`Page ${initialResult.page} · size ${initialResult.pageSize}`} />
           </div>
         </header>
 
@@ -784,22 +772,69 @@ function BundleLineComposer({
   const [bundleName, setBundleName] = useState(initialBundle.name);
   const [bundleDescription, setBundleDescription] = useState(initialBundle.description ?? "");
   const [bundleActive, setBundleActive] = useState(initialBundle.is_active);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<PricebookItem[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [categories, setCategories] = useState<PricebookCategory[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [newRequirementLabel, setNewRequirementLabel] = useState("");
+  const [newRequirementCategoryId, setNewRequirementCategoryId] = useState("");
+  const [newRequirementQuantity, setNewRequirementQuantity] = useState("1.000");
+  const [newRequirementSortOrder, setNewRequirementSortOrder] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [savingBundle, setSavingBundle] = useState(false);
   const [busyRowId, setBusyRowId] = useState<string | null>(null);
+  const [quantityByRequirementId, setQuantityByRequirementId] = useState<Record<string, string>>({});
+  const [sortOrderByRequirementId, setSortOrderByRequirementId] = useState<Record<string, string>>({});
+  const [labelByRequirementId, setLabelByRequirementId] = useState<Record<string, string>>({});
+  const [categoryByRequirementId, setCategoryByRequirementId] = useState<Record<string, string>>({});
   const [quantityByItemId, setQuantityByItemId] = useState<Record<string, string>>({});
   const [sortOrderByItemId, setSortOrderByItemId] = useState<Record<string, string>>({});
 
-  const nextSortOrder = useMemo(() => {
-    if (initialBundle.items.length === 0) {
+  const requirements = initialBundle.requirements ?? [];
+
+  const nextRequirementSortOrder = useMemo(() => {
+    if (requirements.length === 0) {
       return 10;
     }
 
-    return Math.max(...initialBundle.items.map((item) => item.sort_order)) + 10;
-  }, [initialBundle.items]);
+    return Math.max(...requirements.map((requirement) => requirement.sort_order)) + 10;
+  }, [requirements]);
+
+  const sortedCategories = useMemo(
+    () => [...categories].sort((left, right) => left.name.localeCompare(right.name)),
+    [categories],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCategories() {
+      setLoadingCategories(true);
+
+      try {
+        const result = await crmApiFetch<PricebookCategoryListResult>("/api/pricebook/categories");
+        if (!cancelled) {
+          setCategories(result.categories ?? []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(error instanceof Error ? error.message : "Categories could not be loaded.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingCategories(false);
+        }
+      }
+    }
+
+    void loadCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setNewRequirementSortOrder(String(nextRequirementSortOrder));
+  }, [nextRequirementSortOrder]);
 
   async function saveBundle() {
     setErrorMessage(null);
@@ -843,43 +878,65 @@ function BundleLineComposer({
     }
   }
 
-  async function searchItems() {
+  async function addRequirement() {
     setErrorMessage(null);
-    setSearching(true);
+    setBusyRowId("add-requirement");
 
     try {
-      const params = new URLSearchParams();
-      params.set("activeState", "active");
-      params.set("pageSize", "12");
-      if (searchQuery.trim()) {
-        params.set("q", searchQuery.trim());
-      }
-
-      const result = await crmApiFetch<PricebookItemListResult>(`/api/pricebook/items?${params.toString()}`);
-      setSearchResults(result.items);
+      await crmApiFetch<PricebookBundleRequirement>(`/api/pricebook/bundles/${initialBundle.id}/requirements`, {
+        method: "POST",
+        body: JSON.stringify({
+          label: newRequirementLabel.trim(),
+          categoryId: newRequirementCategoryId,
+          defaultQuantity: newRequirementQuantity.trim() || "1.000",
+          sortOrder: Number(newRequirementSortOrder.trim() || String(nextRequirementSortOrder)),
+        }),
+      });
+      setNewRequirementLabel("");
+      setNewRequirementCategoryId("");
+      setNewRequirementQuantity("1.000");
+      setNewRequirementSortOrder(String(nextRequirementSortOrder + 10));
+      router.refresh();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Pricebook search failed.");
+      setErrorMessage(error instanceof Error ? error.message : "The requirement could not be added.");
     } finally {
-      setSearching(false);
+      setBusyRowId(null);
     }
   }
 
-  async function addBundleItem(item: PricebookItem) {
+  async function updateRequirement(requirement: PricebookBundleRequirement) {
     setErrorMessage(null);
-    setBusyRowId(`add:${item.id}`);
+    setBusyRowId(`update:${requirement.id}`);
 
     try {
-      await crmApiFetch(`/api/pricebook/bundles/${initialBundle.id}/items`, {
-        method: "POST",
+      await crmApiFetch(`/api/pricebook/bundles/${initialBundle.id}/requirements/${requirement.id}`, {
+        method: "PATCH",
         body: JSON.stringify({
-          pricebookItemId: item.id,
-          defaultQuantity: quantityByItemId[item.id]?.trim() || "1.000",
-          sortOrder: Number(sortOrderByItemId[item.id]?.trim() || String(nextSortOrder)),
+          label: labelByRequirementId[requirement.id]?.trim() || requirement.label,
+          categoryId: categoryByRequirementId[requirement.id] || requirement.category_id,
+          defaultQuantity: quantityByRequirementId[requirement.id]?.trim() || requirement.default_quantity,
+          sortOrder: Number(sortOrderByRequirementId[requirement.id]?.trim() || String(requirement.sort_order)),
         }),
       });
       router.refresh();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "The item could not be added to the bundle.");
+      setErrorMessage(error instanceof Error ? error.message : "The requirement could not be updated.");
+    } finally {
+      setBusyRowId(null);
+    }
+  }
+
+  async function removeRequirement(requirement: PricebookBundleRequirement) {
+    setErrorMessage(null);
+    setBusyRowId(`remove:${requirement.id}`);
+
+    try {
+      await crmApiFetch(`/api/pricebook/bundles/${initialBundle.id}/requirements/${requirement.id}`, {
+        method: "DELETE",
+      });
+      router.refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "The requirement could not be removed.");
     } finally {
       setBusyRowId(null);
     }
@@ -887,7 +944,7 @@ function BundleLineComposer({
 
   async function updateBundleItem(bundleItem: PricebookBundleItem) {
     setErrorMessage(null);
-    setBusyRowId(`update:${bundleItem.id}`);
+    setBusyRowId(`update-item:${bundleItem.id}`);
 
     try {
       await crmApiFetch(`/api/pricebook/bundles/${initialBundle.id}/items/${bundleItem.id}`, {
@@ -899,7 +956,7 @@ function BundleLineComposer({
       });
       router.refresh();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "The bundle item could not be updated.");
+      setErrorMessage(error instanceof Error ? error.message : "The legacy bundle item could not be updated.");
     } finally {
       setBusyRowId(null);
     }
@@ -907,7 +964,7 @@ function BundleLineComposer({
 
   async function removeBundleItem(bundleItem: PricebookBundleItem) {
     setErrorMessage(null);
-    setBusyRowId(`remove:${bundleItem.id}`);
+    setBusyRowId(`remove-item:${bundleItem.id}`);
 
     try {
       await crmApiFetch(`/api/pricebook/bundles/${initialBundle.id}/items/${bundleItem.id}`, {
@@ -915,13 +972,12 @@ function BundleLineComposer({
       });
       router.refresh();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "The bundle item could not be removed.");
+      setErrorMessage(error instanceof Error ? error.message : "The legacy bundle item could not be removed.");
     } finally {
       setBusyRowId(null);
     }
   }
 
-  const searchResultIds = new Set(initialBundle.items.map((item) => item.pricebook_item_id));
   const inputClass = "theme-input-control h-11 w-full rounded-xl px-3 text-sm disabled:cursor-not-allowed disabled:opacity-60";
   const monoInputClass = `${inputClass} font-[family:var(--font-geist-mono)] text-right`;
   const actionsBusy = savingBundle || busyRowId !== null;
@@ -940,7 +996,7 @@ function BundleLineComposer({
                 Bundle Line Composer
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[color:var(--sem-text-secondary)]">
-                Compose reusable package lines with default quantities and sort order.
+                Define category-based requirements that expand into document line snapshots when selected.
               </p>
               <p className="mt-2 max-w-3xl text-sm leading-7 text-[color:var(--sem-text-muted)]">
                 Bundles expand into document line snapshots when selected. Later bundle edits do not rewrite existing quotes, invoices, PDFs, signatures, or payments.
@@ -965,8 +1021,13 @@ function BundleLineComposer({
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <BundleStatusBadge bundle={initialBundle} />
             <span className="rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-2.5 py-1 font-[family:var(--font-geist-mono)] text-xs text-[color:var(--sem-text-secondary)]">
-              {initialBundle.items.length} lines
+              {requirements.length} requirements
             </span>
+            {initialBundle.items.length > 0 ? (
+              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 font-[family:var(--font-geist-mono)] text-xs text-amber-100">
+                {initialBundle.items.length} legacy items
+              </span>
+            ) : null}
           </div>
         </header>
 
@@ -976,7 +1037,7 @@ function BundleLineComposer({
 
         <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
           <div className="space-y-5">
-            <SectionCard eyebrow="Metadata" title="Package identity" description="Name, description, and active state. Same PATCH payload as before." icon={Boxes}>
+            <SectionCard eyebrow="Metadata" title="Package identity" description="Name, description, and active state." icon={Boxes}>
               <div className="space-y-4">
                 <label className="block space-y-2">
                   <span className="text-sm font-medium text-[color:var(--sem-text-secondary)]">Bundle name</span>
@@ -994,47 +1055,48 @@ function BundleLineComposer({
             </SectionCard>
 
             {canManage ? (
-              <SectionCard eyebrow="Catalog" title="Add from pricebook" description="Search returns up to 12 active catalog items per query." icon={PackagePlus}>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--sem-text-muted)]" />
-                    <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className={`${inputClass} pl-10`} placeholder="Search SKU or item name..." />
+              <SectionCard eyebrow="Requirements" title="Add requirement" description="Each row defines a label and category the bundle needs." icon={PackagePlus}>
+                <div className="space-y-4">
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-[color:var(--sem-text-secondary)]">Label</span>
+                    <input value={newRequirementLabel} onChange={(event) => setNewRequirementLabel(event.target.value)} className={inputClass} placeholder="e.g. Primary venting run" />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-[color:var(--sem-text-secondary)]">Category</span>
+                    <select
+                      value={newRequirementCategoryId}
+                      onChange={(event) => setNewRequirementCategoryId(event.target.value)}
+                      disabled={loadingCategories}
+                      className={inputClass}
+                    >
+                      <option value="">Select category</option>
+                      {sortedCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.system?.name ? `${category.system.name} · ${category.name}` : category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-[color:var(--sem-text-secondary)]">Default quantity</span>
+                      <input value={newRequirementQuantity} onChange={(event) => setNewRequirementQuantity(event.target.value)} className={monoInputClass} placeholder="1.000" />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-[color:var(--sem-text-secondary)]">Sort order</span>
+                      <input value={newRequirementSortOrder} onChange={(event) => setNewRequirementSortOrder(event.target.value)} className={monoInputClass} placeholder={String(nextRequirementSortOrder)} />
+                    </label>
                   </div>
-                  <button type="button" onClick={() => void searchItems()} disabled={searching} className="theme-btn-secondary inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60">
-                    {searching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                    Search
+                  <button
+                    type="button"
+                    onClick={() => void addRequirement()}
+                    disabled={!newRequirementLabel.trim() || !newRequirementCategoryId || busyRowId === "add-requirement"}
+                    className="theme-btn-secondary inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {busyRowId === "add-requirement" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Add requirement
                   </button>
                 </div>
-
-                <div className="mt-4 space-y-2">
-                  {searchResults.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-3">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <p className="font-semibold text-[color:var(--sem-text-primary)]">{item.name}</p>
-                          <p className="mt-1 font-[family:var(--font-geist-mono)] text-xs text-[color:var(--sem-text-muted)]">{item.internal_sku}</p>
-                          <p className="mt-1 text-xs text-[color:var(--sem-text-secondary)]">
-                            {getPricebookItemTypeLabel(item.item_type)} · {formatCurrencyFromCents(item.customer_price_cents)} · {itemStatusLabel(item)}
-                          </p>
-                        </div>
-                        <div className="grid gap-2 max-sm:grid-cols-1 sm:grid-cols-[96px_80px_auto]">
-                          <input value={quantityByItemId[item.id] ?? "1.000"} onChange={(event) => setQuantityByItemId((current) => ({ ...current, [item.id]: event.target.value }))} className={monoInputClass} placeholder="1.000" title="Default quantity" />
-                          <input value={sortOrderByItemId[item.id] ?? String(nextSortOrder)} onChange={(event) => setSortOrderByItemId((current) => ({ ...current, [item.id]: event.target.value }))} className={monoInputClass} placeholder={String(nextSortOrder)} title="Sort order" />
-                          <button type="button" onClick={() => void addBundleItem(item)} disabled={searchResultIds.has(item.id) || busyRowId === `add:${item.id}`} className="theme-btn-secondary inline-flex h-11 items-center justify-center gap-1 rounded-xl px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60">
-                            {busyRowId === `add:${item.id}` ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                            {searchResultIds.has(item.id) ? "Added" : "Add"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {searchQuery && !searching && searchResults.length === 0 ? (
-                    <p className="text-sm text-[color:var(--sem-text-secondary)]">No active pricebook items matched that search.</p>
-                  ) : null}
-                </div>
-                <p className="mt-3 text-xs leading-5 text-[color:var(--sem-text-muted)]">
-                  Search uses active items only with a 12-result cap. Duplicate membership remains blocked by the server.
-                </p>
               </SectionCard>
             ) : null}
           </div>
@@ -1044,14 +1106,14 @@ function BundleLineComposer({
               <div className="border-b border-[color:var(--cmp-border-subtle)] px-5 py-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Composition table</p>
-                    <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-[color:var(--sem-display-headline)]">Bundle line template</h2>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Composition</p>
+                    <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-[color:var(--sem-display-headline)]">Bundle requirements</h2>
                     <p className="mt-1 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                      Default quantities and sort order are editable inline. No live invoice rewrite.
+                      Label + category rows define what the bundle needs. Quantities and sort order are editable inline.
                     </p>
                   </div>
                   <span className="rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-3 py-1 font-[family:var(--font-geist-mono)] text-xs text-[color:var(--sem-text-secondary)]">
-                    {initialBundle.items.length} lines
+                    {requirements.length} rows
                   </span>
                 </div>
               </div>
@@ -1060,92 +1122,163 @@ function BundleLineComposer({
                 <table className="w-full min-w-[900px] text-left text-sm">
                   <thead className="border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
                     <tr>
-                      <th className="px-5 py-3 font-semibold">Catalog item</th>
-                      <th className="px-5 py-3 font-semibold">Type</th>
+                      <th className="px-5 py-3 font-semibold">Label</th>
+                      <th className="px-5 py-3 font-semibold">Category</th>
                       <th className="px-5 py-3 text-right font-semibold">Default qty</th>
                       <th className="px-5 py-3 text-right font-semibold">Sort</th>
                       {canManage ? <th className="px-5 py-3 text-right font-semibold">Actions</th> : null}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[color:var(--cmp-border-subtle)]">
-                    {initialBundle.items.length === 0 ? (
+                    {requirements.length === 0 ? (
                       <tr>
                         <td colSpan={canManage ? 5 : 4} className="px-5 py-10 text-center text-sm text-[color:var(--sem-text-secondary)]">
-                          No items are in this bundle yet.
+                          No requirements are in this bundle yet.
                         </td>
                       </tr>
-                    ) : initialBundle.items.map((bundleItem) => {
-                      const item = bundleItem.pricebook_item;
-
-                      return (
-                        <tr key={bundleItem.id} className="hover:bg-[color:var(--cmp-hover-surface)]">
-                          <td className="px-5 py-4 align-top">
-                            <p className="font-semibold text-[color:var(--sem-text-primary)]">{item?.name ?? "Unknown item"}</p>
-                            <p className="mt-1 font-[family:var(--font-geist-mono)] text-xs text-[color:var(--sem-text-muted)]">{item?.internal_sku ?? bundleItem.pricebook_item_id}</p>
-                            <p className="mt-1 font-[family:var(--font-geist-mono)] text-xs text-[color:var(--sem-text-muted)]">
-                              {item ? formatCurrencyFromCents(item.customer_price_cents) : "-"}
-                            </p>
+                    ) : requirements.map((requirement) => (
+                      <tr key={requirement.id} className="hover:bg-[color:var(--cmp-hover-surface)]">
+                        <td className="px-5 py-4 align-top">
+                          <input
+                            value={labelByRequirementId[requirement.id] ?? requirement.label}
+                            onChange={(event) => setLabelByRequirementId((current) => ({ ...current, [requirement.id]: event.target.value }))}
+                            disabled={fieldsDisabled}
+                            className={inputClass}
+                          />
+                        </td>
+                        <td className="px-5 py-4 align-top">
+                          <select
+                            value={categoryByRequirementId[requirement.id] ?? requirement.category_id}
+                            onChange={(event) => setCategoryByRequirementId((current) => ({ ...current, [requirement.id]: event.target.value }))}
+                            disabled={fieldsDisabled || loadingCategories}
+                            className={inputClass}
+                          >
+                            {sortedCategories.map((category) => (
+                              <option key={category.id} value={category.id}>
+                                {category.system?.name ? `${category.system.name} · ${category.name}` : category.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-5 py-4 text-right align-top">
+                          <input value={quantityByRequirementId[requirement.id] ?? requirement.default_quantity} onChange={(event) => setQuantityByRequirementId((current) => ({ ...current, [requirement.id]: event.target.value }))} disabled={fieldsDisabled} className={`${monoInputClass} ml-auto w-24`} />
+                        </td>
+                        <td className="px-5 py-4 text-right align-top">
+                          <input value={sortOrderByRequirementId[requirement.id] ?? String(requirement.sort_order)} onChange={(event) => setSortOrderByRequirementId((current) => ({ ...current, [requirement.id]: event.target.value }))} disabled={fieldsDisabled} className={`${monoInputClass} ml-auto w-20`} />
+                        </td>
+                        {canManage ? (
+                          <td className="master-table-actions-cell px-5 py-4 text-right align-top">
+                            <div className="flex justify-end gap-2">
+                              <button type="button" onClick={() => void updateRequirement(requirement)} disabled={busyRowId === `update:${requirement.id}`} className="theme-control-surface inline-flex min-h-11 items-center gap-1 rounded-xl px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60">
+                                {busyRowId === `update:${requirement.id}` ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                Save
+                              </button>
+                              <button type="button" onClick={() => void removeRequirement(requirement)} disabled={busyRowId === `remove:${requirement.id}`} className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-100 disabled:cursor-not-allowed disabled:opacity-60">
+                                {busyRowId === `remove:${requirement.id}` ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                Remove
+                              </button>
+                            </div>
                           </td>
-                          <td className="px-5 py-4 align-top text-[color:var(--sem-text-secondary)]">
-                            {item ? getPricebookItemTypeLabel(item.item_type) : "-"}
-                          </td>
-                          <td className="px-5 py-4 text-right align-top">
-                            <input value={quantityByItemId[bundleItem.id] ?? bundleItem.default_quantity} onChange={(event) => setQuantityByItemId((current) => ({ ...current, [bundleItem.id]: event.target.value }))} disabled={fieldsDisabled} className={`${monoInputClass} ml-auto w-24`} />
-                          </td>
-                          <td className="px-5 py-4 text-right align-top">
-                            <input value={sortOrderByItemId[bundleItem.id] ?? String(bundleItem.sort_order)} onChange={(event) => setSortOrderByItemId((current) => ({ ...current, [bundleItem.id]: event.target.value }))} disabled={fieldsDisabled} className={`${monoInputClass} ml-auto w-20`} />
-                          </td>
-                          {canManage ? (
-                            <td className="master-table-actions-cell px-5 py-4 text-right align-top">
-                              <div className="flex justify-end gap-2">
-                                <button type="button" onClick={() => void updateBundleItem(bundleItem)} disabled={busyRowId === `update:${bundleItem.id}`} className="theme-control-surface inline-flex min-h-11 items-center gap-1 rounded-xl px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60">
-                                  {busyRowId === `update:${bundleItem.id}` ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                                  Save
-                                </button>
-                                <button type="button" onClick={() => void removeBundleItem(bundleItem)} disabled={busyRowId === `remove:${bundleItem.id}`} className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-100 disabled:cursor-not-allowed disabled:opacity-60">
-                                  {busyRowId === `remove:${bundleItem.id}` ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                  Remove
-                                </button>
-                              </div>
-                            </td>
-                          ) : null}
-                        </tr>
-                      );
-                    })}
+                        ) : null}
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
 
               <div className="lg:hidden">
                 <MasterMobileList
-                  items={initialBundle.items}
-                  emptyState="No items are in this bundle yet."
-                  renderItem={(bundleItem) => {
-                    const item = bundleItem.pricebook_item;
-
-                    return (
-                      <article key={bundleItem.id} className="border-t border-[color:var(--cmp-border-subtle)] p-4">
-                        <h3 className="text-base font-semibold text-[color:var(--sem-text-primary)]">{item?.name ?? "Unknown item"}</h3>
-                        <p className="mt-1 font-[family:var(--font-geist-mono)] text-xs text-[color:var(--sem-text-muted)]">{item?.internal_sku ?? "-"}</p>
-                        <div className="mt-4 grid grid-cols-2 gap-3">
-                          <input value={quantityByItemId[bundleItem.id] ?? bundleItem.default_quantity} onChange={(event) => setQuantityByItemId((current) => ({ ...current, [bundleItem.id]: event.target.value }))} disabled={fieldsDisabled} className={monoInputClass} />
-                          <input value={sortOrderByItemId[bundleItem.id] ?? String(bundleItem.sort_order)} onChange={(event) => setSortOrderByItemId((current) => ({ ...current, [bundleItem.id]: event.target.value }))} disabled={fieldsDisabled} className={monoInputClass} />
+                  items={requirements}
+                  emptyState="No requirements are in this bundle yet."
+                  renderItem={(requirement) => (
+                    <article key={requirement.id} className="border-t border-[color:var(--cmp-border-subtle)] p-4">
+                      <input value={labelByRequirementId[requirement.id] ?? requirement.label} onChange={(event) => setLabelByRequirementId((current) => ({ ...current, [requirement.id]: event.target.value }))} disabled={fieldsDisabled} className={inputClass} />
+                      <select value={categoryByRequirementId[requirement.id] ?? requirement.category_id} onChange={(event) => setCategoryByRequirementId((current) => ({ ...current, [requirement.id]: event.target.value }))} disabled={fieldsDisabled || loadingCategories} className={`${inputClass} mt-3`}>
+                        {sortedCategories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.system?.name ? `${category.system.name} · ${category.name}` : category.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="mt-4 grid grid-cols-2 gap-3">
+                        <input value={quantityByRequirementId[requirement.id] ?? requirement.default_quantity} onChange={(event) => setQuantityByRequirementId((current) => ({ ...current, [requirement.id]: event.target.value }))} disabled={fieldsDisabled} className={monoInputClass} />
+                        <input value={sortOrderByRequirementId[requirement.id] ?? String(requirement.sort_order)} onChange={(event) => setSortOrderByRequirementId((current) => ({ ...current, [requirement.id]: event.target.value }))} disabled={fieldsDisabled} className={monoInputClass} />
+                      </div>
+                      {canManage ? (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button type="button" onClick={() => void updateRequirement(requirement)} disabled={busyRowId === `update:${requirement.id}`} className="theme-control-surface rounded-xl px-3 py-2 text-xs font-medium disabled:opacity-60">Save</button>
+                          <button type="button" onClick={() => void removeRequirement(requirement)} disabled={busyRowId === `remove:${requirement.id}`} className="theme-control-surface rounded-xl px-3 py-2 text-xs font-medium disabled:opacity-60">Remove</button>
                         </div>
-                        {canManage ? (
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <button type="button" onClick={() => void updateBundleItem(bundleItem)} disabled={busyRowId === `update:${bundleItem.id}`} className="theme-control-surface rounded-xl px-3 py-2 text-xs font-medium disabled:opacity-60">Save</button>
-                            <button type="button" onClick={() => void removeBundleItem(bundleItem)} disabled={busyRowId === `remove:${bundleItem.id}`} className="theme-control-surface rounded-xl px-3 py-2 text-xs font-medium disabled:opacity-60">Remove</button>
-                          </div>
-                        ) : null}
-                      </article>
-                    );
-                  }}
+                      ) : null}
+                    </article>
+                  )}
                 />
               </div>
             </section>
 
+            {initialBundle.items.length > 0 ? (
+              <section className={`${panelClass()} min-w-0`}>
+                <div className="border-b border-[color:var(--cmp-border-subtle)] px-5 py-4">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Legacy</p>
+                    <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-[color:var(--sem-display-headline)]">Legacy fixed items</h2>
+                    <p className="mt-1 text-sm leading-6 text-[color:var(--sem-text-secondary)]">
+                      Older bundles may still have fixed catalog item lines. New composition should use requirements above.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="crm-table-frame hidden min-w-0 lg:block">
+                  <table className="w-full min-w-[900px] text-left text-sm">
+                    <thead className="border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] text-[11px] uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
+                      <tr>
+                        <th className="px-5 py-3 font-semibold">Catalog item</th>
+                        <th className="px-5 py-3 text-right font-semibold">Default qty</th>
+                        <th className="px-5 py-3 text-right font-semibold">Sort</th>
+                        {canManage ? <th className="px-5 py-3 text-right font-semibold">Actions</th> : null}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[color:var(--cmp-border-subtle)]">
+                      {initialBundle.items.map((bundleItem) => {
+                        const item = bundleItem.pricebook_item;
+
+                        return (
+                          <tr key={bundleItem.id} className="hover:bg-[color:var(--cmp-hover-surface)]">
+                            <td className="px-5 py-4 align-top">
+                              <p className="font-semibold text-[color:var(--sem-text-primary)]">{item?.name ?? "Unknown item"}</p>
+                              <p className="mt-1 font-[family:var(--font-geist-mono)] text-xs text-[color:var(--sem-text-muted)]">{item?.internal_sku ?? bundleItem.pricebook_item_id}</p>
+                            </td>
+                            <td className="px-5 py-4 text-right align-top">
+                              <input value={quantityByItemId[bundleItem.id] ?? bundleItem.default_quantity} onChange={(event) => setQuantityByItemId((current) => ({ ...current, [bundleItem.id]: event.target.value }))} disabled={fieldsDisabled} className={`${monoInputClass} ml-auto w-24`} />
+                            </td>
+                            <td className="px-5 py-4 text-right align-top">
+                              <input value={sortOrderByItemId[bundleItem.id] ?? String(bundleItem.sort_order)} onChange={(event) => setSortOrderByItemId((current) => ({ ...current, [bundleItem.id]: event.target.value }))} disabled={fieldsDisabled} className={`${monoInputClass} ml-auto w-20`} />
+                            </td>
+                            {canManage ? (
+                              <td className="master-table-actions-cell px-5 py-4 text-right align-top">
+                                <div className="flex justify-end gap-2">
+                                  <button type="button" onClick={() => void updateBundleItem(bundleItem)} disabled={busyRowId === `update-item:${bundleItem.id}`} className="theme-control-surface inline-flex min-h-11 items-center gap-1 rounded-xl px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60">
+                                    {busyRowId === `update-item:${bundleItem.id}` ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                    Save
+                                  </button>
+                                  <button type="button" onClick={() => void removeBundleItem(bundleItem)} disabled={busyRowId === `remove-item:${bundleItem.id}`} className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-100 disabled:cursor-not-allowed disabled:opacity-60">
+                                    {busyRowId === `remove-item:${bundleItem.id}` ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                    Remove
+                                  </button>
+                                </div>
+                              </td>
+                            ) : null}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ) : null}
+
             <div className="rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-4 text-xs leading-6 text-[color:var(--sem-text-muted)]">
-              Saved bundle lines expand into quote and invoice line snapshots when selected from the pricebook picker. Existing documents are not rewritten by bundle edits.
+              Saved bundle requirements expand into quote and invoice line snapshots when selected from the pricebook picker. Existing documents are not rewritten by bundle edits.
             </div>
           </div>
         </div>

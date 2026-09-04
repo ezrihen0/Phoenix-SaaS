@@ -1,13 +1,23 @@
 import { Injectable } from "@nestjs/common";
 
+import { apiError } from "../common/api-response";
 import type { BillingProviderPort } from "./billing-provider.interface";
-import { StripeBillingProvider } from "./stripe/stripe-billing.provider";
 
 @Injectable()
 export class BillingProviderRegistryService {
-  constructor(private readonly stripeBillingProvider: StripeBillingProvider) {}
+  getActiveProviderName(): null {
+    return null;
+  }
+
+  isActiveProviderConfigured() {
+    return false;
+  }
 
   getActiveProvider(): BillingProviderPort {
-    return this.stripeBillingProvider;
+    apiError(
+      410,
+      "platform_subscription_billing_disabled",
+      "WizField SaaS subscription billing has no active provider in this runtime.",
+    );
   }
 }

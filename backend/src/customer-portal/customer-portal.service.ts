@@ -15,6 +15,7 @@ import { PortalMagicLinkEntity } from "../database/entities/portal-magic-link.en
 import { PortalSessionEntity } from "../database/entities/portal-session.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
+import { InvoiceDocumentEntity } from "../database/entities/invoice-document.entity";
 import { WarrantyCertificateEntity } from "../database/entities/warranty-certificate.entity";
 
 /** Default magic-link lifetime when minting from staff (no new env var). */
@@ -46,6 +47,8 @@ export class CustomerPortalService {
     private readonly eventsRepository: Repository<PortalAccessEventEntity>,
     @InjectRepository(WarrantyCertificateEntity)
     private readonly warrantyCertificatesRepository: Repository<WarrantyCertificateEntity>,
+    @InjectRepository(InvoiceDocumentEntity)
+    private readonly invoiceDocumentsRepository: Repository<InvoiceDocumentEntity>,
     private readonly configService: ConfigService,
   ) {}
 
@@ -313,6 +316,26 @@ export class CustomerPortalService {
       take: 5,
     });
 
+    const customerJobs = await this.jobsRepository.find({
+      where: { customer_id: customerId, organization_id: organizationScope },
+      order: { updated_at: "DESC" },
+      take: 50,
+    });
+    const jobIds = customerJobs.map((job) => job.id);
+    const customerInvoices = jobIds.length === 0
+      ? []
+      : await this.invoicesRepository
+          .createQueryBuilder("invoice")
+          .where("invoice.organization_id = :organizationId", { organizationId: organizationScope })
+          .andWhere("invoice.job_id IN (:...jobIds)", { jobIds })
+          .orderBy("invoice.issued_at", "DESC")
+          .getMany();
+
+    const invoiceDocuments = await this.invoiceDocumentsRepository.find({
+      where: { customer_id: customerId, organization_id: organizationScope, document_kind: "workiz_source_pdf" },
+    });
+    const documentByInvoiceId = new Map(invoiceDocuments.map((document) => [document.invoice_id, document]));
+
     return {
       active_inspection: null,
       active_quote: activeQuote
@@ -329,6 +352,26 @@ export class CustomerPortalService {
           paid_at: invoice.paid_at ? invoice.paid_at.toISOString() : null,
         }
         : null,
+      invoices: customerInvoices.map((row) => {
+        let invoiceLabel: string | null = null;
+        if (row.branding_snapshot_json) {
+          try {
+            const snapshot = JSON.parse(row.branding_snapshot_json) as { workiz_invoice_code?: string };
+            invoiceLabel = snapshot.workiz_invoice_code ?? null;
+          } catch {
+            invoiceLabel = null;
+          }
+        }
+        const hasPdf = documentByInvoiceId.has(row.id);
+        return {
+          id: row.id,
+          invoice_number: invoiceLabel,
+          status: row.status,
+          total_cents: row.total_cents,
+          issued_at: row.issued_at.toISOString(),
+          source_pdf_url: hasPdf ? `/api/portal/invoices/${row.id}/pdf` : null,
+        };
+      }),
       warranty_certificates: warrantyCertificates.map((certificate) => ({
         id: certificate.id,
         warranty_type: certificate.warranty_type,

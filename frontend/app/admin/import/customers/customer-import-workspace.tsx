@@ -403,7 +403,7 @@ export default function CustomerImportWorkspace({
                 <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">Step 1</p>
                 <h2 className="mt-2 text-2xl font-semibold text-[#f5ecd2]">Upload CSV</h2>
                 <p className="mt-2 text-sm leading-6 text-white/58">
-                  Use the real Workiz customer export columns: Client #, Name, Email, Company, Address, Phone, and Created.
+                  Use the customer export columns: Client #, Name, Email, Company, Address, Phone, and Created.
                 </p>
               </div>
             </div>
@@ -443,15 +443,15 @@ export default function CustomerImportWorkspace({
                 <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">Step 2</p>
                 <h2 className="mt-2 text-2xl font-semibold text-[#f5ecd2]">Map Columns</h2>
                 <p className="mt-2 text-sm leading-6 text-white/58">
-                  Review the Workiz field mapping first. Address stays in the CRM main address field and is not split into city or postal code during import.
+                  Review the field mapping first. Address stays in the CRM main address field and is not split into city or postal code during import.
                 </p>
               </div>
             </div>
 
             <div className="mt-6 rounded-[24px] border border-white/10 bg-black/20 p-5">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">Main Workiz Fields</p>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--flat-gold)]">Main Export Fields</p>
               <p className="mt-2 text-sm leading-6 text-white/52">
-                Use the Workiz export columns directly: Client #, Name, Email, Company, Address, Phone, and Created.
+                Use the export columns directly: Client #, Name, Email, Company, Address, Phone, and Created.
               </p>
 
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -515,7 +515,7 @@ export default function CustomerImportWorkspace({
 
             {missingRequiredMappings.length > 0 ? (
               <div className="mt-5 rounded-[20px] border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-                Map the required Workiz fields before preview: {missingRequiredMappings.map((field) => customerImportFieldLabels[field]).join(", ")}
+                Map the required fields before preview: {missingRequiredMappings.map((field) => customerImportFieldLabels[field]).join(", ")}
               </div>
             ) : null}
 

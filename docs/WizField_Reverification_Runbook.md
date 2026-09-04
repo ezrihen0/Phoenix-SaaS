@@ -6,6 +6,8 @@ This is the reusable operator runbook for future WizField reverification on prod
 
 It is a replay tool, not an active engineering gate blocker.
 
+**Current production verification already recorded:** [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md) — **CONDITIONAL GO**. Replay this runbook for a *new* environment; do not treat a fresh replay as reopening closed findings.
+
 ## 1. When to use this runbook
 
 Use this runbook when:
@@ -243,6 +245,35 @@ Stop the AI portion if:
 - outcome tracking triggers outbound send
 - verification failure would require a new AI product phase to explain
 
+## 6C. Production closeout replay addendum (September 2026)
+
+Use when replaying the post-closeout confidence suite. Product truth: `WizField_Master_Source_of_Truth.md` and `WizField_AI_Master_Source_of_Truth.md`. Evidence template: the production closeout.
+
+```text
+npm.cmd run auth:inactive-session:smoke --workspace backend
+npm.cmd run auth:organization-resolution:check --workspace backend
+npm.cmd run auth:operational-access:check --workspace backend
+npm.cmd run operational-access:isolation:smoke --workspace backend
+npm.cmd run team:rbac:smoke --workspace backend
+npm.cmd run public-booking:isolation:smoke --workspace backend
+npm.cmd run public-booking:idempotency:smoke --workspace backend
+npm.cmd run portal:isolation:smoke --workspace backend
+npm.cmd run inspections:isolation:smoke --workspace backend
+npm.cmd run inspection-photo:upload:smoke --workspace backend
+npm.cmd run document-snapshot:isolation:smoke --workspace backend
+npm.cmd run invoice-document:durability:smoke --workspace backend
+npm.cmd run crm:core-workflow:smoke --workspace backend
+npm.cmd run crm:invoice-payment-recording:smoke --workspace backend
+npm.cmd run home:ai:smoke --workspace backend
+npm.cmd run home:ai:contract-check --workspace backend
+npm.cmd run billing:webhook-contract-check --workspace backend
+npm.cmd run production-config:check --workspace backend
+npm.cmd run security:secrets-check --workspace backend
+npm.cmd run launch:surface:check --workspace backend
+```
+
+Home AI replay requires `AI_FOUNDATION_ENABLED` + `AI_HOME_V1_ENABLED`. Telephony activation is not required for core CRM or Home AI replay. `billing:webhook-contract-check` asserts the **disabled** Stripe webhook contract, not live Stripe.
+
 ## 7. Multi-org UX verification replay
 
 Replay the Gate 11 contract:
@@ -292,8 +323,9 @@ Public booking replay:
 
 1. Submit a valid booking for Org A.
 2. Confirm the created lead is stamped to Org A.
-3. Attempt inactive or invalid slug paths.
-4. Confirm safe failure and no wrong-tenant defaulting.
+3. Replay the same idempotency key and confirm one lead / durable receipt.
+4. Attempt inactive or invalid slug paths.
+5. Confirm safe failure, rate-limit behavior where applicable, and no wrong-tenant defaulting.
 
 ## 10. Self-serve onboarding replay
 

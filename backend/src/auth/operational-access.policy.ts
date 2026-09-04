@@ -1,11 +1,10 @@
 /**
  * Route policy for default-deny operational access on staff APIs.
- * Public, provider webhook, portal-customer, and pre-activation billing/auth routes are exempt.
+ * Public, integration webhook, portal-customer, and pre-activation auth/summary routes are exempt.
  */
 
 const PUBLIC_ROUTE_PREFIXES = [
   "/api/public/",
-  "/api/billing/webhooks/",
   "/api/webhooks/",
   "/telephony/telnyx",
   "/telephony/twilio",
@@ -16,7 +15,6 @@ const PRE_ACTIVATION_ROUTE_PREFIXES = ["/api/auth/"] as const;
 
 const PRE_ACTIVATION_EXACT_ROUTES = new Set([
   "/api/billing/summary",
-  "/api/billing/checkout-session",
 ]);
 
 function normalizePath(path: string) {

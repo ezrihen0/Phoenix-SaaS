@@ -79,6 +79,7 @@ export type ClientSession = {
     } | null;
   }>;
   permissions: string[];
+  platform_capabilities: string[];
 };
 
 export async function loginWithPassword(email: string, password: string) {
@@ -121,10 +122,13 @@ export async function listClientOrganizations() {
   return authFetch<ClientSession["memberships"]>("/api/auth/organizations");
 }
 
-export async function createClientOrganization(organizationName: string) {
+export async function createClientOrganization(
+  organizationName: string,
+  mode: "standalone" | "shared" = "shared",
+) {
   return authFetch<ClientSession>("/api/auth/organizations", {
     method: "POST",
-    body: JSON.stringify({ organizationName }),
+    body: JSON.stringify({ organizationName, mode }),
   });
 }
 

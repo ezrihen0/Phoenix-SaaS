@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { EntityManager, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import { InvoiceLineItemEntity } from "../database/entities/invoice-line-item.entity";
@@ -13,7 +13,7 @@ import { CustomerOutputTranslationService } from "../language-store/customer-out
 import { DocumentPricingService } from "./document-pricing.service";
 import type { DocumentLineItemInput } from "./validation";
 
-type SnapshotLineDraft = {
+export type SnapshotLineDraft = {
   pricebook_item_id: string | null;
   document_line_key: string | null;
   sku_snapshot: string;
@@ -27,9 +27,17 @@ type SnapshotLineDraft = {
   labor_cost_cents_snapshot: number | null;
   estimated_labor_minutes_snapshot: number | null;
   warranty_months_snapshot: number | null;
+  pricebook_bundle_id: string | null;
+  bundle_requirement_id: string | null;
+  catalog_unit_price_cents_snapshot: number | null;
   quantity: string;
   line_subtotal_cents: number;
   sort_order: number;
+};
+
+export type DocumentLineReplacementOptions = {
+  manager?: EntityManager;
+  afterLineDelete?: (manager: EntityManager) => void | Promise<void>;
 };
 
 type SnapshotDocumentKind = "quote" | "invoice";
@@ -56,16 +64,25 @@ export class DocumentSnapshotService {
     private readonly customerOutputTranslationService: CustomerOutputTranslationService,
   ) {}
 
-  async replaceInvoiceLineItems(invoiceId: string, lineDrafts: SnapshotLineDraft[]) {
-    await this.invoiceLineItemsRepository.delete({ invoice_id: invoiceId });
+  async replaceInvoiceLineItems(
+    invoiceId: string,
+    lineDrafts: SnapshotLineDraft[],
+    options?: DocumentLineReplacementOptions,
+  ) {
+    const lineItemsRepository = this.resolveInvoiceLineItemsRepository(options?.manager);
+    await lineItemsRepository.delete({ invoice_id: invoiceId });
+
+    if (options?.afterLineDelete && options.manager) {
+      await options.afterLineDelete(options.manager);
+    }
 
     if (lineDrafts.length === 0) {
       return [];
     }
 
-    return this.invoiceLineItemsRepository.save(
+    return lineItemsRepository.save(
       lineDrafts.map((lineDraft) =>
-        this.invoiceLineItemsRepository.create({
+        lineItemsRepository.create({
           invoice_id: invoiceId,
           ...lineDraft,
         }),
@@ -73,21 +90,38 @@ export class DocumentSnapshotService {
     );
   }
 
-  async replaceQuoteLineItems(quoteId: string, lineDrafts: SnapshotLineDraft[]) {
-    await this.quoteLineItemsRepository.delete({ quote_id: quoteId });
+  async replaceQuoteLineItems(
+    quoteId: string,
+    lineDrafts: SnapshotLineDraft[],
+    options?: DocumentLineReplacementOptions,
+  ) {
+    const lineItemsRepository = this.resolveQuoteLineItemsRepository(options?.manager);
+    await lineItemsRepository.delete({ quote_id: quoteId });
+
+    if (options?.afterLineDelete && options.manager) {
+      await options.afterLineDelete(options.manager);
+    }
 
     if (lineDrafts.length === 0) {
       return [];
     }
 
-    return this.quoteLineItemsRepository.save(
+    return lineItemsRepository.save(
       lineDrafts.map((lineDraft) =>
-        this.quoteLineItemsRepository.create({
+        lineItemsRepository.create({
           quote_id: quoteId,
           ...lineDraft,
         }),
       ),
     );
+  }
+
+  private resolveInvoiceLineItemsRepository(manager?: EntityManager) {
+    return manager?.getRepository(InvoiceLineItemEntity) ?? this.invoiceLineItemsRepository;
+  }
+
+  private resolveQuoteLineItemsRepository(manager?: EntityManager) {
+    return manager?.getRepository(QuoteLineItemEntity) ?? this.quoteLineItemsRepository;
   }
 
   async buildLineDrafts(lineItems: DocumentLineItemInput[], context: SnapshotDocumentContext) {
@@ -107,6 +141,10 @@ export class DocumentSnapshotService {
             lineItem.descriptionOverride,
             lineItem.nameTranslationRecordId ?? null,
             lineItem.descriptionTranslationRecordId ?? null,
+            lineItem.warrantyMonthsOverride,
+            lineItem.pricebookBundleId,
+            lineItem.bundleRequirementId,
+            lineItem.catalogUnitPriceCentsSnapshot,
           ),
         );
         continue;
@@ -153,6 +191,10 @@ export class DocumentSnapshotService {
     descriptionOverride?: string | null,
     nameTranslationRecordId?: string | null,
     descriptionTranslationRecordId?: string | null,
+    warrantyMonthsOverride?: number | null,
+    pricebookBundleId?: string | null,
+    bundleRequirementId?: string | null,
+    catalogUnitPriceCentsSnapshot?: number | null,
   ): Promise<SnapshotLineDraft> {
     const item = await this.pricebookItemsRepository.findOne({
       where: {
@@ -198,7 +240,10 @@ export class DocumentSnapshotService {
       material_cost_cents_snapshot: item.material_cost_cents,
       labor_cost_cents_snapshot: item.labor_cost_cents,
       estimated_labor_minutes_snapshot: item.estimated_labor_minutes,
-      warranty_months_snapshot: item.warranty_months,
+      warranty_months_snapshot: warrantyMonthsOverride !== undefined ? warrantyMonthsOverride : item.warranty_months,
+      pricebook_bundle_id: pricebookBundleId ?? null,
+      bundle_requirement_id: bundleRequirementId ?? null,
+      catalog_unit_price_cents_snapshot: catalogUnitPriceCentsSnapshot ?? null,
       quantity,
       line_subtotal_cents: this.documentPricingService.computeLineSubtotal(quantity, unitPriceCents),
       sort_order: sortOrder,
@@ -268,6 +313,9 @@ export class DocumentSnapshotService {
           labor_cost_cents_snapshot: item.labor_cost_cents,
           estimated_labor_minutes_snapshot: item.estimated_labor_minutes,
           warranty_months_snapshot: item.warranty_months,
+          pricebook_bundle_id: null,
+          bundle_requirement_id: null,
+          catalog_unit_price_cents_snapshot: null,
           quantity,
           line_subtotal_cents: this.documentPricingService.computeLineSubtotal(
             quantity,
@@ -320,6 +368,9 @@ export class DocumentSnapshotService {
       labor_cost_cents_snapshot: null,
       estimated_labor_minutes_snapshot: null,
       warranty_months_snapshot: null,
+      pricebook_bundle_id: null,
+      bundle_requirement_id: null,
+      catalog_unit_price_cents_snapshot: null,
       quantity,
       line_subtotal_cents: this.documentPricingService.computeLineSubtotal(quantity, unitPriceCents),
       sort_order: sortOrder,

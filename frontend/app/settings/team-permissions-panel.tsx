@@ -298,14 +298,51 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
     }
   }
 
-  async function handleDeleteRole(roleId: string) {
+  async function handleRemoveMember(member: TeamMember) {
+    const confirmed = typeof window === "undefined"
+      ? true
+      : window.confirm(
+        `Remove ${member.full_name} from the team? They will lose access to this organization.`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setSaving(true);
+    setErrorMessage(null);
+    setMessage(null);
+
+    try {
+      await teamFetch(`/api/team/members/${member.id}`, { method: "DELETE" });
+      setMembers((current) => current.filter((item) => item.id !== member.id));
+
+      const nextSummary = await teamFetch<TeamSummary>("/api/team/summary");
+      setSummary(nextSummary);
+      setMessage(`${member.full_name} was removed from the team.`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "The team member could not be removed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteRole(roleId: string, roleName: string) {
+    const confirmed = typeof window === "undefined"
+      ? true
+      : window.confirm(`Remove custom role "${roleName}"? This cannot be undone.`);
+
+    if (!confirmed) {
+      return;
+    }
+
     setSaving(true);
     try {
       await teamFetch(`/api/team/custom-roles/${roleId}`, { method: "DELETE" });
       setCustomRoles((current) => current.filter((role) => role.id !== roleId));
-      setMessage("Custom role deleted.");
+      setMessage(`Custom role "${roleName}" was removed.`);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Could not delete the custom role.");
+      setErrorMessage(error instanceof Error ? error.message : "Could not remove the custom role.");
     } finally {
       setSaving(false);
     }
@@ -535,16 +572,17 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
         ) : null}
 
         <div className="mx-6 mb-6 overflow-hidden rounded-[26px] border border-[color:var(--cmp-border-subtle)]">
-          <div className="grid grid-cols-[1.2fr_1.2fr_0.8fr_0.8fr] gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-3 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)] max-md:hidden">
+          <div className="grid grid-cols-[1.2fr_1.2fr_0.8fr_0.8fr_0.7fr] gap-3 border-b border-[color:var(--cmp-border-subtle)] px-4 py-3 text-[11px] uppercase tracking-[0.2em] text-[color:var(--sem-text-muted)] max-md:hidden">
             <span>Name</span>
             <span>Email</span>
             <span>Role</span>
             <span>Status</span>
+            <span className="text-right">Actions</span>
           </div>
           {sortedMembers.map((member) => (
             <div
               key={member.id}
-              className="border-b border-[color:var(--cmp-border-subtle)] px-4 py-4 text-sm last:border-b-0 max-md:space-y-2 md:grid md:grid-cols-[1.2fr_1.2fr_0.8fr_0.8fr] md:gap-3 md:items-center"
+              className="border-b border-[color:var(--cmp-border-subtle)] px-4 py-4 text-sm last:border-b-0 max-md:space-y-2 md:grid md:grid-cols-[1.2fr_1.2fr_0.8fr_0.8fr_0.7fr] md:gap-3 md:items-center"
             >
               <div>
                 <p className="font-semibold text-[color:var(--sem-text-primary)]">{member.full_name}</p>
@@ -555,6 +593,21 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
               <p className="text-[color:var(--sem-text-secondary)]">{member.user?.email ?? "—"}</p>
               <p className="text-[color:var(--sem-text-secondary)]">{member.access_label}</p>
               <p className="capitalize text-[color:var(--sem-text-secondary)]">{member.status}</p>
+              <div className="md:text-right">
+                {member.id === currentProfileId ? (
+                  <span className="text-xs text-[color:var(--sem-text-muted)]">—</span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void handleRemoveMember(member)}
+                    className="theme-control-surface inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium text-red-300"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Remove
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -578,8 +631,14 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
                   <button type="button" disabled={saving} onClick={() => void handleDuplicateRole(role.id)} className="theme-control-surface rounded-full border px-3 py-2 text-xs">
                     <Copy className="h-3.5 w-3.5" />
                   </button>
-                  <button type="button" disabled={saving} onClick={() => void handleDeleteRole(role.id)} className="theme-control-surface rounded-full border px-3 py-2 text-xs">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void handleDeleteRole(role.id, role.name)}
+                    className="theme-control-surface inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium text-red-300"
+                  >
                     <Trash2 className="h-3.5 w-3.5" />
+                    Remove
                   </button>
                 </div>
               </div>

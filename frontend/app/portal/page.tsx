@@ -9,6 +9,14 @@ type PortalHomePayload = {
   active_inspection: { id: string; status: string } | null;
   active_quote: { id: string; status: string; price_cents: number } | null;
   payment_state: { invoice_id: string; invoice_status: string; paid_at: string | null } | null;
+  invoices: Array<{
+    id: string;
+    invoice_number: string | null;
+    status: string;
+    total_cents: number;
+    issued_at: string;
+    source_pdf_url: string | null;
+  }>;
   warranty_certificates: Array<{
     id: string;
     warranty_type: string;
@@ -101,6 +109,45 @@ export default function PortalHomePage() {
                 {data.contact.office_email ? <a href={`mailto:${data.contact.office_email}`} className="theme-control-surface inline-flex items-center rounded-full px-3.5 py-2 text-[color:var(--text-secondary)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:rgba(212,175,55,0.35)]">Email office</a> : null}
                 {data.contact.technician_phone ? <a href={`tel:${data.contact.technician_phone}`} className="theme-control-surface inline-flex items-center rounded-full px-3.5 py-2 text-[color:var(--text-secondary)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:rgba(212,175,55,0.35)]">Call technician</a> : null}
               </div>
+            </section>
+            <section className="theme-surface-card rounded-[24px] border border-[color:var(--border-subtle)] bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))] p-6">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Invoices</p>
+              {(data.invoices ?? []).length > 0 ? (
+                <div className="mt-3 space-y-3">
+                  {data.invoices.map((invoice) => (
+                    <div key={invoice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-[color:var(--border-subtle)] px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-[color:var(--text-primary)]">
+                          {invoice.invoice_number ? `Invoice #${invoice.invoice_number}` : `Invoice ${invoice.id.slice(0, 8).toUpperCase()}`}
+                        </p>
+                        <p className="mt-1 text-xs text-[color:var(--text-secondary)]">
+                          {formatCurrency(invoice.total_cents)} • {invoice.status} • {new Date(invoice.issued_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </p>
+                      </div>
+                      {invoice.source_pdf_url ? (
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            href={invoice.source_pdf_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="theme-control-surface inline-flex items-center rounded-full px-3.5 py-2 text-sm text-[color:var(--text-secondary)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)]"
+                          >
+                            View Invoice
+                          </a>
+                          <a
+                            href={`${invoice.source_pdf_url}?download=1`}
+                            className="theme-control-surface inline-flex items-center rounded-full px-3.5 py-2 text-sm text-[color:var(--text-secondary)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)]"
+                          >
+                            Download PDF
+                          </a>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-[color:var(--text-secondary)]">No invoices available in this portal yet.</p>
+              )}
             </section>
             <section className="theme-surface-card rounded-[24px] border border-[color:var(--border-subtle)] bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))] p-6">
               <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Warranty Certificates</p>

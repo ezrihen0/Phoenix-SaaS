@@ -47,6 +47,9 @@ export class InvoicePaymentEntity {
   @Column({ type: "varchar", length: 255, nullable: true })
   reference!: string | null;
 
+  @Column({ type: "varchar", length: 64, nullable: true })
+  idempotency_key!: string | null;
+
   @Column({ type: "text", nullable: true })
   note!: string | null;
 

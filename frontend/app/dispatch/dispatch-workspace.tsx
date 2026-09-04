@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import DispatchStopCard from "@/app/dispatch/dispatch-stop-card";
+import { metricTileHoverClassNameDark } from "@/components/board/metric-tile";
 import { handleLogout } from "@/lib/auth/logout";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import {
@@ -40,7 +41,7 @@ function SectionFrame({ title, subtitle, children }: { title: string; subtitle: 
 
 function MetricCard({ label, value }: { label: string; value: number }) {
   return (
-    <article className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+    <article className={`rounded-[24px] border border-white/10 bg-white/[0.04] p-4 ${metricTileHoverClassNameDark}`}>
       <p className="text-[11px] uppercase tracking-[0.28em] text-white/38">{label}</p>
       <p className="mt-3 text-3xl font-semibold tracking-tight text-white">{value}</p>
     </article>

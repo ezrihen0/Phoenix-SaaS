@@ -9,13 +9,11 @@ import {
   Clock3,
   DollarSign,
   FolderKanban,
-  Layers3,
   LoaderCircle,
   Package2,
   Pencil,
   Plus,
   Search,
-  ShieldCheck,
   Tag,
   Trash2,
   Undo2,
@@ -24,8 +22,8 @@ import {
 } from "lucide-react";
 
 import { BoardShell } from "@/components/board/board-shell";
+import { metricTileHoverClassName } from "@/components/board/metric-tile";
 import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
-import { MetricTile } from "@/components/board/metric-tile";
 import {
   MasterMobileList,
   MasterTable,
@@ -36,17 +34,25 @@ import {
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import type { SessionRole } from "@/lib/auth/server-session";
 import {
+  isPricebookItemInventoryEligible,
+  openPricebookInventoryPurchase,
+} from "@/lib/crm/pricebook-inventory-bridge";
+import {
   PRICEBOOK_ITEM_TYPES,
   buildPricebookItemQuery,
   formatCurrencyFromCents,
   getInventoryTrackingLabel,
   getPricebookItemTypeLabel,
   getPricebookUnitLabel,
+  itemHasWarranty,
   itemStatusLabel,
+  type PricebookCategory,
   type PricebookItem,
   type PricebookItemFilters,
   type PricebookItemListResult,
   type PricebookItemType,
+  type PricebookNavigationSummary,
+  type PricebookSystem,
 } from "@/lib/crm/pricebook-model";
 
 const SHOW_LEGACY_PRICEBOOK = false;
@@ -55,13 +61,20 @@ type PricebookTableProps = {
   sessionRole?: SessionRole | null;
   initialResult: PricebookItemListResult;
   initialFilters: PricebookItemFilters;
+  catalogSystems?: PricebookSystem[];
+  catalogCategories?: PricebookCategory[];
+  navigationSummary?: PricebookNavigationSummary | null;
   loadError?: string | null;
 };
 
 type CategoryCard = {
+  key: string;
   name: string;
   count: number;
-  kind: "trade" | "type";
+  kind: "system" | "category" | "type";
+  systemId?: string;
+  categoryId?: string;
+  itemType?: string;
 };
 
 type PricingModel = {
@@ -79,7 +92,8 @@ function canViewPricebookRole(sessionRole: SessionRole | null | undefined) {
   return sessionRole === "owner"
     || sessionRole === "admin"
     || sessionRole === "office_admin"
-    || sessionRole === "viewer";
+    || sessionRole === "viewer"
+    || sessionRole === "technician";
 }
 
 function canManagePricebookRole(sessionRole: SessionRole | null | undefined) {
@@ -88,12 +102,49 @@ function canManagePricebookRole(sessionRole: SessionRole | null | undefined) {
     || sessionRole === "office_admin";
 }
 
-function getItemCategory(item: PricebookItem) {
-  return item.trade_area?.trim() || item.item_type;
+function getItemCategoryLabel(item: PricebookItem) {
+  if (item.category?.name?.trim()) {
+    return item.category.name.trim();
+  }
+
+  if (item.system?.name?.trim()) {
+    return item.system.name.trim();
+  }
+
+  return getPricebookItemTypeLabel(item.item_type);
 }
 
-function getCategoryKind(item: PricebookItem): "trade" | "type" {
-  return item.trade_area?.trim() ? "trade" : "type";
+function NavigationFolderButton({
+  title,
+  count,
+  active,
+  subtitle,
+  onClick,
+}: {
+  title: string;
+  count: number;
+  active: boolean;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-[22px] border p-4 text-left transition hover:border-[color:var(--cmp-border-accent)] hover:bg-[color:var(--cmp-hover-surface)] ${active
+        ? "border-[color:var(--sem-accent-primary)] bg-[color:var(--cmp-surface-soft)]"
+        : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]"}`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{title}</span>
+        <ChevronRight className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
+      </div>
+      <p className="mt-2 font-[family:var(--font-geist-mono)] text-2xl font-semibold text-[color:var(--sem-display-headline)]">
+        {String(count).padStart(2, "0")}
+      </p>
+      <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">{subtitle}</p>
+    </button>
+  );
 }
 
 function getPricingModel(item: PricebookItem): PricingModel {
@@ -199,10 +250,14 @@ function PricebookInspectorDrawer({
   item,
   canManage,
   onClose,
+  onInventoryPurchase,
+  inventoryBusy = false,
 }: {
   item: PricebookItem;
   canManage: boolean;
   onClose: () => void;
+  onInventoryPurchase?: () => void;
+  inventoryBusy?: boolean;
 }) {
   const pricingModel = getPricingModel(item);
   const isLabor = item.item_type === "labor";
@@ -244,12 +299,12 @@ function PricebookInspectorDrawer({
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <InspectorInfoCard label="Category" value={getItemCategory(item)} />
+          <InspectorInfoCard label="Category" value={getItemCategoryLabel(item)} />
           <InspectorInfoCard label="Pricing model" value={pricingModel.label} mono />
           <InspectorInfoCard label="Customer price" value={formatCurrencyFromCents(item.customer_price_cents)} mono />
           <InspectorInfoCard
             label="Warranty"
-            value={item.warranty_months != null ? `${item.warranty_months} months` : "No warranty set"}
+            value={itemHasWarranty(item.warranty_months) ? `${item.warranty_months} months` : "No warranty set"}
           />
         </div>
 
@@ -290,7 +345,9 @@ function PricebookInspectorDrawer({
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <InspectorInfoCard label="Item type" value={getPricebookItemTypeLabel(item.item_type)} />
             <InspectorInfoCard label="Unit of measure" value={getPricebookUnitLabel(item.unit_of_measure)} />
-            <InspectorInfoCard label="Trade area" value={item.trade_area?.trim() || "Not set"} />
+            <InspectorInfoCard label="System" value={item.system?.name?.trim() || "Not set"} />
+            <InspectorInfoCard label="Category" value={item.category?.name?.trim() || "Not set"} />
+            <InspectorInfoCard label="Trade area (legacy)" value={item.trade_area?.trim() || "Not set"} />
             <InspectorInfoCard label="Service area" value={item.service_area?.trim() || "Not set"} />
             <InspectorInfoCard label="Minimum price" value={item.minimum_price_cents != null ? formatCurrencyFromCents(item.minimum_price_cents) : "No minimum"} mono />
             <InspectorInfoCard label="Inventory tracking" value={getInventoryTrackingLabel(item.inventory_tracking_mode)} />
@@ -334,6 +391,29 @@ function PricebookInspectorDrawer({
           </p>
         </div>
 
+        {isPricebookItemInventoryEligible(item) && canManage && onInventoryPurchase ? (
+          <div className="mt-6 rounded-[24px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] p-4">
+            <div className="flex items-start gap-3">
+              <Boxes className="mt-0.5 h-5 w-5 text-[color:var(--sem-accent-primary)]" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">Inventory</p>
+                <p className="mt-2 text-xs leading-5 text-[color:var(--sem-text-secondary)]">
+                  Link this Gas part to inventory and open receive stock when you are ready to buy.
+                </p>
+                <button
+                  type="button"
+                  disabled={inventoryBusy}
+                  onClick={onInventoryPurchase}
+                  className="theme-control-surface mt-4 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                >
+                  {inventoryBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Package2 className="h-4 w-4" />}
+                  Receive stock
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {canManage ? (
           <div className="mt-6">
             <Link
@@ -368,6 +448,9 @@ function PricebookControlDesk({
   sessionRole,
   initialResult,
   initialFilters,
+  catalogSystems = [],
+  catalogCategories = [],
+  navigationSummary = null,
   loadError = null,
 }: PricebookTableProps) {
   const router = useRouter();
@@ -376,50 +459,55 @@ function PricebookControlDesk({
 
   const [query, setQuery] = useState(initialFilters.q);
   const [itemType, setItemType] = useState(initialFilters.itemType);
+  const [systemId, setSystemId] = useState(initialFilters.systemId);
+  const [categoryId, setCategoryId] = useState(initialFilters.categoryId);
   const [tradeArea, setTradeArea] = useState(initialFilters.tradeArea);
   const [activeState, setActiveState] = useState(initialFilters.activeState);
   const [popularOnly, setPopularOnly] = useState(initialFilters.popularOnly);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
+  const [inventoryBusyId, setInventoryBusyId] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<PricebookItem | null>(null);
-
-  const activeItemsInView = useMemo(
-    () => initialResult.items.filter((item) => item.is_active && !item.archived_at).length,
-    [initialResult.items],
-  );
-
-  const popularItemsInView = useMemo(
-    () => initialResult.items.filter((item) => item.is_popular && item.is_active && !item.archived_at).length,
-    [initialResult.items],
-  );
 
   const popularItems = useMemo(
     () => initialResult.items.filter((item) => item.is_popular && item.is_active).slice(0, 4),
     [initialResult.items],
   );
 
-  const categoryCards = useMemo(() => {
-    const counts = new Map<string, CategoryCard>();
+  const selectedCategoryId = initialFilters.categoryId.trim();
+  const selectedSystemId = initialFilters.systemId.trim()
+    || catalogCategories.find((category) => category.id === selectedCategoryId)?.system_id?.trim()
+    || "";
+  const selectedSystem = catalogSystems.find((system) => system.id === selectedSystemId) ?? null;
+  const selectedCategory = catalogCategories.find((category) => category.id === selectedCategoryId) ?? null;
+  const navigationLevel = selectedCategoryId ? "category" : selectedSystemId ? "system" : "root";
+  const catalogTotal = navigationSummary?.total_count ?? initialResult.totalCount;
 
-    for (const item of initialResult.items) {
-      const name = getItemCategory(item);
-      const kind = getCategoryKind(item);
-      const existing = counts.get(name);
+  const systemCards = useMemo(
+    () => [...catalogSystems]
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map((system) => ({
+        system,
+        count: navigationSummary?.systems?.find((entry) => entry.id === system.id)?.item_count ?? 0,
+      })),
+    [catalogSystems, navigationSummary],
+  );
 
-      if (existing) {
-        existing.count += 1;
-      } else {
-        counts.set(name, { name, count: 1, kind });
-      }
-    }
+  const categoryCardsForSystem = useMemo(
+    () => catalogCategories
+      .filter((category) => category.system_id === selectedSystemId)
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map((category) => ({
+        category,
+        count: navigationSummary?.categories?.find((entry) => entry.id === category.id)?.item_count ?? 0,
+      })),
+    [catalogCategories, navigationSummary, selectedSystemId],
+  );
 
-    return Array.from(counts.values()).sort((left, right) => left.name.localeCompare(right.name));
-  }, [initialResult.items]);
-
-  const activeCategoryKey = initialFilters.tradeArea.trim()
-    ? initialFilters.tradeArea.trim()
-    : initialFilters.itemType.trim()
-      ? initialFilters.itemType.trim()
+  const activeNavigationKey = selectedCategoryId
+    ? `category:${selectedCategoryId}`
+    : selectedSystemId
+      ? `system:${selectedSystemId}`
       : "All";
 
   async function runItemAction(item: PricebookItem, action: "archive" | "restore") {
@@ -457,9 +545,24 @@ function PricebookControlDesk({
     }
   }
 
+  async function runInventoryPurchase(item: PricebookItem) {
+    setActionError(null);
+    setInventoryBusyId(item.id);
+
+    try {
+      await openPricebookInventoryPurchase(item, router);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Inventory could not be opened.");
+    } finally {
+      setInventoryBusyId(null);
+    }
+  }
+
   function pushFilters(next: {
     q?: string;
     itemType?: string;
+    systemId?: string;
+    categoryId?: string;
     tradeArea?: string;
     activeState?: PricebookItemFilters["activeState"];
     popularOnly?: boolean;
@@ -468,6 +571,8 @@ function PricebookControlDesk({
     const params = buildPricebookItemQuery({
       q: next.q ?? query,
       itemType: next.itemType ?? itemType,
+      systemId: next.systemId ?? systemId,
+      categoryId: next.categoryId ?? categoryId,
       tradeArea: next.tradeArea ?? tradeArea,
       activeState: next.activeState ?? activeState,
       popularOnly: next.popularOnly ?? popularOnly,
@@ -484,22 +589,55 @@ function PricebookControlDesk({
 
   function applyCategoryFilter(category: CategoryCard | "all") {
     if (category === "all") {
+      setSystemId("");
+      setCategoryId("");
       setTradeArea("");
       setItemType("");
-      pushFilters({ tradeArea: "", itemType: "", page: 1 });
+      pushFilters({ systemId: "", categoryId: "", tradeArea: "", itemType: "", page: 1 });
       return;
     }
 
-    if (category.kind === "trade") {
-      setTradeArea(category.name);
+    if (category.kind === "system") {
+      setSystemId(category.systemId ?? "");
+      setCategoryId("");
+      setTradeArea("");
       setItemType("");
-      pushFilters({ tradeArea: category.name, itemType: "", page: 1 });
+      pushFilters({
+        systemId: category.systemId ?? "",
+        categoryId: "",
+        tradeArea: "",
+        itemType: "",
+        page: 1,
+      });
       return;
     }
 
-    setItemType(category.name);
+    if (category.kind === "category") {
+      setCategoryId(category.categoryId ?? "");
+      setSystemId(category.systemId ?? "");
+      setTradeArea("");
+      setItemType("");
+      pushFilters({
+        categoryId: category.categoryId ?? "",
+        systemId: category.systemId ?? "",
+        tradeArea: "",
+        itemType: "",
+        page: 1,
+      });
+      return;
+    }
+
+    setItemType(category.itemType ?? "");
+    setSystemId("");
+    setCategoryId("");
     setTradeArea("");
-    pushFilters({ itemType: category.name, tradeArea: "", page: 1 });
+    pushFilters({
+      itemType: category.itemType ?? "",
+      systemId: "",
+      categoryId: "",
+      tradeArea: "",
+      page: 1,
+    });
   }
 
   const totalPages = Math.max(1, Math.ceil(initialResult.totalCount / initialResult.pageSize));
@@ -543,34 +681,6 @@ function PricebookControlDesk({
             ) : null}
           </div>
 
-          {canView ? (
-            <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <MetricTile
-                icon={Package2}
-                label="Catalog items in view"
-                value={initialResult.items.length}
-                helper="Current page rows"
-              />
-              <MetricTile
-                icon={ShieldCheck}
-                label="Active in view"
-                value={activeItemsInView}
-                helper="Current page · is_active"
-              />
-              <MetricTile
-                icon={Tag}
-                label="Popular in view"
-                value={popularItemsInView}
-                helper="Current page · is_popular"
-              />
-              <MetricTile
-                icon={Layers3}
-                label="Filtered catalog total"
-                value={initialResult.totalCount}
-                helper="Matches current filters"
-              />
-            </div>
-          ) : null}
         </header>
 
         {!canView ? (
@@ -583,153 +693,6 @@ function PricebookControlDesk({
           </section>
         ) : (
           <>
-            <section className={`${panelClass()} mt-6 p-5`}>
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">
-                    Category folders
-                  </p>
-                  <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">Counts from current page · trade area or item type</p>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <button
-                      type="button"
-                      onClick={() => applyCategoryFilter("all")}
-                      className={`rounded-[22px] border p-4 text-left transition ${activeCategoryKey === "All"
-                        ? "border-[color:var(--sem-accent-primary)] bg-[color:var(--cmp-surface-soft)]"
-                        : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] hover:border-[color:var(--cmp-border-accent)]"}`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-semibold text-[color:var(--sem-text-primary)]">All</span>
-                        <ChevronRight className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
-                      </div>
-                      <p className="mt-2 font-[family:var(--font-geist-mono)] text-2xl font-semibold text-[color:var(--sem-display-headline)]">
-                        {String(initialResult.items.length).padStart(2, "0")}
-                      </p>
-                      <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">In current view</p>
-                    </button>
-                    {categoryCards.map((category) => {
-                      const active = activeCategoryKey === category.name;
-
-                      return (
-                        <button
-                          key={`${category.kind}:${category.name}`}
-                          type="button"
-                          onClick={() => applyCategoryFilter(category)}
-                          className={`rounded-[22px] border p-4 text-left transition ${active
-                            ? "border-[color:var(--sem-accent-primary)] bg-[color:var(--cmp-surface-soft)]"
-                            : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] hover:border-[color:var(--cmp-border-accent)]"}`}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{category.name}</span>
-                            <ChevronRight className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
-                          </div>
-                          <p className="mt-2 font-[family:var(--font-geist-mono)] text-2xl font-semibold text-[color:var(--sem-display-headline)]">
-                            {String(category.count).padStart(2, "0")}
-                          </p>
-                          <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">In current view</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Fast add entry point</p>
-                  <div className="mt-3 rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] p-4">
-                    {canManage ? (
-                      <>
-                        <p className="text-sm text-[color:var(--sem-text-secondary)]">
-                          Create catalog items through the full pricebook form with SKU, pricing, warranty, and inventory-ready fields.
-                        </p>
-                        <Link
-                          href="/pricebook/new"
-                          className="theme-btn-secondary mt-4 inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium"
-                        >
-                          <Plus className="h-4 w-4" />
-                          Open create item form
-                        </Link>
-                      </>
-                    ) : (
-                      <p className="text-sm leading-6 text-[color:var(--sem-text-secondary)]">
-                        Item creation requires an owner, admin, or office admin role with pricebook management access.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className={`${panelClass()} mt-6 p-5`}>
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.6fr)]">
-                <label className="block space-y-2">
-                  <span className="text-sm text-[color:var(--sem-text-secondary)]">Search</span>
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--sem-text-muted)]" />
-                    <input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      className="theme-input-control h-12 w-full rounded-[18px] pl-11 pr-4 text-sm"
-                      placeholder="SKU, name, description, tag"
-                    />
-                  </div>
-                </label>
-                <label className="block space-y-2">
-                  <span className="text-sm text-[color:var(--sem-text-secondary)]">Item type</span>
-                  <select
-                    value={itemType}
-                    onChange={(event) => setItemType(event.target.value)}
-                    className="theme-input-control h-12 w-full rounded-[18px] px-4 text-sm"
-                  >
-                    <option value="">All types</option>
-                    {PRICEBOOK_ITEM_TYPES.map((typeValue) => (
-                      <option key={typeValue} value={typeValue}>{getPricebookItemTypeLabel(typeValue)}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block space-y-2">
-                  <span className="text-sm text-[color:var(--sem-text-secondary)]">Trade area</span>
-                  <input
-                    value={tradeArea}
-                    onChange={(event) => setTradeArea(event.target.value)}
-                    className="theme-input-control h-12 w-full rounded-[18px] px-4 text-sm"
-                    placeholder="Gas, Wood, Masonry"
-                  />
-                </label>
-                <label className="block space-y-2">
-                  <span className="text-sm text-[color:var(--sem-text-secondary)]">State</span>
-                  <select
-                    value={activeState}
-                    onChange={(event) => setActiveState(event.target.value as PricebookItemFilters["activeState"])}
-                    className="theme-input-control h-12 w-full rounded-[18px] px-4 text-sm"
-                  >
-                    <option value="active">Active</option>
-                    <option value="archived">Archived</option>
-                    <option value="all">All</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <label className="theme-control-surface inline-flex items-center gap-3 rounded-full px-4 py-3 text-sm text-[color:var(--sem-text-secondary)]">
-                  <input
-                    type="checkbox"
-                    checked={popularOnly}
-                    onChange={(event) => setPopularOnly(event.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  Popular items only
-                </label>
-
-                <button
-                  type="button"
-                  onClick={applyFilters}
-                  className="theme-btn-secondary inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-medium"
-                >
-                  Apply filters
-                </button>
-              </div>
-            </section>
-
             {loadError ? (
               <div className="theme-alert-error mt-6 rounded-[20px] border px-4 py-3 text-sm">{loadError}</div>
             ) : null}
@@ -738,12 +701,193 @@ function PricebookControlDesk({
               <div className="theme-alert-error mt-6 rounded-[20px] border px-4 py-3 text-sm">{actionError}</div>
             ) : null}
 
-            <div className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[1.45fr_0.85fr]">
-              <section className={`${panelClass()} min-w-0`}>
+            <div className={`mt-6 grid min-w-0 gap-4${popularItems.length > 0 ? " xl:grid-cols-[1.45fr_0.85fr]" : ""}`}>
+              <section className={`${panelClass()} min-w-0`} aria-label="Service catalog">
                 <div className="border-b border-[color:var(--cmp-border-subtle)] p-5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Service catalog</p>
-                  <h2 className="mt-2 text-lg font-semibold text-[color:var(--sem-display-headline)]">Universal schema table</h2>
-                  <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">
+                    Catalog navigation
+                  </p>
+
+                  <nav aria-label="Pricebook hierarchy" className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => applyCategoryFilter("all")}
+                      className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-1.5 text-[color:var(--sem-text-secondary)] transition hover:border-[color:var(--cmp-border-accent)]"
+                    >
+                      Pricebook
+                    </button>
+                    {selectedSystem ? (
+                      <>
+                        <ChevronRight className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
+                        <button
+                          type="button"
+                          onClick={() => applyCategoryFilter({
+                            key: `system:${selectedSystem.id}`,
+                            name: selectedSystem.name,
+                            count: 0,
+                            kind: "system",
+                            systemId: selectedSystem.id,
+                          })}
+                          className="rounded-full border border-[color:var(--cmp-border-subtle)] px-3 py-1.5 text-[color:var(--sem-text-secondary)] transition hover:border-[color:var(--cmp-border-accent)]"
+                        >
+                          {selectedSystem.name}
+                        </button>
+                      </>
+                    ) : null}
+                    {selectedCategory ? (
+                      <>
+                        <ChevronRight className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
+                        <span className="rounded-full border border-[color:var(--sem-accent-primary)] bg-[color:var(--cmp-surface-soft)] px-3 py-1.5 font-medium text-[color:var(--sem-text-primary)]">
+                          {selectedCategory.name}
+                        </span>
+                      </>
+                    ) : null}
+                  </nav>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {navigationLevel === "root" ? (
+                      <>
+                        <NavigationFolderButton
+                          title="All"
+                          count={catalogTotal}
+                          active={activeNavigationKey === "All"}
+                          subtitle="Filtered catalog total"
+                          onClick={() => applyCategoryFilter("all")}
+                        />
+                        {systemCards.map(({ system, count }) => (
+                          <NavigationFolderButton
+                            key={system.id}
+                            title={system.name}
+                            count={count}
+                            active={activeNavigationKey === `system:${system.id}`}
+                            subtitle="System"
+                            onClick={() => applyCategoryFilter({
+                              key: `system:${system.id}`,
+                              name: system.name,
+                              count,
+                              kind: "system",
+                              systemId: system.id,
+                            })}
+                          />
+                        ))}
+                      </>
+                    ) : null}
+
+                    {navigationLevel === "system" && selectedSystem ? (
+                      categoryCardsForSystem.map(({ category, count }) => (
+                        <NavigationFolderButton
+                          key={category.id}
+                          title={category.name}
+                          count={count}
+                          active={activeNavigationKey === `category:${category.id}`}
+                          subtitle={`${selectedSystem.name} category`}
+                          onClick={() => applyCategoryFilter({
+                            key: `category:${category.id}`,
+                            name: category.name,
+                            count,
+                            kind: "category",
+                            categoryId: category.id,
+                            systemId: selectedSystem.id,
+                          })}
+                        />
+                      ))
+                    ) : null}
+
+                    {navigationLevel === "category" && selectedSystem ? (
+                      categoryCardsForSystem.map(({ category, count }) => (
+                        <NavigationFolderButton
+                          key={category.id}
+                          title={category.name}
+                          count={count}
+                          active={activeNavigationKey === `category:${category.id}`}
+                          subtitle={`${selectedSystem.name} category`}
+                          onClick={() => applyCategoryFilter({
+                            key: `category:${category.id}`,
+                            name: category.name,
+                            count,
+                            kind: "category",
+                            categoryId: category.id,
+                            systemId: selectedSystem.id,
+                          })}
+                        />
+                      ))
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="border-b border-[color:var(--cmp-border-subtle)] p-5">
+                  <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.6fr)]">
+                    <label className="block space-y-2 lg:col-span-2 xl:col-span-1">
+                      <span className="text-sm text-[color:var(--sem-text-secondary)]">Search</span>
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--sem-text-muted)]" />
+                        <input
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                          className="theme-input-control h-12 w-full rounded-[18px] pl-11 pr-4 text-sm"
+                          placeholder="SKU, name, description, tag"
+                        />
+                      </div>
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm text-[color:var(--sem-text-secondary)]">Item type</span>
+                      <select
+                        value={itemType}
+                        onChange={(event) => setItemType(event.target.value)}
+                        className="theme-input-control h-12 w-full rounded-[18px] px-4 text-sm"
+                      >
+                        <option value="">All types</option>
+                        {PRICEBOOK_ITEM_TYPES.map((typeValue) => (
+                          <option key={typeValue} value={typeValue}>{getPricebookItemTypeLabel(typeValue)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm text-[color:var(--sem-text-secondary)]">Trade area (legacy)</span>
+                      <input
+                        value={tradeArea}
+                        onChange={(event) => setTradeArea(event.target.value)}
+                        className="theme-input-control h-12 w-full rounded-[18px] px-4 text-sm"
+                        placeholder="Legacy trade area filter"
+                      />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm text-[color:var(--sem-text-secondary)]">State</span>
+                      <select
+                        value={activeState}
+                        onChange={(event) => setActiveState(event.target.value as PricebookItemFilters["activeState"])}
+                        className="theme-input-control h-12 w-full rounded-[18px] px-4 text-sm"
+                      >
+                        <option value="active">Active</option>
+                        <option value="archived">Archived</option>
+                        <option value="all">All</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <label className="theme-control-surface inline-flex items-center gap-3 rounded-full px-4 py-3 text-sm text-[color:var(--sem-text-secondary)]">
+                      <input
+                        type="checkbox"
+                        checked={popularOnly}
+                        onChange={(event) => setPopularOnly(event.target.checked)}
+                        className="h-4 w-4"
+                      />
+                      Popular items only
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={applyFilters}
+                      className="theme-btn-secondary inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-medium"
+                    >
+                      Apply filters
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border-b border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-5 py-3">
+                  <p className="text-sm text-[color:var(--sem-text-secondary)]">
                     Page {initialResult.page} · showing {initialResult.items.length} of {initialResult.totalCount} filtered items
                   </p>
                 </div>
@@ -796,8 +940,11 @@ function PricebookControlDesk({
                             </td>
                             <td className="px-5 py-4 align-top">
                               <span className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-2.5 py-1 text-xs text-[color:var(--sem-text-secondary)]">
-                                {getItemCategory(item)}
+                                {getItemCategoryLabel(item)}
                               </span>
+                              {item.system?.name?.trim() && item.category?.name?.trim() ? (
+                                <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">{item.system.name}</p>
+                              ) : null}
                               {item.service_area?.trim() ? (
                                 <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">{item.service_area}</p>
                               ) : null}
@@ -816,6 +963,20 @@ function PricebookControlDesk({
                             {canManage ? (
                               <td className="master-table-actions-cell px-5 py-4 text-right align-top">
                                 <div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}>
+                                  {isPricebookItemInventoryEligible(item) ? (
+                                    <button
+                                      type="button"
+                                      aria-label={`Receive stock for ${item.name}`}
+                                      title="Receive stock"
+                                      disabled={inventoryBusyId === item.id || isBusy}
+                                      onClick={() => void runInventoryPurchase(item)}
+                                      className="theme-control-surface inline-flex h-11 w-11 items-center justify-center rounded-full"
+                                    >
+                                      {inventoryBusyId === item.id
+                                        ? <LoaderCircle className="h-4 w-4 animate-spin" />
+                                        : <Boxes className="h-4 w-4" />}
+                                    </button>
+                                  ) : null}
                                   <Link
                                     href={`/pricebook/${item.id}`}
                                     aria-label={`Edit ${item.name}`}
@@ -871,7 +1032,7 @@ function PricebookControlDesk({
                           <div>
                             <p className="font-[family:var(--font-geist-mono)] text-xs text-[color:var(--sem-text-muted)]">{item.internal_sku}</p>
                             <h2 className="mt-2 text-lg font-semibold text-[color:var(--sem-text-primary)]">{item.name}</h2>
-                            <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">{getItemCategory(item)}</p>
+                            <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">{getItemCategoryLabel(item)}</p>
                           </div>
                           <StatusBadge item={item} />
                         </div>
@@ -883,6 +1044,16 @@ function PricebookControlDesk({
                         </p>
                         {canManage ? (
                           <div className="mt-4 flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
+                            {isPricebookItemInventoryEligible(item) ? (
+                              <button
+                                type="button"
+                                disabled={inventoryBusyId === item.id}
+                                onClick={() => void runInventoryPurchase(item)}
+                                className="theme-control-surface rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-60"
+                              >
+                                {inventoryBusyId === item.id ? "Opening inventory…" : "Receive stock"}
+                              </button>
+                            ) : null}
                             <Link href={`/pricebook/${item.id}`} className="theme-control-surface rounded-full px-3 py-1.5 text-xs font-medium">Edit</Link>
                             {item.is_active ? (
                               <button type="button" onClick={() => void runItemAction(item, "archive")} disabled={busyActionId === `archive:${item.id}`} className="theme-control-surface rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60">Archive</button>
@@ -910,8 +1081,8 @@ function PricebookControlDesk({
                 ) : null}
               </section>
 
+              {popularItems.length > 0 ? (
               <aside className="space-y-4">
-                {popularItems.length > 0 ? (
                   <section className={`${panelClass()} p-5`}>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Catalog signals</p>
                     <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">Popular items on current page</p>
@@ -939,26 +1110,8 @@ function PricebookControlDesk({
                       ))}
                     </div>
                   </section>
-                ) : null}
-
-                <section className={`${panelClass()} p-5`}>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Bundle plane</p>
-                  <h3 className="mt-2 text-lg font-semibold text-[color:var(--sem-display-headline)]">Reusable packages</h3>
-                  <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">
-                    Bundle templates group catalog items for quote and invoice line expansion. Manage bundles on the dedicated workspace.
-                  </p>
-                  {canManage ? (
-                    <Link href="/pricebook/bundles" className="theme-control-surface mt-4 inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium">
-                      <Boxes className="h-4 w-4" />
-                      Open bundle workspace
-                    </Link>
-                  ) : (
-                    <p className="mt-4 text-xs leading-5 text-[color:var(--sem-text-muted)]">
-                      Bundle management requires owner, admin, or office admin access.
-                    </p>
-                  )}
-                </section>
               </aside>
+              ) : null}
             </div>
           </>
         )}
@@ -968,6 +1121,8 @@ function PricebookControlDesk({
             item={selectedItem}
             canManage={canManage}
             onClose={() => setSelectedItem(null)}
+            onInventoryPurchase={() => void runInventoryPurchase(selectedItem)}
+            inventoryBusy={inventoryBusyId === selectedItem.id}
           />
         ) : null}
       </div>
@@ -994,6 +1149,8 @@ function LegacyPricebookTable({ initialResult, initialFilters, loadError = null 
   const router = useRouter();
   const [query, setQuery] = useState(initialFilters.q);
   const [itemType, setItemType] = useState(initialFilters.itemType);
+  const [systemId, setSystemId] = useState(initialFilters.systemId);
+  const [categoryId, setCategoryId] = useState(initialFilters.categoryId);
   const [tradeArea, setTradeArea] = useState(initialFilters.tradeArea);
   const [activeState, setActiveState] = useState(initialFilters.activeState);
   const [popularOnly, setPopularOnly] = useState(initialFilters.popularOnly);
@@ -1043,6 +1200,8 @@ function LegacyPricebookTable({ initialResult, initialFilters, loadError = null 
     const params = buildPricebookItemQuery({
       q: query,
       itemType,
+      systemId,
+      categoryId,
       tradeArea,
       activeState,
       popularOnly,
@@ -1087,19 +1246,19 @@ function LegacyPricebookTable({ initialResult, initialFilters, loadError = null 
           </div>
 
           <div className="mt-8 grid gap-4 md:grid-cols-4">
-            <article className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5">
+            <article className={`theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5 ${metricTileHoverClassName}`}>
               <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Items in view</p>
               <p className="mt-3 text-3xl font-semibold text-[color:var(--sem-text-primary)]">{initialResult.items.length}</p>
             </article>
-            <article className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5">
+            <article className={`theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5 ${metricTileHoverClassName}`}>
               <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Total catalog</p>
               <p className="mt-3 text-3xl font-semibold text-[color:var(--sem-text-primary)]">{initialResult.totalCount}</p>
             </article>
-            <article className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5">
+            <article className={`theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5 ${metricTileHoverClassName}`}>
               <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Popular items</p>
               <p className="mt-3 text-3xl font-semibold text-[color:var(--sem-text-primary)]">{popularItems.length}</p>
             </article>
-            <article className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5">
+            <article className={`theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] p-5 ${metricTileHoverClassName}`}>
               <p className="text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">View state</p>
               <p className="mt-3 text-3xl font-semibold text-[color:var(--sem-text-primary)]">{activeState}</p>
             </article>
@@ -1156,12 +1315,12 @@ function LegacyPricebookTable({ initialResult, initialFilters, loadError = null 
                 </select>
               </label>
               <label className="block space-y-2">
-                <span className="text-sm text-[color:var(--sem-text-secondary)]">Trade area</span>
+                <span className="text-sm text-[color:var(--sem-text-secondary)]">Trade area (legacy)</span>
                 <input
                   value={tradeArea}
                   onChange={(event) => setTradeArea(event.target.value)}
                   className="theme-input-control h-12 w-full rounded-[18px] px-4 text-sm"
-                  placeholder="Gas, Wood, Masonry"
+                  placeholder="Legacy trade area filter"
                 />
               </label>
               <label className="block space-y-2">

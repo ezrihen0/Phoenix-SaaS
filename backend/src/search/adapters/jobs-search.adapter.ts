@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Brackets, Repository } from "typeorm";
 
+import { sanitizeJobTitle } from "../../crm/user-facing-text";
 import { CustomerEntity } from "../../database/entities/customer.entity";
 import { JobEntity } from "../../database/entities/job.entity";
 import { SEARCH_LIMITS } from "../search.constants";
@@ -33,7 +34,7 @@ export class JobsSearchAdapter {
     qb.where("job.organization_id = :organizationId", { organizationId: context.organizationId });
     qb.andWhere(new Brackets((q) => {
       q.where("LOWER(job.id) = :exact", { exact: context.normalized })
-        .orWhere("LOWER(job.title) LIKE :likeToken", { likeToken: context.likeToken })
+        .orWhere("REPLACE(LOWER(job.title), 'workiz', '') LIKE :likeToken", { likeToken: context.likeToken })
         .orWhere("LOWER(customer.full_name) LIKE :likeToken", { likeToken: context.likeToken })
         .orWhere("LOWER(job.service_address_line_1) LIKE :likeToken", { likeToken: context.likeToken });
     }));
@@ -52,7 +53,7 @@ export class JobsSearchAdapter {
 
     return rawRows.slice(0, SEARCH_LIMITS.jobsResultLimit).map((row) => ({
       id: row.id,
-      title: row.title,
+      title: sanitizeJobTitle(row.title, { customerName: row.customerName }),
       status: row.status,
       customerName: row.customerName ?? "Customer",
       addressLine1: row.addressLine1,

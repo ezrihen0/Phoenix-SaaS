@@ -7,6 +7,7 @@ import {
   getClientDestination,
   getClientSession,
 } from "@/lib/auth/client-auth";
+import { resolvePostLoginPath } from "@/lib/auth/post-login-redirect";
 
 import LoginForm, { LoginAmbientShell, LoginSessionLoading } from "./login-form";
 
@@ -29,9 +30,10 @@ export default function LoginPage() {
         return;
       }
 
-      const payload = await getClientDestination().catch(() => ({ destination: "/pricing" as const }));
+      const payload = await getClientDestination().catch(() => ({ destination: "/home" as const }));
+      const nextPath = new URLSearchParams(window.location.search).get("next");
 
-      router.replace(payload.destination ?? "/pricing");
+      router.replace(resolvePostLoginPath(nextPath, payload.destination ?? null));
       router.refresh();
     }
 

@@ -1,10 +1,10 @@
 import { Injectable } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
+import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
 import { randomUUID } from "crypto";
 import { createReadStream } from "fs";
 import { promises as fs } from "fs";
 import { join } from "path";
-import { IsNull, Repository } from "typeorm";
+import { DataSource, EntityManager, IsNull, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import type { ActorContext } from "../common/request-types";
@@ -25,9 +25,242 @@ import {
 import { JobEntity } from "../database/entities/job.entity";
 import { InspectionWorkflowService, TemplateNotConfiguredError } from "./inspection-workflow.service";
 
+export const INSPECTION_PHOTO_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+export const INSPECTION_PHOTO_MAX_FILES_PER_REQUEST = 20;
+export const INSPECTION_PHOTO_MAX_REQUEST_BYTES = 40 * 1024 * 1024;
+export const INSPECTION_PHOTO_MAX_PHOTOS_PER_INSPECTION = 100;
+
+export type InspectionPhotoUploadFile = {
+  originalname: string;
+  mimetype: string;
+  buffer: Buffer;
+};
+
+export type UploadInspectionPhotoTestHooks = {
+  beforePhotoInsert?: (manager: EntityManager) => void | Promise<void>;
+  beforeCommit?: () => void | Promise<void>;
+  forceStageWriteFailure?: boolean;
+};
+
+type SupportedInspectionPhotoFormat = "jpeg" | "png" | "webp";
+
+type DetectedInspectionPhotoFormat =
+  | SupportedInspectionPhotoFormat
+  | "gif"
+  | "svg"
+  | "heic"
+  | "unsupported";
+
+const DECLARED_MIME_TO_FORMAT: Record<string, SupportedInspectionPhotoFormat> = {
+  "image/jpeg": "jpeg",
+  "image/jpg": "jpeg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+function normalizeDeclaredMime(mimeType: string) {
+  return mimeType.trim().toLowerCase();
+}
+
+function includesAscii(buffer: Buffer, needle: string, offset = 0) {
+  return buffer.indexOf(Buffer.from(needle, "ascii"), offset) >= 0;
+}
+
+function detectInspectionPhotoFormat(buffer: Buffer): DetectedInspectionPhotoFormat | null {
+  if (buffer.length === 0) {
+    return null;
+  }
+
+  const asciiHead = buffer.subarray(0, Math.min(buffer.length, 256)).toString("utf8").trimStart();
+  if (asciiHead.startsWith("<svg") || (asciiHead.startsWith("<?xml") && asciiHead.includes("<svg"))) {
+    return "svg";
+  }
+
+  if (buffer.length >= 6) {
+    const gifHeader = buffer.toString("ascii", 0, 6);
+    if (gifHeader === "GIF87a" || gifHeader === "GIF89a") {
+      return "gif";
+    }
+  }
+
+  if (buffer.length >= 12 && buffer.toString("ascii", 4, 8) === "ftyp") {
+    const brandWindow = buffer.toString("ascii", 8, Math.min(buffer.length, 64)).toLowerCase();
+    if (
+      brandWindow.includes("heic")
+      || brandWindow.includes("heix")
+      || brandWindow.includes("hevc")
+      || brandWindow.includes("hevx")
+      || brandWindow.includes("heif")
+      || brandWindow.includes("mif1")
+      || brandWindow.includes("msf1")
+    ) {
+      return "heic";
+    }
+  }
+
+  if (
+    buffer.length >= 8
+    && buffer[0] === 0x89
+    && buffer[1] === 0x50
+    && buffer[2] === 0x4e
+    && buffer[3] === 0x47
+    && buffer[4] === 0x0d
+    && buffer[5] === 0x0a
+    && buffer[6] === 0x1a
+    && buffer[7] === 0x0a
+  ) {
+    return "png";
+  }
+
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "jpeg";
+  }
+
+  if (
+    buffer.length >= 12
+    && buffer.toString("ascii", 0, 4) === "RIFF"
+    && buffer.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    return "webp";
+  }
+
+  return "unsupported";
+}
+
+function hasJpegEndOfImage(buffer: Buffer) {
+  for (let index = buffer.length - 2; index >= 2; index -= 1) {
+    if (buffer[index] === 0xff && buffer[index + 1] === 0xd9) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function validateJpegStructure(buffer: Buffer) {
+  if (buffer.length < 4) {
+    return false;
+  }
+  if (buffer[0] !== 0xff || buffer[1] !== 0xd8 || buffer[2] !== 0xff) {
+    return false;
+  }
+  return hasJpegEndOfImage(buffer);
+}
+
+function validatePngStructure(buffer: Buffer) {
+  if (buffer.length < 33) {
+    return false;
+  }
+  if (buffer.readUInt32BE(8) !== 13 || buffer.toString("ascii", 12, 16) !== "IHDR") {
+    return false;
+  }
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  if (width === 0 || height === 0 || width > 65535 || height > 65535) {
+    return false;
+  }
+  if (!includesAscii(buffer, "IDAT")) {
+    return false;
+  }
+  return includesAscii(buffer, "IEND");
+}
+
+function validateWebpStructure(buffer: Buffer) {
+  if (buffer.length < 16) {
+    return false;
+  }
+  const riffSize = buffer.readUInt32LE(4) + 8;
+  if (riffSize > buffer.length) {
+    return false;
+  }
+  const chunkTag = buffer.toString("ascii", 12, 16);
+  return chunkTag === "VP8 " || chunkTag === "VP8L" || chunkTag === "VP8X";
+}
+
+function validateSupportedStructure(format: SupportedInspectionPhotoFormat, buffer: Buffer) {
+  if (format === "jpeg") {
+    return validateJpegStructure(buffer);
+  }
+  if (format === "png") {
+    return validatePngStructure(buffer);
+  }
+  return validateWebpStructure(buffer);
+}
+
+function extensionForFormat(format: SupportedInspectionPhotoFormat) {
+  if (format === "jpeg") {
+    return "jpg";
+  }
+  return format;
+}
+
+export function validateInspectionPhotoUploadFile(file: InspectionPhotoUploadFile) {
+  const buffer = file.buffer;
+  if (!buffer || buffer.length === 0) {
+    apiError(400, "inspection_photo_empty", "Inspection photo file is empty.");
+  }
+  if (buffer.length > INSPECTION_PHOTO_MAX_FILE_SIZE_BYTES) {
+    apiError(400, "inspection_photo_too_large", "Inspection photo exceeds the maximum allowed size.");
+  }
+
+  const declaredMime = normalizeDeclaredMime(file.mimetype);
+  const declaredFormat = DECLARED_MIME_TO_FORMAT[declaredMime];
+  if (!declaredFormat) {
+    apiError(400, "inspection_photo_invalid_type", "Inspection photo type is not supported.");
+  }
+
+  const detectedFormat = detectInspectionPhotoFormat(buffer);
+  if (detectedFormat === null) {
+    apiError(400, "inspection_photo_empty", "Inspection photo file is empty.");
+  }
+  if (detectedFormat === "gif" || detectedFormat === "svg" || detectedFormat === "heic") {
+    apiError(400, "inspection_photo_invalid_type", "Inspection photo type is not supported.");
+  }
+  if (detectedFormat === "unsupported" || detectedFormat !== declaredFormat) {
+    apiError(400, "inspection_photo_invalid_type", "Inspection photo MIME and file content do not match a supported image type.");
+  }
+  if (!validateSupportedStructure(declaredFormat, buffer)) {
+    apiError(400, "inspection_photo_corrupt", "Inspection photo file is corrupt or truncated.");
+  }
+
+  return {
+    format: declaredFormat,
+    extension: extensionForFormat(declaredFormat),
+    declaredMime,
+  };
+}
+
+export function validateInspectionPhotoUploadBatch(files: InspectionPhotoUploadFile[]) {
+  if (!files.length) {
+    apiError(400, "no_files_uploaded", "At least one image file is required.");
+  }
+  if (files.length > INSPECTION_PHOTO_MAX_FILES_PER_REQUEST) {
+    apiError(400, "inspection_photo_count_exceeded", "Too many inspection photos were uploaded in one request.");
+  }
+
+  const totalBytes = files.reduce((sum, file) => sum + file.buffer.length, 0);
+  if (totalBytes > INSPECTION_PHOTO_MAX_REQUEST_BYTES) {
+    apiError(400, "inspection_photo_request_too_large", "Inspection photo upload request exceeds the maximum allowed total size.");
+  }
+
+  return files.map((file) => validateInspectionPhotoUploadFile(file));
+}
+
+async function safeUnlink(path: string | null | undefined) {
+  if (!path) {
+    return;
+  }
+
+  try {
+    await fs.unlink(path);
+  } catch {
+    // ignore missing files during compensation
+  }
+}
+
 @Injectable()
 export class InspectionsAdminService {
   private readonly uploadsRoot = join(process.cwd(), "uploads", "inspection-photos");
+  private readonly pendingRoot = join(this.uploadsRoot, ".pending");
   private readonly standardSectionOrder = [
     "fireplace_interior",
     "chimney_exterior",
@@ -48,6 +281,8 @@ export class InspectionsAdminService {
   };
 
   constructor(
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     @InjectRepository(InspectionEntity)
     private readonly inspectionsRepository: Repository<InspectionEntity>,
     @InjectRepository(InspectionItemEntity)
@@ -928,8 +1163,9 @@ export class InspectionsAdminService {
 
   async uploadPhotos(
     inspectionId: string,
-    files: Array<{ originalname: string; mimetype: string; buffer: Buffer }>,
+    files: InspectionPhotoUploadFile[],
     organizationId: string,
+    options?: { testHooks?: UploadInspectionPhotoTestHooks },
   ) {
     const scopedOrganizationId = this.requireOrganizationId(organizationId);
     const inspection = await this.loadInspectionOrFail(inspectionId, scopedOrganizationId);
@@ -938,49 +1174,134 @@ export class InspectionsAdminService {
     }
     this.assertInspectionNotArchived(inspection);
 
-    if (!files.length) {
-      apiError(400, "no_files_uploaded", "At least one image file is required.");
-    }
+    const validatedFiles = validateInspectionPhotoUploadBatch(files);
+    const batchId = randomUUID();
+    const batchPendingDir = join(this.pendingRoot, batchId);
+    const stagedEntries: Array<{
+      photoId: string;
+      fileName: string;
+      stagedPath: string;
+      finalPath: string;
+      extension: string;
+    }> = [];
+    const finalPathsCreated: string[] = [];
 
+    await fs.mkdir(this.pendingRoot, { recursive: true });
     await fs.mkdir(this.uploadsRoot, { recursive: true });
-    const saved: InspectionPhotoEntity[] = [];
+    await fs.mkdir(batchPendingDir, { recursive: true });
 
-    for (const file of files) {
-      if (!file.mimetype.startsWith("image/")) {
-        continue;
+    try {
+      for (let index = 0; index < validatedFiles.length; index += 1) {
+        const validated = validatedFiles[index];
+        const source = files[index];
+        const photoId = randomUUID();
+        const fileName = `${photoId}.${validated.extension}`;
+        const stagedPath = join(batchPendingDir, fileName);
+        const finalPath = join(this.uploadsRoot, fileName);
+
+        if (options?.testHooks?.forceStageWriteFailure) {
+          apiError(400, "inspection_photo_upload_failed", "Inspection photo could not be stored.");
+        }
+
+        try {
+          await fs.writeFile(stagedPath, source.buffer);
+        } catch {
+          apiError(400, "inspection_photo_upload_failed", "Inspection photo could not be stored.");
+        }
+
+        stagedEntries.push({
+          photoId,
+          fileName,
+          stagedPath,
+          finalPath,
+          extension: validated.extension,
+        });
       }
-      const extension = this.resolveImageExtension(file.mimetype, file.originalname);
-      const fileName = `${randomUUID()}.${extension}`;
-      const absolutePath = join(this.uploadsRoot, fileName);
-      await fs.writeFile(absolutePath, file.buffer);
-
-      const photo = await this.inspectionPhotosRepository.save(
-        this.inspectionPhotosRepository.create({
-          organization_id: scopedOrganizationId,
-          inspection_id: inspectionId,
-          photo_type: "finding",
-          caption: null,
-          sort_order: 0,
-          storage_key: fileName,
-          thumbnail_url: `/api/inspections/photos/${fileName}/asset`,
-          asset_url: `/api/inspections/photos/${fileName}/asset`,
-        }),
-      );
-      saved.push(photo);
+    } catch (error) {
+      await Promise.all(stagedEntries.map((entry) => safeUnlink(entry.stagedPath)));
+      await safeUnlink(batchPendingDir);
+      throw error;
     }
 
-    if (!saved.length) {
-      apiError(400, "no_valid_images", "No valid image files were uploaded.");
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+
+    try {
+      await queryRunner.startTransaction();
+      const manager = queryRunner.manager;
+
+      await manager.getRepository(InspectionEntity).findOneOrFail({
+        where: { id: inspectionId, organization_id: scopedOrganizationId },
+        lock: { mode: "pessimistic_write" },
+      });
+
+      const existingPhotoCount = await manager.getRepository(InspectionPhotoEntity).count({
+        where: [
+          { inspection_id: inspectionId, organization_id: scopedOrganizationId },
+          { inspection_id: inspectionId, organization_id: IsNull() },
+        ],
+      });
+      if (existingPhotoCount + validatedFiles.length > INSPECTION_PHOTO_MAX_PHOTOS_PER_INSPECTION) {
+        apiError(400, "inspection_photo_count_exceeded", "This inspection already has the maximum number of photos.");
+      }
+
+      await options?.testHooks?.beforePhotoInsert?.(manager);
+
+      const savedPhotos: InspectionPhotoEntity[] = [];
+      for (const entry of stagedEntries) {
+        savedPhotos.push(await manager.getRepository(InspectionPhotoEntity).save(
+          manager.getRepository(InspectionPhotoEntity).create({
+            id: entry.photoId,
+            organization_id: scopedOrganizationId,
+            inspection_id: inspectionId,
+            photo_type: "finding",
+            caption: null,
+            sort_order: 0,
+            storage_key: entry.fileName,
+            thumbnail_url: `/api/inspections/photos/${entry.fileName}/asset`,
+            asset_url: `/api/inspections/photos/${entry.fileName}/asset`,
+          }),
+        ));
+      }
+
+      inspection.report_snapshot_key = randomUUID();
+      inspection.generated_pdf_at = null;
+      inspection.generated_pdf_url = null;
+      inspection.report_generated_at = new Date();
+      inspection.sent_to_customer_at = null;
+      await manager.getRepository(InspectionEntity).save(inspection);
+
+      for (const entry of stagedEntries) {
+        await fs.rename(entry.stagedPath, entry.finalPath);
+        finalPathsCreated.push(entry.finalPath);
+      }
+
+      await options?.testHooks?.beforeCommit?.();
+
+      await queryRunner.commitTransaction();
+      return this.getWorkspace(inspectionId, scopedOrganizationId);
+    } catch (error) {
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+
+      await Promise.all(finalPathsCreated.map((path) => safeUnlink(path)));
+      await Promise.all(stagedEntries.map((entry) => safeUnlink(entry.stagedPath)));
+      try {
+        await fs.rm(batchPendingDir, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup failures
+      }
+
+      throw error;
+    } finally {
+      await queryRunner.release();
+      try {
+        await fs.rm(batchPendingDir, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup failures
+      }
     }
-
-    inspection.report_snapshot_key = randomUUID();
-    inspection.generated_pdf_at = null;
-    inspection.generated_pdf_url = null;
-    inspection.report_generated_at = new Date();
-    inspection.sent_to_customer_at = null;
-    await this.inspectionsRepository.save(inspection);
-
-    return this.getWorkspace(inspectionId, scopedOrganizationId);
   }
 
   async getPhotoAssetStream(fileName: string, organizationId: string) {
@@ -2399,9 +2720,7 @@ export class InspectionsAdminService {
         ? "image/png"
         : lowerName.endsWith(".webp")
           ? "image/webp"
-          : lowerName.endsWith(".gif")
-            ? "image/gif"
-            : "image/jpeg";
+          : "image/jpeg";
       return `data:${mimeType};base64,${fileBuffer.toString("base64")}`;
     } catch {
       return null;
@@ -2561,18 +2880,6 @@ export class InspectionsAdminService {
     }
     pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
     return Buffer.from(pdf, "utf8");
-  }
-
-  private resolveImageExtension(mimeType: string, originalName: string) {
-    if (mimeType === "image/png") return "png";
-    if (mimeType === "image/webp") return "webp";
-    if (mimeType === "image/gif") return "gif";
-    if (mimeType === "image/jpeg" || mimeType === "image/jpg") return "jpg";
-    const fromName = originalName.split(".").pop()?.toLowerCase();
-    if (fromName && ["png", "jpg", "jpeg", "webp", "gif"].includes(fromName)) {
-      return fromName === "jpeg" ? "jpg" : fromName;
-    }
-    return "jpg";
   }
 
   private buildPublicJobCodeAttempt(sourceId: string, attempt: number) {

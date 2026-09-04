@@ -34,6 +34,7 @@ export const roleModePermissions = [
   "invoices.manage",
   "invoices.payment.manage",
   "invoices.assigned.view",
+  "invoices.assigned.manage",
   "pricebook.view",
   "pricebook.manage",
   "inventory.view",
@@ -133,6 +134,8 @@ const rolePermissionMap: Record<RoleModeRole, ReadonlySet<RoleModePermission>> =
     "jobs.notes.create",
     "estimates.assigned.view",
     "invoices.assigned.view",
+    "invoices.assigned.manage",
+    "pricebook.view",
     "inventory.assigned.view",
   ]),
   viewer: new Set<RoleModePermission>([
@@ -276,4 +279,26 @@ export function canAccessInvoiceResource(
     actorHasPermission(actor, "invoices.assigned.view")
     && canAccessAssignedJob(actor, assignedTechnicianId)
   );
+}
+
+export function canManageInvoiceResource(
+  actor: ActorContext | null | undefined,
+  assignedTechnicianId: string | null | undefined,
+) {
+  return actorHasPermission(actor, "invoices.manage") || (
+    actorHasPermission(actor, "invoices.assigned.manage")
+    && canAccessAssignedJob(actor, assignedTechnicianId)
+  );
+}
+
+export function canViewPricebookCatalog(
+  actor: ActorContext | null | undefined,
+  assignedTechnicianId?: string | null,
+) {
+  if (actorHasPermission(actor, "pricebook.view")) {
+    return true;
+  }
+
+  return actorHasPermission(actor, "invoices.assigned.manage")
+    && canAccessAssignedJob(actor, assignedTechnicianId);
 }

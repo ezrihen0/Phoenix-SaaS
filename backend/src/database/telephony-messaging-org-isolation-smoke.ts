@@ -67,6 +67,8 @@ type SeededTelephonyHarness = {
   orgBId: string;
   ownedAId: string;
   ownedBId: string;
+  ownedAInactiveNumber: string;
+  ownedAVoiceDisabledNumber: string;
   customerAId: string;
   customerBId: string;
   callAId: string;
@@ -84,6 +86,9 @@ class SmokeStubConfigService {
   get(key: string): string | undefined {
     if (key === "TELNYX_SKIP_SIGNATURE_VERIFICATION") {
       return "true";
+    }
+    if (key === "TELNYX_API_KEY") {
+      return "";
     }
     return process.env[key];
   }
@@ -193,7 +198,7 @@ function buildTelephonyStack(dataSource: DataSource) {
 
   const ownedPhoneNumbersService = new OwnedPhoneNumbersService(dataSource, stubConfig);
   const callFlowSettingsService = new CallFlowSettingsService(dataSource);
-  const telephonyExecutionService = new TelephonyExecutionService(stubConfig);
+  const telephonyExecutionService = new TelephonyExecutionService(stubConfig, ownedPhoneNumbersService);
   const callbackTaskService = new CallbackTaskService(dataSource, recentCallsRepository, profilesRepository);
   const telnyxLiveVoiceAttach = new TelnyxLiveVoiceAttachService(
     stubConfig,
@@ -234,7 +239,7 @@ function buildTelephonyStack(dataSource: DataSource) {
     callFlowSettingsService,
   );
   const callReportingService = new CallReportingService(dataSource);
-  return { telnyxWebhookService, callbackTaskService, callReportingService, availabilityTool };
+  return { telnyxWebhookService, callbackTaskService, callReportingService, availabilityTool, telephonyExecutionService };
 }
 
 /**
@@ -292,7 +297,7 @@ async function seedTelephonyGraph(dataSource: DataSource, token: string): Promis
       provider: "telnyx",
       provider_number_id: null,
       phone_number: "+15551110001",
-      phone_number_normalized: "15551110001",
+      phone_number_normalized: "+15551110001",
       label: "Smoke DID A",
       market_key: null,
       market_label: null,
@@ -313,7 +318,7 @@ async function seedTelephonyGraph(dataSource: DataSource, token: string): Promis
       provider: "telnyx",
       provider_number_id: null,
       phone_number: "+15552220002",
-      phone_number_normalized: "15552220002",
+      phone_number_normalized: "+15552220002",
       label: "Smoke DID B",
       market_key: null,
       market_label: null,
@@ -325,6 +330,48 @@ async function seedTelephonyGraph(dataSource: DataSource, token: string): Promis
       voice_enabled: true,
       is_active: true,
       tenant_id: orgB.id,
+      company_id: null,
+    }),
+  );
+
+  const ownedAInactive = await ownedRepo.save(
+    ownedRepo.create({
+      provider: "telnyx",
+      provider_number_id: null,
+      phone_number: "+15553330003",
+      phone_number_normalized: "+15553330003",
+      label: "Smoke DID A Inactive",
+      market_key: null,
+      market_label: null,
+      default_source: "website",
+      source_mapping_id: null,
+      campaign_name: null,
+      purpose: "both",
+      sms_enabled: true,
+      voice_enabled: true,
+      is_active: false,
+      tenant_id: orgA.id,
+      company_id: null,
+    }),
+  );
+
+  const ownedAVoiceDisabled = await ownedRepo.save(
+    ownedRepo.create({
+      provider: "telnyx",
+      provider_number_id: null,
+      phone_number: "+15554440004",
+      phone_number_normalized: "+15554440004",
+      label: "Smoke DID A Voice Disabled",
+      market_key: null,
+      market_label: null,
+      default_source: "website",
+      source_mapping_id: null,
+      campaign_name: null,
+      purpose: "both",
+      sms_enabled: true,
+      voice_enabled: false,
+      is_active: true,
+      tenant_id: orgA.id,
       company_id: null,
     }),
   );
@@ -606,6 +653,8 @@ async function seedTelephonyGraph(dataSource: DataSource, token: string): Promis
     orgBId: orgB.id,
     ownedAId: ownedA.id,
     ownedBId: ownedB.id,
+    ownedAInactiveNumber: ownedAInactive.phone_number,
+    ownedAVoiceDisabledNumber: ownedAVoiceDisabled.phone_number,
     customerAId: customerA.id,
     customerBId: customerB.id,
     callAId,
@@ -1151,6 +1200,115 @@ async function runTelephonyIsolationChecks(
   });
 }
 
+async function runOutboundDialIsolationChecks(
+  summary: SmokeSummary,
+  seed: SeededTelephonyHarness,
+  telephonyExecutionService: TelephonyExecutionService,
+) {
+  const orgADialableNumber = "+15551110001";
+  const orgBDialableNumber = "+15552220002";
+  const unregisteredNumber = "+15559998888";
+  const smokeConnectionId = "smoke-call-control-app";
+
+  await expectPass(summary, "10a — Org A dialer options exclude Org B caller IDs", async () => {
+    const options = await telephonyExecutionService.getOutboundDialerOptions(seed.orgAId);
+    if (options.fromNumbers.includes(orgBDialableNumber)) {
+      throw new Error("Org B caller ID leaked into Org A dialer options.");
+    }
+    if (!options.fromNumbers.includes(orgADialableNumber)) {
+      throw new Error("Expected Org A dialable caller ID in dialer options.");
+    }
+    if (options.fromNumbers.includes(seed.ownedAInactiveNumber) || options.fromNumbers.includes(seed.ownedAVoiceDisabledNumber)) {
+      throw new Error("Inactive or voice-disabled caller IDs leaked into Org A dialer options.");
+    }
+    return options;
+  });
+
+  await expectApiError(
+    summary,
+    "10b — Org A dial with Org B from rejected",
+    ["dial_from_forbidden"],
+    () =>
+      telephonyExecutionService.createOutboundDial({
+        organizationId: seed.orgAId,
+        to: "+15550009999",
+        from: orgBDialableNumber,
+        connectionId: smokeConnectionId,
+        clientState: null,
+      }),
+  );
+
+  await expectApiError(
+    summary,
+    "10c — Org A dial with unregistered from rejected",
+    ["dial_from_forbidden"],
+    () =>
+      telephonyExecutionService.createOutboundDial({
+        organizationId: seed.orgAId,
+        to: "+15550009999",
+        from: unregisteredNumber,
+        connectionId: smokeConnectionId,
+        clientState: null,
+      }),
+  );
+
+  await expectApiError(
+    summary,
+    "10d — Org A dial with inactive owned from rejected",
+    ["dial_from_forbidden"],
+    () =>
+      telephonyExecutionService.createOutboundDial({
+        organizationId: seed.orgAId,
+        to: "+15550009999",
+        from: seed.ownedAInactiveNumber,
+        connectionId: smokeConnectionId,
+        clientState: null,
+      }),
+  );
+
+  await expectApiError(
+    summary,
+    "10e — Org A dial with voice-disabled owned from rejected",
+    ["dial_from_forbidden"],
+    () =>
+      telephonyExecutionService.createOutboundDial({
+        organizationId: seed.orgAId,
+        to: "+15550009999",
+        from: seed.ownedAVoiceDisabledNumber,
+        connectionId: smokeConnectionId,
+        clientState: null,
+      }),
+  );
+
+  await expectPass(summary, "10f — Org A dial with owned active voice from succeeds (simulated)", async () => {
+    const result = await telephonyExecutionService.createOutboundDial({
+      organizationId: seed.orgAId,
+      to: "+15550009999",
+      from: orgADialableNumber,
+      connectionId: smokeConnectionId,
+      clientState: null,
+    });
+    if (result.status !== "simulated" || result.from !== orgADialableNumber) {
+      throw new Error(`Expected simulated Org A dial, got ${JSON.stringify(result)}`);
+    }
+    return result;
+  });
+
+  await expectPass(summary, "10g — Org A dial without from uses owned default (simulated)", async () => {
+    const result = await telephonyExecutionService.createOutboundDial({
+      organizationId: seed.orgAId,
+      to: "+15550009998",
+      from: null,
+      connectionId: smokeConnectionId,
+      clientState: null,
+    });
+    if (result.status !== "simulated" || result.from !== orgADialableNumber) {
+      throw new Error(`Expected simulated default Org A dial, got ${JSON.stringify(result)}`);
+    }
+    return result;
+  });
+}
+
 async function main() {
   const options = requireMySqlOptions();
   const databaseName = process.env.DB_SMOKE_DATABASE?.trim() || `wizfield_tel_msg_verify_${Date.now()}`;
@@ -1198,7 +1356,7 @@ async function main() {
     const seed = await seedTelephonyGraph(dataSource, token);
     summary.phases.seeding = "PASS";
 
-    const { telnyxWebhookService, callbackTaskService, callReportingService, availabilityTool } = buildTelephonyStack(
+    const { telnyxWebhookService, callbackTaskService, callReportingService, availabilityTool, telephonyExecutionService } = buildTelephonyStack(
       dataSource,
     );
 
@@ -1211,6 +1369,8 @@ async function main() {
       dataSource,
       availabilityTool,
     );
+
+    await runOutboundDialIsolationChecks(summary, seed, telephonyExecutionService);
   } catch (error) {
     summary.errors.push(extractErrorCode(error));
   } finally {

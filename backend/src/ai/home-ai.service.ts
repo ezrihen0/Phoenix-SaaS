@@ -10,6 +10,7 @@ import {
   requireActorProfile,
 } from "../auth/permissions";
 import { openJobStatuses } from "../crm/constants";
+import { CustomerLedgerService } from "../crm/customer-ledger.service";
 import { endOfLocalDashboardDay, startOfLocalDashboardDay } from "../crm/crm-dashboard-time-window";
 import { HomeAiConversationEntity } from "../database/entities/home-ai-conversation.entity";
 import { HomeAiMessageEntity } from "../database/entities/home-ai-message.entity";
@@ -23,14 +24,22 @@ import {
   AI_DEEPSEEK_PROVIDER_NAME,
   AI_FEATURE_HOME_AI_V1,
   AI_PROMPT_VERSION_HOME_AI_V1,
+  HOME_AI_DEFAULT_HISTORY_LIMIT,
+  HOME_AI_DEFAULT_VISIBLE_MESSAGES,
   HOME_AI_MAX_CONTEXT_MESSAGES,
+  HOME_AI_MAX_HISTORY_LIMIT,
   HOME_AI_MAX_MESSAGE_LENGTH,
   HOME_AI_MAX_OUTPUT_TOKENS,
   HOME_AI_MAX_TOOL_ITERATIONS,
+  HOME_AI_MAX_VISIBLE_MESSAGES,
 } from "./ai.constants";
 import type { AiDeepSeekChatMessage } from "./ai-deepseek-provider.service";
 import { AiDeepSeekProviderService } from "./ai-deepseek-provider.service";
 import { resolveAiFoundationEnabled, resolveAiHomeV1Enabled } from "./ai-environment";
+import {
+  generateHomeAiConversationTitle,
+  HOME_AI_DEFAULT_CONVERSATION_TITLE,
+} from "./home-ai-conversation-title";
 import {
   buildHomeAiSystemPrompt,
   resolveHomeAiRoleProfile,
@@ -38,9 +47,23 @@ import {
 } from "./home-ai-role-profiles";
 import { HomeAiToolRegistryService, type HomeAiToolTraceEntry } from "./home-ai-tool-registry.service";
 
+const HOME_AI_CONVERSATION_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export type HomeAiPostMessageBody = {
   message?: string;
+  conversationId?: string;
   orgId?: string;
+};
+
+export type HomeAiListConversationsQuery = {
+  limit?: string;
+  cursor?: string;
+};
+
+export type HomeAiListMessagesQuery = {
+  limit?: string;
+  before?: string;
 };
 
 export type HomeAiConversationMessageDto = {
@@ -51,6 +74,24 @@ export type HomeAiConversationMessageDto = {
   recordLinks: HomeAiRecordLink[];
   toolMetadata: Record<string, unknown> | null;
   runId: string | null;
+};
+
+export type HomeAiConversationSummaryDto = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt: string;
+};
+
+export type HomeAiConversationDto = {
+  conversationId: string | null;
+  title: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  lastMessageAt: string | null;
+  messages: HomeAiConversationMessageDto[];
+  hasOlder: boolean;
 };
 
 @Injectable()
@@ -72,6 +113,7 @@ export class HomeAiService {
     private readonly leadsRepository: Repository<LeadEntity>,
     @InjectRepository(InvoiceEntity)
     private readonly invoicesRepository: Repository<InvoiceEntity>,
+    private readonly customerLedgerService: CustomerLedgerService,
   ) {}
 
   private mergedEnvPreference(key: string): string | undefined {
@@ -100,22 +142,41 @@ export class HomeAiService {
     return organizationId;
   }
 
-  private async getOrCreateConversation(userId: string, organizationId: string) {
-    let conversation = await this.conversationRepository.findOne({
-      where: { user_id: userId, organization_id: organizationId },
-    });
-
-    if (!conversation) {
-      conversation = await this.conversationRepository.save(
-        this.conversationRepository.create({
-          id: randomUUID(),
-          user_id: userId,
-          organization_id: organizationId,
-        }),
-      );
+  private parseLimit(raw: string | undefined, fallback: number, max: number): number {
+    const parsed = Number.parseInt(raw ?? "", 10);
+    if (!Number.isFinite(parsed)) {
+      return fallback;
     }
+    return Math.min(Math.max(parsed, 1), max);
+  }
 
-    return conversation;
+  private isConversationId(value: string | undefined): value is string {
+    return Boolean(value && HOME_AI_CONVERSATION_ID_PATTERN.test(value));
+  }
+
+  private toIso(value: Date | string): string {
+    const date = value instanceof Date ? value : new Date(value);
+    return date.toISOString();
+  }
+
+  private encodeHistoryCursor(conversation: HomeAiConversationEntity): string {
+    return `${this.toIso(conversation.last_message_at)}~${conversation.id}`;
+  }
+
+  private parseHistoryCursor(cursor: string | undefined): { lastMessageAt: Date; id: string } | null {
+    if (!cursor) {
+      return null;
+    }
+    const separator = cursor.lastIndexOf("~");
+    if (separator <= 0) {
+      return null;
+    }
+    const lastMessageAt = new Date(cursor.slice(0, separator));
+    const id = cursor.slice(separator + 1);
+    if (Number.isNaN(lastMessageAt.getTime()) || !this.isConversationId(id)) {
+      return null;
+    }
+    return { lastMessageAt, id };
   }
 
   private serializeMessage(message: HomeAiMessageEntity): HomeAiConversationMessageDto {
@@ -123,11 +184,166 @@ export class HomeAiService {
       id: message.id,
       role: message.role,
       content: message.content,
-      createdAt: message.created_at.toISOString(),
+      createdAt: this.toIso(message.created_at),
       recordLinks: (message.record_links ?? []) as HomeAiRecordLink[],
       toolMetadata: message.tool_metadata,
       runId: message.run_id,
     };
+  }
+
+  private serializeConversationSummary(conversation: HomeAiConversationEntity): HomeAiConversationSummaryDto {
+    return {
+      id: conversation.id,
+      title: conversation.title || HOME_AI_DEFAULT_CONVERSATION_TITLE,
+      createdAt: this.toIso(conversation.created_at),
+      updatedAt: this.toIso(conversation.updated_at),
+      lastMessageAt: this.toIso(conversation.last_message_at),
+    };
+  }
+
+  private emptyConversationDto(): HomeAiConversationDto {
+    return {
+      conversationId: null,
+      title: HOME_AI_DEFAULT_CONVERSATION_TITLE,
+      createdAt: null,
+      updatedAt: null,
+      lastMessageAt: null,
+      messages: [],
+      hasOlder: false,
+    };
+  }
+
+  private async loadRecentMessages(
+    conversationId: string,
+    limit = HOME_AI_DEFAULT_VISIBLE_MESSAGES,
+  ): Promise<{ messages: HomeAiConversationMessageDto[]; hasOlder: boolean }> {
+    const take = this.parseLimit(String(limit), HOME_AI_DEFAULT_VISIBLE_MESSAGES, HOME_AI_MAX_VISIBLE_MESSAGES);
+    const newest = await this.messageRepository.find({
+      where: { conversation_id: conversationId },
+      order: { created_at: "DESC" },
+      take: take + 1,
+    });
+    const hasOlder = newest.length > take;
+    const page = hasOlder ? newest.slice(0, take) : newest;
+    return {
+      messages: page.reverse().map((message) => this.serializeMessage(message)),
+      hasOlder,
+    };
+  }
+
+  private async toConversationDto(conversation: HomeAiConversationEntity): Promise<HomeAiConversationDto> {
+    const { messages, hasOlder } = await this.loadRecentMessages(conversation.id);
+    return {
+      conversationId: conversation.id,
+      title: conversation.title || HOME_AI_DEFAULT_CONVERSATION_TITLE,
+      createdAt: this.toIso(conversation.created_at),
+      updatedAt: this.toIso(conversation.updated_at),
+      lastMessageAt: this.toIso(conversation.last_message_at),
+      messages,
+      hasOlder,
+    };
+  }
+
+  private async requireOwnedConversation(
+    conversationId: string | undefined,
+    userId: string,
+    organizationId: string,
+  ): Promise<HomeAiConversationEntity> {
+    if (!this.isConversationId(conversationId)) {
+      apiError(404, "home_ai_conversation_not_found", "Conversation not found.");
+    }
+
+    const conversation = await this.conversationRepository.findOne({
+      where: {
+        id: conversationId,
+        user_id: userId,
+        organization_id: organizationId,
+      },
+    });
+
+    if (!conversation) {
+      apiError(404, "home_ai_conversation_not_found", "Conversation not found.");
+    }
+
+    return conversation;
+  }
+
+  private async findLatestConversation(userId: string, organizationId: string) {
+    return this.conversationRepository.findOne({
+      where: { user_id: userId, organization_id: organizationId },
+      order: { last_message_at: "DESC", id: "DESC" },
+    });
+  }
+
+  private async findReusableEmptyConversation(userId: string, organizationId: string) {
+    const candidates = await this.conversationRepository.find({
+      where: {
+        user_id: userId,
+        organization_id: organizationId,
+        title: HOME_AI_DEFAULT_CONVERSATION_TITLE,
+      },
+      order: { created_at: "DESC" },
+      take: 8,
+    });
+
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    const candidateIds = candidates.map((conversation) => conversation.id);
+    const usedIds = new Set(
+      (
+        await this.messageRepository
+          .createQueryBuilder("message")
+          .select("message.conversation_id", "conversation_id")
+          .where("message.conversation_id IN (:...candidateIds)", { candidateIds })
+          .groupBy("message.conversation_id")
+          .getRawMany<{ conversation_id: string }>()
+      ).map((row) => row.conversation_id),
+    );
+
+    return candidates.find((conversation) => !usedIds.has(conversation.id)) ?? null;
+  }
+
+  private async createOwnedConversation(userId: string, organizationId: string) {
+    const reusable = await this.findReusableEmptyConversation(userId, organizationId);
+    if (reusable) {
+      return reusable;
+    }
+
+    const now = new Date();
+    return this.conversationRepository.save(
+      this.conversationRepository.create({
+        id: randomUUID(),
+        user_id: userId,
+        organization_id: organizationId,
+        title: HOME_AI_DEFAULT_CONVERSATION_TITLE,
+        last_message_at: now,
+      }),
+    );
+  }
+
+  private async touchConversation(conversation: HomeAiConversationEntity, title?: string) {
+    const now = new Date();
+    conversation.last_message_at = now;
+    conversation.updated_at = now;
+    if (title) {
+      conversation.title = title;
+    }
+    await this.conversationRepository.update(conversation.id, {
+      last_message_at: now,
+      updated_at: now,
+      ...(title ? { title } : {}),
+    });
+  }
+
+  private async loadLlmContextMessages(conversationId: string) {
+    const newest = await this.messageRepository.find({
+      where: { conversation_id: conversationId },
+      order: { created_at: "DESC" },
+      take: HOME_AI_MAX_CONTEXT_MESSAGES,
+    });
+    return newest.reverse();
   }
 
   async getProfile(request: RequestWithActor) {
@@ -142,19 +358,107 @@ export class HomeAiService {
     };
   }
 
-  async getConversation(request: RequestWithActor) {
+  async getConversation(request: RequestWithActor): Promise<HomeAiConversationDto> {
     const actor = this.requireActor(request);
     const organizationId = this.requireOrganizationId(actor);
-    const conversation = await this.getOrCreateConversation(actor.user.id, organizationId);
-    const messages = await this.messageRepository.find({
-      where: { conversation_id: conversation.id },
-      order: { created_at: "ASC" },
-      take: HOME_AI_MAX_CONTEXT_MESSAGES,
-    });
+    const conversation = await this.findLatestConversation(actor.user.id, organizationId);
+    if (!conversation) {
+      return this.emptyConversationDto();
+    }
+    return this.toConversationDto(conversation);
+  }
+
+  async listConversations(request: RequestWithActor, query: HomeAiListConversationsQuery = {}) {
+    const actor = this.requireActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    const limit = this.parseLimit(query.limit, HOME_AI_DEFAULT_HISTORY_LIMIT, HOME_AI_MAX_HISTORY_LIMIT);
+    const cursor = this.parseHistoryCursor(query.cursor);
+
+    const qb = this.conversationRepository
+      .createQueryBuilder("conversation")
+      .where("conversation.user_id = :userId", { userId: actor.user.id })
+      .andWhere("conversation.organization_id = :organizationId", { organizationId });
+
+    if (cursor) {
+      qb.andWhere(
+        "(conversation.last_message_at < :cursorAt OR (conversation.last_message_at = :cursorAt AND conversation.id < :cursorId))",
+        { cursorAt: cursor.lastMessageAt, cursorId: cursor.id },
+      );
+    }
+
+    const rows = await qb
+      .orderBy("conversation.last_message_at", "DESC")
+      .addOrderBy("conversation.id", "DESC")
+      .take(limit + 1)
+      .getMany();
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
+
+    return {
+      conversations: page.map((conversation) => this.serializeConversationSummary(conversation)),
+      nextCursor: hasMore && last ? this.encodeHistoryCursor(last) : null,
+    };
+  }
+
+  async createConversation(request: RequestWithActor): Promise<HomeAiConversationDto> {
+    const actor = this.requireActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    const conversation = await this.createOwnedConversation(actor.user.id, organizationId);
+    return this.toConversationDto(conversation);
+  }
+
+  async getConversationById(request: RequestWithActor, conversationId: string): Promise<HomeAiConversationDto> {
+    const actor = this.requireActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    const conversation = await this.requireOwnedConversation(conversationId, actor.user.id, organizationId);
+    return this.toConversationDto(conversation);
+  }
+
+  async listMessages(
+    request: RequestWithActor,
+    conversationId: string,
+    query: HomeAiListMessagesQuery = {},
+  ) {
+    const actor = this.requireActor(request);
+    const organizationId = this.requireOrganizationId(actor);
+    const conversation = await this.requireOwnedConversation(conversationId, actor.user.id, organizationId);
+    const limit = this.parseLimit(query.limit, HOME_AI_DEFAULT_VISIBLE_MESSAGES, HOME_AI_MAX_VISIBLE_MESSAGES);
+
+    const qb = this.messageRepository
+      .createQueryBuilder("message")
+      .where("message.conversation_id = :conversationId", { conversationId: conversation.id });
+
+    if (query.before) {
+      if (!this.isConversationId(query.before)) {
+        apiError(400, "home_ai_message_anchor_invalid", "The message page anchor is invalid.");
+      }
+      const anchor = await this.messageRepository.findOne({
+        where: { id: query.before, conversation_id: conversation.id },
+      });
+      if (!anchor) {
+        apiError(400, "home_ai_message_anchor_invalid", "The message page anchor is invalid.");
+      }
+      qb.andWhere(
+        "(message.created_at < :createdAt OR (message.created_at = :createdAt AND message.id < :id))",
+        { createdAt: anchor.created_at, id: anchor.id },
+      );
+    }
+
+    const newest = await qb
+      .orderBy("message.created_at", "DESC")
+      .addOrderBy("message.id", "DESC")
+      .take(limit + 1)
+      .getMany();
+
+    const hasOlder = newest.length > limit;
+    const page = hasOlder ? newest.slice(0, limit) : newest;
 
     return {
       conversationId: conversation.id,
-      messages: messages.map((message) => this.serializeMessage(message)),
+      messages: page.reverse().map((message) => this.serializeMessage(message)),
+      hasOlder,
     };
   }
 
@@ -211,6 +515,18 @@ export class HomeAiService {
     } else {
       widgets.today = { visible: false };
       widgets.jobs = { visible: false };
+    }
+
+    if (this.hasPermission(actor, "customers.view")) {
+      const customerAggregates = await this.customerLedgerService.getOrganizationAggregates(organizationId);
+      widgets.customers = {
+        visible: true,
+        label: "Total customers",
+        count: customerAggregates.totalCustomers,
+        href: "/customers",
+      };
+    } else {
+      widgets.customers = { visible: false };
     }
 
     if (this.hasPermission(actor, "leads.view")) {
@@ -273,12 +589,13 @@ export class HomeAiService {
       apiError(400, "home_ai_message_too_long", "Message exceeds the allowed length.");
     }
 
-    const conversation = await this.getOrCreateConversation(actor.user.id, organizationId);
-    const priorMessages = await this.messageRepository.find({
-      where: { conversation_id: conversation.id },
-      order: { created_at: "ASC" },
-      take: HOME_AI_MAX_CONTEXT_MESSAGES,
-    });
+    const conversation = this.isConversationId(body.conversationId)
+      ? await this.requireOwnedConversation(body.conversationId, actor.user.id, organizationId)
+      : await this.createOwnedConversation(actor.user.id, organizationId);
+    const priorMessages = await this.loadLlmContextMessages(conversation.id);
+    const shouldAssignTitle = conversation.title === HOME_AI_DEFAULT_CONVERSATION_TITLE
+      && priorMessages.every((message) => message.role !== "user");
+    const nextTitle = shouldAssignTitle ? generateHomeAiConversationTitle(messageText) : conversation.title;
 
     const userMessage = await this.messageRepository.save(
       this.messageRepository.create({
@@ -291,6 +608,8 @@ export class HomeAiService {
         tool_metadata: null,
       }),
     );
+
+    await this.touchConversation(conversation, nextTitle);
 
     if (!this.deepSeekProvider.isConfigured()) {
       const fallback = "Home AI is enabled but the language model provider is not configured yet.";
@@ -313,6 +632,7 @@ export class HomeAiService {
       });
       return {
         conversationId: conversation.id,
+        title: conversation.title,
         message: this.serializeMessage(assistantMessage),
         userMessage: this.serializeMessage(userMessage),
       };
@@ -468,10 +788,11 @@ export class HomeAiService {
       runId,
     });
 
-    await this.conversationRepository.update(conversation.id, { updated_at: new Date() });
+    await this.touchConversation(conversation);
 
     return {
       conversationId: conversation.id,
+      title: conversation.title,
       message: this.serializeMessage(assistantMessage),
       userMessage: this.serializeMessage(userMessage),
     };

@@ -4,6 +4,8 @@
 **Provider:** DeepSeek (backend-only)  
 **Parent docs:** [`WizField_AI_Master_Source_of_Truth.md`](./WizField_AI_Master_Source_of_Truth.md), [`WizField_AI_Actions_V1_Integration_Map.md`](./WizField_AI_Actions_V1_Integration_Map.md)
 
+This document describes the older owner/admin `POST /api/ai/chat` agent. **Current Home AI V1** (persisted `/home` conversation, read-only CRM tools) is owned by the AI Master SoT §1A and is a different surface. Do not treat `general_ai_chat` as Home AI.
+
 ---
 
 ## Purpose

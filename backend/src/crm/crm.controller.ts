@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpException,
   Param,
@@ -14,8 +15,8 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { InjectRepository } from "@nestjs/typeorm";
-import { In, Repository } from "typeorm";
+import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
+import { DataSource, In, Repository } from "typeorm";
 import type { Request, Response } from "express";
 
 import {
@@ -24,6 +25,7 @@ import {
   canAccessEstimateResource,
   canAccessInvoiceResource,
   canAccessJobResource,
+  canManageInvoiceResource,
   requireActorProfile,
   requirePermission,
   type RoleModePermission,
@@ -59,7 +61,18 @@ import {
   type CustomerImportRowInput,
   type CustomerImportSource,
 } from "./customer-import";
+import { CustomerLedgerService } from "./customer-ledger.service";
+import { CustomerDeletionService } from "./customer-deletion.service";
 import { formatAddress } from "./display";
+import {
+  isProvenanceOnlyCustomerNotes,
+  sanitizeCustomerNotes,
+  sanitizeInvoiceDescription,
+  sanitizeJobTitle,
+  sanitizePaymentReference,
+  sanitizeSkuSnapshot,
+  sanitizeUserFacingText,
+} from "./user-facing-text";
 import {
   type DocumentLineItemInput,
   parseConvertLeadPayload,
@@ -94,9 +107,14 @@ import { DocumentBrandingSnapshotService } from "../documents/pdf/document-brand
 import { setPdfDownloadResponseHeaders } from "../documents/pdf/pdf-download-response";
 import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
+import {
+  persistInvoiceHeaderAndLineItems,
+  persistQuoteHeaderAndLineItems,
+} from "./crm-document-persistence";
 import { EmailService } from "../email/email.service";
 import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
+import { InvoicePaymentRecordingService } from "./invoice-payment-recording.service";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
 import { TxtService } from "../messaging/txt/txt.service";
@@ -188,7 +206,10 @@ export class CrmController {
     private readonly documentPricingService: DocumentPricingService,
     private readonly documentSnapshotService: DocumentSnapshotService,
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
+    private readonly invoicePaymentRecordingService: InvoicePaymentRecordingService,
     private readonly crmOfficeDashboardService: CrmOfficeDashboardService,
+    private readonly customerLedgerService: CustomerLedgerService,
+    private readonly customerDeletionService: CustomerDeletionService,
     private readonly jobsService: JobsService,
     private readonly emailService: EmailService,
     private readonly txtService: TxtService,
@@ -196,6 +217,8 @@ export class CrmController {
     private readonly documentBrandingSnapshotService: DocumentBrandingSnapshotService,
     private readonly invoicePdfService: InvoicePdfService,
     private readonly configService: ConfigService,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   private requireActor(request: RequestWithActor) {
@@ -405,8 +428,14 @@ export class CrmController {
   }
 
   private buildJobDetailResponse(job: JobEntity) {
+    const customer = this.relationValue(job.customer as RelatedValue<CustomerEntity>);
     return {
       ...job,
+      title: sanitizeJobTitle(job.title, {
+        customerName: customer?.full_name,
+        serviceType: job.requested_service_type,
+      }),
+      description: sanitizeUserFacingText(job.description) || job.description,
       notes: (job.notes ?? []).map((note) => this.buildJobNoteResponse(note)),
     };
   }
@@ -484,7 +513,7 @@ export class CrmController {
           waitingForApprovalJobs: waitingApprovalCount,
           completedToday: completedTodayCount,
         },
-        jobs,
+        jobs: jobs.map((job) => this.buildJobDetailResponse(job)),
       });
     } catch (error) {
       apiError(
@@ -521,7 +550,7 @@ export class CrmController {
         technicianId,
       });
 
-      return apiSuccess(jobs);
+      return apiSuccess(jobs.map((job) => this.buildJobDetailResponse(job)));
     } catch (error) {
       apiError(500, "job_list_failed", "The job board could not be loaded.", error);
     }
@@ -1086,42 +1115,36 @@ export class CrmController {
         : null;
 
       if (existingQuote) {
-        existingQuote.description = payload.description;
-        existingQuote.price_cents = quoteTotals.totalCents;
-        existingQuote.subtotal_cents = quoteTotals.subtotalCents;
-        existingQuote.tax_rate_bps_snapshot = quoteTotals.taxRateBpsSnapshot;
-        existingQuote.tax_cents = quoteTotals.taxCents;
-        existingQuote.total_cents = quoteTotals.totalCents;
-        existingQuote.status = payload.status;
-        existingQuote.sent_at = sent_at;
-        existingQuote.approved_at = approved_at;
-
-        const result = await this.quotesRepository.save(existingQuote);
-        await this.documentSnapshotService.replaceQuoteLineItems(
-          result.id,
-          hasSnapshotLineItems ? quoteLineDrafts : [],
+        const result = await this.dataSource.transaction((manager) =>
+          persistQuoteHeaderAndLineItems(manager, this.documentSnapshotService, {
+            organizationId,
+            jobId,
+            existingQuote,
+            description: payload.description,
+            quoteTotals,
+            status: payload.status,
+            sent_at,
+            approved_at,
+            hasSnapshotLineItems,
+            lineDrafts: quoteLineDrafts,
+          }),
         );
         return apiSuccess(result);
       }
 
-      const result = await this.quotesRepository.save(
-        this.quotesRepository.create(this.withOrganizationId(organizationId, {
-          job_id: jobId,
+      const result = await this.dataSource.transaction((manager) =>
+        persistQuoteHeaderAndLineItems(manager, this.documentSnapshotService, {
+          organizationId,
+          jobId,
+          existingQuote: null,
           description: payload.description,
-          price_cents: quoteTotals.totalCents,
-          subtotal_cents: quoteTotals.subtotalCents,
-          tax_rate_bps_snapshot: quoteTotals.taxRateBpsSnapshot,
-          tax_cents: quoteTotals.taxCents,
-          total_cents: quoteTotals.totalCents,
+          quoteTotals,
           status: payload.status,
           sent_at,
           approved_at,
-        })),
-      );
-
-      await this.documentSnapshotService.replaceQuoteLineItems(
-        result.id,
-        hasSnapshotLineItems ? quoteLineDrafts : [],
+          hasSnapshotLineItems,
+          lineDrafts: quoteLineDrafts,
+        }),
       );
 
       return apiSuccess(result);
@@ -1180,28 +1203,13 @@ export class CrmController {
         entry_type: payment.entry_type,
         amount_cents: payment.amount_cents,
         method: payment.method,
-        reference: payment.reference,
-        note: payment.note,
+        reference: sanitizePaymentReference(payment.reference),
+        note: sanitizeUserFacingText(payment.note) || payment.note,
         occurred_at: payment.occurred_at.toISOString(),
         created_by_auth_user_id: payment.created_by_auth_user_id,
         created_at: payment.created_at.toISOString(),
         updated_at: payment.updated_at.toISOString(),
       }));
-  }
-
-  private deriveLegacyInvoiceStatusFromLedger(invoice: InvoiceEntity) {
-    const ledgerSummary = this.summarizeInvoiceLedger(invoice);
-
-    return {
-      status:
-        ledgerSummary.lifecycleStatus === "paid" || ledgerSummary.lifecycleStatus === "overpaid"
-          ? ("paid" as InvoiceStatus)
-          : ("unpaid" as InvoiceStatus),
-      paidAt:
-        ledgerSummary.lifecycleStatus === "paid" || ledgerSummary.lifecycleStatus === "overpaid"
-          ? ledgerSummary.paidAt
-          : null,
-    };
   }
 
   private async syncInvoiceJobPaymentState(
@@ -1210,61 +1218,14 @@ export class CrmController {
     actor: ActorContext & { profile: ProfileEntity },
   ) {
     const organizationId = this.requireActiveOrganizationId(actor);
-    const legacyState = this.deriveLegacyInvoiceStatusFromLedger(invoice);
 
-    if (invoice.status !== legacyState.status || this.toIsoString(invoice.paid_at) !== this.toIsoString(legacyState.paidAt)) {
-      invoice.status = legacyState.status;
-      invoice.paid_at = legacyState.paidAt;
-      await this.invoicesRepository.save(invoice);
-    }
-
-    if (legacyState.status === "paid" && job.status !== "paid" && canTransitionJobStatus(job.status, "paid")) {
-      await this.jobsRepository.update(
-        {
-          id: job.id,
-          organization_id: organizationId,
-        },
-        {
-          status: "paid",
-          paid_at: legacyState.paidAt,
-          updated_by_auth_user_id: actor.user.id,
-        },
-      );
-
-      await this.jobStatusEventsRepository.save(
-        this.jobStatusEventsRepository.create({
-          organization_id: organizationId,
-          job_id: job.id,
-          author_profile_id: actor.profile.id,
-          status: "paid",
-          note: "Invoice marked paid from payment ledger.",
-        }),
-      );
-    }
-
-    if (legacyState.status === "unpaid" && job.status === "paid") {
-      await this.jobsRepository.update(
-        {
-          id: job.id,
-          organization_id: organizationId,
-        },
-        {
-          status: "completed",
-          paid_at: null,
-          updated_by_auth_user_id: actor.user.id,
-        },
-      );
-
-      await this.jobStatusEventsRepository.save(
-        this.jobStatusEventsRepository.create({
-          organization_id: organizationId,
-          job_id: job.id,
-          author_profile_id: actor.profile.id,
-          status: "completed",
-          note: "Invoice payment ledger no longer indicates paid in full.",
-        }),
-      );
-    }
+    await this.invoicePaymentRecordingService.syncInvoiceJobPaymentStateOutsideTransaction({
+      invoice,
+      job,
+      organizationId,
+      actorUserId: actor.user.id,
+      actorProfileId: actor.profile.id,
+    });
   }
 
   private buildInvoiceListItem(invoice: InvoiceEntity) {
@@ -1283,8 +1244,12 @@ export class CrmController {
       lifecycle_status: ledgerSummary.lifecycleStatus,
       status: invoice.status,
       issued_at: invoice.issued_at?.toISOString() ?? invoice.created_at.toISOString(),
+      customer_id: job?.customer_id ?? customer?.id ?? null,
       customer_name: customer?.full_name ?? "Customer pending",
-      job_title: job?.title ?? "Job",
+      job_title: sanitizeJobTitle(job?.title, {
+        customerName: customer?.full_name,
+        serviceType: job?.requested_service_type,
+      }),
     };
   }
 
@@ -1293,10 +1258,10 @@ export class CrmController {
       id: lineItem.id,
       invoice_id: lineItem.invoice_id,
       pricebook_item_id: lineItem.pricebook_item_id,
-      sku_snapshot: lineItem.sku_snapshot,
+      sku_snapshot: sanitizeSkuSnapshot(lineItem.sku_snapshot),
       document_line_key: lineItem.document_line_key,
-      name_snapshot: lineItem.name_snapshot,
-      description_snapshot: lineItem.description_snapshot,
+      name_snapshot: sanitizeUserFacingText(lineItem.name_snapshot) || lineItem.name_snapshot,
+      description_snapshot: sanitizeUserFacingText(lineItem.description_snapshot) || lineItem.description_snapshot,
       item_type_snapshot: lineItem.item_type_snapshot,
       unit_of_measure_snapshot: lineItem.unit_of_measure_snapshot,
       unit_price_cents_snapshot: lineItem.unit_price_cents_snapshot,
@@ -1305,6 +1270,9 @@ export class CrmController {
       labor_cost_cents_snapshot: lineItem.labor_cost_cents_snapshot,
       estimated_labor_minutes_snapshot: lineItem.estimated_labor_minutes_snapshot,
       warranty_months_snapshot: lineItem.warranty_months_snapshot,
+      pricebook_bundle_id: lineItem.pricebook_bundle_id,
+      bundle_requirement_id: lineItem.bundle_requirement_id,
+      catalog_unit_price_cents_snapshot: lineItem.catalog_unit_price_cents_snapshot,
       quantity: lineItem.quantity,
       line_subtotal_cents: lineItem.line_subtotal_cents,
       sort_order: lineItem.sort_order,
@@ -1318,10 +1286,10 @@ export class CrmController {
       id: lineItem.id,
       quote_id: lineItem.quote_id,
       pricebook_item_id: lineItem.pricebook_item_id,
-      sku_snapshot: lineItem.sku_snapshot,
+      sku_snapshot: sanitizeSkuSnapshot(lineItem.sku_snapshot),
       document_line_key: lineItem.document_line_key,
-      name_snapshot: lineItem.name_snapshot,
-      description_snapshot: lineItem.description_snapshot,
+      name_snapshot: sanitizeUserFacingText(lineItem.name_snapshot) || lineItem.name_snapshot,
+      description_snapshot: sanitizeUserFacingText(lineItem.description_snapshot) || lineItem.description_snapshot,
       item_type_snapshot: lineItem.item_type_snapshot,
       unit_of_measure_snapshot: lineItem.unit_of_measure_snapshot,
       unit_price_cents_snapshot: lineItem.unit_price_cents_snapshot,
@@ -1330,6 +1298,9 @@ export class CrmController {
       labor_cost_cents_snapshot: lineItem.labor_cost_cents_snapshot,
       estimated_labor_minutes_snapshot: lineItem.estimated_labor_minutes_snapshot,
       warranty_months_snapshot: lineItem.warranty_months_snapshot,
+      pricebook_bundle_id: lineItem.pricebook_bundle_id,
+      bundle_requirement_id: lineItem.bundle_requirement_id,
+      catalog_unit_price_cents_snapshot: lineItem.catalog_unit_price_cents_snapshot,
       quantity: lineItem.quantity,
       line_subtotal_cents: lineItem.line_subtotal_cents,
       sort_order: lineItem.sort_order,
@@ -1446,7 +1417,7 @@ export class CrmController {
         job_id: listItem.job_id,
         invoice_id: listItem.document_number,
         document_number: listItem.document_number,
-        description: invoice.description ?? "",
+        description: sanitizeInvoiceDescription(invoice.description),
         amount_cents: invoice.amount_cents,
         subtotal_cents: invoice.subtotal_cents || invoice.amount_cents,
         tax_rate_bps_snapshot: invoice.tax_rate_bps_snapshot,
@@ -1474,7 +1445,10 @@ export class CrmController {
         job: job
           ? {
             id: job.id,
-            title: job.title,
+            title: sanitizeJobTitle(job.title, {
+              customerName: customer?.full_name,
+              serviceType: job.requested_service_type,
+            }),
             status: job.status,
             assigned_technician_id: job.assigned_technician_id,
           }
@@ -1491,7 +1465,7 @@ export class CrmController {
             service_city: customer.service_city,
             service_state_or_region: customer.service_state_or_region,
             service_postal_code: customer.service_postal_code,
-            notes: customer.notes,
+            notes: sanitizeCustomerNotes(customer.notes),
           }
           : null,
         organization: {
@@ -1945,73 +1919,39 @@ export class CrmController {
     );
     const organizationId = this.requireActiveOrganizationId(actor);
 
+    let payload;
+
     try {
-      const payload = parseRecordInvoicePaymentPayload(body);
+      payload = parseRecordInvoicePaymentPayload(body);
+    } catch (error) {
+      apiError(400, "invalid_invoice_payment_payload", "The invoice payment payload is invalid.", error);
+    }
 
-      if (payload.amountCents <= 0) {
-        apiError(400, "invalid_invoice_payment_amount", "Invoice payments must be greater than zero.");
-      }
+    if (payload.amountCents <= 0) {
+      apiError(400, "invalid_invoice_payment_amount", "Invoice payments must be greater than zero.");
+    }
 
-      const invoice = await this.invoicesRepository.findOne({
-        where: {
-          id: invoiceId,
-          organization_id: organizationId,
-        },
-        relations: {
-          payments: true,
-          job: true,
-        },
+    try {
+      const result = await this.invoicePaymentRecordingService.recordNativePayment({
+        organizationId,
+        invoiceId,
+        actorUserId: actor.user.id,
+        actorProfileId: actor.profile.id,
+        payload,
       });
-
-      if (!invoice) {
-        apiError(404, "invoice_not_found", "The invoice could not be found.");
-      }
-
-      const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
-
-      if (!job) {
-        apiError(404, "invoice_job_not_found", "The related job could not be found.");
-      }
-
-      const occurredAt = payload.occurredAt
-        ? new Date(payload.occurredAt)
-        : new Date();
-
-      await this.invoicePaymentsRepository.save(
-        this.invoicePaymentsRepository.create(this.withOrganizationId(organizationId, {
-          invoice_id: invoice.id,
-          entry_type: payload.entryType,
-          amount_cents: payload.amountCents,
-          method: payload.method,
-          reference: payload.reference,
-          note: payload.note,
-          occurred_at: occurredAt,
-          created_by_auth_user_id: actor.user.id,
-        })),
-      );
-
-      const refreshedInvoice = await this.invoicesRepository.findOne({
-        where: {
-          id: invoice.id,
-          organization_id: organizationId,
-        },
-        relations: {
-          payments: true,
-          job: true,
-        },
-      });
-
-      if (!refreshedInvoice) {
-        apiError(404, "invoice_not_found", "The invoice could not be found.");
-      }
-
-      await this.syncInvoiceJobPaymentState(refreshedInvoice, job, actor);
 
       return apiSuccess({
         ok: true,
+        idempotent: result.idempotent,
+        payment_id: result.paymentId,
+        invoice_status: result.invoiceStatus,
+        lifecycle_status: result.ledger.lifecycleStatus,
+        balance_cents: result.ledger.balanceCents,
+        amount_paid_cents: result.ledger.netPaidCents,
       });
     } catch (error) {
-      apiError(400, "invalid_invoice_payment_payload", "The invoice payment payload is invalid.", error);
+      this.rethrowHttpException(error);
+      apiError(500, "invoice_payment_recording_failed", "The invoice payment could not be recorded.", error);
     }
   }
 
@@ -2123,10 +2063,13 @@ export class CrmController {
             job_id: relatedJob?.id ?? quote.job_id,
             customer_id: relatedCustomer?.id ?? "",
             customer_name: relatedCustomer?.full_name ?? "Customer pending",
-            job_title: relatedJob?.title ?? "Job",
+            job_title: sanitizeJobTitle(relatedJob?.title, {
+              customerName: relatedCustomer?.full_name,
+              serviceType: relatedJob?.requested_service_type,
+            }),
             document_number: this.buildEstimateDocumentNumber(quote),
             lifecycle_status: lifecycle,
-            description: quote.description,
+            description: sanitizeUserFacingText(quote.description) || quote.description,
             price_cents: quote.price_cents,
             status: quote.status,
             sent_at: this.toIsoString(quote.sent_at),
@@ -2195,9 +2138,12 @@ export class CrmController {
         job_id: job.id,
         customer_id: customer.id,
         customer_name: customer.full_name,
-        job_title: job.title,
+        job_title: sanitizeJobTitle(job.title, {
+          customerName: customer.full_name,
+          serviceType: job.requested_service_type,
+        }),
         lifecycle_status: lifecycle,
-        description: quote.description,
+        description: sanitizeUserFacingText(quote.description) || quote.description,
         price_cents: quote.price_cents,
         subtotal_cents: quote.subtotal_cents || quote.price_cents,
         tax_rate_bps_snapshot: quote.tax_rate_bps_snapshot,
@@ -2354,12 +2300,7 @@ export class CrmController {
     @Param("jobId") jobId: string,
     @Body() body: unknown,
   ) {
-    const actor = this.requireCrmPermissionActor(
-      request,
-      "invoices.manage",
-      "invoice_manage_forbidden",
-      "This account cannot change invoices.",
-    );
+    const actor = requireActorProfile(request.actor);
     const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
@@ -2373,6 +2314,10 @@ export class CrmController {
 
       if (!job) {
         apiError(404, "job_not_found", "The job could not be found.");
+      }
+
+      if (!canManageInvoiceResource(actor, job.assigned_technician_id)) {
+        apiError(403, "invoice_manage_forbidden", "This account cannot change invoices.");
       }
 
       const existingInvoice = await this.invoicesRepository.findOne({
@@ -2422,42 +2367,25 @@ export class CrmController {
       const issuedAt = existingInvoice?.issued_at ?? timestamp;
       const dueAt = existingInvoice?.due_at ?? this.computeDueAt(issuedAt, dueDays);
 
-      let invoice: InvoiceEntity;
+      const invoicePayments = existingInvoice?.payments ?? [];
 
-      if (existingInvoice) {
-        existingInvoice.description = invoiceDescription;
-        existingInvoice.amount_cents = invoiceTotals.totalCents;
-        existingInvoice.subtotal_cents = invoiceTotals.subtotalCents;
-        existingInvoice.tax_rate_bps_snapshot = invoiceTotals.taxRateBpsSnapshot;
-        existingInvoice.tax_cents = invoiceTotals.taxCents;
-        existingInvoice.total_cents = invoiceTotals.totalCents;
-        existingInvoice.status = payload.status;
-        existingInvoice.paid_at = paid_at;
-        existingInvoice.due_at = dueAt;
-        invoice = await this.invoicesRepository.save(existingInvoice);
-      } else {
-        invoice = await this.invoicesRepository.save(
-          this.invoicesRepository.create(this.withOrganizationId(organizationId, {
-            job_id: jobId,
-            description: invoiceDescription,
-            amount_cents: invoiceTotals.totalCents,
-            subtotal_cents: invoiceTotals.subtotalCents,
-            tax_rate_bps_snapshot: invoiceTotals.taxRateBpsSnapshot,
-            tax_cents: invoiceTotals.taxCents,
-            total_cents: invoiceTotals.totalCents,
-            status: payload.status,
-            paid_at,
-            due_at: dueAt,
-          })),
-        );
-      }
-
-      await this.documentSnapshotService.replaceInvoiceLineItems(
-        invoice.id,
-        hasSnapshotLineItems ? invoiceLineDrafts : [],
+      const invoice = await this.dataSource.transaction((manager) =>
+        persistInvoiceHeaderAndLineItems(manager, this.documentSnapshotService, {
+          organizationId,
+          jobId,
+          existingInvoice: existingInvoice ?? null,
+          description: invoiceDescription,
+          invoiceTotals,
+          status: payload.status,
+          paid_at,
+          due_at: dueAt,
+          hasSnapshotLineItems,
+          lineDrafts: invoiceLineDrafts,
+        }),
       );
 
-      if ((invoice.payments?.length ?? 0) > 0) {
+      if (invoicePayments.length > 0) {
+        invoice.payments = invoicePayments;
         await this.syncInvoiceJobPaymentState(invoice, job, actor);
         return apiSuccess(invoice);
       }
@@ -3058,52 +2986,25 @@ export class CrmController {
   }
 
   @Get("customers")
-  async listCustomers(@Req() request: RequestWithActor) {
+  async listCustomers(
+    @Req() request: RequestWithActor,
+    @Query("q") q?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+    @Query("segment") segment?: string,
+    @Query("region") region?: string,
+  ) {
     const actor = this.requireCrmPermissionActor(request, "customers.view", "customer_view_forbidden", "This account cannot view customers.");
     const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
-      const customers = await this.customersRepository.find({
-        where: {
-          organization_id: organizationId,
-        },
-        order: {
-          updated_at: "DESC",
-        },
+      const result = await this.customerLedgerService.listLedger(organizationId, {
+        q,
+        page,
+        pageSize,
+        segment,
+        region,
       });
-
-      if (customers.length === 0) {
-        return apiSuccess([] as Array<CustomerEntity & { relatedJobs: JobEntity[] }>);
-      }
-
-      const customerIds = customers.map((customer) => customer.id);
-      const jobs = await this.jobsRepository.find({
-        where: {
-          customer_id: In(customerIds),
-          organization_id: organizationId,
-        },
-        relations: {
-          technician: true,
-        },
-        order: {
-          scheduled_for: "ASC",
-          updated_at: "DESC",
-        },
-      });
-
-      const jobsByCustomer = new Map<string, JobEntity[]>();
-
-      for (const job of jobs) {
-        const existing = jobsByCustomer.get(job.customer_id) ?? [];
-        existing.push(job);
-        jobsByCustomer.set(job.customer_id, existing);
-      }
-
-      const result = customers.map((customer) => ({
-        ...customer,
-        relatedJobs: jobsByCustomer.get(customer.id) ?? [],
-      }));
-
       return apiSuccess(result);
     } catch (error) {
       apiError(500, "customer_list_failed", "The customer list could not be loaded.", error);
@@ -3146,8 +3047,11 @@ export class CrmController {
       }
 
       return apiSuccess({
-        customer,
-        relatedJobs,
+        customer: {
+          ...customer,
+          notes: sanitizeCustomerNotes(customer.notes),
+        },
+        relatedJobs: relatedJobs.map((job) => this.buildJobDetailResponse(job)),
       });
     } catch (error) {
       apiError(400, "customer_lookup_failed", "The customer could not be loaded.", error);
@@ -3218,7 +3122,12 @@ export class CrmController {
       }
 
       if (payload.notes !== undefined) {
-        customer.notes = payload.notes;
+        const incomingNotes = payload.notes;
+        if (!incomingNotes && isProvenanceOnlyCustomerNotes(customer.notes)) {
+          // Keep internal migration notes that are not shown on the product surface.
+        } else {
+          customer.notes = incomingNotes;
+        }
       }
 
       if (payload.preferredServiceType !== undefined) {
@@ -3227,13 +3136,73 @@ export class CrmController {
 
       const result = await this.customersRepository.save(customer);
 
-      return apiSuccess(result);
+      return apiSuccess({
+        ...result,
+        notes: sanitizeCustomerNotes(result.notes),
+      });
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
       }
       apiError(400, "invalid_customer_update_payload", "The customer update payload is invalid.", error);
     }
+  }
+
+  @Delete("customers/:customerId")
+  async deleteCustomer(
+    @Req() request: RequestWithActor,
+    @Param("customerId") customerId: string,
+  ) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "customers.manage",
+      "customer_manage_forbidden",
+      "This account cannot delete customers.",
+    );
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    const result = await this.customerDeletionService.deleteCustomers(organizationId, [customerId]);
+    const failure = result.failed[0];
+
+    if (failure) {
+      apiError(
+        failure.code === "customer_has_jobs" ? 409 : failure.code === "customer_not_found" ? 404 : 400,
+        failure.code,
+        failure.message,
+      );
+    }
+
+    return apiSuccess({ deleted: true, customerId });
+  }
+
+  @Post("customers/bulk-delete")
+  async bulkDeleteCustomers(@Req() request: RequestWithActor, @Body() body: unknown) {
+    const actor = this.requireCrmPermissionActor(
+      request,
+      "customers.manage",
+      "customer_manage_forbidden",
+      "This account cannot delete customers.",
+    );
+    const organizationId = this.requireActiveOrganizationId(actor);
+    const customerIds = this.parseBulkDeleteCustomerIds(body);
+
+    return apiSuccess(await this.customerDeletionService.deleteCustomers(organizationId, customerIds));
+  }
+
+  private parseBulkDeleteCustomerIds(body: unknown) {
+    if (!this.isRecord(body) || !Array.isArray(body.customerIds)) {
+      apiError(400, "invalid_customer_delete_payload", "customerIds must be an array.");
+    }
+
+    const customerIds = body.customerIds
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      .map((value) => value.trim());
+
+    if (customerIds.length === 0) {
+      apiError(400, "invalid_customer_delete_payload", "Select at least one customer to delete.");
+    }
+
+    return [...new Set(customerIds)];
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {
@@ -4076,10 +4045,10 @@ export class CrmController {
       customerEmail: this.normalizeOptionalString(input.customer?.email),
       customerPhone: this.normalizeOptionalString(input.customer?.phone),
       serviceAddressLines,
-      description: this.normalizeOptionalString(input.invoice.description),
+      description: this.normalizeOptionalString(sanitizeInvoiceDescription(input.invoice.description)),
       lineItems: sortedLineItems.map((item) => ({
-        name: item.name_snapshot || "Item",
-        description: item.description_snapshot,
+        name: sanitizeUserFacingText(item.name_snapshot) || item.name_snapshot || "Item",
+        description: sanitizeUserFacingText(item.description_snapshot) || item.description_snapshot,
         quantity: String(item.quantity),
         rateLabel: this.formatCents(item.unit_price_cents_snapshot),
         amountLabel: this.formatCents(item.line_subtotal_cents),

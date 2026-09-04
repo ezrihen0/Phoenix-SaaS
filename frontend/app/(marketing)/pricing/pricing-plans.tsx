@@ -1,10 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 
-import { createStripeCheckoutSession } from "@/lib/billing/client-billing";
-import { BILLING_HONESTY_FOOTNOTE, PLAN_DISPLAY_CATALOG, type BillingPlanKey } from "@/lib/billing/plan-display";
+import { BILLING_HONESTY_FOOTNOTE, PLAN_DISPLAY_CATALOG } from "@/lib/billing/plan-display";
 
 type PricingPlansProps = {
   ownerMode: boolean;
@@ -14,27 +12,9 @@ type PricingPlansProps = {
 };
 
 export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, activationMode }: PricingPlansProps) {
-  const [busyPlan, setBusyPlan] = useState<BillingPlanKey | null>(null);
-  const [message, setMessage] = useState<string | null>(
-    checkoutCancelled
-      ? activationMode
-        ? "Complete your subscription to activate your workspace."
-        : "Stripe checkout was cancelled before confirmation. No plan change was activated."
-      : null,
-  );
-
-  async function startCheckout(planKey: BillingPlanKey) {
-    setBusyPlan(planKey);
-    setMessage(null);
-
-    try {
-      const session = await createStripeCheckoutSession(planKey);
-      window.location.assign(session.url);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Stripe checkout could not be started.");
-      setBusyPlan(null);
-    }
-  }
+  const message = checkoutCancelled
+    ? "Subscription checkout is not active in this WizField runtime. Workspace access is handled directly by WizField."
+    : null;
 
   return (
     <>
@@ -59,14 +39,12 @@ export function PricingPlans({ ownerMode, authenticated, checkoutCancelled, acti
 
             <div className="mt-6">
               {ownerMode ? (
-                <button
-                  type="button"
-                  disabled={busyPlan !== null}
-                  onClick={() => void startCheckout(plan.key)}
+                <Link
+                  href={activationMode ? "/home" : "/settings?topic=billing"}
                   className="inline-flex w-full items-center justify-center rounded-full border border-[color:rgba(212,175,55,0.4)] bg-[color:rgba(212,175,55,0.15)] px-5 py-3 text-sm font-semibold text-[#f7df97] transition hover:border-[color:rgba(212,175,55,0.55)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {busyPlan === plan.key ? "Redirecting to Stripe…" : activationMode ? "Start Plan" : "Start Stripe checkout"}
-                </button>
+                  {activationMode ? "Enter workspace" : "Review current access"}
+                </Link>
               ) : authenticated ? (
                 <Link
                   href="/settings"

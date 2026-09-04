@@ -6,12 +6,11 @@ import { BillingOrchestrationService } from "../billing/billing-orchestration.se
 import { BillingProviderRegistryService } from "../billing/billing-provider-registry.service";
 import { LanguageStoreEntitlementService } from "../billing/language-store-entitlement.service";
 import { OrganizationBillingService } from "../billing/organization-billing.service";
-import { StripeBillingProvider } from "../billing/stripe/stripe-billing.provider";
-import { StripeClient } from "../billing/stripe/stripe.client";
 import { AuthSessionEntity } from "./entities/auth-session.entity";
 import { BillingAccountEntity } from "./entities/billing-account.entity";
 import { BillingAccountSubscriptionItemEntity } from "./entities/billing-account-subscription-item.entity";
 import { ControlledAccessGrantEntity } from "./entities/controlled-access-grant.entity";
+import { PlatformOperatorGrantEntity } from "./entities/platform-operator-grant.entity";
 import { MembershipEntity } from "./entities/membership.entity";
 import { OrganizationBillingEntity } from "./entities/organization-billing.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
@@ -37,9 +36,7 @@ export type BillingSmokeHarness = {
 
 export function buildBillingSmokeHarness(dataSource: DataSource): BillingSmokeHarness {
   const configService = new SmokeConfigService() as ConfigService;
-  const stripeClient = new StripeClient(configService);
-  const stripeBillingProvider = new StripeBillingProvider(configService, stripeClient);
-  const billingProviderRegistryService = new BillingProviderRegistryService(stripeBillingProvider);
+  const billingProviderRegistryService = new BillingProviderRegistryService();
   const languageStoreEntitlementService = new LanguageStoreEntitlementService(
     configService,
     dataSource.getRepository(OrganizationBillingEntity),
@@ -53,7 +50,6 @@ export function buildBillingSmokeHarness(dataSource: DataSource): BillingSmokeHa
     languageStoreEntitlementService,
   );
   const orchestration = new BillingOrchestrationService(
-    configService,
     dataSource,
     organizationBillingService,
     billingProviderRegistryService,
@@ -67,6 +63,7 @@ export function buildBillingSmokeHarness(dataSource: DataSource): BillingSmokeHa
     dataSource.getRepository(MembershipEntity),
     dataSource.getRepository(AuthSessionEntity),
     dataSource.getRepository(ControlledAccessGrantEntity),
+    dataSource.getRepository(PlatformOperatorGrantEntity),
     organizationBillingService,
     configService,
     dataSource,

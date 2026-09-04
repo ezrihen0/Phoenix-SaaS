@@ -117,6 +117,8 @@ export default async function SettingsPage({
         profileEmail={session.user.email}
         activeOrganizationName={session.active_organization?.name ?? null}
         initialTopic={isSettingsTopic(topicValue) ? topicValue : null}
+        platformCapabilities={session.platform_capabilities ?? []}
+        permissions={session.permissions ?? []}
       />
     </Suspense>
   );

@@ -19,6 +19,7 @@ import {
   getClientDestination,
   loginWithPassword,
 } from "@/lib/auth/client-auth";
+import { resolvePostLoginPath } from "@/lib/auth/post-login-redirect";
 
 export const SHOW_LEGACY_LOGIN = false;
 
@@ -150,7 +151,7 @@ export function LoginSessionLoading() {
 
 function getStatusMessage(nextPath: string | null) {
   if (nextPath === "/pricing") {
-    return "Sign in to continue with subscription activation for your WizField workspace.";
+    return "Sign in to review WizField access plans or continue to your workspace.";
   }
 
   return null;
@@ -191,11 +192,9 @@ function CenteredLoginForm() {
       );
     }
 
-    const nextDestination = nextPath && nextPath === destination
-      ? nextPath
-      : destination;
+    const nextDestination = resolvePostLoginPath(nextPath, destination);
 
-    router.replace(nextDestination ?? "/pricing");
+    router.replace(nextDestination);
     router.refresh();
   }
 
@@ -389,7 +388,7 @@ function LegacyLoginForm() {
 
   function getLegacyStatusMessage(next: string | null) {
     if (next === "/pricing") {
-      return "Sign in to continue with subscription activation for your WizField workspace.";
+      return "Sign in to review WizField access plans or continue to your workspace.";
     }
 
     return "Sign in to run leads, jobs, dispatch, estimates, invoices, and customer history in one WizField workspace.";
@@ -405,11 +404,9 @@ function LegacyLoginForm() {
       );
     }
 
-    const nextDestination = nextPath && nextPath === destination
-      ? nextPath
-      : destination;
+    const nextDestination = resolvePostLoginPath(nextPath, destination);
 
-    router.replace(nextDestination ?? "/pricing");
+    router.replace(nextDestination);
     router.refresh();
   }
 

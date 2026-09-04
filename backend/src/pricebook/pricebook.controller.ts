@@ -8,24 +8,30 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  StreamableFile,
   UseGuards,
 } from "@nestjs/common";
+import type { Response } from "express";
 
 import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { requirePermission } from "../auth/permissions";
-import { EntitlementService } from "../billing/entitlement.service";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
 import { PricebookService } from "./pricebook.service";
 import {
   parseCreatePricebookBundleItemPayload,
   parseCreatePricebookBundlePayload,
+  parseCreatePricebookBundleRequirementPayload,
   parseCreatePricebookItemPayload,
   parsePricebookBundleListQuery,
+  parsePricebookCategoryListQuery,
   parsePricebookItemListQuery,
+  parsePricebookNavigationSummaryQuery,
   parseUpdatePricebookBundleItemPayload,
   parseUpdatePricebookBundlePayload,
+  parseUpdatePricebookBundleRequirementPayload,
   parseUpdatePricebookItemPayload,
   parseUuidParam,
 } from "./validation";
@@ -33,10 +39,47 @@ import {
 @UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/pricebook")
 export class PricebookController {
-  constructor(
-    private readonly pricebookService: PricebookService,
-    private readonly entitlementService: EntitlementService,
-  ) {}
+  constructor(private readonly pricebookService: PricebookService) {}
+
+  @Get("systems")
+  async listSystems(@Req() request: RequestWithActor) {
+    const actor = this.requirePricebookViewer(request);
+    return apiSuccess(await this.pricebookService.listSystems(this.requireOrganizationId(actor)));
+  }
+
+  @Post("bootstrap")
+  async bootstrapCatalog(@Req() request: RequestWithActor) {
+    const { actor, organizationId } = this.requirePricebookManage(request);
+    return apiSuccess(await this.pricebookService.bootstrapCatalog(organizationId, actor.user.id));
+  }
+
+  @Get("categories")
+  async listCategories(@Req() request: RequestWithActor, @Query() query: Record<string, unknown>) {
+    const actor = this.requirePricebookViewer(request);
+
+    try {
+      return apiSuccess(await this.pricebookService.listCategories(
+        this.requireOrganizationId(actor),
+        parsePricebookCategoryListQuery(query),
+      ));
+    } catch (error) {
+      this.handleValidationError(error, "pricebook_categories_query_invalid");
+    }
+  }
+
+  @Get("navigation-summary")
+  async listNavigationSummary(@Req() request: RequestWithActor, @Query() query: Record<string, unknown>) {
+    const actor = this.requirePricebookViewer(request);
+
+    try {
+      return apiSuccess(await this.pricebookService.listNavigationSummary(
+        this.requireOrganizationId(actor),
+        parsePricebookNavigationSummaryQuery(query),
+      ));
+    } catch (error) {
+      this.handleValidationError(error, "pricebook_navigation_summary_query_invalid");
+    }
+  }
 
   @Get("items")
   async listItems(@Req() request: RequestWithActor, @Query() query: Record<string, unknown>) {
@@ -54,7 +97,7 @@ export class PricebookController {
 
   @Post("items")
   async createItem(@Req() request: RequestWithActor, @Body() body: unknown) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     try {
       return apiSuccess(await this.pricebookService.createItem(
@@ -65,6 +108,22 @@ export class PricebookController {
     } catch (error) {
       this.handleValidationError(error, "pricebook_item_invalid");
     }
+  }
+
+  @Get("items/:itemId/image")
+  async getItemImage(
+    @Req() request: RequestWithActor,
+    @Param("itemId") itemId: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const actor = this.requirePricebookViewer(request);
+    const image = await this.pricebookService.getItemImage(
+      this.requireOrganizationId(actor),
+      parseUuidParam(itemId, "itemId"),
+    );
+    response.setHeader("content-type", image.contentType);
+    response.setHeader("cache-control", "private, max-age=300");
+    return new StreamableFile(image.stream);
   }
 
   @Get("items/:itemId")
@@ -83,7 +142,7 @@ export class PricebookController {
     @Param("itemId") itemId: string,
     @Body() body: unknown,
   ) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     try {
       return apiSuccess(await this.pricebookService.updateItem(
@@ -99,7 +158,7 @@ export class PricebookController {
 
   @Post("items/:itemId/duplicate")
   async duplicateItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     return apiSuccess(await this.pricebookService.duplicateItem(
       organizationId,
@@ -110,7 +169,7 @@ export class PricebookController {
 
   @Delete("items/:itemId")
   async archiveItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     return apiSuccess(await this.pricebookService.archiveItem(
       organizationId,
@@ -121,7 +180,7 @@ export class PricebookController {
 
   @Post("items/:itemId/restore")
   async restoreItem(@Req() request: RequestWithActor, @Param("itemId") itemId: string) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     return apiSuccess(await this.pricebookService.restoreItem(
       organizationId,
@@ -146,7 +205,7 @@ export class PricebookController {
 
   @Post("bundles")
   async createBundle(@Req() request: RequestWithActor, @Body() body: unknown) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     try {
       return apiSuccess(await this.pricebookService.createBundle(
@@ -175,7 +234,7 @@ export class PricebookController {
     @Param("bundleId") bundleId: string,
     @Body() body: unknown,
   ) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     try {
       return apiSuccess(await this.pricebookService.updateBundle(
@@ -191,7 +250,7 @@ export class PricebookController {
 
   @Delete("bundles/:bundleId")
   async archiveBundle(@Req() request: RequestWithActor, @Param("bundleId") bundleId: string) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     return apiSuccess(await this.pricebookService.archiveBundle(
       organizationId,
@@ -202,7 +261,7 @@ export class PricebookController {
 
   @Post("bundles/:bundleId/restore")
   async restoreBundle(@Req() request: RequestWithActor, @Param("bundleId") bundleId: string) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     return apiSuccess(await this.pricebookService.restoreBundle(
       organizationId,
@@ -217,7 +276,7 @@ export class PricebookController {
     @Param("bundleId") bundleId: string,
     @Body() body: unknown,
   ) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     try {
       return apiSuccess(await this.pricebookService.addItemToBundle(
@@ -238,7 +297,7 @@ export class PricebookController {
     @Param("bundleItemId") bundleItemId: string,
     @Body() body: unknown,
   ) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     try {
       return apiSuccess(await this.pricebookService.updateBundleItem(
@@ -259,12 +318,80 @@ export class PricebookController {
     @Param("bundleId") bundleId: string,
     @Param("bundleItemId") bundleItemId: string,
   ) {
-    const { actor, organizationId } = await this.requirePricebookManageWithPlan(request);
+    const { actor, organizationId } = this.requirePricebookManage(request);
 
     return apiSuccess(await this.pricebookService.removeBundleItem(
       organizationId,
       parseUuidParam(bundleId, "bundleId"),
       parseUuidParam(bundleItemId, "bundleItemId"),
+      actor.user.id,
+    ));
+  }
+
+  @Get("bundles/:bundleId/requirements")
+  async listBundleRequirements(@Req() request: RequestWithActor, @Param("bundleId") bundleId: string) {
+    const actor = this.requirePricebookViewer(request);
+
+    return apiSuccess(await this.pricebookService.listBundleRequirements(
+      this.requireOrganizationId(actor),
+      parseUuidParam(bundleId, "bundleId"),
+    ));
+  }
+
+  @Post("bundles/:bundleId/requirements")
+  async addBundleRequirement(
+    @Req() request: RequestWithActor,
+    @Param("bundleId") bundleId: string,
+    @Body() body: unknown,
+  ) {
+    const { actor, organizationId } = this.requirePricebookManage(request);
+
+    try {
+      return apiSuccess(await this.pricebookService.addBundleRequirement(
+        organizationId,
+        parseUuidParam(bundleId, "bundleId"),
+        parseCreatePricebookBundleRequirementPayload(body),
+        actor.user.id,
+      ));
+    } catch (error) {
+      this.handleValidationError(error, "pricebook_bundle_requirement_invalid");
+    }
+  }
+
+  @Patch("bundles/:bundleId/requirements/:requirementId")
+  async updateBundleRequirement(
+    @Req() request: RequestWithActor,
+    @Param("bundleId") bundleId: string,
+    @Param("requirementId") requirementId: string,
+    @Body() body: unknown,
+  ) {
+    const { actor, organizationId } = this.requirePricebookManage(request);
+
+    try {
+      return apiSuccess(await this.pricebookService.updateBundleRequirement(
+        organizationId,
+        parseUuidParam(bundleId, "bundleId"),
+        parseUuidParam(requirementId, "requirementId"),
+        parseUpdatePricebookBundleRequirementPayload(body),
+        actor.user.id,
+      ));
+    } catch (error) {
+      this.handleValidationError(error, "pricebook_bundle_requirement_update_invalid");
+    }
+  }
+
+  @Delete("bundles/:bundleId/requirements/:requirementId")
+  async removeBundleRequirement(
+    @Req() request: RequestWithActor,
+    @Param("bundleId") bundleId: string,
+    @Param("requirementId") requirementId: string,
+  ) {
+    const { actor, organizationId } = this.requirePricebookManage(request);
+
+    return apiSuccess(await this.pricebookService.removeBundleRequirement(
+      organizationId,
+      parseUuidParam(bundleId, "bundleId"),
+      parseUuidParam(requirementId, "requirementId"),
       actor.user.id,
     ));
   }
@@ -295,10 +422,9 @@ export class PricebookController {
     );
   }
 
-  private async requirePricebookManageWithPlan(request: RequestWithActor) {
+  private requirePricebookManage(request: RequestWithActor) {
     const actor = this.requirePricebookManager(request);
     const organizationId = this.requireOrganizationId(actor);
-    await this.entitlementService.requirePricebookManageEntitled(organizationId);
     return { actor, organizationId };
   }
 

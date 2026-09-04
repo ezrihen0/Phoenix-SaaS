@@ -2,6 +2,8 @@
 
 **Purpose:** Keep demos, videos, website copy, and partner conversations **honest** against current product truth. Aligns with [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md), [WizField_AI_Master_Source_of_Truth.md](WizField_AI_Master_Source_of_Truth.md), and [WizField_Growth_Center_Source_of_Truth.md](WizField_Growth_Center_Source_of_Truth.md).
 
+Current Home AI may be described as a role-aware, org-scoped, **read-only** assistant. Forbidden: AI write actions, Stripe billing, live telephony as if activated, or Service Intelligence expansion as shipped.
+
 **How to use:** Before any external AI messaging, scan **Forbidden now** and **Allowed with qualifier**. If unchecked, do not ship copy.
 
 ---

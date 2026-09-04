@@ -15,6 +15,7 @@ import { TechnicianEntity } from "../database/entities/technician.entity";
 import { getJobStatusLabel, openJobStatuses } from "./constants";
 import { endOfLocalDashboardDay, startOfLocalDashboardDay } from "./crm-dashboard-time-window";
 import { formatAddress } from "./display";
+import { sanitizeJobTitle } from "./user-facing-text";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -98,7 +99,10 @@ export class CrmOfficeDashboardService {
     return {
       id: job.id,
       jobId: job.id,
-      title: job.title,
+      title: sanitizeJobTitle(job.title, {
+        customerName: customer?.full_name,
+        serviceType: job.requested_service_type,
+      }),
       customerName: customer?.full_name ?? "Customer pending",
       addressLabel: formatAddress(
         job.service_address_line_1,
@@ -123,7 +127,10 @@ export class CrmOfficeDashboardService {
     return {
       id: quote.id,
       jobId: job?.id ?? quote.job_id,
-      title: job?.title ?? "Quote waiting approval",
+      title: sanitizeJobTitle(job?.title, {
+        customerName: customer?.full_name,
+        serviceType: job?.requested_service_type,
+      }),
       customerName: customer?.full_name ?? "Customer pending",
       addressLabel: job
         ? formatAddress(
@@ -150,7 +157,10 @@ export class CrmOfficeDashboardService {
     return {
       id: invoice.id,
       jobId: job?.id ?? invoice.job_id,
-      title: job?.title ?? "Invoice awaiting payment",
+      title: sanitizeJobTitle(job?.title, {
+        customerName: customer?.full_name,
+        serviceType: job?.requested_service_type,
+      }),
       customerName: customer?.full_name ?? "Customer pending",
       addressLabel: job
         ? formatAddress(

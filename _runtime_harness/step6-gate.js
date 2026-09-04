@@ -1,8 +1,11 @@
 ﻿const { chromium } = require('playwright-core');
 
 const BASE_URL = 'http://localhost:3000';
-const EMAIL = 'admin@wizfield.local';
-const PASSWORD = 'Admin12345!';
+const EMAIL = process.env.WIZFIELD_ADMIN_EMAIL?.trim() || "admin@wizfield.local";
+const PASSWORD = process.env.WIZFIELD_ADMIN_PASSWORD?.trim();
+if (!PASSWORD) {
+  throw new Error("WIZFIELD_ADMIN_PASSWORD must be set to run step6-gate.js.");
+}
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 async function login(page) {

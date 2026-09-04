@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 import { BoardShell } from "@/components/board/board-shell";
-import { MetricTile } from "@/components/board/metric-tile";
+import { MetricTile, metricTileHoverClassName } from "@/components/board/metric-tile";
 import { DesktopOptimizedNotice } from "@/components/mobile/desktop-optimized-notice";
 
 import { MarketingAutomationsPanel } from "./marketing-automations-panel";
@@ -55,7 +55,7 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 function SummaryCardLegacy({ label, value, helper }: MarketingFoundationData["summaryCards"][number]) {
   return (
-    <article className="theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5">
+    <article className={`theme-surface-card rounded-[24px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] p-5 ${metricTileHoverClassName}`}>
       <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">{label}</p>
       <p className="mt-3 text-3xl font-semibold text-[color:var(--sem-text-primary)]">{value}</p>
       <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{helper}</p>
@@ -476,7 +476,7 @@ function GrowthCommandCenterWorkspace({
         <section className={cx("mt-5 grid gap-3", compactSubRoute ? "md:grid-cols-2 xl:grid-cols-5" : "md:grid-cols-2 xl:grid-cols-5")}>
           {summaryCards.map((card) => (
             compactSubRoute ? (
-              <article key={card.label} className="rounded-[24px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-3 shadow-[0_20px_60px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)] backdrop-blur-xl">
+              <article key={card.label} className={`group rounded-[24px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-3 shadow-[0_20px_60px_color-mix(in_srgb,var(--sem-board-glow)_55%,transparent)] backdrop-blur-xl ${metricTileHoverClassName}`}>
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-soft)] text-[color:var(--sem-accent-primary)]">
                   {(() => {
                     const Icon = resolveSummaryCardIcon(card.label);

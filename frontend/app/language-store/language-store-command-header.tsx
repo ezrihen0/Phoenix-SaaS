@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import type { LanguageStoreSurfacePayload } from "@/lib/language-store/client-language-store";
 import type { LanguagePreferencePayload } from "@/lib/language-store/client-language-preferences";
+import { metricTileHoverClassName } from "@/components/board/metric-tile";
 
 type LanguageStoreCommandHeaderProps = {
   payload: LanguageStoreSurfacePayload;
@@ -86,7 +87,7 @@ export function LanguageStoreCommandHeader({
           ].map((metric) => (
             <article
               key={metric.label}
-              className="rounded-xl border border-[color:var(--sem-ai-node-border)] bg-[color:var(--sem-ai-node-bg)] px-4 py-3"
+              className={`rounded-xl border border-[color:var(--sem-ai-node-border)] bg-[color:var(--sem-ai-node-bg)] px-4 py-3 ${metricTileHoverClassName}`}
             >
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--sem-ai-grid-text-muted)]">{metric.label}</p>
               <p className="mt-1 font-[family:var(--font-geist-mono)] text-xl font-semibold capitalize text-[color:var(--sem-ai-grid-text-primary)]">{metric.value}</p>

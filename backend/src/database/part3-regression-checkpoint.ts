@@ -32,17 +32,17 @@ function expectRepoIncludes(relativePath: string, token: string, message: string
 }
 
 expectIncludes("billing/plan-catalog-contract-check.ts", "PLAN_CATALOG", "Part 3 plan catalog contract check must exist.");
-expectIncludes("billing/billing-webhook-contract-check.ts", "SUPPORTED_STRIPE_WEBHOOK_EVENTS", "Part 3 webhook contract check must exist.");
-expectIncludes("billing/stripe/stripe-webhook.service.ts", "StripeWebhookReceiptService", "Stripe webhook receipt service must be wired.");
+expectIncludes("billing/billing-webhook-contract-check.ts", "STRIPE_WEBHOOK_RUNTIME_REMOVAL", "Part 3 Stripe webhook removal guard must exist.");
+expectIncludes("billing/billing-webhook-contract-check.ts", "Stripe webhook runtime removed", "Stripe webhook runtime must remain removed.");
 expectIncludes("billing/billing-orchestration.service.ts", "reconcileBillingAccountWithManager", "Billing snapshot must reconcile entitlements in transaction.");
 expectIncludes("database/entities/stripe-webhook-event-receipt.entity.ts", "stripe_webhook_event_receipts", "Stripe webhook receipt entity must exist.");
 expectIncludes("config/production-config.validator.ts", "validateProductionConfig", "Production config validator must exist.");
 expectIncludes("security/secrets-check.ts", "security:secrets-check", "Secrets safety check must exist.");
 expectIncludes("common/health.controller.ts", "@Controller(\"api/health\")", "Health endpoint must exist.");
 expectIncludes("auth/global-operational-access.guard.ts", "requiresOperationalAccess", "Global operational access guard must exist.");
-expectIncludes("auth/operational-access.policy.ts", "/api/billing/webhooks/", "Operational access policy must exempt billing webhooks.");
-expectIncludes("database/billing-lifecycle-smoke.ts", "applyProviderSnapshot", "Billing lifecycle smoke must stub webhook application.");
-expectIncludes("database/billing-activation-smoke.ts", "/pricing", "Billing activation smoke must verify pricing redirect.");
+expectIncludes("auth/operational-access-contract-check.ts", "doesNotMatch", "Operational access policy must not exempt removed billing webhooks.");
+expectIncludes("database/billing-lifecycle-smoke.ts", "local active billing state", "Billing lifecycle smoke must verify local billing access.");
+expectIncludes("database/billing-activation-smoke.ts", "/home without Stripe", "Billing activation smoke must verify direct home routing without Stripe.");
 expectIncludes("database/billing-multi-org-smoke.ts", "organization_limit_reached", "Multi-org billing smoke must verify org limits.");
 expectIncludes("database/operational-access-isolation-smoke.ts", "requiresOperationalAccess", "Operational access isolation smoke must verify route policy.");
 expectIncludes("database/part3-deployment-check.ts", "part3:deployment-check", "Part 3 deployment check orchestrator must exist.");

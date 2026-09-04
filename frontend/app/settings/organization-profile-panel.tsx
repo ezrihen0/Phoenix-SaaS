@@ -4,7 +4,8 @@ import { Building2, ReceiptText, Save } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
 
-import { createClientOrganization } from "@/lib/auth/client-auth";
+import { createClientOrganization, getClientSession } from "@/lib/auth/client-auth";
+import { canCreateOrganization, canCreateStandaloneOrganization } from "@/lib/auth/organization-resolution";
 
 import type { BillingSummaryPayload } from "./billing-panel";
 
@@ -39,6 +40,8 @@ type OrganizationProfilePanelProps = {
   initialSettings: OrganizationSettings;
   ownerMode: boolean;
   billingSummary: BillingSummaryPayload | null;
+  platformCapabilities?: string[];
+  permissions?: string[];
 };
 
 async function organizationSettingsFetch<T>(input: string, init?: RequestInit) {
@@ -70,6 +73,8 @@ export function OrganizationProfilePanel({
   initialSettings,
   ownerMode,
   billingSummary,
+  platformCapabilities = [],
+  permissions = [],
 }: OrganizationProfilePanelProps) {
   const [businessName, setBusinessName] = useState(valueOrEmpty(initialSettings.businessName));
   const [displayInitials, setDisplayInitials] = useState(valueOrEmpty(initialSettings.displayInitials));
@@ -145,9 +150,10 @@ export function OrganizationProfilePanel({
     setAddBusinessError(null);
 
     try {
-      await createClientOrganization(newOrganizationName.trim());
+      const mode = canCreateStandaloneOrganization(platformCapabilities) ? "standalone" : "shared";
+      await createClientOrganization(newOrganizationName.trim(), mode);
       setAddBusinessMessage("Business created. Opening the new workspace…");
-      window.location.assign("/settings");
+      window.location.assign("/home");
     } catch (error) {
       setAddBusinessError(error instanceof Error ? error.message : "The business could not be created.");
     } finally {
@@ -157,7 +163,11 @@ export function OrganizationProfilePanel({
 
   const businessLimit = billingSummary?.billing.organization_limit ?? null;
   const businessCount = billingSummary?.billing.covered_organization_count ?? 0;
-  const canAddBusiness = ownerMode && Boolean(billingSummary?.billing.can_add_organization);
+  const canAddBusiness = ownerMode && canCreateOrganization(
+    permissions,
+    platformCapabilities,
+    Boolean(billingSummary?.billing.can_add_organization),
+  );
 
   return (
     <section className="space-y-6">
@@ -361,7 +371,7 @@ export function OrganizationProfilePanel({
               <h2 className="mt-2 text-2xl font-semibold text-[color:var(--sem-text-primary)]">Create another workspace</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--sem-text-secondary)]">
                 New businesses attach to the same shared WizField billing account and count against the current plan
-                entitlement, regardless of which covered workspace started the Stripe-backed subscription.
+                entitlement, regardless of which covered workspace created the shared access profile.
               </p>
             </div>
           </div>

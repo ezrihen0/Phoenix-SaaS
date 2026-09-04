@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 
 type ServiceType = "inspection" | "cleaning" | "repair" | "rebuild";
@@ -17,6 +17,22 @@ type BookingForm = {
   serviceType: ServiceType;
   notes: string;
 };
+
+function bookingIdempotencyStorageKey(slug: string) {
+  return `wizfield.public-booking.idempotency.${slug}`;
+}
+
+function readOrCreateIdempotencyKey(slug: string) {
+  const storageKey = bookingIdempotencyStorageKey(slug);
+  const existing = sessionStorage.getItem(storageKey)?.trim();
+  if (existing) {
+    return existing;
+  }
+
+  const created = crypto.randomUUID();
+  sessionStorage.setItem(storageKey, created);
+  return created;
+}
 
 const initialForm: BookingForm = {
   fullName: "",
@@ -45,6 +61,7 @@ export default function OrgBookPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,12 +77,16 @@ export default function OrgBookPage() {
     }
 
     try {
+      const idempotencyKey = idempotencyKeyRef.current ?? readOrCreateIdempotencyKey(slug);
+      idempotencyKeyRef.current = idempotencyKey;
+
       const response = await fetch(
         `/api/public/orgs/${encodeURIComponent(slug)}/bookings`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKey,
           },
           body: JSON.stringify({
             fullName: form.fullName,
@@ -90,6 +111,8 @@ export default function OrgBookPage() {
       }
 
       setSuccess("Booking request received. Our office will contact you shortly.");
+      sessionStorage.removeItem(bookingIdempotencyStorageKey(slug));
+      idempotencyKeyRef.current = null;
       setForm(initialForm);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Booking request failed.");

@@ -1,5 +1,7 @@
 # Team & Permissions V1 — Pre-Implementation RBAC Audit
 
+> **HISTORICAL pre-implementation audit.** Current Team RBAC is server-enforced. Operating truth: [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md) §5. Implementation: [TEAM_PERMISSIONS_V1_IMPLEMENTATION.md](TEAM_PERMISSIONS_V1_IMPLEMENTATION.md).
+
 Generated before Team & Permissions V1 implementation.
 
 ## Architecture (preserved)

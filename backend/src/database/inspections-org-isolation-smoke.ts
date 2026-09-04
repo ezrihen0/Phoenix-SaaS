@@ -26,6 +26,11 @@ import { buildDataSourceOptions } from "./typeorm.config";
 import { InspectionsAdminService } from "../inspections/inspections.admin.service";
 import { InspectionWorkflowService } from "../inspections/inspection-workflow.service";
 
+const MINIMAL_PNG_BUFFER = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2oQAAAAASUVORK5CYII=",
+  "base64",
+);
+
 type SmokeStatus = "PASS" | "FAIL" | "SKIP";
 
 type SmokeResult = {
@@ -193,6 +198,7 @@ function buildActor(organization: OrganizationEntity, user: UserEntity, membersh
     organization_id: organization.id,
     role: membership.role,
     permissions: ["inspections.admin"],
+    platform_capabilities: [],
   };
 }
 
@@ -293,6 +299,7 @@ async function createHarnessContext(dataSource: DataSource): Promise<HarnessCont
   return {
     dataSource,
     service: new InspectionsAdminService(
+      dataSource,
       dataSource.getRepository(InspectionEntity),
       dataSource.getRepository(InspectionItemEntity),
       dataSource.getRepository(InspectionRequiredFieldEntity),
@@ -705,7 +712,7 @@ async function runIsolationChecks(summary: SmokeSummary, context: HarnessContext
         {
           originalname: `inspection-smoke-${token}.png`,
           mimetype: "image/png",
-          buffer: Buffer.from([137, 80, 78, 71]),
+          buffer: MINIMAL_PNG_BUFFER,
         },
       ],
       orgA.organization.id,
