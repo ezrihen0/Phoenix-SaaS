@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 
 import { apiError } from "../common/api-response";
 import type { ActorContext } from "../common/request-types";
-import { PHOENIX_OWNER_EMAIL } from "../database/phoenix-owner-credentials";
+import { PHOENIX_OWNER_EMAIL } from "../database/phoenix-owner-identity";
 import { LanguageStoreEntitlementService } from "./language-store-entitlement.service";
 import { OrganizationBillingService } from "./organization-billing.service";
 
