@@ -29,6 +29,7 @@ type CreateMemberPayload = {
   systemRole?: unknown;
   customRoleId?: unknown;
   customPermissionKeys?: unknown;
+  organizationIds?: unknown;
 };
 
 type UpdateMemberPayload = CreateMemberPayload;
@@ -58,6 +59,23 @@ function parseAccessPayload(payload: CreateMemberPayload) {
   };
 }
 
+function parseOrganizationIds(payload: CreateMemberPayload) {
+  if (payload.organizationIds === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(payload.organizationIds)) {
+    apiError(400, "invalid_team_member_payload", "organizationIds must be an array.");
+  }
+
+  const organizationIds = payload.organizationIds
+    .filter((organizationId): organizationId is string => typeof organizationId === "string")
+    .map((organizationId) => organizationId.trim())
+    .filter(Boolean);
+
+  return [...new Set(organizationIds)];
+}
+
 function parseCreateMemberPayload(payload: CreateMemberPayload) {
   if (typeof payload.email !== "string" || !payload.email.trim()) {
     apiError(400, "invalid_team_member_payload", "email is required.");
@@ -75,12 +93,18 @@ function parseCreateMemberPayload(payload: CreateMemberPayload) {
     ? payload.phone.trim()
     : null;
 
+  const organizationIds = parseOrganizationIds(payload);
+  if (organizationIds && organizationIds.length === 0) {
+    apiError(400, "organization_ids_required", "Select at least one organization.");
+  }
+
   return {
     email: payload.email.trim().toLowerCase(),
     password: payload.password,
     fullName: payload.fullName.trim(),
     phone,
     access: parseAccessPayload(payload),
+    organizationIds,
   };
 }
 
@@ -108,10 +132,17 @@ export class TeamController {
     return apiSuccess(await this.teamService.listMembers(request.actor!));
   }
 
+  @Get("organizations")
+  async organizations(@Req() request: RequestWithActor) {
+    requirePermission(request.actor, "team.invite", "team_invite_forbidden", "You cannot add team members.");
+    return apiSuccess(await this.teamService.listManageableOrganizations(request.actor!));
+  }
+
   @Post("members")
   async createMember(@Body() payload: CreateMemberPayload, @Req() request: RequestWithActor) {
     requirePermission(request.actor, "team.invite", "team_invite_forbidden", "You cannot add team members.");
-    return apiSuccess(await this.teamService.createMember(parseCreateMemberPayload(payload), request.actor!));
+    const parsed = parseCreateMemberPayload(payload);
+    return apiSuccess(await this.teamService.createMember(parsed, request.actor!));
   }
 
   @Patch("members/:profileId")

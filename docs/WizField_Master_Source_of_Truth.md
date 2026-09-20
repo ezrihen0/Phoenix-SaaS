@@ -91,10 +91,10 @@ Field invoice creation resolves exact pricebook items into immutable invoice lin
 ---
 
 - Organizations remain the tenant boundary for business data.
-- Users are global identities.
-- Memberships link users to organizations.
+- Users are global identities; one User may belong to one or multiple Organizations via Membership rows.
+- Memberships link users to organizations and carry membership-scoped roles and permissions (not global user roles).
 - Roles and permissions belong to memberships, not globally to users.
-- Actor / session organization resolution is authoritative. Frontend org ids are not trusted for authorization.
+- Actor / session organization resolution is authoritative. Frontend organization UUIDs are never trusted for authorization; the backend independently authorizes every organization selected on team invite/create flows.
 - Every tenant-owned request resolves actor, active organization, membership, role, and permissions.
 - Tenant-owned operational access remains org-scoped.
 - Platform-owned concepts remain distinct from organization-owned records, public-access resources, immutable snapshots, and provider/integration records.
@@ -120,6 +120,11 @@ Platform
 ### 5.2 Team RBAC
 
 - Team RBAC is server-enforced (`team.view` / `team.invite` / `team.manage` plus membership custom roles).
+- Add User (Settings → Team & Permissions) supports single-organization or multi-organization access selection; the same system role applies across all selected organizations in V1.
+- Existing global Users may be attached to additional managed organizations without creating duplicate User/Profile rows; global profile-role compatibility remains enforced for V1.
+- `customRoleId` is organization-scoped and cannot be assigned across multiple organizations in one create operation.
+- Technician membership requires a separate tenant-scoped `TechnicianEntity` per organization.
+- Seat limits (`max_users`) are enforced per organization; multi-organization member creation is transactional (all-or-nothing, no partial writes on failure).
 - Canonical permission registry: `backend/src/auth/permissions.ts`.
 - Implementation detail: [TEAM_PERMISSIONS_V1_IMPLEMENTATION.md](TEAM_PERMISSIONS_V1_IMPLEMENTATION.md).
 

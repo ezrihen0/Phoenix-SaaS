@@ -74,6 +74,27 @@ type ApiEnvelope<T> = {
   error?: { message?: string };
 };
 
+type ManageableOrganization = {
+  id: string;
+  name: string;
+  slug: string;
+  isCurrent: boolean;
+};
+
+type CreateMemberResult = {
+  userCreated: boolean;
+  userReused: boolean;
+  membershipsCreated: Array<{
+    membership_id: string;
+    organization_id: string;
+    organization: { id: string; name: string; slug: string } | null;
+    role: SessionRole;
+    status: string;
+  }>;
+  organizations: Array<{ id: string; name: string; slug: string }>;
+  member: TeamMember | null;
+};
+
 const RESPONSIBILITIES: Array<{ id: string; label: string }> = [
   { id: "answer_calls_messages", label: "Answer calls & messages" },
   { id: "manage_customers_leads", label: "Manage customers & leads" },
@@ -113,7 +134,8 @@ type TeamPermissionsPanelProps = {
   currentProfileId: string;
 };
 
-type AddUserStep = "user" | "responsibilities" | "recommendation" | "customize" | "confirm";
+type AddUserStep = "user" | "organizations" | "responsibilities" | "recommendation" | "customize" | "confirm";
+type OrganizationAccessMode = "single" | "multiple";
 
 export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelProps) {
   const [summary, setSummary] = useState<TeamSummary | null>(null);
@@ -138,23 +160,29 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
   const [selectedSystemRole, setSelectedSystemRole] = useState<SessionRole>("office_admin");
   const [selectedCustomRoleId, setSelectedCustomRoleId] = useState<string | null>(null);
   const [newCustomRoleName, setNewCustomRoleName] = useState("");
+  const [manageableOrganizations, setManageableOrganizations] = useState<ManageableOrganization[]>([]);
+  const [organizationAccessMode, setOrganizationAccessMode] = useState<OrganizationAccessMode>("single");
+  const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<string[]>([]);
+  const [singleOrganizationId, setSingleOrganizationId] = useState<string>("");
 
   const loadTeam = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
 
     try {
-      const [nextSummary, nextMembers, nextCustomRoles, registry] = await Promise.all([
+      const [nextSummary, nextMembers, nextCustomRoles, registry, organizations] = await Promise.all([
         teamFetch<TeamSummary>("/api/team/summary"),
         teamFetch<TeamMember[]>("/api/team/members"),
         teamFetch<CustomRole[]>("/api/team/custom-roles"),
         teamFetch<{ groups: PermissionRegistryGroup[] }>("/api/team/permissions/registry"),
+        teamFetch<ManageableOrganization[]>("/api/team/organizations"),
       ]);
 
       setSummary(nextSummary);
       setMembers(nextMembers);
       setCustomRoles(nextCustomRoles);
       setRegistryGroups(registry.groups);
+      setManageableOrganizations(organizations);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Team data could not be loaded.");
     } finally {
@@ -171,6 +199,35 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
     [members],
   );
 
+  const canContinueAddUserStep = Boolean(fullName.trim() && email.trim() && password.length >= 8);
+
+  const selectedOrganizations = useMemo(
+    () => manageableOrganizations.filter((organization) => selectedOrganizationIds.includes(organization.id)),
+    [manageableOrganizations, selectedOrganizationIds],
+  );
+
+  const multiOrganizationSelection = selectedOrganizationIds.length > 1;
+  const canContinueOrganizationStep = selectedOrganizationIds.length > 0;
+
+  const addUserStepHint = useMemo(() => {
+    if (canContinueAddUserStep) {
+      return null;
+    }
+
+    const missing: string[] = [];
+    if (!fullName.trim()) {
+      missing.push("full name");
+    }
+    if (!email.trim()) {
+      missing.push("email");
+    }
+    if (password.length < 8) {
+      missing.push("temporary password (at least 8 characters)");
+    }
+
+    return `Enter ${missing.join(", ")} to continue.`;
+  }, [canContinueAddUserStep, email, fullName, password.length]);
+
   function resetAddUserFlow() {
     setShowAddUser(false);
     setAddStep("user");
@@ -185,6 +242,29 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
     setSelectedSystemRole("office_admin");
     setSelectedCustomRoleId(null);
     setNewCustomRoleName("");
+    setOrganizationAccessMode("single");
+    setSelectedOrganizationIds([]);
+    setSingleOrganizationId("");
+  }
+
+  function beginAddUserFlow() {
+    const currentOrganization = manageableOrganizations.find((organization) => organization.isCurrent)
+      ?? manageableOrganizations[0]
+      ?? null;
+    const defaultOrganizationId = currentOrganization?.id ?? "";
+    setOrganizationAccessMode("single");
+    setSingleOrganizationId(defaultOrganizationId);
+    setSelectedOrganizationIds(defaultOrganizationId ? [defaultOrganizationId] : []);
+    setShowAddUser(true);
+    setAddStep("user");
+  }
+
+  function toggleSelectedOrganization(organizationId: string) {
+    setSelectedOrganizationIds((current) => (
+      current.includes(organizationId)
+        ? current.filter((item) => item !== organizationId)
+        : [...current, organizationId]
+    ));
   }
 
   async function handleRecommendRole() {
@@ -220,6 +300,12 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
         password,
       };
 
+      if (multiOrganizationSelection && selectedCustomRoleId) {
+        setErrorMessage("Saved custom roles can only be used for a single organization.");
+        setSaving(false);
+        return;
+      }
+
       if (selectedCustomRoleId) {
         body.customRoleId = selectedCustomRoleId;
         body.systemRole = selectedSystemRole;
@@ -230,23 +316,27 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
         body.systemRole = selectedSystemRole;
       }
 
-      const created = await teamFetch<TeamMember>("/api/team/members", {
+      if (selectedOrganizationIds.length > 0) {
+        body.organizationIds = selectedOrganizationIds;
+      }
+
+      const result = await teamFetch<CreateMemberResult>("/api/team/members", {
         method: "POST",
         body: JSON.stringify(body),
       });
 
-      setMembers((current) => [...current, created]);
-      setSummary((current) => current
-        ? {
-          ...current,
-          activeCount: current.activeCount + 1,
-          canAddUser: current.activeCount + 1 < current.maxUsers,
-          limitMessage: current.activeCount + 1 >= current.maxUsers
-            ? `Your organization has reached its ${current.maxUsers}-user limit.`
-            : null,
-        }
-        : current);
-      setMessage(`${created.full_name} was added to the team.`);
+      await loadTeam();
+
+      const organizationNames = result.organizations.map((organization) => organization.name).join(", ");
+      if (result.userReused) {
+        setMessage(
+          result.membershipsCreated.length > 0
+            ? `${fullName.trim()} was linked to ${result.membershipsCreated.length} organization${result.membershipsCreated.length === 1 ? "" : "s"}.`
+            : `${fullName.trim()} already had access to the selected organization${selectedOrganizationIds.length === 1 ? "" : "s"}.`,
+        );
+      } else {
+        setMessage(`${fullName.trim()} was added to ${organizationNames || "the team"}.`);
+      }
       resetAddUserFlow();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "The team member could not be created.");
@@ -394,7 +484,7 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
             {summary?.canAddUser ? (
               <button
                 type="button"
-                onClick={() => setShowAddUser(true)}
+                onClick={beginAddUserFlow}
                 className="theme-control-surface inline-flex items-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold"
               >
                 <UserPlus className="h-4 w-4" />
@@ -415,7 +505,8 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
                 <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-accent-primary)]">Add User</p>
                 <h3 className="text-lg font-semibold text-[color:var(--sem-text-primary)]">
                   {addStep === "user" && "Step 1 — User"}
-                  {addStep === "responsibilities" && "Step 2 — Responsibilities"}
+                  {addStep === "organizations" && "Step 2 — Organization access"}
+                  {addStep === "responsibilities" && "Step 3 — Responsibilities"}
                   {addStep === "recommendation" && "Recommended access"}
                   {addStep === "customize" && "Customize permissions"}
                   {addStep === "confirm" && "Confirm access"}
@@ -442,13 +533,107 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
                 </label>
                 <label className="space-y-2 text-sm">
                   <span className="text-[color:var(--sem-text-secondary)]">Temporary password</span>
-                  <input value={password} type="password" minLength={8} onChange={(e) => setPassword(e.target.value)} className="theme-control-surface w-full rounded-[16px] border px-4 py-3" required />
+                  <input value={password} type="password" minLength={8} autoComplete="new-password" onChange={(e) => setPassword(e.target.value)} className="theme-control-surface w-full rounded-[16px] border px-4 py-3" required />
+                  <span className="block text-xs text-[color:var(--sem-text-muted)]">Minimum 8 characters (the user can change it after sign-in).</span>
                 </label>
+                <div className="space-y-2 lg:col-span-2">
+                  {addUserStepHint ? (
+                    <p className="text-sm text-[color:var(--sem-text-muted)]">{addUserStepHint}</p>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={!canContinueAddUserStep}
+                    onClick={() => setAddStep("organizations")}
+                    className="theme-control-surface inline-flex items-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    Continue
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {addStep === "organizations" ? (
+              <div className="space-y-4">
+                <p className="text-sm text-[color:var(--sem-text-secondary)]">
+                  Choose which organization(s) this person should access. You can only select organizations you are allowed to manage.
+                </p>
+                <div className="space-y-3">
+                  <label className="flex items-start gap-3 rounded-[16px] border border-[color:var(--cmp-border-subtle)] px-4 py-3 text-sm">
+                    <input
+                      type="radio"
+                      name="organization-access-mode"
+                      checked={organizationAccessMode === "single"}
+                      onChange={() => {
+                        setOrganizationAccessMode("single");
+                        setSelectedOrganizationIds(singleOrganizationId ? [singleOrganizationId] : []);
+                        setSelectedCustomRoleId(null);
+                      }}
+                    />
+                    <span>
+                      <span className="font-medium text-[color:var(--sem-text-primary)]">Single organization</span>
+                      <span className="mt-2 block">
+                        <select
+                          value={singleOrganizationId}
+                          disabled={organizationAccessMode !== "single"}
+                          onChange={(event) => {
+                            const nextOrganizationId = event.target.value;
+                            setSingleOrganizationId(nextOrganizationId);
+                            setSelectedOrganizationIds(nextOrganizationId ? [nextOrganizationId] : []);
+                          }}
+                          className="theme-control-surface mt-2 w-full rounded-[14px] border px-3 py-2 text-sm"
+                        >
+                          {manageableOrganizations.map((organization) => (
+                            <option key={organization.id} value={organization.id}>
+                              {organization.name}
+                              {organization.isCurrent ? " (current workspace)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-[16px] border border-[color:var(--cmp-border-subtle)] px-4 py-3 text-sm">
+                    <input
+                      type="radio"
+                      name="organization-access-mode"
+                      checked={organizationAccessMode === "multiple"}
+                      onChange={() => {
+                        setOrganizationAccessMode("multiple");
+                        setSelectedCustomRoleId(null);
+                      }}
+                    />
+                    <span className="w-full">
+                      <span className="font-medium text-[color:var(--sem-text-primary)]">Multiple organizations</span>
+                      <span className="mt-3 grid gap-2">
+                        {manageableOrganizations.map((organization) => (
+                          <label key={organization.id} className="flex items-center gap-3 rounded-[12px] border border-[color:var(--cmp-border-subtle)] px-3 py-2">
+                            <input
+                              type="checkbox"
+                              disabled={organizationAccessMode !== "multiple"}
+                              checked={selectedOrganizationIds.includes(organization.id)}
+                              onChange={() => toggleSelectedOrganization(organization.id)}
+                            />
+                            <span>
+                              {organization.name}
+                              {organization.isCurrent ? (
+                                <span className="ml-2 text-xs text-[color:var(--sem-text-muted)]">Current workspace</span>
+                              ) : null}
+                            </span>
+                          </label>
+                        ))}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+                {!canContinueOrganizationStep ? (
+                  <p className="text-sm text-[color:var(--sem-text-muted)]">Select at least one organization to continue.</p>
+                ) : null}
                 <button
                   type="button"
-                  disabled={!fullName.trim() || !email.trim() || password.length < 8}
+                  disabled={!canContinueOrganizationStep}
                   onClick={() => setAddStep("responsibilities")}
-                  className="theme-control-surface inline-flex items-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold lg:col-span-2"
+                  className="theme-control-surface inline-flex items-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   Continue
                   <ChevronRight className="h-4 w-4" />
@@ -485,6 +670,25 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
 
             {(addStep === "recommendation" || addStep === "confirm") && recommendation ? (
               <div className="space-y-4">
+                <div className="rounded-[20px] border border-[color:var(--cmp-border-subtle)] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-accent-primary)]">Access</p>
+                  <p className="mt-2 text-sm font-semibold text-[color:var(--sem-text-primary)]">
+                    Role: {recommendation.label}
+                  </p>
+                  <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">
+                    Organizations: {selectedOrganizations.length}
+                  </p>
+                  <ul className="mt-3 space-y-1 text-sm text-[color:var(--sem-text-secondary)]">
+                    {selectedOrganizations.map((organization) => (
+                      <li key={organization.id}>• {organization.name}</li>
+                    ))}
+                  </ul>
+                  {multiOrganizationSelection ? (
+                    <p className="mt-3 text-xs text-[color:var(--sem-text-muted)]">
+                      Saved custom roles are unavailable when assigning multiple organizations.
+                    </p>
+                  ) : null}
+                </div>
                 <div className="rounded-[20px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] p-4">
                   <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">
                     Recommended Role: {recommendation.label}

@@ -12,7 +12,9 @@ import {
   type RoleModePermission,
 } from "../auth/permissions";
 import { profileRoles, type ProfileRole } from "../crm/constants";
+import { ensureTechnicianForOrganizationMembership } from "../crm/technician-membership-link";
 import { MembershipEntity } from "../database/entities/membership.entity";
+import { OrganizationEntity } from "../database/entities/organization.entity";
 import { OrganizationCustomRoleEntity } from "../database/entities/organization-custom-role.entity";
 import { OrganizationTeamEntitlementEntity } from "../database/entities/organization-team-entitlement.entity";
 import { ProfileEntity } from "../database/entities/profile.entity";
@@ -72,6 +74,22 @@ export class TeamService {
     };
   }
 
+  async listManageableOrganizations(actor: ActorContext) {
+    const activeOrganizationId = actor.organization_id;
+
+    return actor.memberships
+      .filter((membership) => membership.status === "active")
+      .filter((membership) => membership.organization?.is_active !== false)
+      .filter((membership) => listPermissionsForMembership(membership).includes("team.invite"))
+      .map((membership) => ({
+        id: membership.organization_id,
+        name: membership.organization?.name ?? "Organization",
+        slug: membership.organization?.slug ?? "",
+        isCurrent: membership.organization_id === activeOrganizationId,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
   async listMembers(actor: ActorContext) {
     const organizationId = this.requireOrganizationId(actor);
     const memberships = await this.membershipsRepository.find({
@@ -112,74 +130,40 @@ export class TeamService {
       fullName: string;
       phone: string | null;
       access: MemberAccessInput;
+      organizationIds?: string[];
     },
     actor: ActorContext,
   ) {
-    const organizationId = this.requireOrganizationId(actor);
+    const targetOrganizationIds = this.resolveTargetOrganizationIds(actor, input.organizationIds);
+
+    if (targetOrganizationIds.length > 1 && input.access.customRoleId) {
+      apiError(
+        400,
+        "multi_org_custom_role_not_supported",
+        "Saved custom roles can only be used when adding a user to one organization.",
+      );
+    }
+
     this.assertAccessInput(input.access);
+
+    const accessOrganizationId = targetOrganizationIds.length === 1
+      ? targetOrganizationIds[0]
+      : actor.organization_id && targetOrganizationIds.includes(actor.organization_id)
+        ? actor.organization_id
+        : targetOrganizationIds[0];
+
+    const resolvedAccess = await this.resolveAccessForOrganization(accessOrganizationId, input.access);
+    await this.assertOrganizationsExist(targetOrganizationIds);
 
     const existingUser = await this.usersRepository.findOne({
       where: { email: input.email },
     });
 
     if (existingUser) {
-      apiError(409, "team_email_exists", "A user already exists for this email.");
+      return this.attachExistingUserToOrganizations(input, actor, targetOrganizationIds, resolvedAccess, existingUser);
     }
 
-    const resolvedAccess = await this.resolveAccessForOrganization(organizationId, input.access);
-    const passwordHash = await bcrypt.hash(input.password, 10);
-
-    const created = await this.dataSource.transaction(async (manager) => {
-      await assertOrganizationSeatAvailable(organizationId, manager);
-
-      const user = await manager.getRepository(UserEntity).save(
-        manager.getRepository(UserEntity).create({
-          email: input.email,
-          password_hash: passwordHash,
-          is_active: true,
-        }),
-      );
-
-      const profile = await manager.getRepository(ProfileEntity).save(
-        manager.getRepository(ProfileEntity).create({
-          auth_user_id: user.id,
-          full_name: input.fullName,
-          phone: input.phone,
-          role: resolvedAccess.systemRole,
-        }),
-      );
-
-      const membership = await manager.getRepository(MembershipEntity).save(
-        manager.getRepository(MembershipEntity).create({
-          user_id: user.id,
-          organization_id: organizationId,
-          role: resolvedAccess.systemRole,
-          status: "active",
-          custom_role_id: resolvedAccess.customRoleId,
-          custom_permission_keys: resolvedAccess.customPermissionKeys,
-        }),
-      );
-
-      await this.recordAudit(manager, {
-        organizationId,
-        actorUserId: actor.user.id,
-        targetUserId: user.id,
-        action: "member_created",
-        previousRole: null,
-        newRole: resolvedAccess.systemRole,
-        previousPermissions: null,
-        newPermissions: resolvedAccess.effectivePermissions,
-        metadata: {
-          custom_role_id: resolvedAccess.customRoleId,
-        },
-      });
-
-      return { profile, membership, user };
-    });
-
-    created.profile.user = created.user;
-    created.membership.custom_role = resolvedAccess.customRole;
-    return this.buildMemberResponse(created.profile, created.membership);
+    return this.createNewUserAcrossOrganizations(input, actor, targetOrganizationIds, resolvedAccess);
   }
 
   async updateMemberAccess(
@@ -487,6 +471,377 @@ export class TeamService {
     });
 
     return { deleted: true };
+  }
+
+  private resolveTargetOrganizationIds(actor: ActorContext, organizationIds?: string[]) {
+    if (!organizationIds || organizationIds.length === 0) {
+      return [this.requireOrganizationId(actor)];
+    }
+
+    const normalized = [...new Set(organizationIds.map((organizationId) => organizationId.trim()).filter(Boolean))];
+    if (normalized.length === 0) {
+      apiError(400, "organization_ids_required", "Select at least one organization.");
+    }
+
+    this.assertActorCanInviteToOrganizations(actor, normalized);
+    return normalized;
+  }
+
+  private assertActorCanInviteToOrganizations(actor: ActorContext, organizationIds: string[]) {
+    const manageableOrganizationIds = new Set(this.listManageableOrganizationIds(actor));
+
+    for (const organizationId of organizationIds) {
+      if (!manageableOrganizationIds.has(organizationId)) {
+        apiError(
+          403,
+          "team_invite_forbidden",
+          "You cannot add team members to one or more selected organizations.",
+        );
+      }
+    }
+  }
+
+  private listManageableOrganizationIds(actor: ActorContext) {
+    return actor.memberships
+      .filter((membership) => membership.status === "active")
+      .filter((membership) => listPermissionsForMembership(membership).includes("team.invite"))
+      .map((membership) => membership.organization_id);
+  }
+
+  private async assertOrganizationsExist(organizationIds: string[]) {
+    const organizations = await this.dataSource.getRepository(OrganizationEntity).find({
+      where: {
+        id: In(organizationIds),
+        is_active: true,
+      },
+    });
+
+    if (organizations.length !== organizationIds.length) {
+      apiError(400, "organization_not_found", "One or more selected organizations could not be found.");
+    }
+  }
+
+  private async createNewUserAcrossOrganizations(
+    input: {
+      email: string;
+      password: string;
+      fullName: string;
+      phone: string | null;
+    },
+    actor: ActorContext,
+    targetOrganizationIds: string[],
+    resolvedAccess: Awaited<ReturnType<TeamService["resolveAccessForOrganization"]>>,
+  ) {
+    const passwordHash = await bcrypt.hash(input.password, 10);
+    const sortedOrganizationIds = [...targetOrganizationIds].sort();
+
+    const created = await this.dataSource.transaction(async (manager) => {
+      for (const organizationId of sortedOrganizationIds) {
+        await assertOrganizationSeatAvailable(organizationId, manager);
+      }
+
+      const user = await manager.getRepository(UserEntity).save(
+        manager.getRepository(UserEntity).create({
+          email: input.email,
+          password_hash: passwordHash,
+          is_active: true,
+        }),
+      );
+
+      const profile = await manager.getRepository(ProfileEntity).save(
+        manager.getRepository(ProfileEntity).create({
+          auth_user_id: user.id,
+          full_name: input.fullName,
+          phone: input.phone,
+          role: resolvedAccess.systemRole,
+        }),
+      );
+
+      const memberships: MembershipEntity[] = [];
+
+      for (const organizationId of sortedOrganizationIds) {
+        const membership = await this.createMembershipWithSideEffects(manager, {
+          organizationId,
+          userId: user.id,
+          profile,
+          resolvedAccess,
+          actorUserId: actor.user.id,
+          auditMetadata: {
+            user_created: true,
+            user_reused: false,
+          },
+        });
+        memberships.push(membership);
+      }
+
+      profile.user = user;
+      return { profile, user, memberships };
+    });
+
+    return this.buildCreateMemberResult({
+      actor,
+      profile: created.profile,
+      user: created.user,
+      memberships: created.memberships,
+      targetOrganizationIds,
+      userCreated: true,
+    });
+  }
+
+  private async attachExistingUserToOrganizations(
+    input: {
+      email: string;
+      password: string;
+      fullName: string;
+      phone: string | null;
+    },
+    actor: ActorContext,
+    targetOrganizationIds: string[],
+    resolvedAccess: Awaited<ReturnType<TeamService["resolveAccessForOrganization"]>>,
+    existingUser: UserEntity,
+  ) {
+    const profile = await this.profilesRepository.findOne({
+      where: { auth_user_id: existingUser.id },
+      relations: { user: true },
+    });
+
+    if (!profile) {
+      apiError(409, "team_email_exists", "A user already exists for this email.");
+    }
+
+    if (profile.role !== resolvedAccess.systemRole) {
+      apiError(
+        409,
+        "existing_user_role_conflict",
+        "A user already exists for this email.",
+      );
+    }
+
+    const actorManageableOrganizationIds = new Set(this.listManageableOrganizationIds(actor));
+    const existingMemberships = await this.membershipsRepository.find({
+      where: { user_id: existingUser.id },
+    });
+
+    const sharesManagedOrganization = existingMemberships.some((membership) =>
+      actorManageableOrganizationIds.has(membership.organization_id),
+    );
+
+    if (existingMemberships.length > 0 && !sharesManagedOrganization) {
+      apiError(409, "team_email_exists", "A user already exists for this email.");
+    }
+
+    const existingMembershipMap = new Map(
+      existingMemberships.map((membership) => [membership.organization_id, membership]),
+    );
+
+    const organizationsToCreate = targetOrganizationIds.filter((organizationId) => {
+      const existingMembership = existingMembershipMap.get(organizationId);
+      if (!existingMembership) {
+        return true;
+      }
+
+      if (!this.membershipMatchesResolvedAccess(existingMembership, resolvedAccess)) {
+        apiError(
+          409,
+          "existing_membership_conflict",
+          "This user already has conflicting access in one of the selected organizations.",
+        );
+      }
+
+      return false;
+    });
+
+    const sortedOrganizationsToCreate = [...organizationsToCreate].sort();
+    const originalPasswordHash = existingUser.password_hash;
+
+    const updated = await this.dataSource.transaction(async (manager) => {
+      for (const organizationId of sortedOrganizationsToCreate) {
+        await assertOrganizationSeatAvailable(organizationId, manager);
+      }
+
+      const lockedUser = await manager.getRepository(UserEntity).findOne({
+        where: { id: existingUser.id },
+      });
+
+      if (!lockedUser) {
+        apiError(409, "team_email_exists", "A user already exists for this email.");
+      }
+
+      const createdMemberships: MembershipEntity[] = [];
+
+      for (const organizationId of sortedOrganizationsToCreate) {
+        const membership = await this.createMembershipWithSideEffects(manager, {
+          organizationId,
+          userId: existingUser.id,
+          profile,
+          resolvedAccess,
+          actorUserId: actor.user.id,
+          auditMetadata: {
+            user_created: false,
+            user_reused: true,
+          },
+        });
+        createdMemberships.push(membership);
+      }
+
+      if (lockedUser.password_hash !== originalPasswordHash) {
+        throw new Error("Existing user password hash changed during attach flow.");
+      }
+
+      return createdMemberships;
+    });
+
+    const allTargetMemberships = await this.membershipsRepository.find({
+      where: {
+        user_id: existingUser.id,
+        organization_id: In(targetOrganizationIds),
+      },
+      relations: {
+        custom_role: true,
+      },
+    });
+
+    profile.user = existingUser;
+    return this.buildCreateMemberResult({
+      actor,
+      profile,
+      user: existingUser,
+      memberships: allTargetMemberships,
+      targetOrganizationIds,
+      userCreated: false,
+      membershipsNewlyCreated: updated,
+    });
+  }
+
+  private async createMembershipWithSideEffects(
+    manager: EntityManager,
+    input: {
+      organizationId: string;
+      userId: string;
+      profile: ProfileEntity;
+      resolvedAccess: Awaited<ReturnType<TeamService["resolveAccessForOrganization"]>>;
+      actorUserId: string;
+      auditMetadata: Record<string, unknown>;
+    },
+  ) {
+    const membership = await manager.getRepository(MembershipEntity).save(
+      manager.getRepository(MembershipEntity).create({
+        user_id: input.userId,
+        organization_id: input.organizationId,
+        role: input.resolvedAccess.systemRole,
+        status: "active",
+        custom_role_id: input.resolvedAccess.customRoleId,
+        custom_permission_keys: input.resolvedAccess.customPermissionKeys,
+      }),
+    );
+
+    await this.recordAudit(manager, {
+      organizationId: input.organizationId,
+      actorUserId: input.actorUserId,
+      targetUserId: input.userId,
+      action: "member_created",
+      previousRole: null,
+      newRole: input.resolvedAccess.systemRole,
+      previousPermissions: null,
+      newPermissions: input.resolvedAccess.effectivePermissions,
+      metadata: {
+        custom_role_id: input.resolvedAccess.customRoleId,
+        ...input.auditMetadata,
+      },
+    });
+
+    if (input.resolvedAccess.systemRole === "technician") {
+      await ensureTechnicianForOrganizationMembership(manager, {
+        organizationId: input.organizationId,
+        userId: input.userId,
+        displayName: input.profile.full_name,
+        phone: input.profile.phone,
+      });
+    }
+
+    membership.custom_role = input.resolvedAccess.customRole;
+    return membership;
+  }
+
+  private membershipMatchesResolvedAccess(
+    membership: MembershipEntity,
+    resolvedAccess: Awaited<ReturnType<TeamService["resolveAccessForOrganization"]>>,
+  ) {
+    if (membership.role !== resolvedAccess.systemRole) {
+      return false;
+    }
+
+    const existingCustomRoleId = membership.custom_role_id ?? null;
+    const requestedCustomRoleId = resolvedAccess.customRoleId ?? null;
+    if (existingCustomRoleId !== requestedCustomRoleId) {
+      return false;
+    }
+
+    const existingCustomPermissions = membership.custom_permission_keys?.length
+      ? normalizePermissionKeys(membership.custom_permission_keys)
+      : null;
+    const requestedCustomPermissions = resolvedAccess.customPermissionKeys?.length
+      ? normalizePermissionKeys(resolvedAccess.customPermissionKeys)
+      : null;
+
+    return JSON.stringify(existingCustomPermissions ?? []) === JSON.stringify(requestedCustomPermissions ?? []);
+  }
+
+  private async buildCreateMemberResult(input: {
+    actor: ActorContext;
+    profile: ProfileEntity;
+    user: UserEntity;
+    memberships: MembershipEntity[];
+    targetOrganizationIds: string[];
+    userCreated: boolean;
+    membershipsNewlyCreated?: MembershipEntity[];
+  }) {
+    const organizations = await this.dataSource.getRepository(OrganizationEntity).find({
+      where: {
+        id: In(input.targetOrganizationIds),
+      },
+      order: {
+        name: "ASC",
+      },
+    });
+
+    const createdMemberships = input.membershipsNewlyCreated
+      ?? (input.userCreated ? input.memberships : []);
+
+    const activeOrganizationId = input.actor.organization_id;
+    const activeMembership = activeOrganizationId
+      ? input.memberships.find((membership) => membership.organization_id === activeOrganizationId) ?? null
+      : null;
+
+    return {
+      userCreated: input.userCreated,
+      userReused: !input.userCreated,
+      membershipsCreated: createdMemberships
+        .map((membership) => {
+          const organization = organizations.find((item) => item.id === membership.organization_id);
+          return {
+            membership_id: membership.id,
+            organization_id: membership.organization_id,
+            organization: organization
+              ? {
+                id: organization.id,
+                name: organization.name,
+                slug: organization.slug,
+              }
+              : null,
+            role: membership.role,
+            status: membership.status,
+          };
+        }),
+      organizations: organizations.map((organization) => ({
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+      })),
+      member: activeMembership
+        ? this.buildMemberResponse(input.profile, activeMembership)
+        : null,
+    };
   }
 
   private requireOrganizationId(actor: ActorContext) {
