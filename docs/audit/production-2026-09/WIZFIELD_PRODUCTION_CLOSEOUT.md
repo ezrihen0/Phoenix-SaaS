@@ -279,3 +279,53 @@ Artifact: `backend/_runtime_harness/production-closeout-2026-09/money-file-integ
 - Dashboard: org-scoped status counts; no current-period revenue KPI contamination
 - Portal PDFs: 378 visible; cross-tenant/cross-customer denied
 - Artifact: `p2-007-workiz-isolation.json`
+
+---
+
+## Addendum — Production database cutover and Phoenix activation (2026-09-20)
+
+**Document role:** Supplements §1–§12 with current Railway/Vercel production truth after the legacy Phoenix CRM database cutover. Does not reopen closed September 2026 engineering findings.
+
+### Verdict (cutover scope)
+
+| Scope | Verdict |
+|---|---|
+| Production DB cutover (`railway` → `wizfield`) | **CLOSED / PASS** |
+| Phoenix Fireplace activation on `wizfield` | **CLOSED / PASS** |
+| Normal WizField production operation | **Not blocked** by the single missing legacy inspection JPEG (see open P1 below) |
+
+### Production truth (authoritative for cutover)
+
+| Field | Value |
+|---|---|
+| Active backend database | **`wizfield`** |
+| Legacy archive database | **`railway`** (read-only; not modified or deleted in cutover) |
+| Phoenix organization ID | `8d5bc762-eb13-43e5-85a1-723477adb47c` |
+| Phoenix slug | `phoenix-fireplace` |
+| Production owner | `service@phoenixfireplace.ca` (owner membership active) |
+| Canonical migrations on `wizfield` | 50 applied (`typeorm_migrations`) |
+| App URL | `https://app.wizfield.com` |
+
+### Closed cutover findings
+
+| ID | Title | Status |
+|---|---|---|
+| WF-CUTOVER-2026-001 | Production backend uses `wizfield` only; legacy `railway` preserved | **CLOSED / PASS** |
+| WF-CUTOVER-2026-002 | Controlled legacy operational CRM migration (org-scoped; no session/portal/telephony history import) | **CLOSED / PASS** |
+| WF-CUTOVER-2026-003 | Phoenix activation + production auth verify (`phoenix:activate:verify`) | **CLOSED / PASS** |
+| WF-CUTOVER-2026-004 | Telephony ownership rows stamped to Phoenix org (`tenant_id` / `organization_id`) | **CLOSED / PASS** |
+| WF-CUTOVER-2026-005 | CRM runtime API sanity (customers, leads, jobs, invoices, inspections, search, dashboard) under Phoenix session | **CLOSED / PASS** |
+
+### Open item (non-blocking)
+
+| ID | Severity | Title | Notes |
+|---|---|---|---|
+| WF-DATA-P1-001 | **P1** | Historical inspection photo blob restoration | Storage key `9444fc4d-aa75-46f2-9c51-4ba8a51872b9.jpg` expected at `uploads/inspection-photos/` on the production volume; DB row exists; authenticated asset **404** until bytes are restored from backup or re-uploaded. **`report_snapshot_key` `d5f9a61f-d630-415b-a683-42d3ee464fe9` is DB report-version metadata, not a volume filename.** Does **not** block auth, CRM, or daily operations. |
+
+### Verification performed (2026-09-20)
+
+- `phoenix:owner:credentials:update` on production `wizfield` (existing owner user; no duplicate users)
+- `PHOENIX_VERIFY_BASE_URL=https://app.wizfield.com` → `phoenix:activate:verify` **ok: true**
+- `schema:verify` against production `wizfield` (tunnel) **PASS**
+- Backend and frontend production **build PASS**
+- Legacy `railway` row-count spot check unchanged (e.g. customers **1**, `auth_sessions` **20**)

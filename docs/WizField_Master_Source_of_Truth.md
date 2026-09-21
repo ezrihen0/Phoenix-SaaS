@@ -48,6 +48,25 @@ Closed P0/P1/P2 audit findings are **not** current blockers. See the closeout fo
 
 Paid acquisition remains owner-gated. See [WizField_Owner_Launch_Activation_Checklist.md](WizField_Owner_Launch_Activation_Checklist.md).
 
+### Production database cutover and Phoenix activation (2026-09-20)
+
+| Item | Status |
+|---|---|
+| Active production MySQL database | **`wizfield`** (backend `DB_NAME`; legacy **`railway`** read-only archive, not modified) |
+| Phoenix Fireplace organization | `8d5bc762-eb13-43e5-85a1-723477adb47c` / slug `phoenix-fireplace` |
+| Production owner login | `service@phoenixfireplace.ca` (owner role; session + `/home` verified) |
+| Controlled legacy CRM migration into `wizfield` | **CLOSED / PASS** (operational rows org-scoped; no legacy auth/session import) |
+| Phoenix WizField activation on `wizfield` | **CLOSED / PASS** (`phoenix:activate:verify` against `https://app.wizfield.com`) |
+| Telephony row ownership on `wizfield` | Phoenix org stamped on owned number + call-flow config (Telnyx send number matches owned record) |
+
+**Open data restoration (does not block production operation):**
+
+- **P1 — WF-DATA-P1-001:** Historical inspection photo blob missing on the production upload volume for storage key `9444fc4d-aa75-46f2-9c51-4ba8a51872b9.jpg` (DB metadata present; authenticated asset returns 404 until restored from backup or re-uploaded). Inspection report `report_snapshot_key` values are DB version identifiers, not volume filenames.
+
+Normal WizField production CRM, auth, and money operations do **not** depend on restoring this single legacy JPEG.
+
+Evidence addendum: [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md) § Addendum — Production database cutover.
+
 ---
 
 ## 1. Product identity and project separation
@@ -242,6 +261,7 @@ Verified classification (September 2026 closeout):
 - Atomic batch persistence
 - Tenant / RBAC enforcement
 - HEIC mobile normalization is **deferred** (backend rejects HEIC)
+- One migrated Phoenix inspection photo references a missing on-disk JPEG (see **Production database cutover and Phoenix activation** above). This is tracked as **P1 data restoration** only; it is not a production-operation blocker.
 
 ## 13. CRM money: jobs, invoices, payments
 

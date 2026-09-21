@@ -12,7 +12,9 @@ Closed P0/P1/P2 engineering findings are **not** current launch blockers.
 
 - The engineering foundation phase is closed (Gate 11–14 locked).
 - September 2026 production closeout is **CONDITIONAL GO**.
-- Owner launch activation is still pending.
+- **Production database cutover** (legacy `railway` → active **`wizfield`**) and **Phoenix activation** on production are **CLOSED / PASS** (2026-09-20). Evidence: closeout addendum in [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md).
+- **P1 data restoration (non-blocking):** one historical inspection JPEG missing on the production upload volume (`WF-DATA-P1-001` in the closeout addendum). Normal daily WizField operation does not depend on restoring this file.
+- Owner launch activation items below (legal, support, backup evidence) may still be pending.
 
 This checklist is intentionally owner-operated. It is not a request to reopen engineering gate status or closed audit findings.
 
