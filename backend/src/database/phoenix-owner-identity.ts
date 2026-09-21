@@ -2,7 +2,7 @@
 
 export const PHOENIX_OWNER_EMAIL =
   process.env.PHOENIX_OWNER_EMAIL?.trim().toLowerCase()
-  || "phoenixfireplace0@gmail.com";
+  || "service@phoenixfireplace.ca";
 
 export const PHOENIX_OWNER_NAME =
   process.env.PHOENIX_OWNER_NAME?.trim()
