@@ -747,7 +747,7 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
                 {t("paymentAssistant")}
               </Link>
               {canCreateInvoice ? (
-                <Link href="/invoices/new" className="theme-btn-primary flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold">
+                <Link href="/invoices/create" className="theme-btn-primary flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold">
                   <Plus className="h-4 w-4" />
                   {t("newInvoice")}
                 </Link>

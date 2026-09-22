@@ -23,11 +23,11 @@ function resolveQuickCreateHref(actionId, pathname) {
     case "job":
       return customerId ? `/jobs/new?customerId=${encodeURIComponent(customerId)}` : "/jobs/new";
     case "invoice":
-      if (jobId) return `/jobs/${jobId}?tab=invoice`;
-      return customerId ? `/invoices/new?customerId=${encodeURIComponent(customerId)}` : "/invoices/new";
+      if (jobId) return `/invoices/create/${jobId}`;
+      return customerId ? `/invoices/create?customerId=${encodeURIComponent(customerId)}` : "/invoices/create";
     case "estimate":
-      if (jobId) return `/jobs/${jobId}?tab=quote`;
-      return customerId ? `/estimates/new?customerId=${encodeURIComponent(customerId)}` : "/estimates/new";
+      if (jobId) return `/estimates/create/${jobId}`;
+      return customerId ? `/estimates/create?customerId=${encodeURIComponent(customerId)}` : "/estimates/create";
     default:
       return "/";
   }
@@ -51,8 +51,13 @@ if (technicianActions.length !== 0) {
 }
 
 const jobContextInvoiceHref = resolveQuickCreateHref("invoice", "/jobs/11111111-1111-1111-1111-111111111111");
-if (jobContextInvoiceHref !== "/jobs/11111111-1111-1111-1111-111111111111?tab=invoice") {
+if (jobContextInvoiceHref !== "/invoices/create/11111111-1111-1111-1111-111111111111") {
   throw new Error(`Unexpected job-context invoice href: ${jobContextInvoiceHref}`);
+}
+
+const jobContextEstimateHref = resolveQuickCreateHref("estimate", "/jobs/11111111-1111-1111-1111-111111111111");
+if (jobContextEstimateHref !== "/estimates/create/11111111-1111-1111-1111-111111111111") {
+  throw new Error(`Unexpected job-context estimate href: ${jobContextEstimateHref}`);
 }
 
 console.log("quick-create-registry check passed");

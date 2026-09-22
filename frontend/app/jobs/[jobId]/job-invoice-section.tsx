@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Receipt, Save, ShieldCheck, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, ExternalLink, LoaderCircle, Receipt, Save, ShieldCheck, Sparkles } from "lucide-react";
 
 import JobInvoiceCatalogPicker from "@/components/job-invoice-catalog-picker";
 import InvoiceLineItemsEditor from "@/components/invoice-line-items-editor";
@@ -82,7 +83,9 @@ type JobInvoiceSectionProps = {
   invoice: JobInvoiceRecord | null;
   quoteId?: string | null;
   currentJobStatus: JobStatus;
+  variant?: "job-tab" | "owner";
   onInvoiceChange?: (invoice: JobInvoiceRecord | null) => void;
+  onInvoiceSaved?: (invoiceId: string) => void;
   onToast?: (message: string, tone?: ToastTone) => void;
 };
 
@@ -159,9 +162,12 @@ export default function JobInvoiceSection({
   invoice,
   quoteId,
   currentJobStatus,
+  variant = "job-tab",
   onInvoiceChange,
+  onInvoiceSaved,
   onToast,
 }: JobInvoiceSectionProps) {
+  const isOwnerComposer = variant === "owner";
   const [status, setStatus] = useState<InvoiceStatus>(invoice?.status ?? "unpaid");
   const [invoiceDetail, setInvoiceDetail] = useState<JobInvoiceRecord | null>(invoice ?? null);
   const [lines, setLines] = useState<InvoiceBuilderLine[]>(() =>
@@ -172,7 +178,9 @@ export default function JobInvoiceSection({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingInvoice, setIsLoadingInvoice] = useState(false);
+  const [ownerSaveAcknowledged, setOwnerSaveAcknowledged] = useState(false);
   const paymentIdempotencyKeyRef = useRef<string | null>(null);
+  const ignoreOwnerAckResetRef = useRef(false);
   const [sourceLanguageCode, setSourceLanguageCode] = useState<string | null>(null);
 
   const canReflectPaidOnJob = currentJobStatus === "completed" || currentJobStatus === "paid";
@@ -201,6 +209,19 @@ export default function JobInvoiceSection({
     applyInvoiceDetail(response, hydratedLines);
     return response;
   }
+
+  useEffect(() => {
+    if (!isOwnerComposer) {
+      return;
+    }
+
+    if (ignoreOwnerAckResetRef.current) {
+      ignoreOwnerAckResetRef.current = false;
+      return;
+    }
+
+    setOwnerSaveAcknowledged(false);
+  }, [isOwnerComposer, lines, taxRateInput, status]);
 
   useEffect(() => {
     let ignore = false;
@@ -244,6 +265,10 @@ export default function JobInvoiceSection({
   }, [invoice?.id]);
 
   async function saveInvoice(nextStatus: InvoiceStatus, successText: string) {
+    if (isSaving) {
+      return;
+    }
+
     if (previewTotals.totalCents === 0) {
       const confirmed = window.confirm(
         "This invoice total is $0.00. Save anyway?",
@@ -270,9 +295,19 @@ export default function JobInvoiceSection({
         }),
       });
 
+      if (isOwnerComposer) {
+        ignoreOwnerAckResetRef.current = true;
+      }
+
       const detail = await loadInvoiceDetailById(response.id);
       setStatus(detail.status);
-      onToast?.(successText, "success");
+      if (isOwnerComposer) {
+        setOwnerSaveAcknowledged(true);
+        onToast?.("Saved.", "success");
+      } else {
+        onToast?.(successText, "success");
+      }
+      onInvoiceSaved?.(response.id);
     } catch (error) {
       const nextMessage = error instanceof Error ? error.message : "The invoice could not be saved.";
       setErrorMessage(nextMessage);
@@ -457,19 +492,21 @@ export default function JobInvoiceSection({
 
       <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.82fr)]">
         <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => {
-                void pullFromQuote();
-              }}
-              className="inline-flex items-center gap-2 rounded-[18px] border border-white/10 bg-white/[0.06] px-4 py-2 text-xs uppercase tracking-[0.18em] text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Pull from quote
-            </button>
-          </div>
+          {!isOwnerComposer ? (
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => {
+                  void pullFromQuote();
+                }}
+                className="inline-flex items-center gap-2 rounded-[18px] border border-white/10 bg-white/[0.06] px-4 py-2 text-xs uppercase tracking-[0.18em] text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Pull from quote
+              </button>
+            </div>
+          ) : null}
 
           <InvoiceLineItemsEditor
             lines={lines}
@@ -535,7 +572,14 @@ export default function JobInvoiceSection({
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          {isOwnerComposer && ownerSaveAcknowledged ? (
+            <div className="flex items-center gap-2 rounded-[18px] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>Saved. You can keep editing here or open the invoice detail when ready.</span>
+            </div>
+          ) : null}
+
+          <div className={`flex flex-col gap-3 ${isOwnerComposer ? "" : "sm:flex-row"}`}>
             <button
               type="button"
               disabled={isSaving}
@@ -547,17 +591,28 @@ export default function JobInvoiceSection({
               {isSaving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {invoiceDetail ? "Save invoice" : "Generate invoice"}
             </button>
-            <button
-              type="button"
-              disabled={isSaving || !canMarkPaid}
-              onClick={() => {
-                void recordFullPayment();
-              }}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <ShieldCheck className="h-4 w-4" />
-              Record full payment
-            </button>
+            {isOwnerComposer && invoiceDetail?.id ? (
+              <Link
+                href={`/invoices/${invoiceDetail.id}`}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white"
+              >
+                <ExternalLink className="h-4 w-4" />
+                View Invoice
+              </Link>
+            ) : null}
+            {!isOwnerComposer ? (
+              <button
+                type="button"
+                disabled={isSaving || !canMarkPaid}
+                onClick={() => {
+                  void recordFullPayment();
+                }}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Record full payment
+              </button>
+            ) : null}
           </div>
         </div>
 

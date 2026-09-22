@@ -666,7 +666,7 @@ function CustomerContextSidebar({
       <div className="mt-6 space-y-2">
         <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--sem-text-muted)]">{t("quickActions")}</p>
         <ActionButton icon={Plus} label={t("addNewJob")} href={`/jobs/new?customerId=${customerRecord.id}`} primary />
-        <ActionButton icon={FileText} label={t("addNewEstimate")} href={`/estimates/new?customerId=${customerRecord.id}`} />
+        <ActionButton icon={FileText} label={t("addNewEstimate")} href={`/estimates/create?customerId=${customerRecord.id}`} />
         <ActionButton icon={MessageSquare} label={t("sendSms")} href={`/messaging?lane=customers&customerId=${customerRecord.id}`} />
         {customerRecord.phone ? (
           <a
@@ -1286,9 +1286,9 @@ export default function CustomerProfileWorkspace({
   function renderEstimatesTab(useTimeline: boolean) {
     return (
       <section>
-        <TabHeader title={t("estimates")} href={`/estimates/new?customerId=${customerRecord.id}`} actionLabel={t("addNewEstimate")} />
+        <TabHeader title={t("estimates")} href={`/estimates/create?customerId=${customerRecord.id}`} actionLabel={t("addNewEstimate")} />
         {estimates.length === 0 ? (
-          <EmptyState label={t("noEstimates")} href={`/estimates/new?customerId=${customerRecord.id}`} actionLabel={t("createEstimate")} />
+          <EmptyState label={t("noEstimates")} href={`/estimates/create?customerId=${customerRecord.id}`} actionLabel={t("createEstimate")} />
         ) : (
           <>
             {useTimeline ? (
@@ -1330,9 +1330,9 @@ export default function CustomerProfileWorkspace({
   function renderInvoicesTab(useTimeline: boolean) {
     return (
       <section>
-        <TabHeader title={t("invoices")} href={`/invoices/new?customerId=${customerRecord.id}`} actionLabel={t("addNewInvoice")} />
+        <TabHeader title={t("invoices")} href={`/invoices/create?customerId=${customerRecord.id}`} actionLabel={t("addNewInvoice")} />
         {invoices.length === 0 ? (
-          <EmptyState label={t("noInvoices")} href={`/invoices/new?customerId=${customerRecord.id}`} actionLabel={t("createInvoice")} />
+          <EmptyState label={t("noInvoices")} href={`/invoices/create?customerId=${customerRecord.id}`} actionLabel={t("createInvoice")} />
         ) : (
           <>
             {useTimeline ? (

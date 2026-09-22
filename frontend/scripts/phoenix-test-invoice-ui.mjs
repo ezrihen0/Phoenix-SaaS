@@ -146,7 +146,11 @@ async function createJob(page, customerId) {
 }
 
 async function createLaborInvoice(page, jobId) {
-  await gotoApp(page, `/jobs/${jobId}?tab=invoice`);
+  const composerPath =
+    process.env.PHOENIX_TEST_INVOICE_COMPOSER?.trim() === "job-tab"
+      ? `/jobs/${jobId}?tab=invoice`
+      : `/invoices/create/${jobId}`;
+  await gotoApp(page, composerPath);
   await page.getByRole("heading", { name: "Create Invoice" }).waitFor({ timeout: 20_000 });
 
   const generateButton = page.getByRole("button", { name: /Generate invoice|Save invoice/u });
@@ -171,6 +175,13 @@ async function createLaborInvoice(page, jobId) {
 
     if (!saveResponse.ok()) {
       throw new Error(`Invoice save failed with HTTP ${saveResponse.status()}.`);
+    }
+
+    await page.getByText(/Saved\./i).waitFor({ timeout: 15_000 }).catch(() => {});
+
+    const pathname = new URL(page.url()).pathname;
+    if (!pathname.includes(`/invoices/create/${jobId}`) && process.env.PHOENIX_TEST_INVOICE_COMPOSER?.trim() !== "job-tab") {
+      throw new Error(`Expected to remain on owner composer after save, got ${pathname}.`);
     }
 
     return savePayload?.data?.id ?? savePayload?.data?.invoice?.id ?? null;
@@ -283,7 +294,8 @@ async function main() {
       customerName: CUSTOMER_NAME,
       customerUrl: `${BASE_URL}/customers/${customerId}`,
       jobUrl: `${BASE_URL}/jobs/${jobId}`,
-      invoiceTabUrl: `${BASE_URL}/jobs/${jobId}?tab=invoice`,
+      invoiceComposerUrl: `${BASE_URL}/invoices/create/${jobId}`,
+      invoiceJobTabUrl: `${BASE_URL}/jobs/${jobId}?tab=invoice`,
       laborAmount: LABOR_AMOUNT,
       invoiceResult,
       receipt,

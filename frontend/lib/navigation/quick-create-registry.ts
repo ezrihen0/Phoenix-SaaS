@@ -44,7 +44,7 @@ export const QUICK_CREATE_ACTIONS: readonly QuickCreateAction[] = [
     icon: Receipt,
     requiredPermission: "invoices.manage",
     tier: "primary",
-    defaultHref: "/invoices/new",
+    defaultHref: "/invoices/create",
   },
   {
     id: "estimate",
@@ -52,7 +52,7 @@ export const QUICK_CREATE_ACTIONS: readonly QuickCreateAction[] = [
     icon: FileText,
     requiredPermission: "estimates.manage",
     tier: "primary",
-    defaultHref: "/estimates/new",
+    defaultHref: "/estimates/create",
   },
   {
     id: "inspection",
@@ -101,20 +101,20 @@ export function resolveQuickCreateHref(actionId: QuickCreateActionId, pathname: 
         : "/jobs/new";
     case "invoice":
       if (jobId) {
-        return `/jobs/${jobId}?tab=invoice`;
+        return `/invoices/create/${jobId}`;
       }
 
       return customerId
-        ? `/invoices/new?customerId=${encodeURIComponent(customerId)}`
-        : "/invoices/new";
+        ? `/invoices/create?customerId=${encodeURIComponent(customerId)}`
+        : "/invoices/create";
     case "estimate":
       if (jobId) {
-        return `/jobs/${jobId}?tab=quote`;
+        return `/estimates/create/${jobId}`;
       }
 
       return customerId
-        ? `/estimates/new?customerId=${encodeURIComponent(customerId)}`
-        : "/estimates/new";
+        ? `/estimates/create?customerId=${encodeURIComponent(customerId)}`
+        : "/estimates/create";
     case "inspection":
       return "/inspections/new";
     case "lead":

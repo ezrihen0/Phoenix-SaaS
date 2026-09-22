@@ -819,7 +819,7 @@ export default async function EstimatesPage({ searchParams }: EstimatesPageConte
                 <Sparkles className="h-4 w-4" />
                 {t("aiFollowUpAssistant")}
               </Link>
-              <Link href="/estimates/new" className="theme-btn-primary flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold">
+              <Link href="/estimates/create" className="theme-btn-primary flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold">
                 <Plus className="h-4 w-4" />
                 {t("newEstimate")}
               </Link>

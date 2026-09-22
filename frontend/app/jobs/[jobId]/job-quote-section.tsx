@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { FileText, LoaderCircle, Save, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { CheckCircle2, ExternalLink, FileText, LoaderCircle, Save, ShieldCheck } from "lucide-react";
 
 import DocumentPricebookPicker from "@/components/document-pricebook-picker";
 import QuoteLineItemsEditor from "@/components/quote-line-items-editor";
@@ -48,7 +49,9 @@ export type JobQuoteRecord = {
 type JobQuoteSectionProps = {
   jobId: string;
   quote: JobQuoteRecord | null;
+  variant?: "job-tab" | "owner";
   onQuoteChange?: (quote: JobQuoteRecord | null) => void;
+  onQuoteSaved?: (quoteId: string) => void;
   onToast?: (message: string, tone?: ToastTone) => void;
 };
 
@@ -66,9 +69,12 @@ function formatQuoteStatusLabel(status: QuoteStatus) {
 export default function JobQuoteSection({
   jobId,
   quote,
+  variant = "job-tab",
   onQuoteChange,
+  onQuoteSaved,
   onToast,
 }: JobQuoteSectionProps) {
+  const isOwnerComposer = variant === "owner";
   const [quoteDetail, setQuoteDetail] = useState<JobQuoteRecord | null>(quote);
   const [description, setDescription] = useState(quote?.description ?? "");
   const [status, setStatus] = useState<QuoteStatus>(quote?.status ?? "draft");
@@ -80,6 +86,8 @@ export default function JobQuoteSection({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+  const [ownerSaveAcknowledged, setOwnerSaveAcknowledged] = useState(false);
+  const ignoreOwnerAckResetRef = useRef(false);
   const [sourceLanguageCode, setSourceLanguageCode] = useState<string | null>(null);
 
   const activeQuote = quoteDetail ?? quote;
@@ -109,6 +117,19 @@ export default function JobQuoteSection({
     applyQuoteDetail(response, hydratedLines);
     return response;
   }
+
+  useEffect(() => {
+    if (!isOwnerComposer) {
+      return;
+    }
+
+    if (ignoreOwnerAckResetRef.current) {
+      ignoreOwnerAckResetRef.current = false;
+      return;
+    }
+
+    setOwnerSaveAcknowledged(false);
+  }, [isOwnerComposer, lines, taxRateInput, description, status]);
 
   useEffect(() => {
     let ignore = false;
@@ -153,6 +174,10 @@ export default function JobQuoteSection({
   }, [quote?.id]);
 
   async function saveQuote(nextStatus: QuoteStatus, successText: string) {
+    if (isSaving) {
+      return;
+    }
+
     if (isLocked) {
       const nextMessage =
         "This estimate is locked because it has already been approved or signed. Use a future revision, void, or duplicate flow to change customer-facing financial content.";
@@ -187,9 +212,19 @@ export default function JobQuoteSection({
         }),
       });
 
+      if (isOwnerComposer) {
+        ignoreOwnerAckResetRef.current = true;
+      }
+
       const detail = await loadQuoteDetail(response.id);
       setStatus(detail.status);
-      onToast?.(successText, "success");
+      if (isOwnerComposer) {
+        setOwnerSaveAcknowledged(true);
+        onToast?.("Saved.", "success");
+      } else {
+        onToast?.(successText, "success");
+      }
+      onQuoteSaved?.(response.id);
     } catch (error) {
       const nextMessage = error instanceof Error ? error.message : "The quote could not be saved.";
       setErrorMessage(nextMessage);
@@ -336,7 +371,14 @@ export default function JobQuoteSection({
             </div>
           ) : null}
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          {isOwnerComposer && ownerSaveAcknowledged ? (
+            <div className="flex items-center gap-2 rounded-[18px] border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>Saved. You can keep editing here or open the estimate detail when ready.</span>
+            </div>
+          ) : null}
+
+          <div className={`flex flex-col gap-3 ${isOwnerComposer ? "" : "sm:flex-row"}`}>
             <button
               type="button"
               disabled={isSaving || isLocked}
@@ -348,17 +390,28 @@ export default function JobQuoteSection({
               {isSaving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {activeQuote ? "Save quote" : "Create quote"}
             </button>
-            <button
-              type="button"
-              disabled={isSaving || isLocked || !canApprove}
-              onClick={() => {
-                void saveQuote("approved", "Quote marked approved.");
-              }}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <ShieldCheck className="h-4 w-4" />
-              Mark approved
-            </button>
+            {isOwnerComposer && activeQuote?.id ? (
+              <Link
+                href={`/estimates/${activeQuote.id}`}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white"
+              >
+                <ExternalLink className="h-4 w-4" />
+                View Estimate
+              </Link>
+            ) : null}
+            {!isOwnerComposer ? (
+              <button
+                type="button"
+                disabled={isSaving || isLocked || !canApprove}
+                onClick={() => {
+                  void saveQuote("approved", "Quote marked approved.");
+                }}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Mark approved
+              </button>
+            ) : null}
           </div>
         </div>
 
