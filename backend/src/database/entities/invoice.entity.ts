@@ -25,6 +25,9 @@ export class InvoiceEntity {
   job_id!: string;
 
   @Column({ type: "varchar", length: 36, nullable: true })
+  source_quote_id!: string | null;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
   organization_id!: string | null;
 
   @Column({ type: "text" })

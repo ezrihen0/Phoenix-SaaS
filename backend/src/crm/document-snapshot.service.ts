@@ -124,6 +124,42 @@ export class DocumentSnapshotService {
     return manager?.getRepository(QuoteLineItemEntity) ?? this.quoteLineItemsRepository;
   }
 
+  copyQuoteLineSnapshotsToInvoiceDrafts(quoteLineItems: QuoteLineItemEntity[]): SnapshotLineDraft[] {
+    return [...quoteLineItems]
+      .sort((left, right) => left.sort_order - right.sort_order)
+      .map((lineItem, index) => {
+        const quantity = String(lineItem.quantity);
+        const unitPriceCents = lineItem.unit_price_cents_snapshot;
+
+        return {
+          pricebook_item_id: lineItem.pricebook_item_id,
+          document_line_key:
+            lineItem.document_line_key?.trim()
+              ? `invoice-from-estimate-${lineItem.document_line_key}`
+              : `invoice-from-estimate-${lineItem.id}`,
+          sku_snapshot: lineItem.sku_snapshot,
+          name_snapshot: lineItem.name_snapshot,
+          description_snapshot: lineItem.description_snapshot,
+          item_type_snapshot: lineItem.item_type_snapshot,
+          unit_of_measure_snapshot: lineItem.unit_of_measure_snapshot,
+          unit_price_cents_snapshot: unitPriceCents,
+          base_cost_cents_snapshot: lineItem.base_cost_cents_snapshot,
+          material_cost_cents_snapshot: lineItem.material_cost_cents_snapshot,
+          labor_cost_cents_snapshot: lineItem.labor_cost_cents_snapshot,
+          estimated_labor_minutes_snapshot: lineItem.estimated_labor_minutes_snapshot,
+          warranty_months_snapshot: lineItem.warranty_months_snapshot,
+          pricebook_bundle_id: lineItem.pricebook_bundle_id,
+          bundle_requirement_id: lineItem.bundle_requirement_id,
+          catalog_unit_price_cents_snapshot: lineItem.catalog_unit_price_cents_snapshot,
+          quantity,
+          line_subtotal_cents:
+            lineItem.line_subtotal_cents
+            ?? this.documentPricingService.computeLineSubtotal(quantity, unitPriceCents),
+          sort_order: index,
+        };
+      });
+  }
+
   async buildLineDrafts(lineItems: DocumentLineItemInput[], context: SnapshotDocumentContext) {
     const drafts: SnapshotLineDraft[] = [];
 

@@ -893,6 +893,18 @@ export function parseRecordInvoicePaymentPayload(jsonBody: unknown): RecordInvoi
   };
 }
 
+export type ConvertFromEstimatePayload = {
+  estimateId: string | null;
+};
+
+export function parseConvertFromEstimatePayload(jsonBody: unknown): ConvertFromEstimatePayload {
+  const payload = requireRecord(jsonBody, "Estimate conversion");
+
+  return {
+    estimateId: optionalUuid(payload.estimateId, "estimateId"),
+  };
+}
+
 export function parseSignDocumentPayload(jsonBody: unknown): SignDocumentPayload {
   const payload = requireRecord(jsonBody, "Document signature");
 

@@ -9,6 +9,7 @@ import { DataSource } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
 import { DocumentPricingService } from "../crm/document-pricing.service";
+import { MoneyEngineService } from "../crm/money-engine.service";
 import { DocumentSnapshotService } from "../crm/document-snapshot.service";
 import type { DocumentLineItemInput } from "../crm/validation";
 import type { CustomerOutputTranslationService } from "../language-store/customer-output-translation.service";
@@ -561,7 +562,7 @@ async function main() {
       dataSource.getRepository(PricebookItemEntity),
       dataSource.getRepository(PricebookBundleEntity),
       dataSource.getRepository(PricebookBundleItemEntity),
-      new DocumentPricingService(),
+      new DocumentPricingService(new MoneyEngineService()),
       {
         requireFinalizedDocumentTranslation: async () => {
           throw new Error("Unexpected translation lookup in document snapshot org isolation smoke test.");

@@ -405,9 +405,28 @@ No conversion or payment redesign accidentally mixed in
 
 **Original phases:** 4–5
 
+**Implementation status:** Shipped in codebase (money engine + conversion API + job-tab UI). Discounts remain deferred.
+
 ## Goal
 
 Make financial transformation and calculation deterministic.
+
+## Part 3 implementation truth (2026-09)
+
+**Money engine (Phase 5 — discounts deferred)**
+
+- Backend authority: [`MoneyEngineService`](backend/src/crm/money-engine.service.ts) / [`money-engine.core.ts`](backend/src/crm/money-engine.core.ts) (line subtotal via quantity thousandths → document subtotal → tax → total).
+- Frontend preview parity: [`frontend/lib/crm/money-engine.ts`](frontend/lib/crm/money-engine.ts) used by invoice/estimate preview totals.
+- Upsert paths reject client total drift when line items are present (`totals_mismatch`).
+
+**Estimate → Invoice conversion (Phase 4)**
+
+- API: `POST /api/jobs/:jobId/invoice/convert-from-estimate` with optional `{ estimateId }`.
+- Gate: estimate must be **approved or signed** (locked customer-facing truth).
+- Copies **persisted quote line snapshots** to invoice lines (no live Pricebook re-hydration on this path).
+- Provenance: `invoices.source_quote_id` exposed as `source_estimate_id` on invoice reads.
+- Job tab UI: **Convert from estimate** replaces **Pull from quote**; owner composer unchanged.
+- Idempotency: repeat conversion from same estimate when invoice already has lines → `409 invoice_already_converted`.
 
 ## Phase 4 — Estimate → Invoice Conversion Engine
 

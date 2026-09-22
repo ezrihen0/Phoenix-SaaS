@@ -31,6 +31,8 @@ import { CustomerLedgerService } from "./customer-ledger.service";
 import { CustomerDeletionService } from "./customer-deletion.service";
 import { JobsService } from "./jobs.service";
 import { DocumentPricingService } from "./document-pricing.service";
+import { MoneyEngineService } from "./money-engine.service";
+import { EstimateInvoiceConversionService } from "./estimate-invoice-conversion.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
 import { InvoicePdfService } from "./invoice-pdf.service";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
@@ -67,8 +69,10 @@ import { InvoicePaymentRecordingService } from "./invoice-payment-recording.serv
   ],
   controllers: [CrmController],
   providers: [
+    MoneyEngineService,
     DocumentPricingService,
     DocumentSnapshotService,
+    EstimateInvoiceConversionService,
     InvoicePaymentLedgerService,
     InvoicePaymentRecordingService,
     CrmOfficeDashboardService,

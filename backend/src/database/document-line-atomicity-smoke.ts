@@ -13,6 +13,11 @@ import {
   persistQuoteHeaderAndLineItems,
 } from "../crm/crm-document-persistence";
 import { DocumentPricingService } from "../crm/document-pricing.service";
+import { MoneyEngineService } from "../crm/money-engine.service";
+
+function createDocumentPricingService() {
+  return new DocumentPricingService(new MoneyEngineService());
+}
 import {
   DocumentSnapshotService,
   type SnapshotLineDraft,
@@ -143,7 +148,7 @@ function buildDocumentSnapshotService(dataSource: DataSource) {
     dataSource.getRepository(PricebookItemEntity),
     dataSource.getRepository(PricebookBundleEntity),
     dataSource.getRepository(PricebookBundleItemEntity),
-    new DocumentPricingService(),
+    createDocumentPricingService(),
     {} as CustomerOutputTranslationService,
   );
 }
@@ -290,7 +295,7 @@ async function seedInvoiceWithLines(dataSource: DataSource, fixture: JobFixture)
   const originalDrafts = [
     manualLineDraft({ key: "line-1", name: "Original invoice line", unitPriceCents: 4_000, sortOrder: 0 }),
   ];
-  const totals = new DocumentPricingService().computeSnapshotTotals(
+  const totals = createDocumentPricingService().computeSnapshotTotals(
     originalDrafts.map((draft) => ({
       quantity: draft.quantity,
       unitPriceCents: draft.unit_price_cents_snapshot,
@@ -321,7 +326,7 @@ async function seedQuoteWithLines(dataSource: DataSource, fixture: JobFixture) {
   const originalDrafts = [
     manualLineDraft({ key: "line-1", name: "Original quote line", unitPriceCents: 3_500, sortOrder: 0 }),
   ];
-  const totals = new DocumentPricingService().computeSnapshotTotals(
+  const totals = createDocumentPricingService().computeSnapshotTotals(
     originalDrafts.map((draft) => ({
       quantity: draft.quantity,
       unitPriceCents: draft.unit_price_cents_snapshot,
@@ -349,7 +354,7 @@ async function seedQuoteWithLines(dataSource: DataSource, fixture: JobFixture) {
 
 async function runTests(summary: SmokeSummary, dataSource: DataSource) {
   const documentSnapshotService = buildDocumentSnapshotService(dataSource);
-  const pricingService = new DocumentPricingService();
+  const pricingService = createDocumentPricingService();
   const invoiceRepo = dataSource.getRepository(InvoiceEntity);
   const quoteRepo = dataSource.getRepository(QuoteEntity);
   const jobRepo = dataSource.getRepository(JobEntity);

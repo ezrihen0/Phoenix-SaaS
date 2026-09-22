@@ -30,8 +30,6 @@ import {
   type PersistedInvoiceLineItem,
 } from "@/lib/crm/invoice-line-model";
 import { getJobStatusLabel, type JobStatus } from "@/lib/crm/statuses";
-import type { PersistedQuoteLineItem } from "@/lib/crm/quote-line-model";
-
 type ToastTone = "success" | "error" | "warning";
 type InvoiceLifecycleStatus = "sent" | "partial" | "paid" | "refunded" | "overpaid";
 
@@ -47,6 +45,7 @@ type InvoicePaymentRecord = {
 
 export type JobInvoiceRecord = {
   id: string;
+  source_estimate_id?: string | null;
   description: string;
   amount_cents: number;
   subtotal_cents?: number;
@@ -64,24 +63,12 @@ export type JobInvoiceRecord = {
   payments?: InvoicePaymentRecord[];
 };
 
-type QuoteDetailRecord = {
-  id: string;
-  description: string;
-  price_cents: number;
-  subtotal_cents?: number;
-  tax_rate_bps_snapshot?: number;
-  tax_cents?: number;
-  total_cents?: number;
-  status: string;
-  approved_at: string | null;
-  sent_at: string | null;
-  line_items?: PersistedQuoteLineItem[];
-};
-
 type JobInvoiceSectionProps = {
   jobId: string;
   invoice: JobInvoiceRecord | null;
   quoteId?: string | null;
+  quoteApprovedAt?: string | null;
+  quoteSignedAt?: string | null;
   currentJobStatus: JobStatus;
   variant?: "job-tab" | "owner";
   onInvoiceChange?: (invoice: JobInvoiceRecord | null) => void;
@@ -114,53 +101,12 @@ function formatLifecycleLabel(status: InvoiceLifecycleStatus | undefined) {
   return status === "paid" ? "Paid" : "Sent";
 }
 
-function invoiceLinesFromQuoteDetail(
-  lines: PersistedQuoteLineItem[] | undefined,
-  fallbackAmountCents?: number,
-): InvoiceBuilderLine[] {
-  if (lines && lines.length > 0) {
-    return [...lines]
-      .sort((left, right) => left.sort_order - right.sort_order)
-      .map((line) => ({
-        clientId: `quote-${line.id}`,
-        documentLineKey: `invoice-from-quote-${line.id}-${Math.random().toString(36).slice(2, 8)}`,
-        kind: line.pricebook_item_id ? "pricebook_item" : "manual",
-        pricebookItemId: line.pricebook_item_id,
-        sourceLabel: null,
-        sku: line.sku_snapshot,
-        name: line.name_snapshot,
-        originalName: line.pricebook_item_id ? line.name_snapshot : null,
-        description: line.description_snapshot ?? "",
-        quantity: normalizeQuantityInput(line.quantity, "Quantity"),
-        unitPriceInput: formatCentsInput(line.unit_price_cents_snapshot),
-        unitPriceCents: line.unit_price_cents_snapshot,
-        originalUnitPriceCents: line.pricebook_item_id ? line.unit_price_cents_snapshot : null,
-        originalDescription: line.pricebook_item_id ? line.description_snapshot : null,
-        itemType: line.item_type_snapshot,
-        unitOfMeasure: line.unit_of_measure_snapshot,
-        ...createEmptyDocumentLineTranslationFields(),
-        ...emptyInvoiceLineBundleMetadata(),
-      }));
-  }
-
-  if (typeof fallbackAmountCents === "number" && fallbackAmountCents > 0) {
-    return [
-      {
-        ...createManualInvoiceLine(),
-        name: "Quote amount",
-        unitPriceInput: formatCentsInput(fallbackAmountCents),
-        unitPriceCents: fallbackAmountCents,
-      },
-    ];
-  }
-
-  return [];
-}
-
 export default function JobInvoiceSection({
   jobId,
   invoice,
   quoteId,
+  quoteApprovedAt,
+  quoteSignedAt,
   currentJobStatus,
   variant = "job-tab",
   onInvoiceChange,
@@ -366,11 +312,28 @@ export default function JobInvoiceSection({
     }
   }
 
-  async function pullFromQuote() {
+  const canConvertFromEstimate = Boolean(quoteId && (quoteApprovedAt || quoteSignedAt));
+
+  async function convertFromEstimate() {
     if (!quoteId) {
-      const nextMessage = "Create a quote before pulling quote lines into the invoice.";
+      const nextMessage = "Create an estimate before converting it into an invoice.";
       setErrorMessage(nextMessage);
       onToast?.(nextMessage, "warning");
+      return;
+    }
+
+    if (!canConvertFromEstimate) {
+      const nextMessage = "Only approved or signed estimates can be converted into an invoice.";
+      setErrorMessage(nextMessage);
+      onToast?.(nextMessage, "warning");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Convert the approved estimate into this job invoice using frozen estimate line snapshots?",
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -378,12 +341,20 @@ export default function JobInvoiceSection({
     setErrorMessage(null);
 
     try {
-      const quoteDetail = await crmApiFetch<QuoteDetailRecord>(`/api/estimates/${quoteId}`);
-      setLines(invoiceLinesFromQuoteDetail(quoteDetail.line_items, quoteDetail.total_cents ?? quoteDetail.price_cents));
-      setTaxRateInput(bpsToTaxRateInput(quoteDetail.tax_rate_bps_snapshot));
-      onToast?.("Invoice draft pulled from quote.", "success");
+      const response = await crmApiFetch<{ id: string; source_estimate_id: string | null }>(
+        `/api/jobs/${jobId}/invoice/convert-from-estimate`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            estimateId: quoteId,
+          }),
+        },
+      );
+
+      await loadInvoiceDetailById(response.id);
+      onToast?.("Invoice created from estimate.", "success");
     } catch (error) {
-      const nextMessage = error instanceof Error ? error.message : "The quote could not be loaded.";
+      const nextMessage = error instanceof Error ? error.message : "The estimate could not be converted.";
       setErrorMessage(nextMessage);
       onToast?.(nextMessage, "error");
     } finally {
@@ -496,14 +467,14 @@ export default function JobInvoiceSection({
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                disabled={isSaving}
+                disabled={isSaving || !canConvertFromEstimate}
                 onClick={() => {
-                  void pullFromQuote();
+                  void convertFromEstimate();
                 }}
                 className="inline-flex items-center gap-2 rounded-[18px] border border-white/10 bg-white/[0.06] px-4 py-2 text-xs uppercase tracking-[0.18em] text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Sparkles className="h-3.5 w-3.5" />
-                Pull from quote
+                Convert from estimate
               </button>
             </div>
           ) : null}
@@ -629,6 +600,18 @@ export default function JobInvoiceSection({
                 <p className="text-xs uppercase tracking-[0.24em] text-white/34">Ledger Status</p>
                 <p className="mt-2 text-white">{formatLifecycleLabel(invoiceDetail.lifecycle_status)}</p>
               </div>
+              {invoiceDetail.source_estimate_id ? (
+                <div className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-xs text-white/58">
+                  <p className="uppercase tracking-[0.22em] text-white/34">Provenance</p>
+                  <Link
+                    href={`/estimates/${invoiceDetail.source_estimate_id}`}
+                    className="mt-2 inline-flex items-center gap-2 text-[#f7df97] transition hover:text-white"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Created from estimate
+                  </Link>
+                </div>
+              ) : null}
               <div className="grid gap-3 rounded-[20px] border border-white/10 bg-black/20 p-4 text-xs text-white/48">
                 <div className="flex items-center justify-between gap-3">
                   <span>Total</span>

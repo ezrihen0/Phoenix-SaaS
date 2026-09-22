@@ -87,6 +87,7 @@ import {
   parseUpdateCustomerPayload,
   parseUpdateJobPayload,
   parseUpdateLeadPayload,
+  parseConvertFromEstimatePayload,
   parseUpsertInvoicePayload,
   parseUpsertQuotePayload,
 } from "./validation";
@@ -107,6 +108,8 @@ import { DocumentBrandingSnapshotService } from "../documents/pdf/document-brand
 import { setPdfDownloadResponseHeaders } from "../documents/pdf/pdf-download-response";
 import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
+import { EstimateInvoiceConversionService } from "./estimate-invoice-conversion.service";
+import { assertClientTotalMatchesEngine } from "./money-engine.core";
 import {
   persistInvoiceHeaderAndLineItems,
   persistQuoteHeaderAndLineItems,
@@ -205,6 +208,7 @@ export class CrmController {
     private readonly organizationSettingsRepository: Repository<OrganizationSettingEntity>,
     private readonly documentPricingService: DocumentPricingService,
     private readonly documentSnapshotService: DocumentSnapshotService,
+    private readonly estimateInvoiceConversionService: EstimateInvoiceConversionService,
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
     private readonly invoicePaymentRecordingService: InvoicePaymentRecordingService,
     private readonly crmOfficeDashboardService: CrmOfficeDashboardService,
@@ -1106,6 +1110,10 @@ export class CrmController {
           )
         : this.documentPricingService.buildLegacyTotals(payload.priceCents);
 
+      if (hasSnapshotLineItems) {
+        assertClientTotalMatchesEngine(payload.priceCents, quoteTotals, "Estimate");
+      }
+
       const timestamp = new Date();
       const sent_at = payload.status === "draft"
         ? null
@@ -1150,6 +1158,9 @@ export class CrmController {
       return apiSuccess(result);
     } catch (error) {
       this.rethrowHttpException(error);
+      if (error instanceof Error && error.message.includes("total mismatch")) {
+        apiError(400, "totals_mismatch", error.message);
+      }
       apiError(400, "invalid_quote_payload", "The quote payload is invalid.", error);
     }
   }
@@ -1250,6 +1261,7 @@ export class CrmController {
         customerName: customer?.full_name,
         serviceType: job?.requested_service_type,
       }),
+      source_estimate_id: invoice.source_quote_id,
     };
   }
 
@@ -1438,6 +1450,7 @@ export class CrmController {
         signed_at: this.toIsoString(invoice.signed_at),
         signed_by_name: invoice.signed_by_name,
         is_locked: this.isDocumentLocked(invoice.approved_at, invoice.signed_at),
+        source_estimate_id: invoice.source_quote_id,
         line_items: this.buildInvoiceLineItemResponse(invoice),
         payments: this.buildInvoicePaymentResponse(invoice),
         customer_name: listItem.customer_name,
@@ -2353,6 +2366,10 @@ export class CrmController {
           )
         : this.documentPricingService.buildLegacyTotals(payload.amountCents);
 
+      if (hasSnapshotLineItems) {
+        assertClientTotalMatchesEngine(payload.amountCents, invoiceTotals, "Invoice");
+      }
+
       const timestamp = new Date();
       const paidAtTimestamp = this.formatSqlTimestamp(timestamp);
       const orgSettings = await this.findOrganizationSettings(organizationId);
@@ -2445,7 +2462,39 @@ export class CrmController {
       return apiSuccess(invoice);
     } catch (error) {
       this.rethrowHttpException(error);
+      if (error instanceof Error && error.message.includes("total mismatch")) {
+        apiError(400, "totals_mismatch", error.message);
+      }
       apiError(400, "invalid_invoice_payload", "The invoice payload is invalid.", error);
+    }
+  }
+
+  @Post("jobs/:jobId/invoice/convert-from-estimate")
+  async convertInvoiceFromEstimate(
+    @Req() request: RequestWithActor,
+    @Param("jobId") jobId: string,
+    @Body() body: unknown,
+  ) {
+    const actor = requireActorProfile(request.actor);
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    try {
+      const payload = parseConvertFromEstimatePayload(body);
+      const invoice = await this.estimateInvoiceConversionService.convertFromEstimate({
+        organizationId,
+        jobId,
+        estimateId: payload.estimateId,
+        actor,
+      });
+
+      return apiSuccess({
+        id: invoice.id,
+        job_id: invoice.job_id,
+        source_estimate_id: invoice.source_quote_id,
+      });
+    } catch (error) {
+      this.rethrowHttpException(error);
+      apiError(400, "estimate_conversion_failed", "The estimate could not be converted.", error);
     }
   }
 

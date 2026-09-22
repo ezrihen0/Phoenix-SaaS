@@ -31,6 +31,7 @@ export async function persistInvoiceHeaderAndLineItems(
     due_at: Date;
     hasSnapshotLineItems: boolean;
     lineDrafts: SnapshotLineDraft[];
+    sourceQuoteId?: string | null;
     testHooks?: CrmDocumentPersistenceTestHooks;
   },
 ) {
@@ -47,6 +48,9 @@ export async function persistInvoiceHeaderAndLineItems(
     input.existingInvoice.status = input.status;
     input.existingInvoice.paid_at = input.paid_at;
     input.existingInvoice.due_at = input.due_at;
+    if (input.sourceQuoteId !== undefined) {
+      input.existingInvoice.source_quote_id = input.sourceQuoteId;
+    }
     invoice = await invoiceRepository.save(input.existingInvoice);
   } else {
     invoice = await invoiceRepository.save(
@@ -62,6 +66,7 @@ export async function persistInvoiceHeaderAndLineItems(
         status: input.status,
         paid_at: input.paid_at,
         due_at: input.due_at,
+        source_quote_id: input.sourceQuoteId ?? null,
       }),
     );
   }

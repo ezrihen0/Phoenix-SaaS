@@ -1575,6 +1575,8 @@ export default function JobDetailWorkspace({
                 jobId={job.id}
                 invoice={invoice}
                 quoteId={quote?.id ?? null}
+                quoteApprovedAt={quote?.approved_at ?? null}
+                quoteSignedAt={quote?.signed_at ?? null}
                 currentJobStatus={job.status}
                 onInvoiceChange={(nextInvoice) => {
                   setJob((current) => ({

@@ -15,6 +15,7 @@ import {
   getFinalizedDocumentLineTranslationRecordId,
   hydrateDocumentLineTranslations,
 } from "@/lib/crm/document-line-translations";
+import { computeDocumentPreviewTotals } from "@/lib/crm/money-engine";
 
 export type InvoiceStatus = Database["public"]["Enums"]["invoice_status"];
 
@@ -423,21 +424,19 @@ export function invoiceLinesFromPersistedSnapshot(
 }
 
 export function calculateInvoicePreviewTotals(lines: InvoiceBuilderLine[], taxRateBps: number): InvoicePreviewTotals {
-  const subtotalCents = lines.reduce((runningTotal, line) => {
-    const quantity = Number(line.quantity || "0");
-    const lineSubtotalCents = Number.isFinite(quantity)
-      ? Math.round(quantity * line.unitPriceCents)
-      : 0;
-    return runningTotal + lineSubtotalCents;
-  }, 0);
-
-  const taxCents = Math.round((subtotalCents * taxRateBps) / 10000);
+  const totals = computeDocumentPreviewTotals(
+    lines.map((line) => ({
+      quantity: line.quantity,
+      unitPriceCents: line.unitPriceCents,
+    })),
+    taxRateBps,
+  );
 
   return {
-    subtotalCents,
-    taxRateBps,
-    taxCents,
-    totalCents: subtotalCents + taxCents,
+    subtotalCents: totals.subtotalCents,
+    taxRateBps: totals.taxRateBps,
+    taxCents: totals.taxCents,
+    totalCents: totals.totalCents,
   };
 }
 

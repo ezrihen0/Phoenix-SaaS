@@ -12,6 +12,7 @@ import {
   getFinalizedDocumentLineTranslationRecordId,
   hydrateDocumentLineTranslations,
 } from "@/lib/crm/document-line-translations";
+import { computeDocumentPreviewTotals } from "@/lib/crm/money-engine";
 
 export type QuoteStatus = Database["public"]["Enums"]["quote_status"];
 
@@ -362,21 +363,19 @@ export function quoteLinesFromPersistedSnapshot(
 }
 
 export function calculateQuotePreviewTotals(lines: QuoteBuilderLine[], taxRateBps: number): QuotePreviewTotals {
-  const subtotalCents = lines.reduce((runningTotal, line) => {
-    const quantity = Number(line.quantity || "0");
-    const lineSubtotalCents = Number.isFinite(quantity)
-      ? Math.round(quantity * getQuoteLineUnitPriceCents(line))
-      : 0;
-    return runningTotal + lineSubtotalCents;
-  }, 0);
-
-  const taxCents = Math.round((subtotalCents * taxRateBps) / 10000);
+  const totals = computeDocumentPreviewTotals(
+    lines.map((line) => ({
+      quantity: line.quantity,
+      unitPriceCents: getQuoteLineUnitPriceCents(line),
+    })),
+    taxRateBps,
+  );
 
   return {
-    subtotalCents,
-    taxRateBps,
-    taxCents,
-    totalCents: subtotalCents + taxCents,
+    subtotalCents: totals.subtotalCents,
+    taxRateBps: totals.taxRateBps,
+    taxCents: totals.taxCents,
+    totalCents: totals.totalCents,
   };
 }
 
