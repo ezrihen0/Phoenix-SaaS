@@ -573,6 +573,21 @@ Possible lifecycle points:
 
 The owner-approved contract decides the final rule.
 
+## Part 4 implementation truth (2026-09)
+
+**Ledger (Phase 6)**
+
+- Canonical summarize logic: [`invoice-financial-lifecycle.core.ts`](backend/src/crm/invoice-financial-lifecycle.core.ts) via [`InvoicePaymentLedgerService`](backend/src/crm/invoice-payment-ledger.service.ts).
+- API exposes `lifecycle_status`, `balance_cents`, `overpayment_cents`, `paid_reason` (internal on ledger summary); legacy `invoice.status` sync still binary paid/unpaid from lifecycle paid/overpaid.
+- Document-terminal lifecycle: `void` / `cancelled` when `invoices.voided_at` / `cancelled_at` set (columns present; workflow UI deferred).
+- Office dashboard open-invoice counts/lists use ledger summaries, not `invoices.status = unpaid` alone.
+
+**Customer-facing snapshot (Phase 7)**
+
+- Column: `invoices.customer_facing_snapshot_json` schema v1 ([`invoice-customer-facing-snapshot.types.ts`](backend/src/crm/invoice-customer-facing-snapshot.types.ts)).
+- **Freeze trigger:** first customer-facing send (email or SMS) via [`InvoiceSendPipelineService`](backend/src/crm/invoice-send-pipeline.service.ts).
+- Post-freeze invoice upserts return `409 invoice_customer_snapshot_frozen`.
+
 ## Explicitly out of scope
 
 - visual PDF V2 redesign
@@ -674,6 +689,26 @@ Required properties:
 
 Do not rewrite historical imported invoice identifiers without explicit owner approval.
 
+## Part 5 implementation truth (2026-09)
+
+**Invoice PDF V2 (Phase 8)**
+
+- Renderer: [`InvoicePdfService`](backend/src/crm/invoice-pdf.service.ts) fed by [`InvoicePdfViewModelService`](backend/src/crm/invoice-pdf-view-model.service.ts) (snapshot-first when frozen; live draft preview before send).
+- Layout adds job/service reference, payments list, overpayment line, discount row when present, company address in header.
+
+**Document storage (Phase 9)**
+
+- Native PDF kind: `native_customer_pdf` on `invoice_documents` with `generation_sequence`, `snapshot_hash`, `sent_via`, `renderer_version` (`invoice-pdf-v2`).
+- Persisted on send after freeze via [`InvoiceNativeDocumentService`](backend/src/documents/invoice-documents/invoice-native-document.service.ts).
+- Portal PDF prefers latest native document, else `workiz_source_pdf`.
+
+**Invoice numbering (Phase 10)**
+
+- Column: `invoices.document_number` unique per org; allocated on first send from `organization_invoice_sequences` ([`InvoiceNumberingService`](backend/src/crm/invoice-numbering.service.ts)).
+- Draft display falls back to Workiz provenance or `INV-{uuid8}` until send.
+
+**Checks:** `npm run finance-part4-part5:checks` (backend).
+
 ## Exit gate
 
 ```text
@@ -740,6 +775,21 @@ Reconnect Finance consistently into:
 One domain truth should feed every surface.
 
 Do not create separate status logic per screen.
+
+## Part 6 implementation truth (2026-09)
+
+**Unified Finance reads (Phase 12)**
+
+- [`FinanceInvoicePresentationService`](backend/src/crm/finance-invoice-presentation.service.ts) builds invoice list/detail fields: ledger totals, `finance_origin`, `display_document_number`, `snapshot_frozen`.
+- Customer portal home invoice rows expose `lifecycle_status`, `balance_cents`, `finance_origin`, `document_origin`; `payment_state` uses ledger (not legacy `invoice.status` alone).
+- Home AI money widget and invoice tool reads use ledger open-balance rules via presentation service.
+
+**Workiz audit (Phase 11 — read-only)**
+
+- `npm run finance-part6:workiz-audit` (requires `FINANCE_AUDIT_ORG_ID` or `PHOENIX_ORG_ID`) writes classification JSON under `_runtime_harness/finance-part6-workiz-audit/`.
+- **No bulk repair** in Part 6; `workiz:final:reconcile` remains out of scope for automated closeout.
+
+**Checks:** `npm run finance-part6:checks`
 
 ## Exit gate
 
@@ -843,6 +893,40 @@ Required verification classes:
 - git review
 
 Final program status may only be marked closed after evidence is recorded.
+
+## Part 7 implementation truth (2026-09)
+
+**Permissions / tenant / audit (Phase 13)**
+
+- Table `finance_audit_events` + [`FinanceAuditService`](backend/src/crm/finance-audit.service.ts) logs invoice upsert, send, snapshot freeze, payments/refunds/adjustments, estimate→invoice conversion.
+- `npm run finance-endpoint-tenant:check` — static guard that core Finance handlers call `requireActiveOrganizationId`.
+- `npm run finance-org-isolation:smoke` — baseline org-scoped invoice read isolation fixture.
+
+**Owner UX helpers (Phase 14)**
+
+- [`frontend/lib/crm/invoice-lifecycle.ts`](frontend/lib/crm/invoice-lifecycle.ts) — shared lifecycle labels (incl. sent-locked).
+- [`frontend/lib/crm/finance-api-errors.ts`](frontend/lib/crm/finance-api-errors.ts) — owner-plain messages for common Finance API codes.
+
+**Closeout (Phase 15)**
+
+- `npm run finance-part7:closeout` — orchestrates build, Part 6 checks, tenant check, isolation smoke, payment recording smoke.
+- `npm run phoenix-finance:closeout-readonly` — read-only org invoice origin counts → `_runtime_harness/finance-program-closeout/phoenix-readonly.json`.
+
+## Post-program closeout & certification (Plans 8–9 — 2026-09)
+
+**Evidence pack (Plan 8)**
+
+- Folder: `backend/_runtime_harness/finance-program-closeout/<timestamp>/` (and `latest/` mirror for key artifacts).
+- `npm run finance-part8:evidence-pack` — alias for full certification run.
+- No Workiz mutating repair in closeout; read-only audit only when `FINANCE_AUDIT_ORG_ID` or `PHOENIX_ORG_ID` is set.
+
+**§9 certification matrix (Plan 9)**
+
+- `npm run finance-part9:certify` — orchestrates build, Part 6 checks, tenant/isolation/portal smokes, payment recording smoke, frontend `tsc`, Phoenix readonly closeout; optional Workiz audit and Playwright when env flags set.
+- `npm run finance-program:finish` — §11 orchestrator: configured-DB smokes, resolves Phoenix org for Workiz audit, then `finance-part9:certify`.
+- Emits: `completion-matrix.json`, `closeout-summary.json`, `open-items-waivers.json`, `cross-surface-walkthrough.md`, `CERTIFICATION.md`, `git-sha.txt`.
+- Env: `FINANCE_CLOSEOUT_DIR` (output path), `FINANCE_CERTIFY_PLAYWRIGHT=1` (UI smokes), `FINANCE_CERTIFY_MANUAL_PASS=1` (owner completed manual §9 items).
+- Program status derived: `COMPLETE` | `COMPLETE WITH WAIVERS` | `NOT COMPLETE` (exit code 1 on `NOT COMPLETE`).
 
 ## Exit gate
 
@@ -1000,16 +1084,238 @@ The Finance program is complete only when WizField can truthfully satisfy all of
 ```text
 Master Program: DEFINED
 
-Part 1:
-Production Truth & Finance Contract
-STATUS: STARTING / PLANNING
+Parts 1–7:
+IMPLEMENTATION SHIPPED (see Part N implementation truth blocks)
 
-Parts 2–7:
-NOT AUTHORIZED FOR IMPLEMENTATION YET
+Post-program (Plans 8–9):
+Evidence pack + §9 certification orchestrator SHIPPED
+Run: npm run finance-part9:certify (backend)
+
+Certification status:
+COMPLETE WITH WAIVERS — automated smokes + Workiz audit PASS via finance-program:finish
+Remaining waivers: Playwright/manual creation, snapshot/PDF sign-off, cross-surface walkthrough
+Evidence: backend/_runtime_harness/finance-program-closeout/latest/
+Owner sign-off on CERTIFICATION.md required for COMPLETE (no waivers).
 ```
 
 ---
 
-# 11. One-Line Program Principle
+# 11. Program Finish Master Plan
+
+**Purpose:** Close the Finance program under §9 with evidence, owner sign-off, and no open FAIL rows in the certification matrix.  
+**Scope:** Verification, documentation, and ops — **not** new Parts, Workiz bulk repair, or unrelated product work.  
+**Definition of done:** `npm run finance-part9:certify` → program status **`COMPLETE`** (waivers only where owner explicitly accepts documented risk) + signed `CERTIFICATION.md` + git review of shipped Parts committed.
+
+## 11.1 Finish gate (single outcome)
+
+```text
+§9: all 15 criteria PASS or owner-accepted WAIVED with written reason in open-items-waivers.json
+Phase 15: evidence folder timestamped + latest/ mirror updated
+§10: updated to PROGRAM CLOSED with certify git SHA and sign-off date
+No STOP conditions from §7 triggered during finish work
+```
+
+## 11.2 Preconditions (before starting)
+
+| Check | Owner action |
+|-------|----------------|
+| Canonical Phoenix org | Confirm org id/slug and DB (`PHOENIX_ORG_ID` / `.env` DB) match **production truth** intent |
+| Code on disk | Parts 1–7 + Plans 8–9 merged or committed; migrations applied on target verify DB |
+| No repair scope creep | Workiz changes limited to **read-only audit** unless a separate correction plan is approved |
+| Runtime for UI tests | Backend + frontend running locally or in CI when using Playwright |
+
+## 11.3 Workstreams (execute in order)
+
+### Stream A — Environment & integration smokes (clears §9 #5, #6, #13 portal leg)
+
+**Goal:** Payment and portal isolation smokes run **PASS**, not ephemeral-DB waiver.
+
+1. **Local (no CREATE DATABASE):** set `FINANCE_SMOKE_USE_CONFIGURED_DATABASE=1` or run the finish orchestrator (sets it automatically).
+2. **CI / privileged host:** grant `CREATE DATABASE` and run ephemeral smokes, **or** use configured DB on a disposable schema.
+3. From `backend/`:
+
+```bash
+npm run crm:invoice-payment-recording:smoke
+npm run portal:isolation:smoke
+# full §11 automation:
+npm run finance-program:finish
+```
+
+3. Fix any real FAIL (not access denied); do **not** weaken smoke assertions.
+
+**Exit:** Both smokes green; re-run `npm run finance-part9:certify` — criteria 5–6 PASS; criterion 13 PASS without portal waiver note.
+
+---
+
+### Stream B — Workiz historical audit (clears §9 #11)
+
+**Goal:** Classify imported Finance; no silent repair.
+
+1. Set `FINANCE_AUDIT_ORG_ID` or `PHOENIX_ORG_ID` to canonical Phoenix org.
+2. Run:
+
+```bash
+npm run finance-part6:workiz-audit
+```
+
+3. Owner reviews latest `backend/_runtime_harness/finance-part6-workiz-audit/classification-*.json`.
+4. Triage anomalies per Part 6 classifications (`Do not repair` default); spawn **separate** correction plans only for approved `Safe repair candidate` rows.
+
+**Exit:** Audit artifact copied into closeout folder on next certify; criterion 11 PASS or owner-documented WAIVED with anomaly list attached.
+
+---
+
+### Stream C — Owner creation & send path (clears §9 #1, #2, #7)
+
+**Goal:** Prove Quick Create + send + freeze behavior.
+
+**Option 1 — Automated (preferred when stack is up):**
+
+```bash
+# terminal 1: backend dev
+# terminal 2: frontend dev
+set FINANCE_CERTIFY_PLAYWRIGHT=1
+npm run finance-part9:certify
+```
+
+**Option 2 — Manual script (same evidence class):**
+
+1. Create Estimate → save draft → reload → edit.
+2. Create Invoice → lines → save → send (email or SMS).
+3. Confirm sequential `document_number`, frozen snapshot (`409` on line edit after send).
+4. Download PDF; confirm matches sent snapshot.
+
+**Exit:** Criteria 1–2 PASS (Playwright) or owner checklist signed in walkthrough; criterion 7 PASS after manual send test → set `FINANCE_CERTIFY_MANUAL_PASS=1` on final certify.
+
+---
+
+### Stream D — Cross-surface truth (clears §9 #12)
+
+**Goal:** One invoice/customer sample matches everywhere (Part 6 Phase 12).
+
+Use checklist: `backend/_runtime_harness/finance-program-closeout/latest/cross-surface-walkthrough.md`
+
+Verify for the **same** org and sample rows:
+
+- Invoices list — `lifecycle_status`, `balance_cents`, `document_number`, `finance_origin`
+- Job → Invoice tab — conversion provenance when applicable
+- Customer profile — open balance vs sum of open invoices
+- Office dashboard — open invoice count
+- Customer portal — lifecycle, PDF, `document_origin`
+- Home AI — open/unpaid alignment with CRM
+
+**Exit:** All boxes checked; owner initials on walkthrough file; include path in closeout folder copy; `FINANCE_CERTIFY_MANUAL_PASS=1` on final certify.
+
+---
+
+### Stream E — Native PDF sign-off (clears §9 #8)
+
+**Goal:** Owner accepts native PDF for production use (Part 5 exit gate).
+
+1. Send a native invoice; open `GET /api/invoices/:id/pdf` and portal PDF link.
+2. Compare to Workiz historical PDF policy (portal prefers native then Workiz source).
+3. If visual gaps remain (logo, multi-page): either **accept as v1** or schedule **Part 5.1** backlog — do not block close if owner waives with explicit “v1 acceptable.”
+
+**Exit:** Criterion 8 PASS after owner sign-off on PDF sample stored in evidence pack (screenshot or PDF hash note in `CERTIFICATION.md`).
+
+---
+
+### Stream F — Phoenix production reverification (clears §9 #14 substantively)
+
+**Goal:** Readonly counts reflect **real** Phoenix Finance rows, not empty dev DB by mistake.
+
+1. Point `.env` / readonly script at intended DB and org (`phoenix-finance:closeout-readonly` uses org from env).
+2. Run:
+
+```bash
+npm run phoenix-finance:closeout-readonly
+```
+
+3. Owner confirms `invoiceCount`, `originCounts`, `withDocumentNumber`, `withCustomerSnapshot` are plausible for production.
+
+**Exit:** `phoenix-readonly.json` in closeout with non-surprising counts; owner note in `CERTIFICATION.md` if zero rows is expected (e.g. fresh org).
+
+---
+
+### Stream G — Final certification & program close (clears §9 #15)
+
+1. Set env for full run:
+
+```text
+FINANCE_AUDIT_ORG_ID=<phoenix org uuid>   # if Stream B done
+FINANCE_CERTIFY_PLAYWRIGHT=1              # if Stream C Option 1
+FINANCE_CERTIFY_MANUAL_PASS=1             # after Streams C, D, E manual items
+```
+
+2. From `backend/`:
+
+```bash
+npm run finance-part9:certify
+# or
+npm run finance-part8:evidence-pack
+```
+
+3. Confirm `completion-matrix.json` → `programStatus`: **`COMPLETE`** (or **`COMPLETE WITH WAIVERS`** with owner acceptance of each waiver in `open-items-waivers.json`).
+4. Sign `CERTIFICATION.md` (owner name, date).
+5. Git: commit program code + master reference; tag or release note optional; **do not** commit secrets or `.env`.
+6. CI (recommended): add job running `finance-part9:certify` on merge with privileged DB.
+
+**Exit:** §10 updated to **PROGRAM CLOSED** with SHA, date, and link to evidence folder.
+
+---
+
+## 11.4 §9 criteria tracker (finish checklist)
+
+| # | Criterion | Primary stream | Pass signal |
+|---|-----------|----------------|-------------|
+| 1 | Reliable Estimate create | C | Playwright or manual |
+| 2 | Reliable Invoice create | C | Playwright or manual |
+| 3 | Conversion no drift | — | Already PASS (part6 checks) |
+| 4 | Backend owns math | — | Already PASS |
+| 5 | Ledger explains state | A | Payment smoke PASS |
+| 6 | Payment states deterministic | A | Smoke + unit checks |
+| 7 | Snapshot immutable | C | Send + 409 manual |
+| 8 | PDF professional | E | Owner sign-off |
+| 9 | Durable native documents | — | Already PASS |
+| 10 | Invoice numbering | — | Already PASS |
+| 11 | Workiz honest | B | Audit artifact |
+| 12 | Cross-surface consistent | D | Walkthrough complete |
+| 13 | Tenant-safe | A | Smokes + tenant check |
+| 14 | Phoenix reverified | F | Readonly plausible |
+| 15 | Evidence recorded | G | Certify + sign |
+
+## 11.5 Explicitly after program close (backlog — not finish blockers)
+
+Track separately from §9; require new owner approval if scope expands:
+
+- Money engine **discounts** (Part 3 deferred)
+- **Void/cancelled** invoice owner workflow UI (Part 4 deferred)
+- PDF **Part 5.1** — branding, multi-page, golden tests
+- Wire **invoice-lifecycle** / **finance-api-errors** on all invoice surfaces
+- Workiz **write repair** only via approved correction plans
+- Part 1 **production truth** document refresh if prod drifted since baseline
+
+## 11.6 Stop conditions during finish (§7)
+
+Halt finish work and report per §7 if:
+
+- production org or DB identity is uncertain for a data-bearing step
+- certify exposes cross-org read or tenant regression
+- a “fix” would rewrite Workiz historical truth without approval
+- migration or repair would touch historical Finance rows without approved plan
+
+## 11.7 Suggested owner calendar (minimal)
+
+```text
+Day 1 — Stream A (DB/CI smokes) + Stream B (Workiz audit review)
+Day 2 — Streams C + D (manual or Playwright walkthrough)
+Day 3 — Streams E + F + G (PDF sign-off, readonly, final certify, sign CERTIFICATION.md)
+```
+
+Adjust for CI availability; parallelize B with A where possible.
+
+---
+
+# 12. One-Line Program Principle
 
 > Truth first. Creation second. Financial math third. Ledger and history fourth. Documents fifth. Integration sixth. Hardening and production closeout last.

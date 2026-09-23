@@ -7,6 +7,7 @@ import { InvoiceEntity } from "../../database/entities/invoice.entity";
 import { JobEntity } from "../../database/entities/job.entity";
 import { InvoiceDocumentsPortalController } from "./invoice-documents.portal.controller";
 import { InvoiceDocumentsService } from "./invoice-documents.service";
+import { InvoiceNativeDocumentService } from "./invoice-native-document.service";
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { InvoiceDocumentsService } from "./invoice-documents.service";
     ]),
   ],
   controllers: [InvoiceDocumentsPortalController],
-  providers: [InvoiceDocumentsService],
-  exports: [InvoiceDocumentsService],
+  providers: [InvoiceDocumentsService, InvoiceNativeDocumentService],
+  exports: [InvoiceDocumentsService, InvoiceNativeDocumentService],
 })
 export class InvoiceDocumentsModule {}

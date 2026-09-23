@@ -11,6 +11,7 @@ import { DataSource } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
 import { CustomerPortalService } from "../customer-portal/customer-portal.service";
+import { InvoicePaymentLedgerService } from "../crm/invoice-payment-ledger.service";
 import { DocumentBrandingSnapshotService } from "../documents/pdf/document-branding-snapshot.service";
 import { WarrantyCertificatesService } from "../warranty/warranty-certificates.service";
 import { WarrantyPdfService } from "../warranty/warranty-pdf.service";
@@ -26,6 +27,9 @@ import { PortalSessionEntity } from "./entities/portal-session.entity";
 import { QuoteEntity } from "./entities/quote.entity";
 import { TechnicianEntity } from "./entities/technician.entity";
 import { WarrantyCertificateEntity } from "./entities/warranty-certificate.entity";
+import { In } from "typeorm";
+
+import { resolveSmokeDatabasePlan } from "./db-smoke-database-plan";
 import { buildDataSourceOptions } from "./typeorm.config";
 import { verifyDatabaseSchema } from "./verify-schema";
 
@@ -173,6 +177,7 @@ function buildPortalService(dataSource: DataSource) {
     dataSource.getRepository(WarrantyCertificateEntity),
     dataSource.getRepository(InvoiceDocumentEntity),
     new SmokeConfigService() as ConfigService,
+    new InvoicePaymentLedgerService(),
   );
 }
 
@@ -372,40 +377,65 @@ async function runCases(summary: SmokeSummary, dataSource: DataSource, seed: See
   });
 }
 
+async function cleanupPortalSmokeSeed(dataSource: DataSource, seed: Seed) {
+  const orgIds = [seed.orgAId, seed.orgBId];
+  await dataSource.getRepository(PortalMagicLinkEntity).delete({ organization_id: In(orgIds) });
+  await dataSource.getRepository(PortalSessionEntity).delete({ organization_id: In(orgIds) });
+  await dataSource.getRepository(PortalAccessEventEntity).delete({ organization_id: In(orgIds) });
+  await dataSource.getRepository(WarrantyCertificateEntity).delete({ id: In([seed.certAId, seed.certBId]) });
+  await dataSource.getRepository(CustomerEntity).delete({ id: In([seed.customerAId, seed.customerBId]) });
+  await dataSource.getRepository(OrganizationEntity).delete({ id: In(orgIds) });
+}
+
 async function main() {
   const options = requireMySqlOptions();
-  const databaseName = process.env.DB_SMOKE_DATABASE?.trim() || `wizfield_portal_verify_${Date.now()}`;
-  const shouldDrop = normalizeBooleanFlag(process.env.DB_SMOKE_DROP, false);
-  const summary = createSummary(databaseName);
+  const plan = resolveSmokeDatabasePlan(options, "wizfield_portal_verify");
+  const summary = createSummary(plan.databaseName);
 
-  const adminConnection = await mysql.createConnection({
-    host: options.host,
-    port: options.port,
-    user: options.username,
-    password: options.password,
-    multipleStatements: true,
-  });
-
+  let adminConnection: mysql.Connection | null = null;
   let dataSource: DataSource | null = null;
+  let seed: Seed | null = null;
 
   try {
-    if (shouldDrop) {
-      await adminConnection.query(`DROP DATABASE IF EXISTS \`${databaseName}\``);
+    if (plan.mode === "ephemeral") {
+      adminConnection = await mysql.createConnection({
+        host: options.host,
+        port: options.port,
+        user: options.username,
+        password: options.password,
+        multipleStatements: true,
+      });
+
+      if (plan.shouldDrop) {
+        await adminConnection.query(`DROP DATABASE IF EXISTS \`${plan.databaseName}\``);
+      }
+
+      await adminConnection.query(
+        `CREATE DATABASE \`${plan.databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+      );
     }
-    await adminConnection.query(
-      `CREATE DATABASE \`${databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
-    );
+
     summary.phases.databaseCreate = "PASS";
 
-    dataSource = new DataSource({ ...options, database: databaseName, synchronize: false, migrationsRun: false, logging: false });
+    dataSource = new DataSource({
+      ...options,
+      database: plan.databaseName,
+      synchronize: false,
+      migrationsRun: false,
+      logging: false,
+    });
     await dataSource.initialize();
-    await dataSource.runMigrations();
+
+    if (plan.mode === "ephemeral") {
+      await dataSource.runMigrations();
+    }
+
     summary.phases.migrations = "PASS";
 
     await verifyDatabaseSchema(dataSource);
     summary.phases.schemaVerify = "PASS";
 
-    const seed = await seedHarness(dataSource, randomUUID().slice(0, 8));
+    seed = await seedHarness(dataSource, randomUUID().slice(0, 8));
     summary.phases.seeding = "PASS";
 
     await runCases(summary, dataSource, seed);
@@ -415,14 +445,23 @@ async function main() {
   } catch (error) {
     summary.errors.push(extractErrorCode(error));
   } finally {
-    if (dataSource?.isInitialized) {
-      await dataSource.destroy();
+    try {
+      if (dataSource?.isInitialized) {
+        if (plan.mode === "configured" && seed) {
+          await cleanupPortalSmokeSeed(dataSource, seed);
+        }
+        await dataSource.destroy();
+      }
+      if (plan.mode === "ephemeral" && adminConnection) {
+        if (plan.shouldDrop) {
+          await adminConnection.query(`DROP DATABASE IF EXISTS \`${plan.databaseName}\``);
+          summary.cleanup.droppedDatabase = true;
+        }
+        await adminConnection.end();
+      }
+    } catch (error) {
+      summary.errors.push(`cleanup: ${extractErrorCode(error)}`);
     }
-    if (shouldDrop) {
-      await adminConnection.query(`DROP DATABASE IF EXISTS \`${databaseName}\``);
-      summary.cleanup.droppedDatabase = true;
-    }
-    await adminConnection.end();
   }
 
   console.log(JSON.stringify(summary, null, 2));

@@ -11,6 +11,7 @@ import {
 } from "../auth/permissions";
 import { openJobStatuses } from "../crm/constants";
 import { CustomerLedgerService } from "../crm/customer-ledger.service";
+import { FinanceInvoicePresentationService } from "../crm/finance-invoice-presentation.service";
 import { endOfLocalDashboardDay, startOfLocalDashboardDay } from "../crm/crm-dashboard-time-window";
 import { HomeAiConversationEntity } from "../database/entities/home-ai-conversation.entity";
 import { HomeAiMessageEntity } from "../database/entities/home-ai-message.entity";
@@ -114,6 +115,7 @@ export class HomeAiService {
     @InjectRepository(InvoiceEntity)
     private readonly invoicesRepository: Repository<InvoiceEntity>,
     private readonly customerLedgerService: CustomerLedgerService,
+    private readonly financeInvoicePresentationService: FinanceInvoicePresentationService,
   ) {}
 
   private mergedEnvPreference(key: string): string | undefined {
@@ -549,25 +551,22 @@ export class HomeAiService {
     if (this.hasPermission(actor, "invoices.view") || this.hasPermission(actor, "invoices.assigned.view")) {
       const invoiceQb = this.invoicesRepository
         .createQueryBuilder("invoice")
-        .leftJoin("invoice.job", "job")
-        .where("invoice.organization_id = :organizationId", { organizationId })
-        .andWhere("invoice.status = :status", { status: "unpaid" });
+        .leftJoinAndSelect("invoice.job", "job")
+        .leftJoinAndSelect("invoice.payments", "payments")
+        .where("invoice.organization_id = :organizationId", { organizationId });
 
       if (!this.hasPermission(actor, "invoices.view") && technicianId) {
         invoiceQb.andWhere("job.assigned_technician_id = :technicianId", { technicianId });
       }
 
-      const unpaidInvoices = await invoiceQb.getMany();
-      const totalBalanceCents = unpaidInvoices.reduce(
-        (sum, invoice) => sum + (invoice.total_cents ?? 0),
-        0,
-      );
+      const visibleInvoices = await invoiceQb.getMany();
+      const openFinance = this.financeInvoicePresentationService.summarizeCustomerOpenFinance(visibleInvoices);
 
       widgets.money = {
         visible: true,
-        label: "Unpaid balance",
-        count: unpaidInvoices.length,
-        totalBalanceCents,
+        label: "Open invoice balance",
+        count: openFinance.open_invoice_count,
+        totalBalanceCents: openFinance.open_balance_cents,
         href: "/invoices",
       };
     } else {

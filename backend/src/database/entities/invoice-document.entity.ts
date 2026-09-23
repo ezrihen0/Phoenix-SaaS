@@ -13,10 +13,10 @@ import { CustomerEntity } from "./customer.entity";
 import { InvoiceEntity } from "./invoice.entity";
 import { OrganizationEntity } from "./organization.entity";
 
-export const invoiceDocumentKinds = ["workiz_source_pdf"] as const;
+export const invoiceDocumentKinds = ["workiz_source_pdf", "native_customer_pdf"] as const;
 export type InvoiceDocumentKind = (typeof invoiceDocumentKinds)[number];
 
-@Index("IDX_invoice_documents_org_invoice_kind", ["organization_id", "invoice_id", "document_kind"], { unique: true })
+@Index("IDX_invoice_documents_org_invoice_kind_seq", ["organization_id", "invoice_id", "document_kind", "generation_sequence"], { unique: true })
 @Index("IDX_invoice_documents_org_invoice_hash", ["organization_id", "invoice_id", "file_hash"], { unique: true })
 @Index("IDX_invoice_documents_org_customer", ["organization_id", "customer_id"])
 @Entity({ name: "invoice_documents" })
@@ -35,6 +35,24 @@ export class InvoiceDocumentEntity {
 
   @Column({ type: "varchar", length: 64 })
   document_kind!: InvoiceDocumentKind;
+
+  @Column({ type: "int", default: 0 })
+  generation_sequence!: number;
+
+  @Column({ type: "varchar", length: 64, nullable: true })
+  snapshot_hash!: string | null;
+
+  @Column({ type: "datetime", precision: 6, nullable: true })
+  snapshot_frozen_at!: Date | null;
+
+  @Column({ type: "varchar", length: 64, nullable: true })
+  document_number_at_generation!: string | null;
+
+  @Column({ type: "varchar", length: 16, nullable: true })
+  sent_via!: string | null;
+
+  @Column({ type: "varchar", length: 32, nullable: true })
+  renderer_version!: string | null;
 
   @Column({ type: "varchar", length: 512 })
   storage_key!: string;

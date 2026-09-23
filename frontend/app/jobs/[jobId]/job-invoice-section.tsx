@@ -6,7 +6,12 @@ import { CheckCircle2, ExternalLink, LoaderCircle, Receipt, Save, ShieldCheck, S
 
 import JobInvoiceCatalogPicker from "@/components/job-invoice-catalog-picker";
 import InvoiceLineItemsEditor from "@/components/invoice-line-items-editor";
-import { crmApiFetch } from "@/lib/crm/browser-api";
+import { CrmApiError, crmApiFetch } from "@/lib/crm/browser-api";
+import { financeApiErrorMessage } from "@/lib/crm/finance-api-errors";
+import {
+  formatInvoiceLifecycleStatus,
+  type InvoiceLifecycleStatus as SharedInvoiceLifecycleStatus,
+} from "@/lib/crm/invoice-lifecycle";
 import {
   applyDocumentLineTranslationState,
   createEmptyDocumentLineTranslationFields,
@@ -31,7 +36,7 @@ import {
 } from "@/lib/crm/invoice-line-model";
 import { getJobStatusLabel, type JobStatus } from "@/lib/crm/statuses";
 type ToastTone = "success" | "error" | "warning";
-type InvoiceLifecycleStatus = "sent" | "partial" | "paid" | "refunded" | "overpaid";
+type InvoiceLifecycleStatus = SharedInvoiceLifecycleStatus;
 
 type InvoicePaymentRecord = {
   id: string;
@@ -59,6 +64,7 @@ export type JobInvoiceRecord = {
   balance_cents?: number;
   issued_at: string;
   paid_at: string | null;
+  last_sent_at?: string | null;
   line_items?: PersistedInvoiceLineItem[];
   payments?: InvoicePaymentRecord[];
 };
@@ -81,24 +87,16 @@ const invoiceStatuses: Array<{ value: InvoiceStatus; label: string }> = [
   { value: "paid", label: "Paid" },
 ];
 
-function formatLifecycleLabel(status: InvoiceLifecycleStatus | undefined) {
-  if (!status) {
-    return "Sent";
+function resolveFinanceErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof CrmApiError) {
+    return financeApiErrorMessage(error.code, error.message || fallback);
   }
 
-  if (status === "partial") {
-    return "Partial";
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
   }
 
-  if (status === "refunded") {
-    return "Refunded";
-  }
-
-  if (status === "overpaid") {
-    return "Overpaid";
-  }
-
-  return status === "paid" ? "Paid" : "Sent";
+  return fallback;
 }
 
 export default function JobInvoiceSection({
@@ -255,7 +253,7 @@ export default function JobInvoiceSection({
       }
       onInvoiceSaved?.(response.id);
     } catch (error) {
-      const nextMessage = error instanceof Error ? error.message : "The invoice could not be saved.";
+      const nextMessage = resolveFinanceErrorMessage(error, "The invoice could not be saved.");
       setErrorMessage(nextMessage);
       onToast?.(nextMessage, "error");
     } finally {
@@ -304,7 +302,7 @@ export default function JobInvoiceSection({
       setStatus(finalInvoice.status);
       onToast?.("Full payment recorded.", "success");
     } catch (error) {
-      const nextMessage = error instanceof Error ? error.message : "The payment could not be recorded.";
+      const nextMessage = resolveFinanceErrorMessage(error, "The payment could not be recorded.");
       setErrorMessage(nextMessage);
       onToast?.(nextMessage, "error");
     } finally {
@@ -354,7 +352,7 @@ export default function JobInvoiceSection({
       await loadInvoiceDetailById(response.id);
       onToast?.("Invoice created from estimate.", "success");
     } catch (error) {
-      const nextMessage = error instanceof Error ? error.message : "The estimate could not be converted.";
+      const nextMessage = resolveFinanceErrorMessage(error, "The estimate could not be converted.");
       setErrorMessage(nextMessage);
       onToast?.(nextMessage, "error");
     } finally {
@@ -598,7 +596,11 @@ export default function JobInvoiceSection({
 
               <div>
                 <p className="text-xs uppercase tracking-[0.24em] text-white/34">Ledger Status</p>
-                <p className="mt-2 text-white">{formatLifecycleLabel(invoiceDetail.lifecycle_status)}</p>
+                <p className="mt-2 text-white">
+                  {formatInvoiceLifecycleStatus(invoiceDetail.lifecycle_status ?? "sent", {
+                    snapshotFrozen: Boolean(invoiceDetail.last_sent_at),
+                  })}
+                </p>
               </div>
               {invoiceDetail.source_estimate_id ? (
                 <div className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-xs text-white/58">

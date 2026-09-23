@@ -5,6 +5,7 @@ import { AuthModule } from "../auth/auth.module";
 import { CustomerEntity } from "../database/entities/customer.entity";
 import { CustomerPortalModule } from "../customer-portal/customer-portal.module";
 import { DocumentsPdfModule } from "../documents/pdf/documents-pdf.module";
+import { InvoiceDocumentsModule } from "../documents/invoice-documents/invoice-documents.module";
 import { EmailModule } from "../email/email.module";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
 import { InvoiceLineItemEntity } from "../database/entities/invoice-line-item.entity";
@@ -15,6 +16,7 @@ import { JobEntity } from "../database/entities/job.entity";
 import { LeadEntity } from "../database/entities/lead.entity";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
+import { OrganizationInvoiceSequenceEntity } from "../database/entities/organization-invoice-sequence.entity";
 import { PricebookBundleItemEntity } from "../database/entities/pricebook-bundle-item.entity";
 import { PricebookBundleEntity } from "../database/entities/pricebook-bundle.entity";
 import { PricebookItemEntity } from "../database/entities/pricebook-item.entity";
@@ -37,6 +39,13 @@ import { DocumentSnapshotService } from "./document-snapshot.service";
 import { InvoicePdfService } from "./invoice-pdf.service";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 import { InvoicePaymentRecordingService } from "./invoice-payment-recording.service";
+import { InvoiceCustomerFacingSnapshotService } from "./invoice-customer-facing-snapshot.service";
+import { InvoiceNumberingService } from "./invoice-numbering.service";
+import { InvoiceSendPipelineService } from "./invoice-send-pipeline.service";
+import { InvoicePdfViewModelService } from "./invoice-pdf-view-model.service";
+import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
+import { FinanceAuditService } from "./finance-audit.service";
+import { FinanceAuditEventEntity } from "../database/entities/finance-audit-event.entity";
 
 @Module({
   imports: [
@@ -46,6 +55,7 @@ import { InvoicePaymentRecordingService } from "./invoice-payment-recording.serv
     MessagingModule,
     CustomerPortalModule,
     DocumentsPdfModule,
+    InvoiceDocumentsModule,
     TypeOrmModule.forFeature([
       ProfileEntity,
       TechnicianEntity,
@@ -65,6 +75,8 @@ import { InvoicePaymentRecordingService } from "./invoice-payment-recording.serv
       PricebookBundleEntity,
       PricebookBundleItemEntity,
       OrganizationSettingEntity,
+      OrganizationInvoiceSequenceEntity,
+      FinanceAuditEventEntity,
     ]),
   ],
   controllers: [CrmController],
@@ -75,12 +87,25 @@ import { InvoicePaymentRecordingService } from "./invoice-payment-recording.serv
     EstimateInvoiceConversionService,
     InvoicePaymentLedgerService,
     InvoicePaymentRecordingService,
+    InvoiceCustomerFacingSnapshotService,
+    InvoiceNumberingService,
+    InvoiceSendPipelineService,
+    InvoicePdfViewModelService,
+    FinanceInvoicePresentationService,
+    FinanceAuditService,
     CrmOfficeDashboardService,
     CustomerLedgerService,
     CustomerDeletionService,
     InvoicePdfService,
     JobsService,
   ],
-  exports: [CrmOfficeDashboardService, CustomerLedgerService, JobsService],
+  exports: [
+    CrmOfficeDashboardService,
+    CustomerLedgerService,
+    JobsService,
+    FinanceInvoicePresentationService,
+    InvoicePaymentLedgerService,
+    FinanceAuditService,
+  ],
 })
 export class CrmModule {}

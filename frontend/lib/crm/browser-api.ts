@@ -2,8 +2,19 @@ type ApiEnvelope<T> = {
   data?: T;
   error?: {
     message?: string;
+    code?: string;
   };
 };
+
+export class CrmApiError extends Error {
+  readonly code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "CrmApiError";
+    this.code = code;
+  }
+}
 
 const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL ?? "").trim();
 
@@ -49,15 +60,17 @@ export async function crmApiFetch<T>(input: string, init?: RequestInit) {
   }
 
   if (!response.ok) {
+    const code = payload?.error?.code?.trim();
     const message = payload?.error?.message?.trim();
     if (message) {
-      throw new Error(message);
+      throw new CrmApiError(message, code);
     }
 
-    throw new Error(
+    throw new CrmApiError(
       response.status >= 500
         ? `The request could not be completed. The backend returned HTTP ${response.status}. Ensure the API server is running on port 4000.`
         : `The request could not be completed (HTTP ${response.status}).`,
+      code,
     );
   }
 

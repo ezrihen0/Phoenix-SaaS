@@ -17,6 +17,9 @@ import { JobEntity } from "./entities/job.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
 import { ProfileEntity } from "./entities/profile.entity";
 import { UserEntity } from "./entities/user.entity";
+import { In, Like } from "typeorm";
+
+import { resolveSmokeDatabasePlan, normalizeBooleanFlag } from "./db-smoke-database-plan";
 import { buildDataSourceOptions } from "./typeorm.config";
 import { upsertHistoricalWorkizInvoice } from "./workiz/workiz-invoice-upsert";
 import { verifyDatabaseSchema } from "./verify-schema";
@@ -63,22 +66,6 @@ function requireMySqlOptions(): MysqlConnectionOptions {
     migrationsRun: false,
     logging: false,
   };
-}
-
-function normalizeBooleanFlag(value: string | undefined, fallback: boolean) {
-  if (typeof value !== "string") {
-    return fallback;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (["true", "1", "yes", "on"].includes(normalized)) {
-    return true;
-  }
-  if (["false", "0", "no", "off"].includes(normalized)) {
-    return false;
-  }
-
-  return fallback;
 }
 
 function extractErrorCode(error: unknown) {
@@ -596,42 +583,90 @@ async function runTests(summary: SmokeSummary, dataSource: DataSource) {
   });
 }
 
+async function cleanupPaymentSmokeOrganizations(dataSource: DataSource) {
+  const orgRepo = dataSource.getRepository(OrganizationEntity);
+  const orgs = await orgRepo.find({ where: { slug: Like("payment-smoke-%") } });
+  if (!orgs.length) {
+    return;
+  }
+
+  const invoiceRepo = dataSource.getRepository(InvoiceEntity);
+  const jobRepo = dataSource.getRepository(JobEntity);
+  const customerRepo = dataSource.getRepository(CustomerEntity);
+  const profileRepo = dataSource.getRepository(ProfileEntity);
+  const userRepo = dataSource.getRepository(UserEntity);
+  const paymentRepo = dataSource.getRepository(InvoicePaymentEntity);
+
+  for (const org of orgs) {
+    const invoices = await invoiceRepo.find({ where: { organization_id: org.id } });
+    const invoiceIds = invoices.map((row) => row.id);
+    if (invoiceIds.length) {
+      await paymentRepo.delete({ invoice_id: In(invoiceIds) });
+      await invoiceRepo.delete({ id: In(invoiceIds) });
+    }
+
+    const jobs = await jobRepo.find({ where: { organization_id: org.id } });
+    const userIds = [
+      ...new Set(
+        jobs.flatMap((job) => [job.created_by_auth_user_id, job.updated_by_auth_user_id].filter(Boolean) as string[]),
+      ),
+    ];
+
+    await jobRepo.delete({ organization_id: org.id });
+    await customerRepo.delete({ organization_id: org.id });
+
+    if (userIds.length) {
+      await profileRepo.delete({ auth_user_id: In(userIds) });
+      await userRepo.delete({ id: In(userIds) });
+    }
+
+    await orgRepo.delete(org.id);
+  }
+}
+
 async function main() {
   const options = requireMySqlOptions();
-  const databaseName = process.env.DB_SMOKE_DATABASE?.trim() || `wizfield_invoice_payment_verify_${Date.now()}`;
-  const shouldDrop = normalizeBooleanFlag(process.env.DB_SMOKE_DROP, false);
-  const summary = createSummary(databaseName);
+  const plan = resolveSmokeDatabasePlan(options, "wizfield_invoice_payment_verify");
+  const summary = createSummary(plan.databaseName);
 
-  const adminConnection = await mysql.createConnection({
-    host: options.host,
-    port: options.port,
-    user: options.username,
-    password: options.password,
-    multipleStatements: true,
-  });
-
+  let adminConnection: mysql.Connection | null = null;
   let dataSource: DataSource | null = null;
 
   try {
-    if (shouldDrop) {
-      await adminConnection.query(`DROP DATABASE IF EXISTS \`${databaseName}\``);
+    if (plan.mode === "ephemeral") {
+      adminConnection = await mysql.createConnection({
+        host: options.host,
+        port: options.port,
+        user: options.username,
+        password: options.password,
+        multipleStatements: true,
+      });
+
+      if (plan.shouldDrop) {
+        await adminConnection.query(`DROP DATABASE IF EXISTS \`${plan.databaseName}\``);
+      }
+
+      await adminConnection.query(
+        `CREATE DATABASE \`${plan.databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+      );
     }
 
-    await adminConnection.query(
-      `CREATE DATABASE \`${databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
-    );
     summary.phases.databaseCreate = "PASS";
 
     dataSource = new DataSource({
       ...options,
-      database: databaseName,
+      database: plan.databaseName,
       synchronize: false,
       migrationsRun: false,
       logging: false,
     });
 
     await dataSource.initialize();
-    await dataSource.runMigrations();
+
+    if (plan.mode === "ephemeral") {
+      await dataSource.runMigrations();
+    }
+
     summary.phases.migrations = "PASS";
 
     await verifyDatabaseSchema(dataSource);
@@ -644,16 +679,20 @@ async function main() {
   } finally {
     try {
       if (dataSource?.isInitialized) {
+        if (plan.mode === "configured") {
+          await cleanupPaymentSmokeOrganizations(dataSource);
+        }
         await dataSource.destroy();
       }
-      if (shouldDrop) {
-        await adminConnection.query(`DROP DATABASE IF EXISTS \`${databaseName}\``);
+      if (plan.mode === "ephemeral" && adminConnection) {
+        if (plan.shouldDrop) {
+          await adminConnection.query(`DROP DATABASE IF EXISTS \`${plan.databaseName}\``);
+        }
+        await adminConnection.end();
       }
       summary.phases.cleanup = "PASS";
     } catch (error) {
       summary.errors.push(`cleanup: ${extractErrorCode(error)}`);
-    } finally {
-      await adminConnection.end();
     }
   }
 

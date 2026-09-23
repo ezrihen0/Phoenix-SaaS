@@ -389,6 +389,8 @@ export class InvoicePaymentRecordingService {
       legacyStatus: invoice.status,
       legacyPaidAt: invoice.paid_at,
       payments: invoice.payments ?? [],
+      voidedAt: invoice.voided_at,
+      cancelledAt: invoice.cancelled_at,
     });
   }
 

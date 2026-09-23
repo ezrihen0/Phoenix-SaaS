@@ -203,7 +203,19 @@ export class InvoiceDocumentsService {
       apiError(404, "invoice_not_found", "The invoice could not be found.");
     }
 
-    const document = await this.invoiceDocumentsRepository.findOne({
+    const nativeDocument = await this.invoiceDocumentsRepository.findOne({
+      where: {
+        invoice_id: invoice.id,
+        organization_id: organizationId,
+        customer_id: customerId,
+        document_kind: "native_customer_pdf",
+      },
+      order: {
+        generation_sequence: "DESC",
+      },
+    });
+
+    const document = nativeDocument ?? await this.invoiceDocumentsRepository.findOne({
       where: {
         invoice_id: invoice.id,
         organization_id: organizationId,

@@ -52,6 +52,20 @@ async function main() {
       dataSource.getRepository(InvoiceEntity),
       dataSource.getRepository(InvoiceServiceIntelligenceEntity),
       dataSource.getRepository(WarrantyCertificateEntity),
+      {
+        buildListPresentation: (invoice: InvoiceEntity) => ({
+          document_number: invoice.id,
+          display_document_number: invoice.id,
+          finance_origin: "unknown",
+          total_cents: invoice.total_cents,
+          amount_paid_cents: 0,
+          refunded_cents: 0,
+          balance_cents: invoice.total_cents,
+          overpayment_cents: 0,
+          lifecycle_status: "sent",
+          snapshot_frozen: false,
+        }),
+      } as never,
     );
 
     const actor = {

@@ -12,6 +12,8 @@ import { QuoteEntity } from "../database/entities/quote.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
 import { WarrantyCertificateEntity } from "../database/entities/warranty-certificate.entity";
 import { InvoiceDocumentEntity } from "../database/entities/invoice-document.entity";
+import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
+import { InvoicePaymentLedgerService } from "../crm/invoice-payment-ledger.service";
 import { CustomerPortalAuthController } from "./customer-portal.auth.controller";
 import { CustomerPortalReadController } from "./customer-portal.read.controller";
 import { CustomerPortalStaffController } from "./customer-portal.staff.controller";
@@ -32,10 +34,11 @@ import { PortalSessionGuard } from "./portal-session.guard";
       PortalAccessEventEntity,
       WarrantyCertificateEntity,
       InvoiceDocumentEntity,
+      InvoicePaymentEntity,
     ]),
   ],
   controllers: [CustomerPortalAuthController, CustomerPortalReadController, CustomerPortalStaffController],
-  providers: [CustomerPortalService, PortalSessionGuard],
+  providers: [CustomerPortalService, PortalSessionGuard, InvoicePaymentLedgerService],
   exports: [CustomerPortalService, PortalSessionGuard],
 })
 export class CustomerPortalModule {}

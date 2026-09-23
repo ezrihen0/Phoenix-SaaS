@@ -27,6 +27,9 @@ export class InvoiceEntity {
   @Column({ type: "varchar", length: 36, nullable: true })
   source_quote_id!: string | null;
 
+  @Column({ type: "varchar", length: 64, nullable: true })
+  document_number!: string | null;
+
   @Column({ type: "varchar", length: 36, nullable: true })
   organization_id!: string | null;
 
@@ -93,6 +96,15 @@ export class InvoiceEntity {
 
   @Column({ type: "text", nullable: true })
   branding_snapshot_json!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  customer_facing_snapshot_json!: string | null;
+
+  @Column({ type: "datetime", precision: 6, nullable: true })
+  voided_at!: Date | null;
+
+  @Column({ type: "datetime", precision: 6, nullable: true })
+  cancelled_at!: Date | null;
 
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;

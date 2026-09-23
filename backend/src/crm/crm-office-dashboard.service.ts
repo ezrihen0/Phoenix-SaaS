@@ -16,6 +16,7 @@ import { getJobStatusLabel, openJobStatuses } from "./constants";
 import { endOfLocalDashboardDay, startOfLocalDashboardDay } from "./crm-dashboard-time-window";
 import { formatAddress } from "./display";
 import { sanitizeJobTitle } from "./user-facing-text";
+import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -82,7 +83,24 @@ export class CrmOfficeDashboardService {
     private readonly profilesRepository: Repository<ProfileEntity>,
     @InjectRepository(ServiceEntity)
     private readonly servicesRepository: Repository<ServiceEntity>,
+    private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
   ) {}
+
+  private summarizeInvoiceLedger(invoice: InvoiceEntity) {
+    return this.invoicePaymentLedgerService.summarizeInvoice({
+      totalCents: invoice.total_cents || invoice.amount_cents,
+      legacyStatus: invoice.status,
+      legacyPaidAt: invoice.paid_at,
+      payments: invoice.payments ?? [],
+      voidedAt: invoice.voided_at,
+      cancelledAt: invoice.cancelled_at,
+    });
+  }
+
+  private isOpenInvoice(invoice: InvoiceEntity) {
+    const lifecycle = this.summarizeInvoiceLedger(invoice).lifecycleStatus;
+    return lifecycle === "sent" || lifecycle === "partial" || lifecycle === "refunded";
+  }
 
   private relationValue<T>(value: RelatedValue<T> | undefined) {
     if (Array.isArray(value)) {
@@ -177,6 +195,33 @@ export class CrmOfficeDashboardService {
       occurredAt: invoice.issued_at,
       statusLabel: "Unpaid",
     };
+  }
+
+  private async countOpenInvoices(organizationId: string) {
+    const invoices = await this.invoicesRepository.find({
+      where: { organization_id: organizationId },
+      relations: { payments: true },
+    });
+
+    return invoices.filter((invoice) => this.isOpenInvoice(invoice)).length;
+  }
+
+  private async listOpenInvoicesForDashboard(organizationId: string, take: number) {
+    const invoices = await this.invoicesRepository.find({
+      where: { organization_id: organizationId },
+      relations: {
+        payments: true,
+        job: {
+          customer: true,
+          technician: true,
+        },
+      },
+      order: {
+        issued_at: "ASC",
+      },
+    });
+
+    return invoices.filter((invoice) => this.isOpenInvoice(invoice)).slice(0, take);
   }
 
   private async provisionFallbackTechniciansIfNeeded(organizationId: string) {
@@ -344,7 +389,7 @@ export class CrmOfficeDashboardService {
           .andWhere("job.scheduled_for <= :todayEnd", { todayEnd })
           .andWhere("job.status != :status", { status: "cancelled" })
           .getCount(),
-        this.invoicesRepository.countBy({ status: "unpaid", organization_id: organizationId }),
+        this.countOpenInvoices(organizationId),
         this.leadsRepository.find({
           where: {
             organization_id: organizationId,
@@ -399,22 +444,7 @@ export class CrmOfficeDashboardService {
           },
           take: 4,
         }),
-        this.invoicesRepository.find({
-          where: {
-            organization_id: organizationId,
-            status: "unpaid",
-          },
-          relations: {
-            job: {
-              customer: true,
-              technician: true,
-            },
-          },
-          order: {
-            issued_at: "ASC",
-          },
-          take: 4,
-        }),
+        this.listOpenInvoicesForDashboard(organizationId, 4),
         this.jobsRepository.find({
           where: {
             organization_id: organizationId,

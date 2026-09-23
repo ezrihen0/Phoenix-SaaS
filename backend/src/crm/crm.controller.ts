@@ -121,7 +121,13 @@ import { InvoicePaymentRecordingService } from "./invoice-payment-recording.serv
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
 import { TxtService } from "../messaging/txt/txt.service";
+import { InvoiceNativeDocumentService } from "../documents/invoice-documents/invoice-native-document.service";
 import { type InvoicePdfBrandingSnapshot, InvoicePdfService } from "./invoice-pdf.service";
+import { InvoiceCustomerFacingSnapshotService } from "./invoice-customer-facing-snapshot.service";
+import { InvoicePdfViewModelService } from "./invoice-pdf-view-model.service";
+import { InvoiceSendPipelineService } from "./invoice-send-pipeline.service";
+import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
+import { FinanceAuditService } from "./finance-audit.service";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -220,6 +226,12 @@ export class CrmController {
     private readonly customerPortalService: CustomerPortalService,
     private readonly documentBrandingSnapshotService: DocumentBrandingSnapshotService,
     private readonly invoicePdfService: InvoicePdfService,
+    private readonly invoicePdfViewModelService: InvoicePdfViewModelService,
+    private readonly invoiceCustomerFacingSnapshotService: InvoiceCustomerFacingSnapshotService,
+    private readonly invoiceSendPipelineService: InvoiceSendPipelineService,
+    private readonly invoiceNativeDocumentService: InvoiceNativeDocumentService,
+    private readonly financeInvoicePresentationService: FinanceInvoicePresentationService,
+    private readonly financeAuditService: FinanceAuditService,
     private readonly configService: ConfigService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -1166,7 +1178,7 @@ export class CrmController {
   }
 
   private buildInvoiceDocumentNumber(invoice: InvoiceEntity) {
-    return `INV-${invoice.id.slice(0, 8).toUpperCase()}`;
+    return this.invoiceCustomerFacingSnapshotService.resolveDisplayNumber(invoice);
   }
 
   private buildEstimateDocumentNumber(quote: QuoteEntity) {
@@ -1183,6 +1195,8 @@ export class CrmController {
       legacyStatus: invoice.status,
       legacyPaidAt: invoice.paid_at,
       payments: invoice.payments ?? [],
+      voidedAt: invoice.voided_at,
+      cancelledAt: invoice.cancelled_at,
     });
   }
 
@@ -1242,27 +1256,16 @@ export class CrmController {
   private buildInvoiceListItem(invoice: InvoiceEntity) {
     const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
     const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
-    const ledgerSummary = this.summarizeInvoiceLedger(invoice);
 
-    return {
-      id: invoice.id,
-      job_id: invoice.job_id,
-      document_number: this.buildInvoiceDocumentNumber(invoice),
-      total_cents: ledgerSummary.totalCents,
-      amount_paid_cents: ledgerSummary.netPaidCents,
-      refunded_cents: ledgerSummary.refundedCents,
-      balance_cents: ledgerSummary.balanceCents,
-      lifecycle_status: ledgerSummary.lifecycleStatus,
-      status: invoice.status,
-      issued_at: invoice.issued_at?.toISOString() ?? invoice.created_at.toISOString(),
-      customer_id: job?.customer_id ?? customer?.id ?? null,
-      customer_name: customer?.full_name ?? "Customer pending",
-      job_title: sanitizeJobTitle(job?.title, {
+    return this.financeInvoicePresentationService.buildListItem(
+      invoice,
+      job ?? null,
+      customer ?? null,
+      sanitizeJobTitle(job?.title, {
         customerName: customer?.full_name,
         serviceType: job?.requested_service_type,
       }),
-      source_estimate_id: invoice.source_quote_id,
-    };
+    );
   }
 
   private buildInvoiceLineItemResponse(invoice: InvoiceEntity) {
@@ -1429,6 +1432,8 @@ export class CrmController {
         job_id: listItem.job_id,
         invoice_id: listItem.document_number,
         document_number: listItem.document_number,
+        display_document_number: listItem.display_document_number,
+        finance_origin: listItem.finance_origin,
         description: sanitizeInvoiceDescription(invoice.description),
         amount_cents: invoice.amount_cents,
         subtotal_cents: invoice.subtotal_cents || invoice.amount_cents,
@@ -1438,7 +1443,9 @@ export class CrmController {
         amount_paid_cents: listItem.amount_paid_cents,
         refunded_cents: listItem.refunded_cents,
         balance_cents: listItem.balance_cents,
+        overpayment_cents: listItem.overpayment_cents,
         lifecycle_status: listItem.lifecycle_status,
+        snapshot_frozen: listItem.snapshot_frozen,
         status: listItem.status,
         issued_at: listItem.issued_at,
         due_at: this.toIsoString(invoice.due_at),
@@ -1525,17 +1532,12 @@ export class CrmController {
     const ledgerSummary = this.summarizeInvoiceLedger(invoice);
     const orgSettings = await this.findOrganizationSettings(organizationId);
     const dueDays = this.readDefaultDueDays(orgSettings);
-    const branding = this.parseInvoiceBrandingSnapshot(invoice.branding_snapshot_json)
-      ?? this.buildInvoiceBrandingSnapshot(orgSettings);
     const pdfBuffer = this.buildInvoicePdfBuffer({
       invoice,
       customer,
-      lifecycleStatus: ledgerSummary.lifecycleStatus,
-      totalCents: invoice.total_cents || ledgerSummary.totalCents,
-      netPaidCents: ledgerSummary.netPaidCents,
-      balanceCents: ledgerSummary.balanceCents,
-      branding,
-      documentNumber,
+      job: job ?? null,
+      orgSettings,
+      ledgerSummary,
       dueDays,
     });
     setPdfDownloadResponseHeaders(response, {
@@ -1585,18 +1587,32 @@ export class CrmController {
       apiError(500, "email_not_configured", "Email service is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM.");
     }
 
+    if (!job || !customer) {
+      apiError(400, "invoice_send_missing_context", "This invoice is missing job or customer context required to send.");
+    }
+
     const orgSettings = await this.findOrganizationSettings(organizationId);
     const businessName = this.normalizeOptionalString(orgSettings?.business_name);
-    const documentNumber = this.buildInvoiceDocumentNumber(invoice);
     const ledgerSummary = this.summarizeInvoiceLedger(invoice);
     const dueDays = this.readDefaultDueDays(orgSettings);
+
+    const sendResult = await this.completeInvoiceCustomerSend({
+      organizationId,
+      customerId: customer.id,
+      actorProfileId: actor.profile.id,
+      invoice,
+      job,
+      customer,
+      orgSettings,
+      frozenVia: "email",
+    });
+    const documentNumber = sendResult.documentNumber;
     const dueDateLabel = this.formatDueDate(invoice.due_at, invoice.issued_at, dueDays);
 
-    // Build template variables
     const vars = {
       business_name: businessName ?? "",
       invoice_number: documentNumber,
-      customer_name: customer?.full_name ?? "Customer",
+      customer_name: customer.full_name ?? "Customer",
       total: `$${((invoice.total_cents || ledgerSummary.totalCents) / 100).toFixed(2)}`,
       due_date: dueDateLabel,
       invoice_link: "",
@@ -1613,16 +1629,12 @@ export class CrmController {
       vars,
     );
 
-    const branding = await this.ensureInvoiceBrandingSnapshot(invoice, organizationId);
     const pdfBuffer = this.buildInvoicePdfBuffer({
       invoice,
       customer,
-      lifecycleStatus: ledgerSummary.lifecycleStatus,
-      totalCents: invoice.total_cents || ledgerSummary.totalCents,
-      netPaidCents: ledgerSummary.netPaidCents,
-      balanceCents: ledgerSummary.balanceCents,
-      branding,
-      documentNumber,
+      job,
+      orgSettings,
+      ledgerSummary: this.summarizeInvoiceLedger(invoice),
       dueDays,
     });
 
@@ -1691,12 +1703,21 @@ export class CrmController {
 
     const orgSettings = await this.findOrganizationSettings(organizationId);
     const businessName = this.normalizeOptionalString(orgSettings?.business_name);
-    const documentNumber = this.buildInvoiceDocumentNumber(invoice);
+    const sendResult = await this.completeInvoiceCustomerSend({
+      organizationId,
+      customerId: customer.id,
+      actorProfileId: actor.profile.id,
+      invoice,
+      job,
+      customer,
+      orgSettings,
+      frozenVia: "sms",
+    });
+    const documentNumber = sendResult.documentNumber;
     const totalCents = invoice.total_cents || (invoice.subtotal_cents || invoice.amount_cents);
     const dueDays = this.readDefaultDueDays(orgSettings);
     const dueDateLabel = this.formatDueDate(invoice.due_at, invoice.issued_at, dueDays);
 
-    // Resolve SMS template
     const smsVars = {
       business_name: businessName ?? "your service provider",
       invoice_number: documentNumber,
@@ -1738,9 +1759,6 @@ export class CrmController {
     });
 
     const now = new Date();
-    if (!invoice.branding_snapshot_json) {
-      invoice.branding_snapshot_json = JSON.stringify(this.buildInvoiceBrandingSnapshot(orgSettings));
-    }
     invoice.sms_sent_at = now;
     invoice.last_sent_at = now;
     invoice.last_sent_via = "sms";
@@ -1951,6 +1969,26 @@ export class CrmController {
         actorUserId: actor.user.id,
         actorProfileId: actor.profile.id,
         payload,
+      });
+
+      const paymentAuditAction =
+        payload.entryType === "refund"
+          ? "invoice.refund"
+          : payload.entryType === "adjustment"
+            ? "invoice.adjustment"
+            : "invoice.payment_record";
+
+      await this.financeAuditService.log({
+        organizationId,
+        actorProfileId: actor.profile.id,
+        entityType: "invoice",
+        entityId: invoiceId,
+        action: paymentAuditAction,
+        metadata: {
+          payment_id: result.paymentId,
+          amount_cents: payload.amountCents,
+          entry_type: payload.entryType,
+        },
       });
 
       return apiSuccess({
@@ -2347,6 +2385,14 @@ export class CrmController {
         this.throwDocumentLockedError("invoice");
       }
 
+      if (existingInvoice && this.invoiceCustomerFacingSnapshotService.isFrozen(existingInvoice)) {
+        apiError(
+          409,
+          "invoice_customer_snapshot_frozen",
+          "This invoice was already sent to the customer. Customer-facing financial content cannot be changed.",
+        );
+      }
+
       const hasSnapshotLineItems = payload.lineItems !== undefined;
       const invoiceLineDrafts = hasSnapshotLineItems
         ? await this.buildDocumentLineDrafts(
@@ -2459,6 +2505,15 @@ export class CrmController {
         );
       }
 
+      await this.financeAuditService.log({
+        organizationId,
+        actorProfileId: actor.profile.id,
+        entityType: "invoice",
+        entityId: invoice.id,
+        action: "invoice.upsert",
+        metadata: { job_id: jobId },
+      });
+
       return apiSuccess(invoice);
     } catch (error) {
       this.rethrowHttpException(error);
@@ -2485,6 +2540,15 @@ export class CrmController {
         jobId,
         estimateId: payload.estimateId,
         actor,
+      });
+
+      await this.financeAuditService.log({
+        organizationId,
+        actorProfileId: actor.profile.id,
+        entityType: "invoice",
+        entityId: invoice.id,
+        action: "estimate.convert_to_invoice",
+        metadata: { job_id: jobId, source_estimate_id: invoice.source_quote_id },
       });
 
       return apiSuccess({
@@ -4060,56 +4124,86 @@ export class CrmController {
   private buildInvoicePdfBuffer(input: {
     invoice: InvoiceEntity;
     customer: CustomerEntity | null;
-    lifecycleStatus: string;
-    totalCents: number;
-    netPaidCents: number;
-    balanceCents: number;
-    branding: InvoicePdfBrandingSnapshot;
-    documentNumber: string;
+    job: JobEntity | null;
+    orgSettings: OrganizationSettingEntity | null;
+    ledgerSummary: import("./invoice-financial-lifecycle.core").InvoiceLedgerSummary;
     dueDays: number;
   }) {
-    const sortedLineItems = [...(input.invoice.line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
-    const subtotalCents = input.invoice.subtotal_cents || input.invoice.amount_cents;
-    const taxRateBps = input.invoice.tax_rate_bps_snapshot ?? 0;
-    const taxLabel = taxRateBps > 0 ? `Tax (${(taxRateBps / 100).toFixed(2)}%)` : "Tax";
-
-    const customerAddressLines = [
-      input.customer?.service_address_line_1 ?? null,
-      input.customer?.service_address_line_2 ?? null,
-      [input.customer?.service_city, input.customer?.service_state_or_region].filter(Boolean).join(", "),
-      input.customer?.service_postal_code ?? null,
-    ].filter((entry): entry is string => Boolean(entry && entry.trim()));
-
-    const serviceAddressLines = [...customerAddressLines];
-
-    return this.invoicePdfService.renderInvoicePdf({
-      documentNumber: input.documentNumber,
-      lifecycleStatus: input.lifecycleStatus,
-      issuedAtLabel: this.formatDisplayDate(input.invoice.issued_at),
-      dueAtLabel: this.formatDueDate(input.invoice.due_at, input.invoice.issued_at, input.dueDays),
-      generatedAtIso: new Date().toISOString(),
-      customerName: input.customer?.full_name ?? "Customer",
-      customerCompany: this.normalizeOptionalString(input.customer?.company_name),
-      customerAddressLines,
-      customerEmail: this.normalizeOptionalString(input.customer?.email),
-      customerPhone: this.normalizeOptionalString(input.customer?.phone),
-      serviceAddressLines,
-      description: this.normalizeOptionalString(sanitizeInvoiceDescription(input.invoice.description)),
-      lineItems: sortedLineItems.map((item) => ({
-        name: sanitizeUserFacingText(item.name_snapshot) || item.name_snapshot || "Item",
-        description: sanitizeUserFacingText(item.description_snapshot) || item.description_snapshot,
-        quantity: String(item.quantity),
-        rateLabel: this.formatCents(item.unit_price_cents_snapshot),
-        amountLabel: this.formatCents(item.line_subtotal_cents),
-      })),
-      subtotalLabel: this.formatCents(subtotalCents),
-      taxLabel,
-      taxAmountLabel: this.formatCents(input.invoice.tax_cents ?? 0),
-      totalLabel: this.formatCents(input.totalCents),
-      paidLabel: input.netPaidCents > 0 ? this.formatCents(input.netPaidCents) : null,
-      balanceLabel: input.balanceCents > 0 ? this.formatCents(input.balanceCents) : null,
-      branding: input.branding,
+    const viewModel = this.invoicePdfViewModelService.build({
+      invoice: input.invoice,
+      customer: input.customer,
+      job: input.job,
+      orgSettings: input.orgSettings,
+      ledgerSummary: input.ledgerSummary,
+      dueDays: input.dueDays,
+      formatCents: (cents) => this.formatCents(cents),
+      formatDisplayDate: (value) => this.formatDisplayDate(value),
+      formatDueDate: (dueAt, issuedAt, dueDays) => this.formatDueDate(dueAt, issuedAt, dueDays),
+      sanitizeDescription: (value) => this.normalizeOptionalString(sanitizeInvoiceDescription(value)) ?? "",
+      sanitizeLineText: (value) => sanitizeUserFacingText(value ?? "") || null,
     });
+
+    return this.invoicePdfService.renderInvoicePdf(viewModel);
+  }
+
+  private async completeInvoiceCustomerSend(input: {
+    organizationId: string;
+    customerId: string;
+    actorProfileId: string;
+    invoice: InvoiceEntity;
+    job: JobEntity;
+    customer: CustomerEntity | null;
+    orgSettings: OrganizationSettingEntity | null;
+    frozenVia: "email" | "sms";
+  }) {
+    const sendResult = await this.invoiceSendPipelineService.finalizeCustomerFacingSend({
+      organizationId: input.organizationId,
+      invoice: input.invoice,
+      job: input.job,
+      customer: input.customer,
+      orgSettings: input.orgSettings,
+      frozenVia: input.frozenVia,
+    });
+
+    const ledgerSummary = this.summarizeInvoiceLedger(input.invoice);
+    const dueDays = this.readDefaultDueDays(input.orgSettings);
+    const pdfBuffer = this.buildInvoicePdfBuffer({
+      invoice: input.invoice,
+      customer: input.customer,
+      job: input.job,
+      orgSettings: input.orgSettings,
+      ledgerSummary,
+      dueDays,
+    });
+
+    await this.invoiceNativeDocumentService.persistNativePdfAfterSend({
+      organizationId: input.organizationId,
+      customerId: input.customerId,
+      invoice: input.invoice,
+      pdfBuffer,
+      snapshot: sendResult.snapshot,
+      sentVia: input.frozenVia,
+    });
+
+    await this.financeAuditService.log({
+      organizationId: input.organizationId,
+      actorProfileId: input.actorProfileId,
+      entityType: "invoice",
+      entityId: input.invoice.id,
+      action: "invoice.snapshot_frozen",
+      metadata: { document_number: sendResult.documentNumber, sent_via: input.frozenVia },
+    });
+
+    await this.financeAuditService.log({
+      organizationId: input.organizationId,
+      actorProfileId: input.actorProfileId,
+      entityType: "invoice",
+      entityId: input.invoice.id,
+      action: input.frozenVia === "email" ? "invoice.send_email" : "invoice.send_sms",
+      metadata: { document_number: sendResult.documentNumber },
+    });
+
+    return sendResult;
   }
 
   private readDefaultDueDays(settings: OrganizationSettingEntity | null) {

@@ -85,6 +85,8 @@ import { UserEntity } from "./entities/user.entity";
 import { UserOrganizationLanguagePreferenceEntity } from "./entities/user-organization-language-preference.entity";
 import { VoiceFlowEntity } from "./entities/voice-flow.entity";
 import { InvoiceDocumentEntity } from "./entities/invoice-document.entity";
+import { OrganizationInvoiceSequenceEntity } from "./entities/organization-invoice-sequence.entity";
+import { FinanceAuditEventEntity } from "./entities/finance-audit-event.entity";
 import { InvoiceServiceIntelligenceEntity } from "./entities/invoice-service-intelligence.entity";
 import { InvoiceServiceIntelligenceComponentEntity } from "./entities/invoice-service-intelligence-component.entity";
 import { InvoiceServiceIntelligenceWarrantyEntity } from "./entities/invoice-service-intelligence-warranty.entity";
@@ -173,6 +175,8 @@ export const typeOrmEntities = [
   TxtMessageEntity,
   WarrantyCertificateEntity,
   InvoiceDocumentEntity,
+  OrganizationInvoiceSequenceEntity,
+  FinanceAuditEventEntity,
   InvoiceServiceIntelligenceEntity,
   InvoiceServiceIntelligenceComponentEntity,
   InvoiceServiceIntelligenceWarrantyEntity,

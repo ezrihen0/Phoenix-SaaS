@@ -66,7 +66,7 @@ async function main() {
     }
 
     const invoices = await dataSource.getRepository(InvoiceEntity).find({ where: { organization_id: PHOENIX_ORG_ID } });
-    const lifecycleCounts = { sent: 0, partial: 0, paid: 0, refunded: 0, overpaid: 0 };
+    const lifecycleCounts = { sent: 0, partial: 0, paid: 0, refunded: 0, overpaid: 0, void: 0, cancelled: 0 };
     for (const invoice of invoices) {
       const payments = currentPayments.filter((payment) => payment.invoice_id === invoice.id);
       const summary = ledgerService.summarizeInvoice({

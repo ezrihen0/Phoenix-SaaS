@@ -31,13 +31,14 @@ import {
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerRoles } from "@/lib/auth/server-session";
 import { formatLocalizedCurrency } from "@/lib/i18n/formatters";
+import { formatInvoiceLifecycleStatus, type InvoiceLifecycleStatus as SharedInvoiceLifecycleStatus } from "@/lib/crm/invoice-lifecycle";
 import { canViewWarrantyCertificate } from "@/lib/crm/warranty-eligibility";
 
 const SHOW_LEGACY_INVOICES_INDEX = false;
 
 type SearchParam = string | string[] | undefined;
 
-type InvoiceLifecycleStatus = "sent" | "partial" | "paid" | "refunded" | "overpaid";
+type InvoiceLifecycleStatus = SharedInvoiceLifecycleStatus;
 type PipelineFilter = "all" | "open" | "partial" | "paid" | "open-balances";
 
 /** UI-only reference shape for a future backend payment intelligence payload. Not fetched in this slice. */
@@ -123,19 +124,7 @@ function formatDate(value: string, locale: string) {
 }
 
 function formatLifecycleStatus(status: InvoiceLifecycleStatus) {
-  if (status === "partial") {
-    return "Partial";
-  }
-
-  if (status === "refunded") {
-    return "Refunded";
-  }
-
-  if (status === "overpaid") {
-    return "Overpaid";
-  }
-
-  return status === "paid" ? "Paid" : "Sent";
+  return formatInvoiceLifecycleStatus(status);
 }
 
 function invoiceStatusBadgeClass(status: InvoiceLifecycleStatus) {

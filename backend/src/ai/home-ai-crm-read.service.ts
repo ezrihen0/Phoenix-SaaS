@@ -16,6 +16,7 @@ import { LeadEntity } from "../database/entities/lead.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
 import { WarrantyCertificateEntity } from "../database/entities/warranty-certificate.entity";
 import { openJobStatuses } from "../crm/constants";
+import { FinanceInvoicePresentationService } from "../crm/finance-invoice-presentation.service";
 import { invoiceDisplayLabel, sanitizeInvoiceDescription, sanitizeJobTitle, sanitizeUserFacingText } from "../crm/user-facing-text";
 import { endOfLocalDashboardDay, startOfLocalDashboardDay } from "../crm/crm-dashboard-time-window";
 import {
@@ -69,6 +70,7 @@ export class HomeAiCrmReadService {
     private readonly intelligenceRepository: Repository<InvoiceServiceIntelligenceEntity>,
     @InjectRepository(WarrantyCertificateEntity)
     private readonly warrantyCertificateRepository: Repository<WarrantyCertificateEntity>,
+    private readonly financeInvoicePresentationService: FinanceInvoicePresentationService,
   ) {}
 
   private assignedOnly(actor: ActorContext): boolean {
@@ -348,18 +350,31 @@ export class HomeAiCrmReadService {
       .createQueryBuilder("invoice")
       .leftJoinAndSelect("invoice.job", "job")
       .leftJoinAndSelect("job.customer", "customer")
+      .leftJoinAndSelect("invoice.payments", "payments")
       .where("invoice.organization_id = :organizationId", { organizationId })
       .orderBy("invoice.updated_at", "DESC")
       .take(limit * 3);
 
+    const rawInvoices = await qb.getMany();
+    let invoices = rawInvoices
+      .filter((invoice) => canAccessInvoiceResource(actor, invoice.job?.assigned_technician_id ?? null));
+
     if (input.status?.trim()) {
-      qb.andWhere("invoice.status = :status", { status: input.status.trim() });
+      const statusFilter = input.status.trim();
+      invoices = invoices.filter((invoice) => {
+        const presentation = this.financeInvoicePresentationService.buildListPresentation(invoice);
+        if (statusFilter === "unpaid") {
+          return presentation.balance_cents > 0
+            && (presentation.lifecycle_status === "sent"
+              || presentation.lifecycle_status === "partial"
+              || presentation.lifecycle_status === "refunded");
+        }
+
+        return presentation.lifecycle_status === statusFilter || invoice.status === statusFilter;
+      });
     }
 
-    const rawInvoices = await qb.getMany();
-    const invoices = rawInvoices
-      .filter((invoice) => canAccessInvoiceResource(actor, invoice.job?.assigned_technician_id ?? null))
-      .slice(0, limit);
+    invoices = invoices.slice(0, limit);
 
     const recordLinks: HomeAiRecordLink[] = invoices.map((invoice) => ({
       type: "invoice",
@@ -376,16 +391,24 @@ export class HomeAiCrmReadService {
       ok: true,
       data: {
         count: invoices.length,
-        invoices: invoices.map((invoice) => ({
-          id: invoice.id,
-          description: sanitizeInvoiceDescription(invoice.description),
-          status: invoice.status,
-          totalCents: invoice.total_cents,
-          amountCents: invoice.amount_cents,
-          jobId: invoice.job_id,
-          customerName: invoice.job?.customer?.full_name ?? null,
-          updatedAt: invoice.updated_at.toISOString(),
-        })),
+        invoices: invoices.map((invoice) => {
+          const presentation = this.financeInvoicePresentationService.buildListPresentation(invoice);
+          return {
+            id: invoice.id,
+            description: sanitizeInvoiceDescription(invoice.description),
+            status: invoice.status,
+            lifecycleStatus: presentation.lifecycle_status,
+            financeOrigin: presentation.finance_origin,
+            documentNumber: presentation.display_document_number,
+            totalCents: presentation.total_cents,
+            balanceCents: presentation.balance_cents,
+            overpaymentCents: presentation.overpayment_cents,
+            amountCents: invoice.amount_cents,
+            jobId: invoice.job_id,
+            customerName: invoice.job?.customer?.full_name ?? null,
+            updatedAt: invoice.updated_at.toISOString(),
+          };
+        }),
       },
       recordLinks,
     };

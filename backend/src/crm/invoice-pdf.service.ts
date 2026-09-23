@@ -11,7 +11,16 @@ type InvoicePdfLineItem = {
   amountLabel: string;
 };
 
-export type InvoicePdfBrandingSnapshot = Omit<DocumentBrandingSnapshot, "companyAddress">;
+export type InvoicePdfBrandingSnapshot = Omit<DocumentBrandingSnapshot, "companyAddress"> & {
+  companyAddress?: string | null;
+};
+
+export type InvoicePdfPaymentRow = {
+  occurredAtLabel: string;
+  method: string;
+  amountLabel: string;
+  reference: string | null;
+};
 
 export type InvoicePdfRenderInput = {
   documentNumber: string;
@@ -25,14 +34,18 @@ export type InvoicePdfRenderInput = {
   customerEmail: string | null;
   customerPhone: string | null;
   serviceAddressLines: string[];
+  jobReferenceLabel?: string | null;
   description: string | null;
   lineItems: InvoicePdfLineItem[];
   subtotalLabel: string;
+  discountLabel?: string | null;
   taxLabel: string;
   taxAmountLabel: string;
   totalLabel: string;
+  payments?: InvoicePdfPaymentRow[];
   paidLabel: string | null;
   balanceLabel: string | null;
+  overpaymentLabel?: string | null;
   branding: InvoicePdfBrandingSnapshot;
 };
 
@@ -106,6 +119,7 @@ export class InvoicePdfService {
 
     const brandingTitle = input.branding.businessName ?? "Service Business";
     const businessMeta = [
+      input.branding.companyAddress,
       input.branding.phone,
       input.branding.email,
       input.branding.website,
@@ -167,6 +181,13 @@ export class InvoicePdfService {
     rule(y, 0.5);
     y -= 16;
 
+    if (input.jobReferenceLabel) {
+      text("F2", 9, left, y, "Job / Service");
+      y -= 12;
+      writeWrapped("F1", 8, left, 110, input.jobReferenceLabel, 10);
+      y -= 6;
+    }
+
     if (input.description) {
       text("F2", 9, left, y, "Summary");
       y -= 12;
@@ -203,6 +224,11 @@ export class InvoicePdfService {
     text("F1", 9, totalsLabelX, y, "Subtotal");
     textRight("F1", 9, y, input.subtotalLabel, totalsValueX);
     y -= 13;
+    if (input.discountLabel) {
+      text("F1", 9, totalsLabelX, y, "Discount");
+      textRight("F1", 9, y, input.discountLabel, totalsValueX);
+      y -= 13;
+    }
     text("F1", 9, totalsLabelX, y, input.taxLabel);
     textRight("F1", 9, y, input.taxAmountLabel, totalsValueX);
     y -= 9;
@@ -220,6 +246,22 @@ export class InvoicePdfService {
       text("F2", 9, totalsLabelX, y, "Balance Due");
       textRight("F2", 9, y, input.balanceLabel, totalsValueX);
       y -= 12;
+    }
+    if (input.overpaymentLabel) {
+      text("F2", 9, totalsLabelX, y, "Overpayment");
+      textRight("F2", 9, y, input.overpaymentLabel, totalsValueX);
+      y -= 12;
+    }
+
+    if (input.payments && input.payments.length > 0) {
+      y -= 4;
+      text("F2", 9, left, y, "Payments");
+      y -= 12;
+      for (const payment of input.payments.slice(0, 6)) {
+        const label = `${payment.occurredAtLabel} · ${payment.method} · ${payment.amountLabel}`;
+        text("F1", 8, left, y, label);
+        y -= 10;
+      }
     }
 
     y = Math.max(104, y - 6);

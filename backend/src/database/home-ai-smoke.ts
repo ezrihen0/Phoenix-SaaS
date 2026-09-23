@@ -340,6 +340,20 @@ async function main() {
       invoiceRepo,
       intelligenceRepo,
       warrantyCertificateRepo,
+      {
+        buildListPresentation: (invoice: InvoiceEntity) => ({
+          document_number: invoice.id,
+          display_document_number: invoice.id,
+          finance_origin: "unknown",
+          total_cents: invoice.total_cents,
+          amount_paid_cents: 0,
+          refunded_cents: 0,
+          balance_cents: invoice.total_cents,
+          overpayment_cents: 0,
+          lifecycle_status: "sent",
+          snapshot_frozen: false,
+        }),
+      } as never,
     );
     const toolRegistry = new HomeAiToolRegistryService(crmRead);
     const telemetry = new AiActionTelemetryService(new AiAuditService(runRepo));
@@ -366,6 +380,9 @@ async function main() {
           newThisMonth: 0,
           relatedJobs: 0,
         }),
+      } as never,
+      {
+        summarizeCustomerOpenFinance: () => ({ open_balance_cents: 0, open_invoice_count: 0 }),
       } as never,
     );
 

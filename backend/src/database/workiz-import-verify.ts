@@ -115,6 +115,20 @@ export async function runWorkizImportVerify(ds: DataSource): Promise<Record<stri
     invoiceRepo,
     ds.getRepository(InvoiceServiceIntelligenceEntity),
     ds.getRepository(WarrantyCertificateEntity),
+    {
+      buildListPresentation: (invoice: InvoiceEntity) => ({
+        document_number: invoice.id,
+        display_document_number: invoice.id,
+        finance_origin: "unknown",
+        total_cents: invoice.total_cents,
+        amount_paid_cents: 0,
+        refunded_cents: 0,
+        balance_cents: invoice.total_cents,
+        overpayment_cents: 0,
+        lifecycle_status: "sent",
+        snapshot_frozen: false,
+      }),
+    } as never,
   );
   const homeAiInvoices = await crmRead.getInvoices(ownerActor, PHOENIX_ID, { limit: 20 });
   const workizVisible = (homeAiInvoices.ok ? homeAiInvoices.data.invoices as Array<{ description?: string }> : [])

@@ -17,6 +17,12 @@ import { QuoteEntity } from "../database/entities/quote.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
 import { InvoiceDocumentEntity } from "../database/entities/invoice-document.entity";
 import { WarrantyCertificateEntity } from "../database/entities/warranty-certificate.entity";
+import { InvoicePaymentLedgerService } from "../crm/invoice-payment-ledger.service";
+import {
+  classifyFinanceInvoiceOrigin,
+  resolveStoredPdfDocumentOrigin,
+} from "../crm/finance-invoice-origin";
+import { resolveInvoiceDisplayNumber } from "../crm/invoice-display-number";
 
 /** Default magic-link lifetime when minting from staff (no new env var). */
 const STAFF_PORTAL_MAGIC_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -50,7 +56,19 @@ export class CustomerPortalService {
     @InjectRepository(InvoiceDocumentEntity)
     private readonly invoiceDocumentsRepository: Repository<InvoiceDocumentEntity>,
     private readonly configService: ConfigService,
+    private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
   ) {}
+
+  private summarizePortalInvoiceLedger(invoice: InvoiceEntity) {
+    return this.invoicePaymentLedgerService.summarizeInvoice({
+      totalCents: invoice.total_cents || invoice.amount_cents,
+      legacyStatus: invoice.status,
+      legacyPaidAt: invoice.paid_at,
+      payments: invoice.payments ?? [],
+      voidedAt: invoice.voided_at,
+      cancelledAt: invoice.cancelled_at,
+    });
+  }
 
   async redeemMagicLinkToken(rawToken: string, request: Request, response: Response) {
     const tokenHash = this.hashToken(rawToken);
@@ -307,7 +325,10 @@ export class CustomerPortalService {
     if (latestJob) {
       activeQuote = await this.quotesRepository.findOne({ where: { job_id: latestJob.id, organization_id: organizationScope } });
 
-      invoice = await this.invoicesRepository.findOne({ where: { job_id: latestJob.id, organization_id: organizationScope } });
+      invoice = await this.invoicesRepository.findOne({
+        where: { job_id: latestJob.id, organization_id: organizationScope },
+        relations: { payments: true },
+      });
     }
 
     const warrantyCertificates = await this.warrantyCertificatesRepository.find({
@@ -326,15 +347,24 @@ export class CustomerPortalService {
       ? []
       : await this.invoicesRepository
           .createQueryBuilder("invoice")
+          .leftJoinAndSelect("invoice.payments", "payments")
           .where("invoice.organization_id = :organizationId", { organizationId: organizationScope })
           .andWhere("invoice.job_id IN (:...jobIds)", { jobIds })
           .orderBy("invoice.issued_at", "DESC")
           .getMany();
 
     const invoiceDocuments = await this.invoiceDocumentsRepository.find({
-      where: { customer_id: customerId, organization_id: organizationScope, document_kind: "workiz_source_pdf" },
+      where: { customer_id: customerId, organization_id: organizationScope },
+      order: {
+        generation_sequence: "DESC",
+      },
     });
-    const documentByInvoiceId = new Map(invoiceDocuments.map((document) => [document.invoice_id, document]));
+    const documentByInvoiceId = new Map<string, (typeof invoiceDocuments)[number]>();
+    for (const document of invoiceDocuments) {
+      if (!documentByInvoiceId.has(document.invoice_id)) {
+        documentByInvoiceId.set(document.invoice_id, document);
+      }
+    }
 
     return {
       active_inspection: null,
@@ -346,29 +376,33 @@ export class CustomerPortalService {
         }
         : null,
       payment_state: invoice
-        ? {
-          invoice_id: invoice.id,
-          invoice_status: invoice.status,
-          paid_at: invoice.paid_at ? invoice.paid_at.toISOString() : null,
-        }
+        ? (() => {
+          const ledger = this.summarizePortalInvoiceLedger(invoice);
+          return {
+            invoice_id: invoice.id,
+            invoice_status: invoice.status,
+            lifecycle_status: ledger.lifecycleStatus,
+            balance_cents: ledger.balanceCents,
+            overpayment_cents: ledger.overpaymentCents,
+            paid_at: ledger.paidAt ? ledger.paidAt.toISOString() : null,
+          };
+        })()
         : null,
       invoices: customerInvoices.map((row) => {
-        let invoiceLabel: string | null = null;
-        if (row.branding_snapshot_json) {
-          try {
-            const snapshot = JSON.parse(row.branding_snapshot_json) as { workiz_invoice_code?: string };
-            invoiceLabel = snapshot.workiz_invoice_code ?? null;
-          } catch {
-            invoiceLabel = null;
-          }
-        }
-        const hasPdf = documentByInvoiceId.has(row.id);
+        const ledger = this.summarizePortalInvoiceLedger(row);
+        const storedDocument = documentByInvoiceId.get(row.id) ?? null;
+        const documentOrigin = resolveStoredPdfDocumentOrigin(storedDocument);
+        const hasPdf = Boolean(storedDocument);
         return {
           id: row.id,
-          invoice_number: invoiceLabel,
+          invoice_number: resolveInvoiceDisplayNumber(row),
+          finance_origin: classifyFinanceInvoiceOrigin(row),
+          lifecycle_status: ledger.lifecycleStatus,
+          balance_cents: ledger.balanceCents,
           status: row.status,
           total_cents: row.total_cents,
           issued_at: row.issued_at.toISOString(),
+          document_origin: documentOrigin,
           source_pdf_url: hasPdf ? `/api/portal/invoices/${row.id}/pdf` : null,
         };
       }),
