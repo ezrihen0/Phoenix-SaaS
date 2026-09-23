@@ -31,6 +31,7 @@ temp/
 frontend/.next/
 frontend/out/
 backend/dist/
+backend/_runtime_harness/
 
 # TypeScript incremental build info
 *.tsbuildinfo
