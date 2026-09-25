@@ -505,7 +505,7 @@ export class CustomerPortalService {
           balance_cents: ledger.balanceCents,
           status: row.status,
           total_cents: row.total_cents,
-          issued_at: row.issued_at.toISOString(),
+          issued_at: row.issued_at ? row.issued_at.toISOString() : null,
           document_origin: documentOrigin,
           source_pdf_url: hasPdf ? `/api/portal/invoices/${row.id}/pdf` : null,
         };
