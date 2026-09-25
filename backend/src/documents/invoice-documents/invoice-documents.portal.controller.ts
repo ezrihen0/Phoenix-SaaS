@@ -2,12 +2,12 @@ import { Controller, Get, Param, Query, Req, Res, StreamableFile, UnauthorizedEx
 import type { Response } from "express";
 
 import type { RequestWithPortalSession } from "../../common/request-types";
-import { PortalSessionGuard } from "../../customer-portal/portal-session.guard";
+import { PortalIntegratedSessionGuard } from "../../customer-portal/portal-integrated-session.guard";
 import { setPdfDownloadResponseHeaders } from "../pdf/pdf-download-response";
 import { InvoiceDocumentsService } from "./invoice-documents.service";
 
 @Controller("api/portal/invoices")
-@UseGuards(PortalSessionGuard)
+@UseGuards(PortalIntegratedSessionGuard)
 export class InvoiceDocumentsPortalController {
   constructor(private readonly invoiceDocumentsService: InvoiceDocumentsService) {}
 

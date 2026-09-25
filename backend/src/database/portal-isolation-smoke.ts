@@ -11,6 +11,8 @@ import { DataSource } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
 import { CustomerPortalService } from "../customer-portal/customer-portal.service";
+import { PhoenixIntegrationAuthService } from "../integrations/phoenix/phoenix-integration-auth.service";
+import { PortalIntegratedSessionGuard } from "../customer-portal/portal-integrated-session.guard";
 import { InvoicePaymentLedgerService } from "../crm/invoice-payment-ledger.service";
 import { DocumentBrandingSnapshotService } from "../documents/pdf/document-branding-snapshot.service";
 import { WarrantyCertificatesService } from "../warranty/warranty-certificates.service";
@@ -62,6 +64,8 @@ type Seed = {
   certBId: string;
 };
 
+const SMOKE_PHOENIX_INTEGRATION_SECRET = "portal-phoenix-integration-smoke-secret";
+
 class SmokeConfigService {
   get(key: string): string | undefined {
     if (key === "PORTAL_SESSION_COOKIE_NAME") {
@@ -69,6 +73,12 @@ class SmokeConfigService {
     }
     if (key === "PORTAL_SESSION_COOKIE_SECURE") {
       return "false";
+    }
+    if (key === "PHOENIX_INTEGRATION_SECRET") {
+      return SMOKE_PHOENIX_INTEGRATION_SECRET;
+    }
+    if (key === "PHOENIX_PORTAL_PUBLIC_BASE_URL") {
+      return "https://portal.phoenixfireplace.ca";
     }
     return process.env[key];
   }
@@ -352,6 +362,129 @@ async function runCases(summary: SmokeSummary, dataSource: DataSource, seed: See
       throw new Error(`Expected used_link, got ${JSON.stringify(replay)}`);
     }
     return { code: replay.code };
+  });
+
+  const phoenixAuth = new PhoenixIntegrationAuthService(new SmokeConfigService() as ConfigService);
+  const integratedGuard = new PortalIntegratedSessionGuard(portal, phoenixAuth);
+
+  await expectPass(summary, "P7a — Phoenix integration mint for org A customer A", async () => {
+    const minted = await portal.createMagicLinkForPhoenixIntegration({
+      organizationId: seed.orgAId,
+      customerId: seed.customerAId,
+      email: null,
+      request,
+    });
+    if (!minted.magic_link_url.includes("portal.phoenixfireplace.ca/portal/auth/magic?token=")) {
+      throw new Error("Unexpected Phoenix magic link URL.");
+    }
+    return { customer_id: minted.customer_id };
+  });
+
+  await expectApiError(
+    summary,
+    "P7b — Phoenix mint rejects customer from another org",
+    ["customer_not_found"],
+    () =>
+      portal.createMagicLinkForPhoenixIntegration({
+        organizationId: seed.orgAId,
+        customerId: seed.customerBId,
+        email: null,
+        request,
+      }),
+  );
+
+  let bffSessionToken = "";
+  let bffOrganizationId = "";
+
+  await expectPass(summary, "P7c — Phoenix BFF redeem returns session handoff", async () => {
+    const link = await portal.createMagicLinkForPhoenixIntegration({
+      organizationId: seed.orgAId,
+      customerId: seed.customerAId,
+      email: null,
+      request,
+    });
+    const token = new URL(link.magic_link_url).searchParams.get("token");
+    if (!token) {
+      throw new Error("missing token in magic link url");
+    }
+    const redeemed = await portal.redeemMagicLinkToken(token, request, mockResponse(), { setSessionCookie: false });
+    if (!redeemed.ok || !redeemed.session_token) {
+      throw new Error(`bff redeem failed: ${JSON.stringify(redeemed)}`);
+    }
+    bffSessionToken = redeemed.session_token;
+    bffOrganizationId = redeemed.organization_id ?? "";
+    return {
+      customer_id: redeemed.customer_id,
+      organization_id: redeemed.organization_id,
+    };
+  });
+
+  await expectPass(summary, "P7d — X-Portal-Session resolves only with integration auth", async () => {
+    const headerRequest = {
+      ...mockRequest(),
+      get: (header: string) => {
+        const normalized = header.toLowerCase();
+        if (normalized === "x-portal-session") {
+          return bffSessionToken;
+        }
+        if (normalized === "authorization") {
+          return `Bearer ${SMOKE_PHOENIX_INTEGRATION_SECRET}`;
+        }
+        if (normalized === "user-agent") {
+          return "portal-smoke";
+        }
+        return undefined;
+      },
+    } as Request;
+
+    const context = {
+      switchToHttp: () => ({
+        getRequest: () => headerRequest,
+      }),
+    };
+
+    const allowed = await integratedGuard.canActivate(context as never);
+    if (!allowed) {
+      throw new Error("Expected integrated guard to allow Phoenix BFF session.");
+    }
+
+    const deniedRequest = {
+      ...headerRequest,
+      get: (header: string) => {
+        const normalized = header.toLowerCase();
+        if (normalized === "x-portal-session") {
+          return bffSessionToken;
+        }
+        if (normalized === "user-agent") {
+          return "portal-smoke";
+        }
+        return undefined;
+      },
+    } as Request;
+
+    try {
+      await integratedGuard.canActivate({
+        switchToHttp: () => ({
+          getRequest: () => deniedRequest,
+        }),
+      } as never);
+      throw new Error("Expected header-only session to be denied.");
+    } catch (error) {
+      const code = extractErrorCode(error);
+      if (code !== "portal_session_header_denied") {
+        throw error;
+      }
+    }
+
+    return { ok: true };
+  });
+
+  await expectPass(summary, "P7e — BFF session home remains org/customer scoped", async () => {
+    const home = await portal.getPortalHome(bffOrganizationId, seed.customerAId);
+    if (!home.warranty_certificates.some((row) => row.id === seed.certAId)) {
+      throw new Error("Expected org A warranty certificate on BFF session home.");
+    }
+    return { invoiceCount: home.invoices.length };
   });
 
   await expectPass(summary, "P7 — expired magic link rejected", async () => {

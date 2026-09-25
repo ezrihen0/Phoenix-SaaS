@@ -3,10 +3,10 @@ import { Controller, Get, Req, UnauthorizedException, UseGuards } from "@nestjs/
 import { apiSuccess } from "../common/api-response";
 import type { RequestWithPortalSession } from "../common/request-types";
 import { CustomerPortalService } from "./customer-portal.service";
-import { PortalSessionGuard } from "./portal-session.guard";
+import { PortalIntegratedSessionGuard } from "./portal-integrated-session.guard";
 
 @Controller("api/portal")
-@UseGuards(PortalSessionGuard)
+@UseGuards(PortalIntegratedSessionGuard)
 export class CustomerPortalReadController {
   constructor(private readonly customerPortalService: CustomerPortalService) {}
 

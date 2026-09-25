@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { createHash, randomBytes } from "crypto";
@@ -70,7 +70,13 @@ export class CustomerPortalService {
     });
   }
 
-  async redeemMagicLinkToken(rawToken: string, request: Request, response: Response) {
+  async redeemMagicLinkToken(
+    rawToken: string,
+    request: Request,
+    response: Response,
+    options?: { setSessionCookie?: boolean },
+  ) {
+    const setSessionCookie = options?.setSessionCookie !== false;
     const tokenHash = this.hashToken(rawToken);
     const now = new Date();
     const link = await this.linksRepository.findOne({
@@ -180,18 +186,44 @@ export class CustomerPortalService {
       });
     });
 
-    response.cookie(this.getPortalSessionCookieName(), rawSessionToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: this.isPortalSessionCookieSecure(),
-      expires: portalSession.expires_at,
-      path: "/",
-    });
+    if (setSessionCookie) {
+      response.cookie(this.getPortalSessionCookieName(), rawSessionToken, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: this.isPortalSessionCookieSecure(),
+        expires: portalSession.expires_at,
+        path: "/",
+      });
+    }
 
     return {
       ok: true as const,
       customer_id: link.customer_id,
+      organization_id: organizationId,
+      session_token: rawSessionToken,
       session_expires_at: portalSession.expires_at.toISOString(),
+    };
+  }
+
+  async resolvePortalSessionFromOpaqueToken(rawToken: string) {
+    const token = rawToken.trim();
+    if (!token) {
+      return null;
+    }
+
+    const session = await this.sessionsRepository.findOne({
+      where: { session_token_hash: this.hashToken(token) },
+    });
+
+    if (!session || session.expires_at <= new Date()) {
+      return null;
+    }
+
+    return {
+      customer_id: session.customer_id,
+      session,
+      is_preview: session.is_preview,
+      is_read_only: session.is_read_only,
     };
   }
 
@@ -236,7 +268,7 @@ export class CustomerPortalService {
   async createMagicLinkForStaff(input: {
     organizationId: string;
     customerId: string;
-    actorProfileId: string;
+    actorProfileId: string | null;
     request: Request;
   }): Promise<StaffPortalMagicLinkResult> {
     const organizationId = input.organizationId.trim();
@@ -268,7 +300,7 @@ export class CustomerPortalService {
         token_hash: this.hashToken(rawToken),
         status: "sent",
         delivery_method: "copy",
-        sender_user_id: input.actorProfileId,
+        sender_user_id: input.actorProfileId?.trim() || null,
         expires_at: expiresAt,
         sent_at: null,
       }),
@@ -280,7 +312,7 @@ export class CustomerPortalService {
       portalMagicLinkId: saved.id,
       portalSessionId: null,
       eventType: "link_generated",
-      actorUserId: input.actorProfileId,
+      actorUserId: input.actorProfileId?.trim() || null,
       deliveryMethod: "copy",
       metadata: {
         delivery_method: "copy",
@@ -292,6 +324,78 @@ export class CustomerPortalService {
       raw_token: rawToken,
       expires_at: expiresAt.toISOString(),
     };
+  }
+
+  async createMagicLinkForPhoenixIntegration(input: {
+    organizationId: string;
+    customerId: string | null;
+    email: string | null;
+    request: Request;
+  }) {
+    const organizationId = input.organizationId.trim();
+    let customerId = input.customerId?.trim() ?? "";
+
+    if (!customerId && input.email) {
+      customerId = await this.resolveUniqueCustomerIdByEmail(organizationId, input.email);
+    }
+
+    const link = await this.createMagicLinkForStaff({
+      organizationId,
+      customerId,
+      actorProfileId: null,
+      request: input.request,
+    });
+
+    const portalBase =
+      this.configService.get<string>("PHOENIX_PORTAL_PUBLIC_BASE_URL")?.trim().replace(/\/+$/, "") ||
+      "https://portal.phoenixfireplace.ca";
+    const magicLinkUrl = `${portalBase}/portal/auth/magic?token=${encodeURIComponent(link.raw_token)}`;
+
+    return {
+      magic_link_url: magicLinkUrl,
+      expires_at: link.expires_at,
+      customer_id: customerId,
+      organization_id: organizationId,
+    };
+  }
+
+  private async resolveUniqueCustomerIdByEmail(organizationId: string, email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new BadRequestException({
+        error: {
+          code: "invalid_phoenix_portal_mint_payload",
+          message: "email is required.",
+        },
+      });
+    }
+
+    const matches = await this.customersRepository
+      .createQueryBuilder("customer")
+      .select(["customer.id"])
+      .where("customer.organization_id = :organizationId", { organizationId })
+      .andWhere("LOWER(TRIM(customer.email)) = :email", { email: normalizedEmail })
+      .getMany();
+
+    if (matches.length === 0) {
+      throw new NotFoundException({
+        error: {
+          code: "customer_not_found",
+          message: "Customer could not be found.",
+        },
+      });
+    }
+
+    if (matches.length > 1) {
+      throw new BadRequestException({
+        error: {
+          code: "ambiguous_customer_email",
+          message: "Multiple customers match that email in this organization.",
+        },
+      });
+    }
+
+    return matches[0]!.id;
   }
 
   async getPortalHome(organizationId: string, customerId: string) {

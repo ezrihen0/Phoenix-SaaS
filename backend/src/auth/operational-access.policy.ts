@@ -6,6 +6,7 @@
 const PUBLIC_ROUTE_PREFIXES = [
   "/api/public/",
   "/api/webhooks/",
+  "/api/integrations/phoenix/",
   "/telephony/telnyx",
   "/telephony/twilio",
   "/api/marketing/oauth/",

@@ -12,6 +12,7 @@ import { AuthService } from "./auth/auth.service";
 import { HealthModule } from "./common/health.module";
 import { CrmModule } from "./crm/crm.module";
 import { CustomerPortalModule } from "./customer-portal/customer-portal.module";
+import { PhoenixIntegrationModule } from "./integrations/phoenix/phoenix-integration.module";
 import { buildTypeOrmModuleOptions } from "./database/typeorm.config";
 import { InspectionsModule } from "./inspections/inspections.module";
 import { InventoryModule } from "./inventory/inventory.module";
@@ -47,6 +48,7 @@ import { TeamModule } from "./team/team.module";
     PublicBookingsModule,
     InspectionsModule,
     CustomerPortalModule,
+    PhoenixIntegrationModule,
     InvoiceDocumentsModule,
     MessagingModule,
     MarketingModule,
