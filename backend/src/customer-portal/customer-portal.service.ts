@@ -4,7 +4,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { createHash, randomBytes } from "crypto";
 import type { Request, Response } from "express";
 import type { EntityManager } from "typeorm";
-import { Repository } from "typeorm";
+import { In, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import { CustomerEntity } from "../database/entities/customer.entity";
@@ -24,6 +24,10 @@ import {
 } from "../crm/finance-invoice-origin";
 import { resolveInvoiceDisplayNumber } from "../crm/invoice-display-number";
 import { SettingsService } from "../settings/settings.service";
+import {
+  INVOICE_CUSTOMER_FACING_SNAPSHOT_VERSION,
+  type InvoiceCustomerFacingSnapshot,
+} from "../crm/invoice-customer-facing-snapshot.types";
 
 /** Default magic-link lifetime when minting from staff (no new env var). */
 const STAFF_PORTAL_MAGIC_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -463,6 +467,16 @@ export class CustomerPortalService {
           .getMany();
 
     const orgSettings = await this.settingsService.getOrganizationSettings(organizationScope);
+    const businessAddress = [orgSettings.address, orgSettings.city, orgSettings.zip].filter(Boolean).join(", ");
+
+    const customerQuotes =
+      jobIds.length === 0
+        ? []
+        : await this.quotesRepository.find({
+            where: { organization_id: organizationScope, job_id: In(jobIds) },
+            relations: { line_items: true },
+            order: { updated_at: "DESC" },
+          });
 
     const invoiceDocuments = await this.invoiceDocumentsRepository.find({
       where: { customer_id: customerId, organization_id: organizationScope },
@@ -490,8 +504,39 @@ export class CustomerPortalService {
       organization: {
         business_name: orgSettings.businessName,
         tax_rate_bps: orgSettings.taxRateBps,
-        issuer_address: [orgSettings.address, orgSettings.city, orgSettings.zip].filter(Boolean).join(", "),
+        issuer_address: businessAddress,
+        business_address: businessAddress,
+        phone: this.normalizeMaybe(orgSettings.phone),
+        email: this.normalizeMaybe(orgSettings.companyEmail),
+        website: this.normalizeMaybe(orgSettings.website),
       },
+      quotes: customerQuotes.map((quote) => {
+        const relatedJob = jobById.get(quote.job_id);
+        const lineItems = (quote.line_items ?? [])
+          .slice()
+          .sort((left, right) => left.sort_order - right.sort_order)
+          .map((line) => ({
+            name: line.name_snapshot,
+            quantity: line.quantity,
+            unit_price_cents: line.unit_price_cents_snapshot,
+            line_subtotal_cents: line.line_subtotal_cents,
+          }));
+        return {
+          id: quote.id,
+          job_id: quote.job_id,
+          job_title: relatedJob?.title ?? null,
+          estimate_number: `EST-${quote.id.slice(0, 8).toUpperCase()}`,
+          description: quote.description,
+          status: quote.status,
+          subtotal_cents: quote.subtotal_cents,
+          tax_cents: quote.tax_cents,
+          tax_rate_bps: quote.tax_rate_bps_snapshot,
+          total_cents: quote.total_cents,
+          created_at: quote.created_at.toISOString(),
+          sent_at: quote.sent_at ? quote.sent_at.toISOString() : null,
+          line_items: lineItems,
+        };
+      }),
       jobs: customerJobs.map((job) => ({
         id: job.id,
         title: job.title,
@@ -530,6 +575,7 @@ export class CustomerPortalService {
         const storedDocument = documentByInvoiceId.get(row.id) ?? null;
         const documentOrigin = resolveStoredPdfDocumentOrigin(storedDocument);
         const financeOrigin = classifyFinanceInvoiceOrigin(row);
+        const frozenSnapshot = this.parseCustomerFacingSnapshot(row.customer_facing_snapshot_json);
         const pdfPath = `/api/portal/invoices/${row.id}/pdf`;
         const relatedJob = jobById.get(row.job_id);
         const lineItems = (row.line_items ?? [])
@@ -549,17 +595,20 @@ export class CustomerPortalService {
           balance_cents: ledger.balanceCents,
           amount_paid_cents: ledger.netPaidCents,
           status: row.status,
+          description: row.description,
           subtotal_cents: row.subtotal_cents,
           tax_cents: row.tax_cents,
           tax_rate_bps: row.tax_rate_bps_snapshot,
           total_cents: row.total_cents,
           issued_at: row.issued_at ? row.issued_at.toISOString() : null,
+          due_at: row.due_at ? row.due_at.toISOString() : null,
           job_id: row.job_id,
           job_title: relatedJob?.title ?? null,
           line_items: lineItems,
           document_origin: documentOrigin,
-          source_pdf_url:
-            storedDocument || financeOrigin !== "workiz_historical" ? pdfPath : null,
+          snapshot_frozen: Boolean(frozenSnapshot),
+          customer_facing_snapshot: frozenSnapshot,
+          source_pdf_url: financeOrigin === "workiz_historical" && storedDocument ? pdfPath : null,
         };
       }),
       warranty_certificates: warrantyCertificates.map((certificate) => ({
@@ -582,6 +631,23 @@ export class CustomerPortalService {
   private normalizeMaybe(value: string | null | undefined) {
     const normalized = value?.trim();
     return normalized?.length ? normalized : null;
+  }
+
+  private parseCustomerFacingSnapshot(raw: string | null | undefined): InvoiceCustomerFacingSnapshot | null {
+    if (!raw?.trim()) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as InvoiceCustomerFacingSnapshot;
+      if (parsed.schema_version !== INVOICE_CUSTOMER_FACING_SNAPSHOT_VERSION) {
+        return null;
+      }
+
+      return parsed;
+    } catch {
+      return null;
+    }
   }
 
   private async persistPortalAccessEvent(

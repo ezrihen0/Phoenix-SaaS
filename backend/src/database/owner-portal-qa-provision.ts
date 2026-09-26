@@ -6,7 +6,7 @@ import type { Request } from "express";
 import { DataSource } from "typeorm";
 
 import { AppModule } from "../app.module";
-import { persistInvoiceHeaderAndLineItems } from "../crm/crm-document-persistence";
+import { persistInvoiceHeaderAndLineItems, persistQuoteHeaderAndLineItems } from "../crm/crm-document-persistence";
 import { DocumentPricingService } from "../crm/document-pricing.service";
 import { DocumentSnapshotService, type SnapshotLineDraft } from "../crm/document-snapshot.service";
 import { InvoicePaymentRecordingService } from "../crm/invoice-payment-recording.service";
@@ -14,6 +14,7 @@ import { MoneyEngineService } from "../crm/money-engine.service";
 import { CustomerPortalService } from "../customer-portal/customer-portal.service";
 import { CustomerEntity } from "./entities/customer.entity";
 import { InvoiceEntity } from "./entities/invoice.entity";
+import { QuoteEntity } from "./entities/quote.entity";
 import { JobEntity } from "./entities/job.entity";
 import { MembershipEntity } from "./entities/membership.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
@@ -237,6 +238,33 @@ export async function runOwnerPortalQaProvision() {
       taxRateBps,
     );
 
+    const quoteRepo = dataSource.getRepository(QuoteEntity);
+    let quote = await quoteRepo.findOne({
+      where: { organization_id: PHOENIX_ORG_ID, job_id: job.id },
+    });
+    const quoteTotals = pricingService.computeSnapshotTotals(
+      lineDrafts.map((line) => ({
+        quantity: line.quantity,
+        unitPriceCents: line.unit_price_cents_snapshot,
+      })),
+      taxRateBps,
+    );
+
+    quote = await dataSource.transaction((manager) =>
+      persistQuoteHeaderAndLineItems(manager, documentSnapshotService, {
+        organizationId: PHOENIX_ORG_ID,
+        jobId: job.id,
+        existingQuote: quote,
+        description: `${QA_TAG} — Native digital estimate (QA)`,
+        quoteTotals,
+        status: "sent",
+        sent_at: new Date(),
+        approved_at: null,
+        hasSnapshotLineItems: true,
+        lineDrafts,
+      }),
+    );
+
     invoice = await dataSource.transaction((manager) =>
       persistInvoiceHeaderAndLineItems(manager, documentSnapshotService, {
         organizationId: PHOENIX_ORG_ID,
@@ -357,6 +385,14 @@ export async function runOwnerPortalQaProvision() {
         title: job.title,
         status: job.status,
         completedAt: job.completed_at?.toISOString() ?? null,
+      },
+      estimate: {
+        id: quote.id,
+        estimateNumber: `EST-${quote.id.slice(0, 8).toUpperCase()}`,
+        subtotalCents: quote.subtotal_cents,
+        taxCents: quote.tax_cents,
+        totalCents: quote.total_cents,
+        status: quote.status,
       },
       invoice: {
         id: invoice.id,
