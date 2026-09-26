@@ -14,6 +14,7 @@ import { WarrantyCertificateEntity } from "../database/entities/warranty-certifi
 import { InvoiceDocumentEntity } from "../database/entities/invoice-document.entity";
 import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
 import { InvoicePaymentLedgerService } from "../crm/invoice-payment-ledger.service";
+import { SettingsModule } from "../settings/settings.module";
 import { PhoenixIntegrationAuthService } from "../integrations/phoenix/phoenix-integration-auth.service";
 import { PhoenixIntegrationGuard } from "../integrations/phoenix/phoenix-integration.guard";
 import { CustomerPortalAuthController } from "./customer-portal.auth.controller";
@@ -27,6 +28,7 @@ import { PortalSessionGuard } from "./portal-session.guard";
 @Module({
   imports: [
     AuthModule,
+    SettingsModule,
     TypeOrmModule.forFeature([
       CustomerEntity,
       JobEntity,

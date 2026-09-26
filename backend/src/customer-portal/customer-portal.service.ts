@@ -23,6 +23,7 @@ import {
   resolveStoredPdfDocumentOrigin,
 } from "../crm/finance-invoice-origin";
 import { resolveInvoiceDisplayNumber } from "../crm/invoice-display-number";
+import { SettingsService } from "../settings/settings.service";
 
 /** Default magic-link lifetime when minting from staff (no new env var). */
 const STAFF_PORTAL_MAGIC_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -57,6 +58,7 @@ export class CustomerPortalService {
     private readonly invoiceDocumentsRepository: Repository<InvoiceDocumentEntity>,
     private readonly configService: ConfigService,
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   private summarizePortalInvoiceLedger(invoice: InvoiceEntity) {
@@ -446,16 +448,21 @@ export class CustomerPortalService {
       order: { updated_at: "DESC" },
       take: 50,
     });
+    const jobById = new Map(customerJobs.map((job) => [job.id, job]));
     const jobIds = customerJobs.map((job) => job.id);
     const customerInvoices = jobIds.length === 0
       ? []
       : await this.invoicesRepository
           .createQueryBuilder("invoice")
           .leftJoinAndSelect("invoice.payments", "payments")
+          .leftJoinAndSelect("invoice.line_items", "line_items")
           .where("invoice.organization_id = :organizationId", { organizationId: organizationScope })
           .andWhere("invoice.job_id IN (:...jobIds)", { jobIds })
           .orderBy("invoice.issued_at", "DESC")
+          .addOrderBy("line_items.sort_order", "ASC")
           .getMany();
+
+    const orgSettings = await this.settingsService.getOrganizationSettings(organizationScope);
 
     const invoiceDocuments = await this.invoiceDocumentsRepository.find({
       where: { customer_id: customerId, organization_id: organizationScope },
@@ -471,6 +478,32 @@ export class CustomerPortalService {
     }
 
     return {
+      customer: {
+        full_name: customer.full_name,
+        email: this.normalizeMaybe(customer.email),
+        phone: this.normalizeMaybe(customer.phone),
+        service_address_line_1: customer.service_address_line_1,
+        service_city: customer.service_city,
+        service_state_or_region: customer.service_state_or_region,
+        service_postal_code: customer.service_postal_code,
+      },
+      organization: {
+        business_name: orgSettings.businessName,
+        tax_rate_bps: orgSettings.taxRateBps,
+        issuer_address: [orgSettings.address, orgSettings.city, orgSettings.zip].filter(Boolean).join(", "),
+      },
+      jobs: customerJobs.map((job) => ({
+        id: job.id,
+        title: job.title,
+        status: job.status,
+        service_address_line_1: job.service_address_line_1,
+        service_city: job.service_city,
+        service_state_or_region: job.service_state_or_region,
+        service_postal_code: job.service_postal_code,
+        scheduled_for: job.scheduled_for ? job.scheduled_for.toISOString() : null,
+        completed_at: job.completed_at ? job.completed_at.toISOString() : null,
+        updated_at: job.updated_at.toISOString(),
+      })),
       active_inspection: null,
       active_quote: activeQuote
         ? {
@@ -496,18 +529,37 @@ export class CustomerPortalService {
         const ledger = this.summarizePortalInvoiceLedger(row);
         const storedDocument = documentByInvoiceId.get(row.id) ?? null;
         const documentOrigin = resolveStoredPdfDocumentOrigin(storedDocument);
-        const hasPdf = Boolean(storedDocument);
+        const financeOrigin = classifyFinanceInvoiceOrigin(row);
+        const pdfPath = `/api/portal/invoices/${row.id}/pdf`;
+        const relatedJob = jobById.get(row.job_id);
+        const lineItems = (row.line_items ?? [])
+          .slice()
+          .sort((left, right) => left.sort_order - right.sort_order)
+          .map((line) => ({
+            name: line.name_snapshot,
+            quantity: line.quantity,
+            unit_price_cents: line.unit_price_cents_snapshot,
+            line_subtotal_cents: line.line_subtotal_cents,
+          }));
         return {
           id: row.id,
           invoice_number: resolveInvoiceDisplayNumber(row),
-          finance_origin: classifyFinanceInvoiceOrigin(row),
+          finance_origin: financeOrigin,
           lifecycle_status: ledger.lifecycleStatus,
           balance_cents: ledger.balanceCents,
+          amount_paid_cents: ledger.netPaidCents,
           status: row.status,
+          subtotal_cents: row.subtotal_cents,
+          tax_cents: row.tax_cents,
+          tax_rate_bps: row.tax_rate_bps_snapshot,
           total_cents: row.total_cents,
           issued_at: row.issued_at ? row.issued_at.toISOString() : null,
+          job_id: row.job_id,
+          job_title: relatedJob?.title ?? null,
+          line_items: lineItems,
           document_origin: documentOrigin,
-          source_pdf_url: hasPdf ? `/api/portal/invoices/${row.id}/pdf` : null,
+          source_pdf_url:
+            storedDocument || financeOrigin !== "workiz_historical" ? pdfPath : null,
         };
       }),
       warranty_certificates: warrantyCertificates.map((certificate) => ({

@@ -11,6 +11,7 @@ import { DataSource } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
 import { CustomerPortalService } from "../customer-portal/customer-portal.service";
+import type { SettingsService } from "../settings/settings.service";
 import { PhoenixIntegrationAuthService } from "../integrations/phoenix/phoenix-integration-auth.service";
 import { PortalIntegratedSessionGuard } from "../customer-portal/portal-integrated-session.guard";
 import { InvoicePaymentLedgerService } from "../crm/invoice-payment-ledger.service";
@@ -188,6 +189,35 @@ function buildPortalService(dataSource: DataSource) {
     dataSource.getRepository(InvoiceDocumentEntity),
     new SmokeConfigService() as ConfigService,
     new InvoicePaymentLedgerService(),
+    {
+      getOrganizationSettings: async () => ({
+        businessName: "Smoke Co",
+        displayInitials: null,
+        companyDescription: null,
+        address: null,
+        city: null,
+        zip: null,
+        website: null,
+        companyEmail: null,
+        phone: null,
+        timezone: null,
+        googleReviewUrl: null,
+        defaultSmsNumber: null,
+        businessHours: null,
+        invoiceEmailSubject: null,
+        invoiceEmailBody: null,
+        invoiceSmsBody: null,
+        invoicePdfFooter: null,
+        logoUrl: null,
+        accentColor: null,
+        paymentInstructions: null,
+        businessLicense: null,
+        gstNumber: null,
+        warrantyMessage: null,
+        defaultDueDays: null,
+        taxRateBps: 0,
+      }),
+    } as unknown as SettingsService,
   );
 }
 

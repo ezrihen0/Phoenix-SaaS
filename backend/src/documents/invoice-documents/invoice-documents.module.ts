@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
+import { CrmPortalPdfModule } from "../../crm/crm-portal-pdf.module";
 import { CustomerPortalModule } from "../../customer-portal/customer-portal.module";
 import { InvoiceDocumentEntity } from "../../database/entities/invoice-document.entity";
 import { InvoiceEntity } from "../../database/entities/invoice.entity";
@@ -11,6 +12,7 @@ import { InvoiceNativeDocumentService } from "./invoice-native-document.service"
 
 @Module({
   imports: [
+    CrmPortalPdfModule,
     CustomerPortalModule,
     TypeOrmModule.forFeature([
       InvoiceDocumentEntity,

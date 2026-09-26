@@ -86,6 +86,8 @@
     "finance-part9:certify": "node -r ts-node/register src/database/finance-part9-certify.ts",
     "finance-program:finish": "node -r ts-node/register src/database/finance-part11-finish.ts",
     "jobs:rbac:smoke": "node -r ts-node/register src/database/jobs-rbac-smoke.ts",
+    "phoenix:owner-portal-qa:provision": "node -r ts-node/register src/database/owner-portal-qa-provision.ts",
+    "phoenix:owner-portal-qa:verify": "node src/integrations/phoenix/owner-portal-qa-verify.mjs",
     "phoenix:activate": "node -r ts-node/register src/database/phoenix-activation.ts",
     "phoenix:activate:verify": "node -r ts-node/register src/database/phoenix-activation-verify.ts",
     "phoenix:owner:credentials:update": "node -r ts-node/register src/database/phoenix-owner-credentials-update.ts",
