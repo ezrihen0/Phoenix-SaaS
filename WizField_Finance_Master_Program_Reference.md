@@ -421,7 +421,7 @@ Make financial transformation and calculation deterministic.
 - Invoice/estimate default tax when omitted: job **branch** `default_tax_rate_bps` (same resolver for both).
 - Frontend preview parity: [`frontend/lib/crm/money-engine.ts`](frontend/lib/crm/money-engine.ts) matches backend quantity rules; `money-engine:parity-check`.
 - Upsert paths reject client total drift when line items are present (`totals_mismatch`).
-- Checks: `npm run finance-part5:checks` (unit + parity + persistence contract + Phase 4 conversion smokes).
+- Checks: `npm run finance-part5:checks` (unit + parity + persistence contract + Phase 4 conversion smokes). Configured local DB closeout: `FINANCE_SMOKE_USE_CONFIGURED_DATABASE=true npm run finance-part5:configured-db-verification` (2026-09-26 **PASS** on `wizfield`).
 
 **Estimate → Invoice conversion (Phase 4 — CLOSED)**
 
