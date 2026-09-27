@@ -8,6 +8,8 @@ import type { OrganizationSettingEntity } from "../database/entities/organizatio
 import { DocumentBrandingSnapshotService } from "../documents/pdf/document-branding-snapshot.service";
 import type { InvoicePdfBrandingSnapshot } from "./invoice-pdf.service";
 import { InvoiceCustomerFacingSnapshotService } from "./invoice-customer-facing-snapshot.service";
+import { snapshotDescription } from "./invoice-customer-facing-snapshot.types";
+import { resolveHistoricalDocumentRenderMode } from "./historical-document-render.types";
 import type { InvoiceLedgerSummary } from "./invoice-financial-lifecycle.core";
 import { resolveInvoiceDisplayNumber } from "./invoice-display-number";
 
@@ -72,7 +74,7 @@ export class InvoicePdfViewModelService {
     sanitizeLineText: (value: string | null | undefined) => string | null;
   }): InvoicePdfViewModel {
     const frozen = this.invoiceCustomerFacingSnapshotService.parseSnapshot(input.invoice.customer_facing_snapshot_json);
-    if (frozen) {
+    if (resolveHistoricalDocumentRenderMode(frozen) === "frozen" && frozen) {
       return this.buildFromSnapshot(frozen, input);
     }
 
@@ -119,7 +121,7 @@ export class InvoicePdfViewModelService {
       customerPhone: snapshot.bill_to.phone,
       serviceAddressLines: snapshot.service_location.address_lines,
       jobReferenceLabel: `${snapshot.job_reference.title} (${snapshot.job_reference.service_type ?? "service"})`,
-      description: snapshot.description,
+      description: snapshotDescription(snapshot),
       lineItems: snapshot.lines.map((line) => ({
         name: line.name,
         description: line.description,

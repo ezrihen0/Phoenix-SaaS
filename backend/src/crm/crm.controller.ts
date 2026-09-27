@@ -1125,6 +1125,14 @@ export class CrmController {
         this.throwDocumentLockedError("estimate");
       }
 
+      if (existingQuote && this.invoiceCustomerFacingSnapshotService.isFrozen(existingQuote)) {
+        apiError(
+          409,
+          "estimate_customer_snapshot_frozen",
+          "This estimate was already issued to the customer. Customer-facing content cannot be changed.",
+        );
+      }
+
       const hasSnapshotLineItems = payload.lineItems !== undefined;
       const quoteLineDrafts = hasSnapshotLineItems
         ? await this.buildDocumentLineDrafts(
@@ -1172,7 +1180,8 @@ export class CrmController {
             lineDrafts: quoteLineDrafts,
           }),
         );
-        return apiSuccess(result);
+        const frozenExisting = await this.maybeFreezeEstimateCustomerFacingSnapshot(organizationId, jobId, result.id);
+        return apiSuccess(frozenExisting ?? result);
       }
 
       const result = await this.dataSource.transaction((manager) =>
@@ -1190,7 +1199,8 @@ export class CrmController {
         }),
       );
 
-      return apiSuccess(result);
+      const frozenNew = await this.maybeFreezeEstimateCustomerFacingSnapshot(organizationId, jobId, result.id);
+      return apiSuccess(frozenNew ?? result);
     } catch (error) {
       this.rethrowHttpException(error);
       if (error instanceof Error && error.message.includes("total mismatch")) {
@@ -2235,6 +2245,10 @@ export class CrmController {
         signed_at: this.toIsoString(quote.signed_at),
         signed_by_name: quote.signed_by_name,
         is_locked: this.isDocumentLocked(quote.approved_at, quote.signed_at),
+        snapshot_frozen: this.invoiceCustomerFacingSnapshotService.isFrozen(quote),
+        customer_facing_snapshot: this.invoiceCustomerFacingSnapshotService.parseSnapshot(
+          quote.customer_facing_snapshot_json,
+        ),
         line_items: this.buildQuoteLineItemResponse(quote),
       });
     } catch (error) {
@@ -2296,6 +2310,7 @@ export class CrmController {
       quote.approval_requested_at = quote.approval_requested_at ?? timestamp;
       quote.approved_at = quote.approved_at ?? timestamp;
       await this.quotesRepository.save(quote);
+      await this.maybeFreezeEstimateCustomerFacingSnapshot(organizationId, quote.job_id, quote.id);
 
       return apiSuccess({ ok: true });
     } catch (error) {
@@ -2363,6 +2378,7 @@ export class CrmController {
       quote.signed_at = quote.signed_at ?? timestamp;
       quote.signed_by_name = payload.signedByName;
       await this.quotesRepository.save(quote);
+      await this.maybeFreezeEstimateCustomerFacingSnapshot(organizationId, quote.job_id, quote.id);
 
       return apiSuccess({ ok: true });
     } catch (error) {
@@ -4156,6 +4172,10 @@ export class CrmController {
     orgSettings: OrganizationSettingEntity | null;
     frozenVia: "email" | "sms";
   }) {
+    const branch = input.job.branch_id
+      ? await this.branchScopeService.findBranchForOrganization(input.organizationId, input.job.branch_id)
+      : null;
+
     const sendResult = await this.invoiceSendPipelineService.finalizeCustomerFacingSend({
       organizationId: input.organizationId,
       invoice: input.invoice,
@@ -4163,6 +4183,7 @@ export class CrmController {
       customer: input.customer,
       orgSettings: input.orgSettings,
       frozenVia: input.frozenVia,
+      branch,
     });
 
     const ledgerSummary = this.summarizeInvoiceLedger(input.invoice);
@@ -4227,6 +4248,55 @@ export class CrmController {
 
     const branch = await this.branchScopeService.findBranchForOrganization(organizationId, job.branch_id);
     return this.branchScopeService.resolveDefaultTaxRateBps(branch);
+  }
+
+  private async maybeFreezeEstimateCustomerFacingSnapshot(
+    organizationId: string,
+    jobId: string,
+    quoteId: string,
+  ) {
+    const quote = await this.quotesRepository.findOne({
+      where: {
+        id: quoteId,
+        job_id: jobId,
+        organization_id: organizationId,
+      },
+      relations: {
+        line_items: true,
+        job: {
+          customer: true,
+        },
+      },
+    });
+
+    if (!quote || !this.invoiceCustomerFacingSnapshotService.shouldFreezeEstimate(quote)) {
+      return quote;
+    }
+
+    const job = this.relationValue(quote.job as RelatedValue<JobEntity>);
+    if (!job) {
+      return quote;
+    }
+
+    const customer = this.relationValue(job.customer as RelatedValue<CustomerEntity>);
+    const orgSettings = await this.findOrganizationSettings(organizationId);
+    const branch = job.branch_id
+      ? await this.branchScopeService.findBranchForOrganization(organizationId, job.branch_id)
+      : null;
+
+    this.invoiceCustomerFacingSnapshotService.freezeEstimateRecord({
+      quote,
+      lineItems: quote.line_items ?? [],
+      customer,
+      job,
+      orgSettings,
+      frozenAt: new Date(),
+      frozenVia: this.invoiceCustomerFacingSnapshotService.resolveEstimateFreezeVia(quote),
+      branch,
+      organizationId,
+    });
+
+    return this.quotesRepository.save(quote);
   }
 }
 

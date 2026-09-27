@@ -6,6 +6,7 @@ import type { CustomerEntity } from "../database/entities/customer.entity";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
 import type { JobEntity } from "../database/entities/job.entity";
 import type { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
+import type { BranchEntity } from "../database/entities/branch.entity";
 import { InvoiceCustomerFacingSnapshotService, type InvoiceSnapshotFreezeVia } from "./invoice-customer-facing-snapshot.service";
 import { InvoiceNumberingService } from "./invoice-numbering.service";
 
@@ -16,6 +17,7 @@ export type InvoiceSendPipelineInput = {
   customer: CustomerEntity | null;
   orgSettings: OrganizationSettingEntity | null;
   frozenVia: InvoiceSnapshotFreezeVia;
+  branch?: BranchEntity | null;
 };
 
 @Injectable()
@@ -63,6 +65,8 @@ export class InvoiceSendPipelineService {
         documentNumber,
         frozenAt,
         frozenVia: input.frozenVia,
+        branch: input.branch ?? null,
+        organizationId: input.organizationId,
       });
 
       await invoiceRepo.save(lockedInvoice);

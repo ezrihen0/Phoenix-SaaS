@@ -594,11 +594,15 @@ The owner-approved contract decides the final rule.
 - Document-terminal lifecycle: `void` / `cancelled` when `invoices.voided_at` / `cancelled_at` set (columns present; workflow UI deferred).
 - Office dashboard open-invoice counts/lists use ledger summaries, not `invoices.status = unpaid` alone.
 
-**Customer-facing snapshot (Phase 7)**
+**Customer-facing snapshot (Phase 7 — CLOSED)**
 
-- Column: `invoices.customer_facing_snapshot_json` schema v1 ([`invoice-customer-facing-snapshot.types.ts`](backend/src/crm/invoice-customer-facing-snapshot.types.ts)).
-- **Freeze trigger:** first customer-facing send (email or SMS) via [`InvoiceSendPipelineService`](backend/src/crm/invoice-send-pipeline.service.ts).
-- Post-freeze invoice upserts return `409 invoice_customer_snapshot_frozen`.
+- **Status:** **CLOSED** (2026-09-26). Configured local DB closeout: `FINANCE_SMOKE_USE_CONFIGURED_DATABASE=true npm run finance-part7:configured-db-verification` (2026-09-26 **PASS** on `wizfield`; includes Phase 6 regression).
+- Schema v3 ([`invoice-customer-facing-snapshot.types.ts`](backend/src/crm/invoice-customer-facing-snapshot.types.ts)): `document_kind`, explicit `copy.*` terms/warranty/payment text, `provenance`, job-derived `service_location` (distinct from bill-to customer address), optional `branch` block on send.
+- Invoice column: `invoices.customer_facing_snapshot_json`. Estimate column: `quotes.customer_facing_snapshot_json` (migration `1791000000000-quote-customer-facing-snapshot`).
+- **Freeze triggers:** invoice — first customer-facing send via [`InvoiceSendPipelineService`](backend/src/crm/invoice-send-pipeline.service.ts); estimate — first of sent / approved / signed via [`InvoiceCustomerFacingSnapshotService.freezeEstimateRecord`](backend/src/crm/invoice-customer-facing-snapshot.service.ts).
+- Guards: `409 invoice_customer_snapshot_frozen`, `409 estimate_customer_snapshot_frozen`.
+- Read boundaries: [`InvoicePdfViewModelService`](backend/src/crm/invoice-pdf-view-model.service.ts) frozen-only snapshot path; portal prefers snapshot lines/copy when frozen; [`buildHistoricalSnapshotAiReadModel`](backend/src/crm/historical-snapshot-read.helper.ts) for AI reads.
+- Checks: `npm run finance-part7:checks` (send snapshot contract + historical read unit + Part 6 checks).
 
 ## Explicitly out of scope
 

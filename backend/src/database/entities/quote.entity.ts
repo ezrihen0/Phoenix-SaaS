@@ -11,6 +11,7 @@ import {
 } from "typeorm";
 
 import { quoteStatuses, type QuoteStatus } from "../../crm/constants";
+import { BranchEntity } from "./branch.entity";
 import { JobEntity } from "./job.entity";
 import { OrganizationEntity } from "./organization.entity";
 import { QuoteLineItemEntity } from "./quote-line-item.entity";
@@ -25,6 +26,9 @@ export class QuoteEntity {
 
   @Column({ type: "varchar", length: 36, nullable: true })
   organization_id!: string | null;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  branch_id!: string | null;
 
   @Column({ type: "text" })
   description!: string;
@@ -69,6 +73,9 @@ export class QuoteEntity {
   @Column({ type: "varchar", length: 255, nullable: true })
   signed_by_name!: string | null;
 
+  @Column({ type: "text", nullable: true })
+  customer_facing_snapshot_json!: string | null;
+
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;
 
@@ -87,6 +94,13 @@ export class QuoteEntity {
   })
   @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
   organization?: OrganizationEntity | null;
+
+  @ManyToOne(() => BranchEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "branch_id", referencedColumnName: "id" })
+  branch?: BranchEntity | null;
 
   @OneToMany(() => QuoteLineItemEntity, (lineItem) => lineItem.quote)
   line_items?: QuoteLineItemEntity[];

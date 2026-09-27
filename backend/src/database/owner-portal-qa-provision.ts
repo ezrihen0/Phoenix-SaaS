@@ -10,6 +10,8 @@ import { persistInvoiceHeaderAndLineItems, persistQuoteHeaderAndLineItems } from
 import { DocumentPricingService } from "../crm/document-pricing.service";
 import { DocumentSnapshotService, type SnapshotLineDraft } from "../crm/document-snapshot.service";
 import { InvoicePaymentRecordingService } from "../crm/invoice-payment-recording.service";
+import { InvoiceCustomerFacingSnapshotService } from "../crm/invoice-customer-facing-snapshot.service";
+import { resolveInvoiceDisplayNumber } from "../crm/invoice-display-number";
 import { MoneyEngineService } from "../crm/money-engine.service";
 import { CustomerPortalService } from "../customer-portal/customer-portal.service";
 import { CustomerEntity } from "./entities/customer.entity";
@@ -18,6 +20,7 @@ import { QuoteEntity } from "./entities/quote.entity";
 import { JobEntity } from "./entities/job.entity";
 import { MembershipEntity } from "./entities/membership.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
+import { OrganizationSettingEntity } from "./entities/organization-setting.entity";
 import { ProfileEntity } from "./entities/profile.entity";
 import { WarrantyCertificateEntity } from "./entities/warranty-certificate.entity";
 import { SettingsService } from "../settings/settings.service";
@@ -31,6 +34,8 @@ const QA_PHONE = "6135550188";
 const QA_FULL_NAME = "Test Testy";
 const QA_JOB_TITLE = "Gas Fireplace Service — OWNER QA TEST";
 const QA_PAYMENT_IDEMPOTENCY = "owner-portal-qa-v1-test-payment";
+const QA_ORG_LOGO_URL =
+  process.env.PHOENIX_QA_ORG_LOGO_URL?.trim() || "https://portal.phoenixfireplace.ca/brand/phoenix-logo.png";
 const QA_NOTES = `${QA_TAG}
 [owner_portal_qa:v1] {"tag":"${QA_TAG}","synthetic":true,"excludeFromMarketing":true,"excludeFromWorkizImport":true,"excludeFromReporting":true,"excludeFromDispatch":true}
 Synthetic production QA customer. Not a real customer.`;
@@ -108,6 +113,7 @@ export async function runOwnerPortalQaProvision() {
   const pricingService = new DocumentPricingService(new MoneyEngineService());
   const paymentService = app.get(InvoicePaymentRecordingService);
   const portalService = app.get(CustomerPortalService);
+  const invoiceCustomerFacingSnapshotService = app.get(InvoiceCustomerFacingSnapshotService);
 
   try {
     const org = await dataSource.getRepository(OrganizationEntity).findOne({
@@ -117,7 +123,30 @@ export async function runOwnerPortalQaProvision() {
       throw new Error(`Phoenix organization ${PHOENIX_ORG_ID} not found.`);
     }
 
-    const orgSettings = await settingsService.getOrganizationSettings(PHOENIX_ORG_ID);
+    let orgSettings = await settingsService.getOrganizationSettings(PHOENIX_ORG_ID);
+    orgSettings = await settingsService.updateOrganizationSettings(PHOENIX_ORG_ID, {
+      businessName: orgSettings.businessName ?? org.name ?? "Phoenix Chimney & Fireplace Services",
+      displayInitials: orgSettings.displayInitials ?? "PC",
+      phone: orgSettings.phone ?? "(825) 823-9556",
+      companyEmail: orgSettings.companyEmail ?? "Service@phoenixfireplace.ca",
+      website: orgSettings.website ?? "https://phoenixfireplace.ca",
+      timezone: orgSettings.timezone ?? "America/Edmonton",
+      googleReviewUrl: orgSettings.googleReviewUrl,
+      defaultSmsNumber: orgSettings.defaultSmsNumber,
+      businessHours: orgSettings.businessHours,
+      logoUrl: orgSettings.logoUrl ?? QA_ORG_LOGO_URL,
+    });
+    const orgSettingsRepo = dataSource.getRepository(OrganizationSettingEntity);
+    let orgSettingsEntity = await orgSettingsRepo.findOne({
+      where: { organization_id: PHOENIX_ORG_ID },
+    });
+    if (orgSettingsEntity && !orgSettingsEntity.address?.trim()) {
+      orgSettingsEntity.address = "Calgary, AB";
+      orgSettingsEntity.city = orgSettingsEntity.city ?? "Calgary";
+      orgSettingsEntity.zip = orgSettingsEntity.zip ?? "T2P";
+      orgSettingsEntity = await orgSettingsRepo.save(orgSettingsEntity);
+      orgSettings = await settingsService.getOrganizationSettings(PHOENIX_ORG_ID);
+    }
     const taxRateBps = orgSettings.taxRateBps;
 
     const customerRepo = dataSource.getRepository(CustomerEntity);
@@ -353,6 +382,28 @@ export async function runOwnerPortalQaProvision() {
       }
     }
 
+    const invoiceForSnapshot = await invoiceRepo.findOne({
+      where: { id: refreshedInvoice.id, organization_id: PHOENIX_ORG_ID },
+      relations: { line_items: true },
+    });
+    if (!invoiceForSnapshot) {
+      throw new Error("Invoice missing before customer-facing snapshot freeze.");
+    }
+    invoiceForSnapshot.customer_facing_snapshot_json = null;
+    await invoiceRepo.save(invoiceForSnapshot);
+    const frozenSnapshot = invoiceCustomerFacingSnapshotService.freezeInvoiceRecord({
+      invoice: invoiceForSnapshot,
+      lineItems: invoiceForSnapshot.line_items ?? [],
+      customer,
+      job: job!,
+      orgSettings: orgSettingsEntity,
+      documentNumber: resolveInvoiceDisplayNumber(invoiceForSnapshot),
+      frozenAt: new Date(),
+      frozenVia: "portal",
+      organizationId: PHOENIX_ORG_ID,
+    });
+    await invoiceRepo.save(invoiceForSnapshot);
+
     const minted = await portalService.createMagicLinkForPhoenixIntegration({
       organizationId: PHOENIX_ORG_ID,
       customerId: customer.id,
@@ -413,6 +464,15 @@ export async function runOwnerPortalQaProvision() {
         url: minted.magic_link_url,
       },
       historicalPdf: "BLOCKED UNTIL PACKAGE E",
+      organization: {
+        name: orgSettings.businessName,
+        phone: orgSettings.phone,
+        email: orgSettings.companyEmail,
+        website: orgSettings.website,
+        businessAddress: [orgSettings.address, orgSettings.city, orgSettings.zip].filter(Boolean).join(", "),
+        logo: orgSettings.logoUrl,
+      },
+      invoiceSnapshotOrganization: frozenSnapshot.business,
     };
   } finally {
     await app.close();

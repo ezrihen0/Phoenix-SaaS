@@ -1,6 +1,8 @@
 const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   invoice_customer_snapshot_frozen:
     "This invoice was already sent. Customer-facing amounts and lines cannot be changed.",
+  estimate_customer_snapshot_frozen:
+    "This estimate was already sent or approved. Customer-facing amounts and lines cannot be changed.",
   totals_mismatch:
     "The total you entered does not match the line items. Refresh totals or update lines before saving.",
   invoice_already_converted:

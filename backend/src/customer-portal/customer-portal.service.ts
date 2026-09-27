@@ -25,9 +25,11 @@ import {
 import { resolveInvoiceDisplayNumber } from "../crm/invoice-display-number";
 import { SettingsService } from "../settings/settings.service";
 import {
-  INVOICE_CUSTOMER_FACING_SNAPSHOT_VERSION,
-  type InvoiceCustomerFacingSnapshot,
+  isSupportedCustomerFacingSnapshot,
+  snapshotDescription,
+  type InvoiceCustomerFacingSnapshotAny,
 } from "../crm/invoice-customer-facing-snapshot.types";
+import { snapshotPortalLineItems } from "../crm/historical-snapshot-read.helper";
 
 /** Default magic-link lifetime when minting from staff (no new env var). */
 const STAFF_PORTAL_MAGIC_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -502,6 +504,7 @@ export class CustomerPortalService {
         service_postal_code: customer.service_postal_code,
       },
       organization: {
+        name: orgSettings.businessName,
         business_name: orgSettings.businessName,
         tax_rate_bps: orgSettings.taxRateBps,
         issuer_address: businessAddress,
@@ -509,24 +512,29 @@ export class CustomerPortalService {
         phone: this.normalizeMaybe(orgSettings.phone),
         email: this.normalizeMaybe(orgSettings.companyEmail),
         website: this.normalizeMaybe(orgSettings.website),
+        logo: this.normalizeMaybe(orgSettings.logoUrl),
+        logo_url: this.normalizeMaybe(orgSettings.logoUrl),
       },
       quotes: customerQuotes.map((quote) => {
         const relatedJob = jobById.get(quote.job_id);
-        const lineItems = (quote.line_items ?? [])
-          .slice()
-          .sort((left, right) => left.sort_order - right.sort_order)
-          .map((line) => ({
-            name: line.name_snapshot,
-            quantity: line.quantity,
-            unit_price_cents: line.unit_price_cents_snapshot,
-            line_subtotal_cents: line.line_subtotal_cents,
-          }));
+        const frozenSnapshot = this.parseCustomerFacingSnapshot(quote.customer_facing_snapshot_json);
+        const lineItems = frozenSnapshot
+          ? snapshotPortalLineItems(frozenSnapshot)
+          : (quote.line_items ?? [])
+              .slice()
+              .sort((left, right) => left.sort_order - right.sort_order)
+              .map((line) => ({
+                name: line.name_snapshot,
+                quantity: line.quantity,
+                unit_price_cents: line.unit_price_cents_snapshot,
+                line_subtotal_cents: line.line_subtotal_cents,
+              }));
         return {
           id: quote.id,
           job_id: quote.job_id,
           job_title: relatedJob?.title ?? null,
           estimate_number: `EST-${quote.id.slice(0, 8).toUpperCase()}`,
-          description: quote.description,
+          description: frozenSnapshot ? snapshotDescription(frozenSnapshot) ?? quote.description : quote.description,
           status: quote.status,
           subtotal_cents: quote.subtotal_cents,
           tax_cents: quote.tax_cents,
@@ -534,6 +542,8 @@ export class CustomerPortalService {
           total_cents: quote.total_cents,
           created_at: quote.created_at.toISOString(),
           sent_at: quote.sent_at ? quote.sent_at.toISOString() : null,
+          snapshot_frozen: Boolean(frozenSnapshot),
+          customer_facing_snapshot: frozenSnapshot,
           line_items: lineItems,
         };
       }),
@@ -578,15 +588,17 @@ export class CustomerPortalService {
         const frozenSnapshot = this.parseCustomerFacingSnapshot(row.customer_facing_snapshot_json);
         const pdfPath = `/api/portal/invoices/${row.id}/pdf`;
         const relatedJob = jobById.get(row.job_id);
-        const lineItems = (row.line_items ?? [])
-          .slice()
-          .sort((left, right) => left.sort_order - right.sort_order)
-          .map((line) => ({
-            name: line.name_snapshot,
-            quantity: line.quantity,
-            unit_price_cents: line.unit_price_cents_snapshot,
-            line_subtotal_cents: line.line_subtotal_cents,
-          }));
+        const lineItems = frozenSnapshot
+          ? snapshotPortalLineItems(frozenSnapshot)
+          : (row.line_items ?? [])
+              .slice()
+              .sort((left, right) => left.sort_order - right.sort_order)
+              .map((line) => ({
+                name: line.name_snapshot,
+                quantity: line.quantity,
+                unit_price_cents: line.unit_price_cents_snapshot,
+                line_subtotal_cents: line.line_subtotal_cents,
+              }));
         return {
           id: row.id,
           invoice_number: resolveInvoiceDisplayNumber(row),
@@ -595,7 +607,7 @@ export class CustomerPortalService {
           balance_cents: ledger.balanceCents,
           amount_paid_cents: ledger.netPaidCents,
           status: row.status,
-          description: row.description,
+          description: frozenSnapshot ? snapshotDescription(frozenSnapshot) ?? row.description : row.description,
           subtotal_cents: row.subtotal_cents,
           tax_cents: row.tax_cents,
           tax_rate_bps: row.tax_rate_bps_snapshot,
@@ -620,8 +632,8 @@ export class CustomerPortalService {
         pdf_url: `/api/portal/warranty-certificates/${certificate.id}/pdf`,
       })),
       contact: {
-        office_phone: this.normalizeMaybe(customer.phone),
-        office_email: this.normalizeMaybe(customer.email),
+        office_phone: this.normalizeMaybe(orgSettings.phone),
+        office_email: this.normalizeMaybe(orgSettings.companyEmail),
         technician_name: technician?.display_name ?? null,
         technician_phone: technician?.phone ?? null,
       },
@@ -633,18 +645,14 @@ export class CustomerPortalService {
     return normalized?.length ? normalized : null;
   }
 
-  private parseCustomerFacingSnapshot(raw: string | null | undefined): InvoiceCustomerFacingSnapshot | null {
+  private parseCustomerFacingSnapshot(raw: string | null | undefined): InvoiceCustomerFacingSnapshotAny | null {
     if (!raw?.trim()) {
       return null;
     }
 
     try {
-      const parsed = JSON.parse(raw) as InvoiceCustomerFacingSnapshot;
-      if (parsed.schema_version !== INVOICE_CUSTOMER_FACING_SNAPSHOT_VERSION) {
-        return null;
-      }
-
-      return parsed;
+      const parsed: unknown = JSON.parse(raw);
+      return isSupportedCustomerFacingSnapshot(parsed) ? parsed : null;
     } catch {
       return null;
     }

@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 
 const steps = [
   "npm run build",
-  "npm run finance-part6:checks",
+  "npm run finance-part7:checks",
   "npm run finance-endpoint-tenant:check",
   "npm run finance-org-isolation:smoke",
   "npm run crm:invoice-payment-recording:smoke",
