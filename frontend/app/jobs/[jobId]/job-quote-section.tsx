@@ -328,7 +328,7 @@ export default function JobQuoteSection({
 
           {showPricebookPicker && !isLocked ? (
             <DocumentPricebookPicker
-              documentLabel="quote"
+              documentLabel="estimate"
               onAddItem={addPricebookItem}
               onAddBundle={addPricebookBundle}
             />
@@ -352,15 +352,15 @@ export default function JobQuoteSection({
 
           <div className="grid gap-3 rounded-[20px] border border-white/10 bg-black/20 p-4 text-xs text-white/48">
             <div className="flex items-center justify-between gap-3">
-              <span>Subtotal Preview</span>
+              <span>Subtotal</span>
               <span className="text-white/72">{formatCurrencyFromCents(previewTotals.subtotalCents)}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span>Tax Preview</span>
+              <span>Tax</span>
               <span className="text-white/72">{formatCurrencyFromCents(previewTotals.taxCents)}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span>Total Preview</span>
+              <span>Total</span>
               <span className="text-white/72">{formatCurrencyFromCents(previewTotals.totalCents)}</span>
             </div>
           </div>
@@ -383,12 +383,12 @@ export default function JobQuoteSection({
               type="button"
               disabled={isSaving || isLocked}
               onClick={() => {
-                void saveQuote(status, activeQuote ? "Quote updated." : "Quote created.");
+                void saveQuote(status, activeQuote ? "Estimate updated." : "Estimate created.");
               }}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] border border-[color:rgba(212,175,55,0.24)] bg-[linear-gradient(135deg,rgba(212,175,55,0.24),rgba(212,175,55,0.08))] px-5 py-3 text-sm font-medium text-[#f7df97] transition hover:bg-[linear-gradient(135deg,rgba(212,175,55,0.3),rgba(212,175,55,0.12))] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {activeQuote ? "Save quote" : "Create quote"}
+              {activeQuote ? "Save estimate" : "Create estimate"}
             </button>
             {isOwnerComposer && activeQuote?.id ? (
               <Link
@@ -416,7 +416,7 @@ export default function JobQuoteSection({
         </div>
 
         <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4 text-sm text-white/60">
-          <p className="text-[11px] uppercase tracking-[0.28em] text-white/34">Current Quote</p>
+          <p className="text-[11px] uppercase tracking-[0.28em] text-white/34">Current estimate</p>
           {activeQuote ? (
             <div className="mt-4 space-y-3">
               <div>

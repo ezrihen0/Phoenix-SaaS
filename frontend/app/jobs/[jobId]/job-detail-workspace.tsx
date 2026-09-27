@@ -130,6 +130,7 @@ type JobDetailWorkspaceProps = {
   initialJob: JobDetailRecord;
   assignmentTechnicians: TechnicianRecord[];
   googleMapsUrl: string;
+  canRecordInvoicePayment?: boolean;
 };
 
 const ITEMS_PER_PAGE = 4;
@@ -460,6 +461,7 @@ export default function JobDetailWorkspace({
   initialJob,
   assignmentTechnicians,
   googleMapsUrl,
+  canRecordInvoicePayment = false,
 }: JobDetailWorkspaceProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -1581,6 +1583,7 @@ export default function JobDetailWorkspace({
                 quoteId={quote?.id ?? null}
                 quoteApprovedAt={quote?.approved_at ?? null}
                 quoteSignedAt={quote?.signed_at ?? null}
+                canRecordPayment={canRecordInvoicePayment}
                 onInvoiceChange={(nextInvoice) => {
                   setJob((current) => ({
                     ...current,

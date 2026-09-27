@@ -56,12 +56,12 @@ export default function InvoiceDocumentHistoryPanel({ invoiceId }: { invoiceId: 
     <section className="rounded-[30px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)]">
       <div className="flex items-center gap-2">
         <FileText className="h-5 w-5 text-[color:var(--sem-accent-primary)]" />
-        <h3 className="text-lg font-semibold tracking-tight text-[color:var(--sem-display-headline)]">Document history</h3>
+        <h3 className="text-lg font-semibold tracking-tight text-[color:var(--sem-display-headline)]">Sent copies</h3>
       </div>
       {loading ? (
         <p className="mt-4 flex items-center gap-2 text-sm text-[color:var(--sem-text-secondary)]">
           <LoaderCircle className="h-4 w-4 animate-spin" />
-          Loading stored documents…
+          Loading sent copies…
         </p>
       ) : null}
       {error ? <p className="theme-alert-error mt-4 rounded-2xl border px-3 py-2 text-sm">{error}</p> : null}

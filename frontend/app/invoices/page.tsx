@@ -79,6 +79,7 @@ type InvoicesPageContext = {
     page?: SearchParam;
     pageSize?: SearchParam;
     q?: SearchParam;
+    customerId?: SearchParam;
     lifecycleStatus?: SearchParam;
     pipeline?: SearchParam;
   }>;
@@ -387,7 +388,8 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
   const resolvedSearchParams = await searchParams;
   const pageValue = Number.parseInt((firstValue(resolvedSearchParams.page) ?? "1").trim(), 10);
   const pageSizeValue = Number.parseInt((firstValue(resolvedSearchParams.pageSize) ?? "10").trim(), 10);
-  const query = (firstValue(resolvedSearchParams.q) ?? "").trim().toLowerCase();
+  const queryRaw = (firstValue(resolvedSearchParams.q) ?? "").trim();
+  const query = queryRaw.toLowerCase();
   const lifecycleStatusRaw = (firstValue(resolvedSearchParams.lifecycleStatus) ?? "").trim();
   const lifecycleStatus =
     lifecycleStatusRaw === "sent" ||
@@ -404,8 +406,20 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
   let invoices: InvoiceListItem[] = [];
   let loadError: string | null = null;
 
+  const customerId = (firstValue(resolvedSearchParams.customerId) ?? "").trim();
+  const invoiceListParams = new URLSearchParams();
+  const passSearchToApi = Boolean(queryRaw) && /[\d#]/u.test(queryRaw);
+  if (passSearchToApi) {
+    invoiceListParams.set("q", queryRaw);
+  }
+  if (customerId) {
+    invoiceListParams.set("customerId", customerId);
+  }
+
+  const invoiceListEndpoint = `/api/invoices${invoiceListParams.toString() ? `?${invoiceListParams.toString()}` : ""}`;
+
   try {
-    const response = await serverApiFetch<InvoiceListItem[]>("/api/invoices");
+    const response = await serverApiFetch<InvoiceListItem[]>(invoiceListEndpoint);
     invoices = Array.isArray(response) ? response : [];
 
     if (!Array.isArray(response)) {
@@ -450,6 +464,7 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
   function listQuery(overrides: Record<string, string | null | undefined> = {}) {
     return buildQueryString({
       q: query || null,
+      customerId: customerId || null,
       pageSize: String(pageSize),
       pipeline: pipeline === "all" ? null : pipeline,
       lifecycleStatus: lifecycleStatus || null,

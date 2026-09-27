@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { formatEstimatePersistedStatus, type EstimatePersistedStatus } from "@/lib/crm/estimate-lifecycle";
 import { formatInvoiceLifecycleStatus, type InvoiceLifecycleStatus } from "@/lib/crm/invoice-lifecycle";
 import { portalApiFetch } from "@/lib/portal/browser-api";
 
@@ -45,6 +46,18 @@ type PortalHomePayload = {
   };
 };
 
+function formatPortalQuoteStatus(status: string | undefined) {
+  if (!status) {
+    return "No estimate on file";
+  }
+
+  if (status === "draft" || status === "sent" || status === "approved" || status === "rejected") {
+    return formatEstimatePersistedStatus(status as EstimatePersistedStatus);
+  }
+
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
 export default function PortalHomePage() {
   const router = useRouter();
   const [data, setData] = useState<PortalHomePayload | null>(null);
@@ -77,7 +90,7 @@ export default function PortalHomePage() {
           <p className="text-[11px] uppercase tracking-[0.3em] text-[color:var(--flat-gold)]">Portal Overview</p>
           <h1 className="mt-3 text-3xl font-semibold leading-tight">Customer Portal</h1>
           <p className="mt-3 text-sm leading-7 text-[color:var(--text-secondary)]">
-            Review supported account documents, quote status, payment status, and service contact details.
+            Review invoices, estimate status, balances, and service contact details.
           </p>
         </section>
         {error ? <p className="theme-alert-error rounded-[20px] border px-5 py-4 text-sm">{error}</p> : null}
@@ -90,8 +103,8 @@ export default function PortalHomePage() {
               </section>
             ) : null}
             <section className="theme-surface-card rounded-[24px] border border-[color:var(--border-subtle)] bg-[linear-gradient(180deg,rgba(20,20,20,0.92),rgba(12,12,12,0.92))] p-6">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Quote</p>
-              <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Status: {data.active_quote?.status ?? "No quote available"}</p>
+              <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Estimate</p>
+              <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Status: {formatPortalQuoteStatus(data.active_quote?.status)}</p>
               {data.active_quote ? (
                 <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
                   Estimated amount: {formatCurrency(data.active_quote.price_cents)}
@@ -179,7 +192,7 @@ export default function PortalHomePage() {
                   {data.warranty_certificates.map((certificate) => (
                     <div key={certificate.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-[color:var(--border-subtle)] px-4 py-3">
                       <div>
-                        <p className="text-sm font-medium text-[color:var(--text-primary)]">WAR-{certificate.id.slice(0, 8).toUpperCase()}</p>
+                        <p className="text-sm font-medium text-[color:var(--text-primary)]">Warranty certificate</p>
                         <p className="mt-1 text-xs text-[color:var(--text-secondary)]">
                           {certificate.warranty_type} • Ends {new Date(certificate.warranty_end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                         </p>

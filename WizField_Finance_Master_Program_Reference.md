@@ -892,27 +892,19 @@ Harden Finance for real production use and close the program.
 
 ## Phase 13 — Permissions / Tenant / Audit Trail
 
+**Status: CLOSED (2026-09)**
+
 Verify all financial operations are organization-scoped.
 
-Audit:
+**Canonical tenant rule:** tenant-owned Finance rows are read/written only when `resource.organization_id === ActorContext.organizationId` (or via an org-scoped parent such as job → invoice). Portal access additionally requires `invoice.job.customer_id === portalSession.customer_id`.
 
-- invoice list/detail/create/edit
-- estimate list/detail/create/edit
-- conversion
-- payment recording
-- refund/adjustment
-- document retrieval
-- PDF
-- search
-- dashboard
-- portal
-- imported document access
+Audit surface (staff `/api/*`, portal `/api/portal/*`): invoices, estimates, conversion, payments/refunds, documents/PDF, invoice-number search, customer finance summary, portal home/document-view/pdf.
 
 Requirements:
 
 - no ID-only tenant-owned reads
 - backend organization scope authoritative
-- correct role permissions
+- correct role permissions (invoice send requires manage, not view-only)
 - auditability of high-risk mutations
 - foreign-org negative tests
 
@@ -948,6 +940,19 @@ Potential improvements:
 
 The goal is operational speed, not decorative redesign.
 
+**Status:** **CLOSED** (2026-09-26).
+
+**Deliverables:**
+
+- Audit + gap register: [`docs/finance/phase14-owner-ux-audit.md`](docs/finance/phase14-owner-ux-audit.md)
+- Shared payment UI: [`frontend/lib/crm/invoice-payment-form.tsx`](frontend/lib/crm/invoice-payment-form.tsx) on invoice detail (primary) and job invoice tab (compact)
+- Estimate lifecycle labels: [`frontend/lib/crm/estimate-lifecycle.ts`](frontend/lib/crm/estimate-lifecycle.ts)
+- Owner copy helpers: [`frontend/lib/crm/finance-owner-copy.ts`](frontend/lib/crm/finance-owner-copy.ts)
+- Customer quick action + invoice list `q` / `customerId` API passthrough
+- Playwright: [`frontend/scripts/phoenix-test-invoice-ui.mjs`](frontend/scripts/phoenix-test-invoice-ui.mjs) records payment via invoice detail
+
+**Verification:** frontend `npm run build`; manual owner workflow matrix in audit doc; no schema changes.
+
 ## Phase 15 — Production Reverification & Finance Closeout
 
 Run final production-grade verification.
@@ -976,16 +981,24 @@ Final program status may only be marked closed after evidence is recorded.
 
 ## Part 7 implementation truth (2026-09)
 
-**Permissions / tenant / audit (Phase 13)**
+**Permissions / tenant / audit (Phase 13 — CLOSED)**
 
-- Table `finance_audit_events` + [`FinanceAuditService`](backend/src/crm/finance-audit.service.ts) logs invoice upsert, send, snapshot freeze, payments/refunds/adjustments, estimate→invoice conversion.
-- `npm run finance-endpoint-tenant:check` — static guard that core Finance handlers call `requireActiveOrganizationId`.
-- `npm run finance-org-isolation:smoke` — baseline org-scoped invoice read isolation fixture.
+- Table `finance_audit_events` + [`FinanceAuditService`](backend/src/crm/finance-audit.service.ts) logs invoice upsert/send/snapshot freeze/number allocation, payments/refunds/adjustments, estimate upsert/approve/sign/reject, estimate→invoice conversion.
+- `npm run finance-endpoint-tenant:check` — all CRM Finance handlers + portal invoice routes require org context.
+- `npm run finance-part13:multi-org-idor-smoke` — configured DB foreign-ID matrix (customers, jobs, estimates, invoices, payments, documents, portal PDF/view, invoice-number search isolation).
+- `npm run finance-part13:readonly-audit` — production-safe orphan/cross-org invariant counts → `_runtime_harness/finance-part13/phase13-readonly-audit.json`.
+- `npm run finance-part13:checks` — tenant + RBAC + audit static contracts chained after Part 12 checks.
+- `npm run finance-part13:closeout` — build, Part 13 checks, IDOR smoke, portal isolation (P9–P11 invoice view/pdf), payment smoke, Part 12 regression.
+- Portal isolation smoke extended: foreign invoice UUID + same-org other customer denied for document-view and PDF.
+- Stored native PDF download uses scoped `findNativeDocumentForInvoice(organizationId, invoiceId, documentId)`.
+- Workiz migration (Phase 15+) must reuse the same tenant/portal/document rules — no bypass path.
 
-**Owner UX helpers (Phase 14)**
+**Owner UX (Phase 14 — CLOSED)**
 
-- [`frontend/lib/crm/invoice-lifecycle.ts`](frontend/lib/crm/invoice-lifecycle.ts) — shared lifecycle labels (incl. sent-locked).
-- [`frontend/lib/crm/finance-api-errors.ts`](frontend/lib/crm/finance-api-errors.ts) — owner-plain messages for common Finance API codes.
+- [`frontend/lib/crm/invoice-lifecycle.ts`](frontend/lib/crm/invoice-lifecycle.ts) — invoice lifecycle labels (incl. sent-locked).
+- [`frontend/lib/crm/estimate-lifecycle.ts`](frontend/lib/crm/estimate-lifecycle.ts) — estimate lifecycle + document state labels.
+- [`frontend/lib/crm/finance-api-errors.ts`](frontend/lib/crm/finance-api-errors.ts) — owner-plain messages + support refs for Finance API codes.
+- [`frontend/lib/crm/invoice-payment-form.tsx`](frontend/lib/crm/invoice-payment-form.tsx) — partial/full payment entry (permission-aware).
 
 **Closeout (Phase 15)**
 

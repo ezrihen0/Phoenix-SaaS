@@ -115,7 +115,7 @@ export default function DocumentApprovalActions({
           <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Approval & Signature</p>
           <h2 className="mt-2 text-xl font-semibold text-[color:var(--sem-text-primary)]">Internal document controls</h2>
           <p className="mt-2 max-w-2xl text-sm text-[color:var(--sem-text-secondary)]">
-            Approval and signature state attaches to the persisted document snapshot. Once approved or signed, customer-facing financial content is locked.
+            Approval and signature apply to this document. Once approved or signed, customer-facing amounts and lines are locked.
           </p>
         </div>
         <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--cmp-border-subtle)] px-4 py-2 text-xs uppercase tracking-[0.18em] text-[color:var(--sem-text-secondary)]">

@@ -21,6 +21,7 @@ import { MetricTile } from "@/components/board/metric-tile";
 import DocumentApprovalActions from "@/components/document-approval-actions";
 import PhoenixInvoiceDocumentTemplate from "@/components/phoenix-invoice-document-template";
 import type { PhoenixInvoiceDocumentViewModel } from "@/lib/crm/phoenix-invoice-document.types";
+import InvoicePaymentForm, { formatPaymentEntryType } from "@/lib/crm/invoice-payment-form";
 import InvoiceDocumentHistoryPanel from "./invoice-document-history-panel";
 import InvoiceHeaderActions from "./invoice-header-actions";
 import { serverApiFetch } from "@/lib/api/server-fetch";
@@ -191,7 +192,7 @@ function getInvoiceCollectionSignal(invoice: InvoiceDetailRecord, locale: string
   if (invoice.balance_cents <= 0 || invoice.lifecycle_status === "paid" || invoice.lifecycle_status === "overpaid") {
     return {
       label: "Closed out",
-      detail: "Invoice balance is settled in the current ledger view.",
+      detail: "This invoice is fully paid.",
       tone: "success",
     };
   }
@@ -294,6 +295,7 @@ export default async function InvoiceDetailPage({
     notFound();
   }
 
+  const canRecordPayment = session.permissions.includes("invoices.payment.manage");
   const warrantyCertificateAvailable = canViewWarrantyCertificate(invoice);
   const pastDue = isPastDue(invoice.due_at, invoice.balance_cents);
   const paidPercent = percentPaid(invoice.total_cents, invoice.amount_paid_cents);
@@ -499,7 +501,16 @@ export default async function InvoiceDetailPage({
             </section>
 
             <section className="rounded-[30px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)]">
-              <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">{t("paymentLedger")}</p>
+              <InvoicePaymentForm
+                invoiceId={invoice.id}
+                balanceCents={invoice.balance_cents}
+                canRecordPayment={canRecordPayment}
+                notePrefix="Recorded from invoice detail."
+              />
+            </section>
+
+            <section className="rounded-[30px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-5 shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)]">
+              <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">Payment history</p>
               <h3 className="mt-2 text-xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">{t("transactionHistory")}</h3>
               <div className="mt-5 space-y-3">
                 {(invoice.payments ?? []).length ? (
@@ -507,7 +518,7 @@ export default async function InvoiceDetailPage({
                     <div key={payment.id} className="rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/80 p-4">
                       <div className="flex justify-between gap-3">
                         <span className="font-semibold text-[color:var(--sem-text-primary)]">
-                          {formatPaymentMethod(payment.method)} · {payment.entry_type}
+                          {formatPaymentMethod(payment.method)} · {formatPaymentEntryType(payment.entry_type)}
                         </span>
                         <span className="text-[color:var(--cmp-status-success-text)]">{formatCurrency(payment.amount_cents, locale)}</span>
                       </div>

@@ -28,6 +28,11 @@ import {
 } from "lucide-react";
 
 import { BoardShell } from "@/components/board/board-shell";
+import { formatEstimateLifecycleStatus, type EstimateLifecycleStatus as SharedEstimateLifecycleStatus } from "@/lib/crm/estimate-lifecycle";
+import {
+  formatInvoiceLifecycleStatus,
+  type InvoiceLifecycleStatus as SharedInvoiceLifecycleStatus,
+} from "@/lib/crm/invoice-lifecycle";
 import { MetricTile, metricTileHoverClassName } from "@/components/board/metric-tile";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import { openJobStatuses } from "@/lib/crm/data";
@@ -156,15 +161,11 @@ function formatOptionalDate(value: string | null, locale: string) {
 }
 
 function formatInvoiceStatus(status: InvoiceListItem["lifecycle_status"]) {
-  if (status === "partial") return "Partial";
-  if (status === "refunded") return "Refunded";
-  if (status === "overpaid") return "Overpaid";
-  return status === "paid" ? "Paid" : "Sent";
+  return formatInvoiceLifecycleStatus(status as SharedInvoiceLifecycleStatus);
 }
 
 function formatEstimateStatus(status: EstimateLifecycleStatus) {
-  if (status === "void") return "Voided";
-  return status.charAt(0).toUpperCase() + status.slice(1);
+  return formatEstimateLifecycleStatus(status as SharedEstimateLifecycleStatus);
 }
 
 function formatLifecycleStatus(status: CustomerRecord["lifecycle_status"]) {
@@ -678,6 +679,7 @@ function CustomerContextSidebar({
         <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--sem-text-muted)]">{t("quickActions")}</p>
         <ActionButton icon={Plus} label={t("addNewJob")} href={`/jobs/new?customerId=${customerRecord.id}`} primary />
         <ActionButton icon={FileText} label={t("addNewEstimate")} href={`/estimates/create?customerId=${customerRecord.id}`} />
+        <ActionButton icon={Receipt} label={t("addNewInvoice")} href={`/invoices/create?customerId=${customerRecord.id}`} />
         <ActionButton icon={MessageSquare} label={t("sendSms")} href={`/messaging?lane=customers&customerId=${customerRecord.id}`} />
         {customerRecord.phone ? (
           <a
@@ -1402,6 +1404,16 @@ export default function CustomerProfileWorkspace({
               </div>
             )}
             <PaginationFooter page={pagedInvoices.currentPage} totalPages={pagedInvoices.totalPages} totalCount={invoices.length} onPageChange={(page) => setPage("invoicesPage", page)} />
+            {invoices.length > pagedInvoices.pageItems.length ? (
+              <p className="mt-4 text-sm">
+                <Link
+                  href={`/invoices?customerId=${encodeURIComponent(customerRecord.id)}`}
+                  className="font-medium text-[color:var(--sem-accent-primary)] hover:underline"
+                >
+                  View all invoices for this customer
+                </Link>
+              </p>
+            ) : null}
           </>
         )}
       </section>

@@ -6,8 +6,10 @@ import { CheckCircle2, ExternalLink, LoaderCircle, Receipt, Save, ShieldCheck, S
 
 import JobInvoiceCatalogPicker from "@/components/job-invoice-catalog-picker";
 import InvoiceLineItemsEditor from "@/components/invoice-line-items-editor";
+import { formatPaymentEntryType } from "@/lib/crm/invoice-payment-form";
 import { CrmApiError, crmApiFetch } from "@/lib/crm/browser-api";
 import { financeApiErrorMessage } from "@/lib/crm/finance-api-errors";
+import { ESTIMATE_TO_INVOICE_CONVERT_CONFIRM } from "@/lib/crm/finance-owner-copy";
 import {
   formatInvoiceLifecycleStatus,
   type InvoiceLifecycleStatus as SharedInvoiceLifecycleStatus,
@@ -368,9 +370,7 @@ export default function JobInvoiceSection({
       return;
     }
 
-    const confirmed = window.confirm(
-      "Convert the approved estimate into this job invoice using frozen estimate line snapshots?",
-    );
+    const confirmed = window.confirm(ESTIMATE_TO_INVOICE_CONVERT_CONFIRM);
 
     if (!confirmed) {
       return;
@@ -542,8 +542,8 @@ export default function JobInvoiceSection({
 
           <div className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/54">
             {canReflectPaidOnJob
-              ? "Ledger-recorded full payment will also move the job to Paid when the balance reaches zero."
-              : `Ledger-recorded full payment will keep the job at ${getJobStatusLabel(currentJobStatus)} until the work is completed.`}
+              ? "Recording the full balance will also move the job to Paid when the balance reaches zero."
+              : `Recording the full balance will keep the job at ${getJobStatusLabel(currentJobStatus)} until the work is completed.`}
           </div>
 
           {errorMessage ? (
@@ -554,15 +554,15 @@ export default function JobInvoiceSection({
 
           <div className="grid gap-3 rounded-[20px] border border-white/10 bg-black/20 p-4 text-xs text-white/48">
             <div className="flex items-center justify-between gap-3">
-              <span>Subtotal Preview</span>
+              <span>Subtotal</span>
               <span className="text-white/72">{formatCurrencyFromCents(previewTotals.subtotalCents)}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span>Tax Preview</span>
+              <span>Tax</span>
               <span className="text-white/72">{formatCurrencyFromCents(previewTotals.taxCents)}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span>Total Preview</span>
+              <span>Total</span>
               <span className="text-white/72">{formatCurrencyFromCents(previewTotals.totalCents)}</span>
             </div>
           </div>
@@ -646,7 +646,7 @@ export default function JobInvoiceSection({
               </div>
 
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-white/34">Ledger Status</p>
+                <p className="text-xs uppercase tracking-[0.24em] text-white/34">Payment status</p>
                 <p className="mt-2 text-white">
                   {formatInvoiceLifecycleStatus(invoiceDetail.lifecycle_status ?? "sent", {
                     snapshotFrozen: Boolean(invoiceDetail.last_sent_at),
@@ -700,12 +700,12 @@ export default function JobInvoiceSection({
 
               {invoiceDetail.payments?.length ? (
                 <div className="rounded-[20px] border border-white/10 bg-black/20 p-4 text-xs text-white/52">
-                  <p className="text-[11px] uppercase tracking-[0.24em] text-white/34">Payment Ledger</p>
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-white/34">Payment history</p>
                   <div className="mt-3 space-y-2">
                     {invoiceDetail.payments.map((payment) => (
                       <div key={payment.id} className="flex items-start justify-between gap-3 rounded-[16px] border border-white/8 px-3 py-2">
                         <div>
-                          <p className="text-white/78">{payment.entry_type}</p>
+                          <p className="text-white/78">{formatPaymentEntryType(payment.entry_type)}</p>
                           <p>{formatDateTime(payment.occurred_at)}</p>
                         </div>
                         <span className="text-white/78">{formatCurrencyFromCents(payment.amount_cents)}</span>

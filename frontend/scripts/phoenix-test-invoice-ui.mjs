@@ -206,16 +206,16 @@ async function markJobStatus(page, jobId, statusValue) {
   await page.waitForTimeout(800);
 }
 
-async function recordFullPayment(page, jobId) {
-  await gotoApp(page, `/jobs/${jobId}?tab=invoice`);
-  await page.getByRole("button", { name: "Record full payment" }).click();
+async function recordFullPayment(page, invoiceId) {
+  await gotoApp(page, `/invoices/${invoiceId}`);
+  await page.getByRole("button", { name: /Pay full balance/u }).click();
 
   await page.waitForResponse(
     (response) => response.url().includes("/api/invoices/") && response.url().includes("/payments") && response.request().method() === "POST",
     { timeout: 60_000 },
   );
 
-  await page.getByText(/Full payment recorded|Invoice already shows no balance due/i).waitFor({ timeout: 15_000 }).catch(() => {});
+  await page.getByText(/Payment recorded/i).waitFor({ timeout: 15_000 }).catch(() => {});
 }
 
 async function resolveInvoiceId(page, jobId, invoiceResult) {
@@ -276,7 +276,11 @@ async function main() {
     const invoiceResult = await createLaborInvoice(page, jobId);
 
     await markJobStatus(page, jobId, "completed");
-    await recordFullPayment(page, jobId);
+    const invoiceId = await resolveInvoiceId(page, jobId, invoiceResult);
+    if (!invoiceId) {
+      throw new Error("Could not resolve invoice id after save.");
+    }
+    await recordFullPayment(page, invoiceId);
     await page.waitForTimeout(1500);
 
     await gotoApp(page, `/jobs/${jobId}`);

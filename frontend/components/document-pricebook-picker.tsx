@@ -12,7 +12,7 @@ import {
 } from "@/lib/crm/pricebook-model";
 
 type DocumentPricebookPickerProps = {
-  documentLabel: "quote" | "invoice";
+  documentLabel: "quote" | "estimate" | "invoice";
   onAddItem: (item: PricebookItem) => void;
   onAddBundle: (bundle: PricebookBundleDetail) => void;
 };

@@ -222,11 +222,14 @@ export default async function JobDetailPage({ params }: JobDetailPageContext) {
     ),
   );
 
+  const canRecordInvoicePayment = session.permissions.includes("invoices.payment.manage");
+
   return (
     <JobDetailWorkspace
       initialJob={job}
       assignmentTechnicians={assignmentTechnicians}
       googleMapsUrl={googleMapsUrl}
+      canRecordInvoicePayment={canRecordInvoicePayment}
     />
   );
 }

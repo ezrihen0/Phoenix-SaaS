@@ -18,6 +18,8 @@ import {
   formatInvoiceLifecycleStatus,
   type InvoiceLifecycleStatus,
 } from "@/lib/crm/invoice-lifecycle";
+import { ESTIMATE_TO_INVOICE_CONVERT_CONFIRM } from "@/lib/crm/finance-owner-copy";
+import InvoicePaymentForm from "@/lib/crm/invoice-payment-form";
 import { formatCurrencyFromCents, formatDateTime } from "@/lib/crm/invoice-line-model";
 import {
   buildQuoteLineItemPayload,
@@ -99,7 +101,7 @@ export function JobEstimateTabPanel({ jobId, quote, onQuoteChange, onToast }: Jo
 
       const refreshed = await crmApiFetch<JobQuoteRecord>(`/api/estimates/${response.id}`);
       onQuoteChange?.(refreshed);
-      onToast?.("Quote marked approved.", "success");
+      onToast?.("Estimate marked approved.", "success");
     } catch (error) {
       const nextMessage = error instanceof Error ? error.message : "The quote could not be approved.";
       setErrorMessage(nextMessage);
@@ -206,6 +208,7 @@ type JobInvoiceTabPanelProps = {
   quoteId?: string | null;
   quoteApprovedAt?: string | null;
   quoteSignedAt?: string | null;
+  canRecordPayment?: boolean;
   onInvoiceChange?: (invoice: JobInvoiceRecord | null) => void;
   onToast?: (message: string, tone?: ToastTone) => void;
 };
@@ -216,6 +219,7 @@ export function JobInvoiceTabPanel({
   quoteId,
   quoteApprovedAt,
   quoteSignedAt,
+  canRecordPayment = false,
   onInvoiceChange,
   onToast,
 }: JobInvoiceTabPanelProps) {
@@ -225,8 +229,7 @@ export function JobInvoiceTabPanel({
   const canConvertFromEstimate = Boolean(
     quoteId && (quoteApprovedAt || quoteSignedAt) && !invoiceBlocksEstimateConversion(invoice),
   );
-  const balanceCents = invoice?.balance_cents ?? invoice?.amount_cents ?? 0;
-  const canRecordFullPayment = Boolean(invoice?.id) && balanceCents > 0;
+  const balanceCents = invoice?.balance_cents ?? 0;
 
   async function reloadInvoice(invoiceId: string) {
     const response = await crmApiFetch<JobInvoiceRecord>(`/api/invoices/${invoiceId}`);
@@ -247,9 +250,7 @@ export function JobInvoiceTabPanel({
       return;
     }
 
-    const confirmed = window.confirm(
-      "Convert the approved estimate into this job invoice using frozen estimate line snapshots?",
-    );
+    const confirmed = window.confirm(ESTIMATE_TO_INVOICE_CONVERT_CONFIRM);
 
     if (!confirmed) {
       return;
@@ -268,42 +269,6 @@ export function JobInvoiceTabPanel({
       onToast?.("Invoice created from estimate.", "success");
     } catch (error) {
       const nextMessage = resolveFinanceErrorMessage(error, "The estimate could not be converted.");
-      setErrorMessage(nextMessage);
-      onToast?.(nextMessage, "error");
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  async function recordFullPayment() {
-    if (!invoice?.id || isBusy) {
-      return;
-    }
-
-    if (balanceCents <= 0) {
-      onToast?.("Invoice already shows no balance due.", "success");
-      return;
-    }
-
-    setIsBusy(true);
-    setErrorMessage(null);
-
-    try {
-      await crmApiFetch(`/api/invoices/${invoice.id}/payments`, {
-        method: "POST",
-        body: JSON.stringify({
-          idempotencyKey: crypto.randomUUID(),
-          entryType: "payment",
-          amountCents: balanceCents,
-          method: "other",
-          note: "Recorded from job invoice workflow.",
-        }),
-      });
-
-      await reloadInvoice(invoice.id);
-      onToast?.("Full payment recorded.", "success");
-    } catch (error) {
-      const nextMessage = resolveFinanceErrorMessage(error, "The payment could not be recorded.");
       setErrorMessage(nextMessage);
       onToast?.(nextMessage, "error");
     } finally {
@@ -334,7 +299,7 @@ export function JobInvoiceTabPanel({
           </div>
           <div className="grid gap-3 text-xs text-[color:var(--sem-text-secondary)] sm:grid-cols-2">
             <div>
-              <p className="uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Ledger status</p>
+              <p className="uppercase tracking-[0.22em] text-[color:var(--sem-text-muted)]">Payment status</p>
               <p className="mt-1 text-sm text-[color:var(--sem-text-primary)]">
                 {formatInvoiceLifecycleStatus((invoice.lifecycle_status ?? "sent") as InvoiceLifecycleStatus, {
                   snapshotFrozen: Boolean(invoice.last_sent_at),
@@ -348,6 +313,21 @@ export function JobInvoiceTabPanel({
               </p>
             </div>
           </div>
+          {invoice.id ? (
+            <div className="mt-4 border-t border-[color:var(--cmp-border-subtle)] pt-4">
+              <InvoicePaymentForm
+                invoiceId={invoice.id}
+                balanceCents={balanceCents}
+                canRecordPayment={canRecordPayment}
+                variant="compact"
+                notePrefix="Recorded from job invoice tab."
+                onPaymentRecorded={async () => {
+                  await reloadInvoice(invoice.id);
+                  onToast?.("Payment recorded.", "success");
+                }}
+              />
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="mt-5 rounded-[24px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-8 text-sm text-[color:var(--sem-text-muted)]">
@@ -401,19 +381,6 @@ export function JobInvoiceTabPanel({
           </button>
         ) : null}
 
-        {canRecordFullPayment ? (
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={() => {
-              void recordFullPayment();
-            }}
-            className="theme-btn-secondary inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-[220px] sm:flex-none"
-          >
-            {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-            Record full payment
-          </button>
-        ) : null}
       </div>
     </section>
   );

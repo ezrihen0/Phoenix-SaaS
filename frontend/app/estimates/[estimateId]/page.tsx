@@ -6,6 +6,10 @@ import DocumentPreview from "@/components/document-preview";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerRoles } from "@/lib/auth/server-session";
 import {
+  formatEstimateLifecycleStatus,
+  formatEstimatePersistedStatus,
+} from "@/lib/crm/estimate-lifecycle";
+import {
   type PersistedQuoteLineItem,
 } from "@/lib/crm/quote-line-model";
 
@@ -47,22 +51,6 @@ type EstimateDetailPageProps = {
   }>;
 };
 
-function formatLifecycleStatus(status: EstimateLifecycleStatus) {
-  if (status === "void") {
-    return "Voided";
-  }
-
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-function formatPersistedStatus(status: EstimateStatus) {
-  if (status === "rejected") {
-    return "Rejected";
-  }
-
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
 export default async function EstimateDetailPage({ params }: EstimateDetailPageProps) {
   await requireServerRoles("/estimates", ["owner", "admin", "office_admin", "technician"]);
   const { estimateId } = await params;
@@ -91,6 +79,13 @@ export default async function EstimateDetailPage({ params }: EstimateDetailPageP
             {estimate ? (
               <>
                 <Link
+                  href={`/estimates/create/${estimate.job_id}`}
+                  className="theme-control-surface inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs uppercase tracking-[0.18em] text-[color:var(--sem-text-secondary)] transition hover:text-[color:var(--sem-text-primary)] print:hidden"
+                >
+                  Edit estimate
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+                <Link
                   href={`/customers/${estimate.customer_id}`}
                   className="theme-control-surface inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs uppercase tracking-[0.18em] text-[color:var(--sem-text-secondary)] transition hover:text-[color:var(--sem-text-primary)] print:hidden"
                 >
@@ -110,7 +105,7 @@ export default async function EstimateDetailPage({ params }: EstimateDetailPageP
 
           <p className="mt-6 text-[11px] uppercase tracking-[0.28em] text-[color:var(--sem-accent-primary)]">Estimate Detail</p>
           <h1 className="mt-4 font-[family:var(--font-flat-display)] text-4xl tracking-tight text-[color:var(--sem-text-primary)] sm:text-5xl">
-            {estimate?.document_number ?? `Estimate #${estimateId.slice(0, 8)}`}
+            {estimate?.document_number ?? "Estimate"}
           </h1>
 
           {loadError ? (
@@ -134,7 +129,7 @@ export default async function EstimateDetailPage({ params }: EstimateDetailPageP
                     href={`/invoices/${estimate.converted_invoice_id}`}
                     className="font-semibold text-[color:var(--sem-accent-primary)]"
                   >
-                    Invoice #{estimate.converted_invoice_document_number ?? estimate.converted_invoice_id.slice(0, 8)}
+                    Invoice #{estimate.converted_invoice_document_number ?? "view"}
                   </Link>
                 </div>
               ) : null}
@@ -142,8 +137,8 @@ export default async function EstimateDetailPage({ params }: EstimateDetailPageP
                 documentKind="estimate"
                 documentNumber={estimate.document_number}
                 description={estimate.description}
-                primaryStatusLabel="Lifecycle"
-                primaryStatusValue={formatLifecycleStatus(estimate.lifecycle_status)}
+                primaryStatusLabel="Status"
+                primaryStatusValue={formatEstimateLifecycleStatus(estimate.lifecycle_status)}
                 issuedLabel="Sent"
                 issuedAt={estimate.sent_at}
                 secondaryDateLabel="Approved"
@@ -158,7 +153,7 @@ export default async function EstimateDetailPage({ params }: EstimateDetailPageP
                 taxRateBpsSnapshot={estimate.tax_rate_bps_snapshot}
                 taxCents={estimate.tax_cents ?? 0}
                 totalCents={estimate.total_cents}
-                compatibilityTotalLabel="Stored Price"
+                compatibilityTotalLabel="Listed total"
                 compatibilityTotalCents={estimate.price_cents}
               />
 
@@ -174,25 +169,28 @@ export default async function EstimateDetailPage({ params }: EstimateDetailPageP
               />
 
               <section className="theme-surface-card mt-6 rounded-[28px] border border-[color:var(--cmp-border-subtle)] p-5 print:hidden">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Snapshot Status</p>
+                <p className="text-[11px] uppercase tracking-[0.24em] text-[color:var(--sem-text-muted)]">Estimate status</p>
                 <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3 text-sm">
-                    <p className="text-[color:var(--sem-text-secondary)]">Lifecycle</p>
-                    <p className="mt-2 font-semibold text-[color:var(--sem-text-primary)]">{formatLifecycleStatus(estimate.lifecycle_status)}</p>
+                    <p className="text-[color:var(--sem-text-secondary)]">Status</p>
+                    <p className="mt-2 font-semibold text-[color:var(--sem-text-primary)]">{formatEstimateLifecycleStatus(estimate.lifecycle_status)}</p>
                   </div>
                   <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3 text-sm">
-                    <p className="text-[color:var(--sem-text-secondary)]">Stored status</p>
-                    <p className="mt-2 font-semibold text-[color:var(--sem-text-primary)]">{formatPersistedStatus(estimate.status)}</p>
+                    <p className="text-[color:var(--sem-text-secondary)]">Document state</p>
+                    <p className="mt-2 font-semibold text-[color:var(--sem-text-primary)]">{formatEstimatePersistedStatus(estimate.status)}</p>
                   </div>
                   <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3 text-sm">
                     <p className="text-[color:var(--sem-text-secondary)]">Approved</p>
                     <p className="mt-2 font-semibold text-[color:var(--sem-text-primary)]">{estimate.approved_at ? "Yes" : "No"}</p>
                   </div>
                   <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] px-4 py-3 text-sm">
-                    <p className="text-[color:var(--sem-text-secondary)]">Locked</p>
+                    <p className="text-[color:var(--sem-text-secondary)]">Locked for editing</p>
                     <p className="mt-2 font-semibold text-[color:var(--sem-text-primary)]">{estimate.is_locked ? "Yes" : "No"}</p>
                   </div>
                 </div>
+                <p className="mt-4 text-sm text-[color:var(--sem-text-secondary)]">
+                  To send this estimate to the customer, use approval and signature below. Email send is available on invoices today.
+                </p>
               </section>
             </div>
           ) : null}

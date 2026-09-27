@@ -111,7 +111,7 @@ export default function DocumentPreview({
           <p className="text-[11px] uppercase tracking-[0.32em] text-slate-500">{documentLabel} Preview</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">{documentNumber}</h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-            Immutable snapshot preview for browser print and PDF save workflows.
+            Customer-facing preview for print and save-as-PDF.
           </p>
         </div>
 
@@ -224,7 +224,7 @@ export default function DocumentPreview({
               </div>
             ) : (
               <div className="px-5 py-8 text-sm text-slate-500">
-                No persisted snapshot line items are available for this document. Compatibility totals are shown from the stored document record.
+                Line items are not shown on this preview. Totals reflect the saved document.
               </div>
             )}
           </article>
