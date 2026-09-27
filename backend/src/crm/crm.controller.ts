@@ -125,6 +125,7 @@ import { InvoiceNativeDocumentService } from "../documents/invoice-documents/inv
 import { type InvoicePdfBrandingSnapshot, InvoicePdfService } from "./invoice-pdf.service";
 import { InvoiceCustomerFacingSnapshotService } from "./invoice-customer-facing-snapshot.service";
 import { InvoicePdfViewModelService } from "./invoice-pdf-view-model.service";
+import { PhoenixInvoiceDocumentPresentationService } from "./phoenix-invoice-document-presentation.service";
 import { InvoiceSendPipelineService } from "./invoice-send-pipeline.service";
 import { classifyFinanceInvoiceOrigin } from "./finance-invoice-origin";
 import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
@@ -233,6 +234,7 @@ export class CrmController {
     private readonly documentBrandingSnapshotService: DocumentBrandingSnapshotService,
     private readonly invoicePdfService: InvoicePdfService,
     private readonly invoicePdfViewModelService: InvoicePdfViewModelService,
+    private readonly phoenixInvoiceDocumentPresentationService: PhoenixInvoiceDocumentPresentationService,
     private readonly invoiceCustomerFacingSnapshotService: InvoiceCustomerFacingSnapshotService,
     private readonly invoiceSendPipelineService: InvoiceSendPipelineService,
     private readonly invoiceNativeDocumentService: InvoiceNativeDocumentService,
@@ -1460,6 +1462,13 @@ export class CrmController {
       const listItem = this.buildInvoiceListItem(invoice);
       const ledgerSummary = this.summarizeInvoiceLedger(invoice);
       const orgSettings = await this.findOrganizationSettings(organizationId);
+      const documentView = this.phoenixInvoiceDocumentPresentationService.buildInvoiceDocumentView({
+        invoice,
+        customer: customer ?? null,
+        job: job ?? null,
+        orgSettings,
+        dueDays: this.readDefaultDueDays(orgSettings),
+      });
 
       return apiSuccess({
         id: listItem.id,
@@ -1526,6 +1535,7 @@ export class CrmController {
           business_name: this.normalizeOptionalString(orgSettings?.business_name),
           company_email: this.normalizeOptionalString(orgSettings?.company_email),
         },
+        document_view: documentView,
       });
     } catch (error) {
       apiError(400, "invoice_lookup_failed", "The invoice could not be loaded.", error);
@@ -1571,7 +1581,6 @@ export class CrmController {
       customer,
       job: job ?? null,
       orgSettings,
-      ledgerSummary,
       dueDays,
     });
     setPdfDownloadResponseHeaders(response, {
@@ -1668,7 +1677,6 @@ export class CrmController {
       customer,
       job,
       orgSettings,
-      ledgerSummary: this.summarizeInvoiceLedger(invoice),
       dueDays,
     });
 
@@ -4142,21 +4150,14 @@ export class CrmController {
     customer: CustomerEntity | null;
     job: JobEntity | null;
     orgSettings: OrganizationSettingEntity | null;
-    ledgerSummary: import("./invoice-financial-lifecycle.core").InvoiceLedgerSummary;
     dueDays: number;
   }) {
-    const viewModel = this.invoicePdfViewModelService.build({
+    const viewModel = this.phoenixInvoiceDocumentPresentationService.buildInvoiceDocumentView({
       invoice: input.invoice,
       customer: input.customer,
       job: input.job,
       orgSettings: input.orgSettings,
-      ledgerSummary: input.ledgerSummary,
       dueDays: input.dueDays,
-      formatCents: (cents) => this.formatCents(cents),
-      formatDisplayDate: (value) => this.formatDisplayDate(value),
-      formatDueDate: (dueAt, issuedAt, dueDays) => this.formatDueDate(dueAt, issuedAt, dueDays),
-      sanitizeDescription: (value) => this.normalizeOptionalString(sanitizeInvoiceDescription(value)) ?? "",
-      sanitizeLineText: (value) => sanitizeUserFacingText(value ?? "") || null,
     });
 
     return this.invoicePdfService.renderInvoicePdf(viewModel);
@@ -4186,14 +4187,12 @@ export class CrmController {
       branch,
     });
 
-    const ledgerSummary = this.summarizeInvoiceLedger(input.invoice);
     const dueDays = this.readDefaultDueDays(input.orgSettings);
     const pdfBuffer = this.buildInvoicePdfBuffer({
       invoice: input.invoice,
       customer: input.customer,
       job: input.job,
       orgSettings: input.orgSettings,
-      ledgerSummary,
       dueDays,
     });
 

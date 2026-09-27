@@ -672,6 +672,45 @@ PDF is a renderer.
 
 PDF must **not** become a source of financial truth.
 
+### Phase 8 alignment requirement (Phoenix Portal / invoice presentation)
+
+**Do not** create a separate WizField PDF design system. Phase 8 consolidates Phoenix product document presentation, not a competing template.
+
+**Canonical architecture:**
+
+```text
+HistoricalDocumentRenderInput
+  → PhoenixInvoiceDocumentViewModel
+  → shared Phoenix document section contract
+  → React Phoenix invoice template
+  → PDF renderer
+```
+
+The **same** canonical view model and **section order** must drive:
+
+- Staff invoice preview
+- Portal HTML invoice preview
+- PDF download
+- Email attachment
+- Portal PDF fallback (native on-the-fly render)
+
+**Backend foundation:** Evolve [`InvoicePdfViewModelService`](backend/src/crm/invoice-pdf-view-model.service.ts) into the shared builder (`PhoenixInvoiceDocumentViewModel` naming in plan/docs); do **not** introduce a competing customer-facing field model.
+
+**Drift to eliminate:**
+
+- Staff [`DocumentPreview`](frontend/components/document-preview.tsx) composes from **live** CRM detail props today.
+- Backend PDF is **snapshot-first** via the view model when frozen.
+- Customer portal has **PDF only** — no HTML invoice document view aligned with staff/PDF.
+
+**Visual language to reuse (not replace):**
+
+- [`DocumentPreview`](frontend/components/document-preview.tsx) section hierarchy and print-oriented layout
+- [`InvoiceCompanyHeader`](frontend/components/invoice-company-header.tsx) for business header block
+- [`WarrantyCertificatePreview`](frontend/components/warranty-certificate-preview.tsx) full-document pattern
+- Existing [`InvoicePdfService`](backend/src/crm/invoice-pdf.service.ts) section order (Bill To / Service Location / job / lines / totals / payments / copy footer)
+
+**Naming note:** `phoenix-v1` ([`branch-document-snapshot.ts`](backend/src/crm/branch-document-snapshot.ts)) is **branch snapshot metadata** (`template_version` on branch blocks), **not** an invoice HTML/PDF template identifier.
+
 ## Phase 9 — Document Storage & Versioning
 
 Define durable native WizField document history.
@@ -707,10 +746,13 @@ Do not rewrite historical imported invoice identifiers without explicit owner ap
 
 ## Part 5 implementation truth (2026-09)
 
-**Invoice PDF V2 (Phase 8)**
+**Invoice PDF V2 (Phase 8 — CLOSED)**
 
-- Renderer: [`InvoicePdfService`](backend/src/crm/invoice-pdf.service.ts) fed by [`InvoicePdfViewModelService`](backend/src/crm/invoice-pdf-view-model.service.ts) (snapshot-first when frozen; live draft preview before send).
-- Layout adds job/service reference, payments list, overpayment line, discount row when present, company address in header.
+- **Status:** **CLOSED** (2026-09-26). Configured local DB: `FINANCE_SMOKE_USE_CONFIGURED_DATABASE=true npm run finance-part8:configured-db-verification` (includes Phase 7 regression).
+- **Alignment:** See § Phase 8 alignment requirement — [`PhoenixInvoiceDocumentViewModel`](backend/src/crm/phoenix-invoice-document-view-model.types.ts) via [`PhoenixInvoiceDocumentPresentationService`](backend/src/crm/phoenix-invoice-document-presentation.service.ts) → [`PhoenixInvoiceDocumentTemplate`](frontend/components/phoenix-invoice-document-template.tsx) + [`InvoicePdfService`](backend/src/crm/invoice-pdf.service.ts) (stream PDF; optional local JPEG logo with initials fallback).
+- **Surfaces:** CRM `document_view` on invoice detail; portal `GET /api/portal/invoices/:id/document-view` + [`/portal/invoices/[invoiceId]`](frontend/app/portal/invoices/[invoiceId]/page.tsx); PDF download/email/portal fallback share the same builder.
+- **Draft:** `legacy_live` + explicit draft banner pre-freeze; frozen snapshot authoritative after Phase 7 freeze.
+- **Checks:** `npm run finance-part8:checks`.
 
 **Document storage (Phase 9)**
 

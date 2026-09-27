@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+﻿import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthModule } from "../auth/auth.module";
@@ -43,6 +43,7 @@ import { InvoiceCustomerFacingSnapshotService } from "./invoice-customer-facing-
 import { InvoiceNumberingService } from "./invoice-numbering.service";
 import { InvoiceSendPipelineService } from "./invoice-send-pipeline.service";
 import { InvoicePdfViewModelService } from "./invoice-pdf-view-model.service";
+import { PhoenixInvoiceDocumentPresentationService } from "./phoenix-invoice-document-presentation.service";
 import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
 import { FinanceAuditService } from "./finance-audit.service";
 import { FinanceAuditEventEntity } from "../database/entities/finance-audit-event.entity";
@@ -91,6 +92,7 @@ import { FinanceAuditEventEntity } from "../database/entities/finance-audit-even
     InvoiceNumberingService,
     InvoiceSendPipelineService,
     InvoicePdfViewModelService,
+    PhoenixInvoiceDocumentPresentationService,
     FinanceInvoicePresentationService,
     FinanceAuditService,
     CrmOfficeDashboardService,
@@ -106,6 +108,9 @@ import { FinanceAuditEventEntity } from "../database/entities/finance-audit-even
     FinanceInvoicePresentationService,
     InvoicePaymentLedgerService,
     FinanceAuditService,
+    PhoenixInvoiceDocumentPresentationService,
+    InvoicePdfViewModelService,
+    InvoicePdfService,
   ],
 })
 export class CrmModule {}

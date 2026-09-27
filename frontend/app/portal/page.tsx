@@ -15,6 +15,8 @@ type PortalHomePayload = {
     status: string;
     total_cents: number;
     issued_at: string;
+    portal_invoice_path?: string | null;
+    pdf_url?: string | null;
     source_pdf_url: string | null;
   }>;
   warranty_certificates: Array<{
@@ -124,24 +126,22 @@ export default function PortalHomePage() {
                           {formatCurrency(invoice.total_cents)} • {invoice.status} • {new Date(invoice.issued_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                         </p>
                       </div>
-                      {invoice.source_pdf_url ? (
-                        <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        <a
+                          href={invoice.portal_invoice_path ?? `/portal/invoices/${invoice.id}`}
+                          className="theme-control-surface inline-flex items-center rounded-full px-3.5 py-2 text-sm text-[color:var(--text-secondary)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)]"
+                        >
+                          View Invoice
+                        </a>
+                        {(invoice.pdf_url ?? invoice.source_pdf_url) ? (
                           <a
-                            href={invoice.source_pdf_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="theme-control-surface inline-flex items-center rounded-full px-3.5 py-2 text-sm text-[color:var(--text-secondary)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)]"
-                          >
-                            View Invoice
-                          </a>
-                          <a
-                            href={`${invoice.source_pdf_url}?download=1`}
+                            href={`${invoice.pdf_url ?? invoice.source_pdf_url}?download=1`}
                             className="theme-control-surface inline-flex items-center rounded-full px-3.5 py-2 text-sm text-[color:var(--text-secondary)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)]"
                           >
                             Download PDF
                           </a>
-                        </div>
-                      ) : null}
+                        ) : null}
+                      </div>
                     </div>
                   ))}
                 </div>

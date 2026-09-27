@@ -14,6 +14,7 @@ import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 import { InvoicePdfService } from "./invoice-pdf.service";
 import { InvoicePdfViewModelService } from "./invoice-pdf-view-model.service";
 import { PortalNativeInvoicePdfService } from "./portal-native-invoice-pdf.service";
+import { PhoenixInvoiceDocumentPresentationService } from "./phoenix-invoice-document-presentation.service";
 
 @Module({
   imports: [
@@ -32,9 +33,10 @@ import { PortalNativeInvoicePdfService } from "./portal-native-invoice-pdf.servi
     InvoicePaymentLedgerService,
     InvoiceCustomerFacingSnapshotService,
     InvoicePdfViewModelService,
+    PhoenixInvoiceDocumentPresentationService,
     InvoicePdfService,
     PortalNativeInvoicePdfService,
   ],
-  exports: [PortalNativeInvoicePdfService],
+  exports: [PortalNativeInvoicePdfService, PhoenixInvoiceDocumentPresentationService],
 })
 export class CrmPortalPdfModule {}

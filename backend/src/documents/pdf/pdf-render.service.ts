@@ -11,19 +11,40 @@ export class PdfRenderService {
   }
 
   renderContentStream(contentStream: string, options: PdfRenderOptions) {
+    return this.renderContentStreamInternal(contentStream, options);
+  }
+
+  renderContentStreamWithJpegLogo(contentStream: string, options: PdfRenderOptions & { logo: NonNullable<PdfRenderOptions["logo"]> }) {
+    const drawLogo = `q ${options.logo.displayWidth} 0 0 ${options.logo.displayHeight} ${options.logo.x} ${options.logo.y} cm /Im1 Do Q\n`;
+    return this.renderContentStreamInternal(drawLogo + contentStream, options);
+  }
+
+  private renderContentStreamInternal(contentStream: string, options: PdfRenderOptions) {
     const fontObjects = options.fonts.map((font) =>
       `<< /Type /Font /Subtype /Type1 /BaseFont /${font.baseFont} >>`,
     );
     const fontDict = options.fonts.map((font, index) => `/${font.name} ${5 + index} 0 R`).join(" ");
     const mediaBox = options.mediaBox ?? DEFAULT_MEDIA_BOX;
+    const fontCount = options.fonts.length;
+    const imageObjectIndex = 5 + fontCount;
+    const xObjectDict = options.logo ? `/XObject << /Im1 ${imageObjectIndex} 0 R >>` : "";
+    const pageResources = `<< /Font << ${fontDict} >>${xObjectDict ? ` ${xObjectDict}` : ""} >>`;
 
     const objects = [
       "<< /Type /Catalog /Pages 2 0 R >>",
       "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
-      `<< /Type /Page /Parent 2 0 R /MediaBox [${mediaBox}] /Contents 4 0 R /Resources << /Font << ${fontDict} >> >> >>`,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [${mediaBox}] /Contents 4 0 R /Resources ${pageResources} >>`,
       `<< /Length ${Buffer.byteLength(contentStream, "utf8")} >>\nstream\n${contentStream}\nendstream`,
       ...fontObjects,
     ];
+
+    if (options.logo) {
+      const imageObject =
+        `<< /Type /XObject /Subtype /Image /Width ${options.logo.width} /Height ${options.logo.height} `
+        + `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${options.logo.jpegBuffer.length} >>\n`
+        + `stream\n${options.logo.jpegBuffer.toString("latin1")}\nendstream`;
+      objects.push(imageObject);
+    }
 
     let pdf = "%PDF-1.4\n";
     const offsets = [0];

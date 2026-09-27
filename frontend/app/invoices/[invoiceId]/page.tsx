@@ -19,7 +19,8 @@ import {
 import { BoardShell } from "@/components/board/board-shell";
 import { MetricTile } from "@/components/board/metric-tile";
 import DocumentApprovalActions from "@/components/document-approval-actions";
-import DocumentPreview from "@/components/document-preview";
+import PhoenixInvoiceDocumentTemplate from "@/components/phoenix-invoice-document-template";
+import type { PhoenixInvoiceDocumentViewModel } from "@/lib/crm/phoenix-invoice-document.types";
 import InvoiceHeaderActions from "./invoice-header-actions";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerRoles } from "@/lib/auth/server-session";
@@ -95,6 +96,7 @@ type InvoiceDetailRecord = {
     business_name: string | null;
     company_email: string | null;
   } | null;
+  document_view?: PhoenixInvoiceDocumentViewModel;
 };
 
 type CollectionSignalTone = "default" | "warning" | "success";
@@ -306,37 +308,6 @@ export default async function InvoiceDetailPage({
         ? t("outstandingHelper")
         : t("clearedHelper");
 
-  const documentPreviewProps = {
-    documentKind: "invoice" as const,
-    documentNumber: invoice.document_number,
-    description: invoice.description,
-    primaryStatusLabel: "Status",
-    primaryStatusValue: formatLifecycleStatus(invoice.lifecycle_status),
-    issuedLabel: "Issued",
-    issuedAt: invoice.issued_at,
-    secondaryDateLabel: "Paid",
-    secondaryDateValue: invoice.paid_at,
-    customerName,
-    customerCompanyName: invoice.customer?.company_name ?? null,
-    customerEmail: invoice.customer?.email ?? null,
-    customerPhone: invoice.customer?.phone ?? null,
-    customerAddressLines: [
-      invoice.customer?.service_address_line_1 ?? "",
-      invoice.customer?.service_address_line_2 ?? "",
-      [invoice.customer?.service_city, invoice.customer?.service_state_or_region].filter(Boolean).join(", ")
-        + (invoice.customer?.service_postal_code ? ` ${invoice.customer.service_postal_code}` : ""),
-    ]
-      .map((line) => line.trim())
-      .filter(Boolean),
-    lineItems: invoice.line_items ?? [],
-    subtotalCents: invoice.subtotal_cents ?? invoice.amount_cents,
-    taxRateBpsSnapshot: invoice.tax_rate_bps_snapshot,
-    taxCents: invoice.tax_cents ?? 0,
-    totalCents: invoice.total_cents,
-    compatibilityTotalLabel: "Stored Amount",
-    compatibilityTotalCents: invoice.amount_cents,
-  };
-
   const headerActionsProps = {
     invoiceId: invoice.id,
     initialInvoice: {
@@ -387,7 +358,12 @@ export default async function InvoiceDetailPage({
               <InvoiceHeaderActions {...headerActionsProps} />
             </div>
             <div className="mt-6">
-              <DocumentPreview {...documentPreviewProps} />
+              {invoice.document_view ? (
+                <PhoenixInvoiceDocumentTemplate
+                  documentView={invoice.document_view}
+                  pdfHref={`/api/invoices/${invoice.id}/pdf`}
+                />
+              ) : null}
               <DocumentApprovalActions {...approvalActionsProps} />
             </div>
           </section>
@@ -486,7 +462,12 @@ export default async function InvoiceDetailPage({
               className="absolute -inset-5 rounded-[44px] bg-gradient-to-br from-indigo-500/10 via-emerald-500/10 to-violet-500/10 blur-2xl print:hidden"
             />
             <div className="relative overflow-hidden rounded-[38px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-4 shadow-[0_40px_120px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)] print:rounded-none print:border-0 print:bg-transparent print:p-0 print:shadow-none">
-              <DocumentPreview {...documentPreviewProps} />
+              {invoice.document_view ? (
+                <PhoenixInvoiceDocumentTemplate
+                  documentView={invoice.document_view}
+                  pdfHref={`/api/invoices/${invoice.id}/pdf`}
+                />
+              ) : null}
             </div>
           </section>
 

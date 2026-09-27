@@ -13,6 +13,7 @@ import { TechnicianEntity } from "../database/entities/technician.entity";
 import { WarrantyCertificateEntity } from "../database/entities/warranty-certificate.entity";
 import { InvoiceDocumentEntity } from "../database/entities/invoice-document.entity";
 import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
+import { CrmPortalPdfModule } from "../crm/crm-portal-pdf.module";
 import { InvoicePaymentLedgerService } from "../crm/invoice-payment-ledger.service";
 import { SettingsModule } from "../settings/settings.module";
 import { PhoenixIntegrationAuthService } from "../integrations/phoenix/phoenix-integration-auth.service";
@@ -29,6 +30,7 @@ import { PortalSessionGuard } from "./portal-session.guard";
   imports: [
     AuthModule,
     SettingsModule,
+    CrmPortalPdfModule,
     TypeOrmModule.forFeature([
       CustomerEntity,
       JobEntity,

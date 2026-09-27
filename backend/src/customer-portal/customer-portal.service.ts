@@ -620,7 +620,9 @@ export class CustomerPortalService {
           document_origin: documentOrigin,
           snapshot_frozen: Boolean(frozenSnapshot),
           customer_facing_snapshot: frozenSnapshot,
+          portal_invoice_path: `/portal/invoices/${row.id}`,
           source_pdf_url: financeOrigin === "workiz_historical" && storedDocument ? pdfPath : null,
+          pdf_url: pdfPath,
         };
       }),
       warranty_certificates: warrantyCertificates.map((certificate) => ({
