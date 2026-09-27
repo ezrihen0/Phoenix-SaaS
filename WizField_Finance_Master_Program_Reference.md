@@ -413,11 +413,15 @@ Make financial transformation and calculation deterministic.
 
 ## Part 3 implementation truth (2026-09)
 
-**Money engine (Phase 5 — discounts deferred)**
+**Money engine (Phase 5 — CLOSED)**
 
-- Backend authority: [`MoneyEngineService`](backend/src/crm/money-engine.service.ts) / [`money-engine.core.ts`](backend/src/crm/money-engine.core.ts) (line subtotal via quantity thousandths → document subtotal → tax → total).
-- Frontend preview parity: [`frontend/lib/crm/money-engine.ts`](frontend/lib/crm/money-engine.ts) used by invoice/estimate preview totals.
+- **Status:** **CLOSED** (2026-09-26). Canonical native document math: line subtotal via quantity thousandths → document subtotal → tax (document-level bps) → total; **discounts deferred** (`discountCents: 0`).
+- Backend authority: [`MoneyEngineService`](backend/src/crm/money-engine.service.ts) / [`money-engine.core.ts`](backend/src/crm/money-engine.core.ts) (`DocumentMoneyResult`, `computeDocumentMoney`). [`DocumentSnapshotService`](backend/src/crm/document-snapshot.service.ts) and CRM upsert/conversion call **MoneyEngineService** directly.
+- Native writes: `amount_cents === total_cents` (invoice) and `price_cents === total_cents` (estimate) on persist; legacy flat upsert without `lineItems` remains deprecated.
+- Invoice/estimate default tax when omitted: job **branch** `default_tax_rate_bps` (same resolver for both).
+- Frontend preview parity: [`frontend/lib/crm/money-engine.ts`](frontend/lib/crm/money-engine.ts) matches backend quantity rules; `money-engine:parity-check`.
 - Upsert paths reject client total drift when line items are present (`totals_mismatch`).
+- Checks: `npm run finance-part5:checks` (unit + parity + persistence contract + Phase 4 conversion smokes).
 
 **Estimate → Invoice conversion (Phase 4 — CLOSED)**
 

@@ -562,7 +562,7 @@ async function main() {
       dataSource.getRepository(PricebookItemEntity),
       dataSource.getRepository(PricebookBundleEntity),
       dataSource.getRepository(PricebookBundleItemEntity),
-      new DocumentPricingService(new MoneyEngineService()),
+      new MoneyEngineService(),
       {
         requireFinalizedDocumentTranslation: async () => {
           throw new Error("Unexpected translation lookup in document snapshot org isolation smoke test.");

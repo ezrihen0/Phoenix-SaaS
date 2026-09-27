@@ -10,7 +10,7 @@ import { PricebookBundleEntity } from "../database/entities/pricebook-bundle.ent
 import { PricebookItemEntity } from "../database/entities/pricebook-item.entity";
 import { QuoteLineItemEntity } from "../database/entities/quote-line-item.entity";
 import { CustomerOutputTranslationService } from "../language-store/customer-output-translation.service";
-import { DocumentPricingService } from "./document-pricing.service";
+import { MoneyEngineService } from "./money-engine.service";
 import type { DocumentLineItemInput } from "./validation";
 
 export type SnapshotLineDraft = {
@@ -60,7 +60,7 @@ export class DocumentSnapshotService {
     private readonly pricebookBundlesRepository: Repository<PricebookBundleEntity>,
     @InjectRepository(PricebookBundleItemEntity)
     private readonly pricebookBundleItemsRepository: Repository<PricebookBundleItemEntity>,
-    private readonly documentPricingService: DocumentPricingService,
+    private readonly moneyEngineService: MoneyEngineService,
     private readonly customerOutputTranslationService: CustomerOutputTranslationService,
   ) {}
 
@@ -154,7 +154,7 @@ export class DocumentSnapshotService {
           quantity,
           line_subtotal_cents:
             lineItem.line_subtotal_cents
-            ?? this.documentPricingService.computeLineSubtotal(quantity, unitPriceCents),
+            ?? this.moneyEngineService.computeLineSubtotal(quantity, unitPriceCents),
           sort_order: index,
         };
       });
@@ -281,7 +281,7 @@ export class DocumentSnapshotService {
       bundle_requirement_id: bundleRequirementId ?? null,
       catalog_unit_price_cents_snapshot: catalogUnitPriceCentsSnapshot ?? null,
       quantity,
-      line_subtotal_cents: this.documentPricingService.computeLineSubtotal(quantity, unitPriceCents),
+      line_subtotal_cents: this.moneyEngineService.computeLineSubtotal(quantity, unitPriceCents),
       sort_order: sortOrder,
     };
   }
@@ -353,7 +353,7 @@ export class DocumentSnapshotService {
           bundle_requirement_id: null,
           catalog_unit_price_cents_snapshot: null,
           quantity,
-          line_subtotal_cents: this.documentPricingService.computeLineSubtotal(
+          line_subtotal_cents: this.moneyEngineService.computeLineSubtotal(
             quantity,
             item.customer_price_cents,
           ),
@@ -408,7 +408,7 @@ export class DocumentSnapshotService {
       bundle_requirement_id: null,
       catalog_unit_price_cents_snapshot: null,
       quantity,
-      line_subtotal_cents: this.documentPricingService.computeLineSubtotal(quantity, unitPriceCents),
+      line_subtotal_cents: this.moneyEngineService.computeLineSubtotal(quantity, unitPriceCents),
       sort_order: sortOrder,
     };
   }

@@ -3,6 +3,7 @@ import type { EntityManager } from "typeorm";
 import type { InvoiceStatus, QuoteStatus } from "./constants";
 import type { DocumentSnapshotService, SnapshotLineDraft } from "./document-snapshot.service";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
+import { JobEntity } from "../database/entities/job.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
 
 export type CrmDocumentPersistenceTestHooks = {
@@ -16,6 +17,12 @@ type DocumentTotals = {
   taxRateBpsSnapshot: number;
   taxCents: number;
 };
+
+function assertPersistedDocumentTotals(totals: DocumentTotals) {
+  if (totals.totalCents !== totals.subtotalCents + totals.taxCents) {
+    throw new Error("Document totals must satisfy totalCents = subtotalCents + taxCents.");
+  }
+}
 
 export async function persistInvoiceHeaderAndLineItems(
   manager: EntityManager,
@@ -36,6 +43,8 @@ export async function persistInvoiceHeaderAndLineItems(
   },
 ) {
   const invoiceRepository = manager.getRepository(InvoiceEntity);
+  const jobBranchId = await resolveJobBranchId(manager, input.organizationId, input.jobId);
+  assertPersistedDocumentTotals(input.invoiceTotals);
   let invoice: InvoiceEntity;
 
   if (input.existingInvoice) {
@@ -51,12 +60,14 @@ export async function persistInvoiceHeaderAndLineItems(
     if (input.sourceQuoteId !== undefined) {
       input.existingInvoice.source_quote_id = input.sourceQuoteId;
     }
+    input.existingInvoice.branch_id = jobBranchId;
     invoice = await invoiceRepository.save(input.existingInvoice);
   } else {
     invoice = await invoiceRepository.save(
       invoiceRepository.create({
         organization_id: input.organizationId,
         job_id: input.jobId,
+        branch_id: jobBranchId,
         description: input.description,
         amount_cents: input.invoiceTotals.totalCents,
         subtotal_cents: input.invoiceTotals.subtotalCents,
@@ -103,6 +114,8 @@ export async function persistQuoteHeaderAndLineItems(
   },
 ) {
   const quoteRepository = manager.getRepository(QuoteEntity);
+  const jobBranchId = await resolveJobBranchId(manager, input.organizationId, input.jobId);
+  assertPersistedDocumentTotals(input.quoteTotals);
   let quote: QuoteEntity;
 
   if (input.existingQuote) {
@@ -115,12 +128,14 @@ export async function persistQuoteHeaderAndLineItems(
     input.existingQuote.status = input.status;
     input.existingQuote.sent_at = input.sent_at;
     input.existingQuote.approved_at = input.approved_at;
+    input.existingQuote.branch_id = jobBranchId;
     quote = await quoteRepository.save(input.existingQuote);
   } else {
     quote = await quoteRepository.save(
       quoteRepository.create({
         organization_id: input.organizationId,
         job_id: input.jobId,
+        branch_id: jobBranchId,
         description: input.description,
         price_cents: input.quoteTotals.totalCents,
         subtotal_cents: input.quoteTotals.subtotalCents,
@@ -146,4 +161,17 @@ export async function persistQuoteHeaderAndLineItems(
   );
 
   return quote;
+}
+
+async function resolveJobBranchId(
+  manager: EntityManager,
+  organizationId: string,
+  jobId: string,
+): Promise<string | null> {
+  const job = await manager.getRepository(JobEntity).findOne({
+    where: { id: jobId, organization_id: organizationId },
+    select: { id: true, branch_id: true },
+  });
+
+  return job?.branch_id ?? null;
 }

@@ -202,7 +202,7 @@ async function main() {
     dataSource.getRepository(PricebookItemEntity),
     dataSource.getRepository(PricebookBundleEntity),
     dataSource.getRepository(PricebookBundleItemEntity),
-    new DocumentPricingService(new MoneyEngineService()),
+    new MoneyEngineService(),
     translationService,
   );
 

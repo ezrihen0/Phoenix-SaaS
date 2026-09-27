@@ -23,4 +23,11 @@ export class DocumentPricingService {
   ): DocumentTotals {
     return this.moneyEngineService.computeSnapshotTotals(lines, taxRateBps);
   }
+
+  computeDocumentMoney(
+    lines: Array<{ quantity: string; unitPriceCents: number }>,
+    taxRateBps: number,
+  ) {
+    return this.moneyEngineService.computeDocumentMoney(lines, taxRateBps);
+  }
 }

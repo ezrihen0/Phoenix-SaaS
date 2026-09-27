@@ -5,8 +5,14 @@ export type DocumentTotals = {
   totalCents: number;
 };
 
+/** Phase 5 canonical native document money output (discounts deferred). */
+export type DocumentMoneyResult = DocumentTotals & {
+  discountCents: 0;
+  taxableAmountCents: number;
+};
+
 /**
- * Canonical WizField document money rules (Part 3):
+ * Canonical WizField document money rules (Phase 5):
  * - Line subtotal = round(unitPriceCents * quantityThousandths / 1000)
  * - Quantity stored as decimal string with up to 3 fractional digits
  * - Tax = round(subtotalCents * taxRateBps / 10000)
@@ -59,6 +65,21 @@ export function computeDocumentTotals(
     taxCents,
     totalCents: subtotalCents + taxCents,
   };
+}
+
+export function toDocumentMoneyResult(totals: DocumentTotals): DocumentMoneyResult {
+  return {
+    ...totals,
+    discountCents: 0,
+    taxableAmountCents: totals.subtotalCents,
+  };
+}
+
+export function computeDocumentMoney(
+  lines: Array<{ quantity: string; unitPriceCents: number }>,
+  taxRateBps: number,
+): DocumentMoneyResult {
+  return toDocumentMoneyResult(computeDocumentTotals(lines, taxRateBps));
 }
 
 export function assertClientTotalMatchesEngine(

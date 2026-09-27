@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 
-import { DocumentPricingService } from "./document-pricing.service";
 import { DocumentSnapshotService } from "./document-snapshot.service";
 import { MoneyEngineService } from "./money-engine.service";
 import type { QuoteLineItemEntity } from "../database/entities/quote-line-item.entity";
@@ -17,14 +16,13 @@ function expect(name: string, run: () => void) {
 
 function buildHarness() {
   const moneyEngineService = new MoneyEngineService();
-  const documentPricingService = new DocumentPricingService(moneyEngineService);
   const documentSnapshotService = new DocumentSnapshotService(
     {} as never,
     {} as never,
     {} as never,
     {} as never,
     {} as never,
-    documentPricingService,
+    moneyEngineService,
     {} as never,
   );
 

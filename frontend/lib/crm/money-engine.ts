@@ -9,13 +9,13 @@ export function quantityToThousandths(quantity: string) {
   const normalizedQuantity = quantity.trim();
 
   if (!/^\d+(\.\d{1,3})?$/.test(normalizedQuantity)) {
-    return 0;
+    throw new Error("Quantity must be a positive decimal with up to three decimal places.");
   }
 
   const parsedQuantity = Number(normalizedQuantity);
 
   if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
-    return 0;
+    throw new Error("Quantity must be greater than zero.");
   }
 
   return Math.round(parsedQuantity * 1000);
@@ -23,11 +23,6 @@ export function quantityToThousandths(quantity: string) {
 
 export function computeLineSubtotalCents(quantity: string, unitPriceCents: number) {
   const quantityThousandths = quantityToThousandths(quantity);
-
-  if (quantityThousandths <= 0) {
-    return 0;
-  }
-
   return Math.round((unitPriceCents * quantityThousandths) / 1000);
 }
 

@@ -4,7 +4,6 @@ import { DataSource, In, Like } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
 import type { ActorContext } from "../common/request-types";
-import { DocumentPricingService } from "../crm/document-pricing.service";
 import { DocumentSnapshotService } from "../crm/document-snapshot.service";
 import { EstimateInvoiceConversionService } from "../crm/estimate-invoice-conversion.service";
 import { MoneyEngineService } from "../crm/money-engine.service";
@@ -181,7 +180,6 @@ export function applyEphemeralDatabaseAccessSkip<
 
 export function buildDocumentSnapshotService(dataSource: DataSource) {
   const moneyEngineService = new MoneyEngineService();
-  const documentPricingService = new DocumentPricingService(moneyEngineService);
 
   return new DocumentSnapshotService(
     dataSource.getRepository(InvoiceLineItemEntity),
@@ -189,7 +187,7 @@ export function buildDocumentSnapshotService(dataSource: DataSource) {
     dataSource.getRepository(PricebookItemEntity),
     dataSource.getRepository(PricebookBundleEntity),
     dataSource.getRepository(PricebookBundleItemEntity),
-    documentPricingService,
+    moneyEngineService,
     {} as never,
   );
 }

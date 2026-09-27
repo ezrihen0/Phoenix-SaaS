@@ -106,10 +106,10 @@ import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
 import { CustomerPortalService } from "../customer-portal/customer-portal.service";
 import { DocumentBrandingSnapshotService } from "../documents/pdf/document-branding-snapshot.service";
 import { setPdfDownloadResponseHeaders } from "../documents/pdf/pdf-download-response";
-import { DocumentPricingService } from "./document-pricing.service";
+import { MoneyEngineService } from "./money-engine.service";
+import { assertClientTotalMatchesEngine } from "./money-engine.core";
 import { DocumentSnapshotService } from "./document-snapshot.service";
 import { EstimateInvoiceConversionService } from "./estimate-invoice-conversion.service";
-import { assertClientTotalMatchesEngine } from "./money-engine.core";
 import {
   persistInvoiceHeaderAndLineItems,
   persistQuoteHeaderAndLineItems,
@@ -128,6 +128,7 @@ import { InvoicePdfViewModelService } from "./invoice-pdf-view-model.service";
 import { InvoiceSendPipelineService } from "./invoice-send-pipeline.service";
 import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
 import { FinanceAuditService } from "./finance-audit.service";
+import { BranchScopeService } from "./branch-scope.service";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -212,7 +213,7 @@ export class CrmController {
     private readonly jobStatusEventsRepository: Repository<JobStatusEventEntity>,
     @InjectRepository(OrganizationSettingEntity)
     private readonly organizationSettingsRepository: Repository<OrganizationSettingEntity>,
-    private readonly documentPricingService: DocumentPricingService,
+    private readonly moneyEngineService: MoneyEngineService,
     private readonly documentSnapshotService: DocumentSnapshotService,
     private readonly estimateInvoiceConversionService: EstimateInvoiceConversionService,
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
@@ -232,6 +233,7 @@ export class CrmController {
     private readonly invoiceNativeDocumentService: InvoiceNativeDocumentService,
     private readonly financeInvoicePresentationService: FinanceInvoicePresentationService,
     private readonly financeAuditService: FinanceAuditService,
+    private readonly branchScopeService: BranchScopeService,
     private readonly configService: ConfigService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -641,6 +643,17 @@ export class CrmController {
       await this.requireTechnicianInOrganization(payload.assignedTechnicianId, organizationId);
       await this.requireServiceInOrganization(payload.serviceId, organizationId);
 
+      let branchId: string | null = null;
+      if (payload.branchId) {
+        await this.branchScopeService.assertActorMayAssignBranch(actor, organizationId, payload.branchId);
+        branchId = payload.branchId;
+      } else {
+        branchId = await this.branchScopeService.resolveBranchIdFromServiceProvince(
+          organizationId,
+          payload.serviceStateOrRegion,
+        );
+      }
+
       let jobTitle = `${getServiceTypeLabel(payload.serviceType)} for ${customerLabel}`;
 
       if (payload.serviceId) {
@@ -659,6 +672,7 @@ export class CrmController {
       const job = await this.jobsRepository.save(
         this.jobsRepository.create({
           organization_id: organizationId,
+          branch_id: branchId,
           customer_id: customerId,
           service_id: payload.serviceId,
           assigned_technician_id: payload.assignedTechnicianId,
@@ -948,7 +962,23 @@ export class CrmController {
         updates.job_type = payload.jobType;
       }
 
-      await this.jobsRepository.update({ id: jobId, organization_id: organizationId }, updates);
+      if (payload.branchId !== undefined) {
+        if (payload.branchId === null) {
+          updates.branch_id = null;
+        } else {
+          await this.branchScopeService.assertActorMayAssignBranch(actor, organizationId, payload.branchId);
+          updates.branch_id = payload.branchId;
+        }
+      }
+
+      await this.dataSource.transaction(async (manager) => {
+        await manager.getRepository(JobEntity).update({ id: jobId, organization_id: organizationId }, updates);
+        if (payload.branchId !== undefined) {
+          const nextBranchId = payload.branchId ?? null;
+          await this.branchScopeService.syncJobBranchToDocuments(manager, jobId, organizationId, nextBranchId);
+        }
+      });
+
       const detail = await this.loadJobDetail(jobId, organizationId);
 
       return apiSuccess(detail ? this.buildJobDetailResponse(detail) : null);
@@ -1112,15 +1142,16 @@ export class CrmController {
             existingQuote?.id ?? null,
           )
         : [];
+      const defaultTaxRateBps = await this.resolveJobBranchDefaultTaxRateBps(organizationId, job);
       const quoteTotals = hasSnapshotLineItems
-        ? this.documentPricingService.computeSnapshotTotals(
+        ? this.moneyEngineService.computeSnapshotTotals(
             quoteLineDrafts.map((lineDraft) => ({
               quantity: lineDraft.quantity,
               unitPriceCents: lineDraft.unit_price_cents_snapshot,
             })),
-            payload.taxRateBps ?? 0,
+            payload.taxRateBps ?? defaultTaxRateBps,
           )
-        : this.documentPricingService.buildLegacyTotals(payload.priceCents);
+        : this.moneyEngineService.buildLegacyTotals(payload.priceCents);
 
       if (hasSnapshotLineItems) {
         assertClientTotalMatchesEngine(payload.priceCents, quoteTotals, "Estimate");
@@ -2402,15 +2433,16 @@ export class CrmController {
             existingInvoice?.id ?? null,
           )
         : [];
+      const defaultInvoiceTaxRateBps = await this.resolveJobBranchDefaultTaxRateBps(organizationId, job);
       const invoiceTotals = hasSnapshotLineItems
-        ? this.documentPricingService.computeSnapshotTotals(
+        ? this.moneyEngineService.computeSnapshotTotals(
             invoiceLineDrafts.map((lineDraft) => ({
               quantity: lineDraft.quantity,
               unitPriceCents: lineDraft.unit_price_cents_snapshot,
             })),
-            payload.taxRateBps ?? 0,
+            payload.taxRateBps ?? defaultInvoiceTaxRateBps,
           )
-        : this.documentPricingService.buildLegacyTotals(payload.amountCents);
+        : this.moneyEngineService.buildLegacyTotals(payload.amountCents);
 
       if (hasSnapshotLineItems) {
         assertClientTotalMatchesEngine(payload.amountCents, invoiceTotals, "Invoice");
@@ -4218,6 +4250,15 @@ export class CrmController {
     const dueAt = new Date(issuedAt);
     dueAt.setDate(dueAt.getDate() + dueDays);
     return dueAt;
+  }
+
+  private async resolveJobBranchDefaultTaxRateBps(organizationId: string, job: JobEntity) {
+    if (!job.branch_id?.trim()) {
+      return 0;
+    }
+
+    const branch = await this.branchScopeService.findBranchForOrganization(organizationId, job.branch_id);
+    return this.branchScopeService.resolveDefaultTaxRateBps(branch);
   }
 }
 

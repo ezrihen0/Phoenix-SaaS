@@ -2,12 +2,15 @@ import { Injectable } from "@nestjs/common";
 
 import {
   buildLegacyDocumentTotals,
+  computeDocumentMoney,
   computeDocumentTotals,
   computeLineSubtotalCents,
+  toDocumentMoneyResult,
+  type DocumentMoneyResult,
   type DocumentTotals,
 } from "./money-engine.core";
 
-export type { DocumentTotals };
+export type { DocumentMoneyResult, DocumentTotals };
 
 @Injectable()
 export class MoneyEngineService {
@@ -24,5 +27,16 @@ export class MoneyEngineService {
     taxRateBps: number,
   ): DocumentTotals {
     return computeDocumentTotals(lines, taxRateBps);
+  }
+
+  computeDocumentMoney(
+    lines: Array<{ quantity: string; unitPriceCents: number }>,
+    taxRateBps: number,
+  ): DocumentMoneyResult {
+    return computeDocumentMoney(lines, taxRateBps);
+  }
+
+  toDocumentMoneyResult(totals: DocumentTotals): DocumentMoneyResult {
+    return toDocumentMoneyResult(totals);
   }
 }
