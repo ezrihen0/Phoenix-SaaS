@@ -30,6 +30,23 @@ import type { JobQuoteRecord } from "./job-quote-section";
 
 type ToastTone = "success" | "error" | "warning";
 
+function invoiceBlocksEstimateConversion(invoice: JobInvoiceRecord | null | undefined) {
+  if (!invoice) {
+    return false;
+  }
+
+  const lineCount = invoice.line_items?.length;
+  if (typeof lineCount === "number") {
+    return lineCount > 0;
+  }
+
+  if (invoice.source_estimate_id) {
+    return true;
+  }
+
+  return (invoice.total_cents ?? invoice.amount_cents ?? 0) > 0;
+}
+
 function resolveFinanceErrorMessage(error: unknown, fallback: string) {
   if (error instanceof CrmApiError) {
     return financeApiErrorMessage(error.code, error.message || fallback);
@@ -205,7 +222,9 @@ export function JobInvoiceTabPanel({
   const [isBusy, setIsBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canConvertFromEstimate = Boolean(quoteId && (quoteApprovedAt || quoteSignedAt));
+  const canConvertFromEstimate = Boolean(
+    quoteId && (quoteApprovedAt || quoteSignedAt) && !invoiceBlocksEstimateConversion(invoice),
+  );
   const balanceCents = invoice?.balance_cents ?? invoice?.amount_cents ?? 0;
   const canRecordFullPayment = Boolean(invoice?.id) && balanceCents > 0;
 
@@ -221,7 +240,8 @@ export function JobInvoiceTabPanel({
     }
 
     if (!canConvertFromEstimate) {
-      const nextMessage = "Only approved or signed estimates can be converted when no invoice exists yet.";
+      const nextMessage =
+        "Convert is available for approved or signed estimates when this job has no invoice lines yet.";
       setErrorMessage(nextMessage);
       onToast?.(nextMessage, "warning");
       return;

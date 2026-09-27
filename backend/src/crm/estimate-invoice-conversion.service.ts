@@ -80,6 +80,14 @@ export class EstimateInvoiceConversionService {
       apiError(404, "estimate_not_found", "The estimate could not be found.");
     }
 
+    if (quote.status === "rejected") {
+      apiError(
+        400,
+        "estimate_not_approved",
+        "Rejected estimates cannot be converted into an invoice.",
+      );
+    }
+
     if (!this.isEstimateApprovedOrSigned(quote)) {
       apiError(
         400,
@@ -112,15 +120,19 @@ export class EstimateInvoiceConversionService {
     }
 
     const existingLineCount = existingInvoice?.line_items?.length ?? 0;
-    if (
-      existingInvoice
-      && existingInvoice.source_quote_id === quote.id
-      && existingLineCount > 0
-    ) {
+    if (existingInvoice && existingLineCount > 0) {
+      if (existingInvoice.source_quote_id === quote.id) {
+        apiError(
+          409,
+          "invoice_already_converted",
+          "This job invoice was already created from this estimate.",
+        );
+      }
+
       apiError(
         409,
-        "invoice_already_converted",
-        "This job invoice was already created from this estimate.",
+        "invoice_exists",
+        "This job already has an invoice with line items. Edit or clear it before converting from an estimate.",
       );
     }
 

@@ -69,6 +69,23 @@ export type JobInvoiceRecord = {
   payments?: InvoicePaymentRecord[];
 };
 
+function invoiceBlocksEstimateConversion(invoice: JobInvoiceRecord | null | undefined) {
+  if (!invoice) {
+    return false;
+  }
+
+  const lineCount = invoice.line_items?.length;
+  if (typeof lineCount === "number") {
+    return lineCount > 0;
+  }
+
+  if (invoice.source_estimate_id) {
+    return true;
+  }
+
+  return (invoice.total_cents ?? invoice.amount_cents ?? 0) > 0;
+}
+
 type JobInvoiceSectionProps = {
   jobId: string;
   invoice: JobInvoiceRecord | null;
@@ -310,7 +327,9 @@ export default function JobInvoiceSection({
     }
   }
 
-  const canConvertFromEstimate = Boolean(quoteId && (quoteApprovedAt || quoteSignedAt));
+  const canConvertFromEstimate = Boolean(
+    quoteId && (quoteApprovedAt || quoteSignedAt) && !invoiceBlocksEstimateConversion(invoiceDetail),
+  );
 
   async function convertFromEstimate() {
     if (!quoteId) {
@@ -321,7 +340,8 @@ export default function JobInvoiceSection({
     }
 
     if (!canConvertFromEstimate) {
-      const nextMessage = "Only approved or signed estimates can be converted into an invoice.";
+      const nextMessage =
+        "Convert is available for approved or signed estimates when this job has no invoice lines yet.";
       setErrorMessage(nextMessage);
       onToast?.(nextMessage, "warning");
       return;

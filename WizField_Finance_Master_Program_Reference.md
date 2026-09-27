@@ -419,14 +419,17 @@ Make financial transformation and calculation deterministic.
 - Frontend preview parity: [`frontend/lib/crm/money-engine.ts`](frontend/lib/crm/money-engine.ts) used by invoice/estimate preview totals.
 - Upsert paths reject client total drift when line items are present (`totals_mismatch`).
 
-**Estimate → Invoice conversion (Phase 4)**
+**Estimate → Invoice conversion (Phase 4 — hardened)**
 
 - API: `POST /api/jobs/:jobId/invoice/convert-from-estimate` with optional `{ estimateId }`.
-- Gate: estimate must be **approved or signed** (locked customer-facing truth).
-- Copies **persisted quote line snapshots** to invoice lines (no live Pricebook re-hydration on this path).
-- Provenance: `invoices.source_quote_id` exposed as `source_estimate_id` on invoice reads.
-- Job tab UI: **Convert from estimate** replaces **Pull from quote**; owner composer unchanged.
-- Idempotency: repeat conversion from same estimate when invoice already has lines → `409 invoice_already_converted`.
+- Eligibility: estimate must be **approved or signed** (`approved_at` or `signed_at`); **`status === rejected` is always blocked** even if timestamps remain.
+- Copies **persisted `quote_line_items` snapshots** via `copyQuoteLineSnapshotsToInvoiceDrafts` (no live Pricebook on this path; composer `buildLineDrafts` is out of scope).
+- Totals: `MoneyEngineService.computeSnapshotTotals` from copied unit prices + `quotes.tax_rate_bps_snapshot`.
+- Provenance: `invoices.source_quote_id` → API `source_estimate_id`; audit `estimate.convert_to_invoice`.
+- Job tab UI: **Convert from estimate** (visible when no invoice, or invoice shell with **zero lines**); owner composer unchanged.
+- **Overwrite rule:** if the job invoice already has **any line items** and this is not the idempotent same-estimate case → `409 invoice_exists` (no silent replace). Same estimate + lines already present → `409 invoice_already_converted`.
+- Other guards: `409 invoice_locked`, `409 invoice_has_payments`, `400 estimate_has_no_lines`, `404` tenant/job/estimate mismatch.
+- Checks: `estimate-invoice-conversion:contract-check`, `estimate-invoice-conversion:smoke`, `estimate-invoice-conversion:pricebook-drift:smoke` (via `finance-part3:checks` when MySQL available).
 
 ## Phase 4 — Estimate → Invoice Conversion Engine
 
