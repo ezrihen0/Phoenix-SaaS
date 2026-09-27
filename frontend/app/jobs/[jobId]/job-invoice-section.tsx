@@ -62,6 +62,7 @@ export type JobInvoiceRecord = {
   amount_paid_cents?: number;
   refunded_cents?: number;
   balance_cents?: number;
+  overpayment_cents?: number;
   issued_at: string;
   paid_at: string | null;
   last_sent_at?: string | null;
@@ -99,11 +100,6 @@ type JobInvoiceSectionProps = {
   onToast?: (message: string, tone?: ToastTone) => void;
 };
 
-const invoiceStatuses: Array<{ value: InvoiceStatus; label: string }> = [
-  { value: "unpaid", label: "Unpaid" },
-  { value: "paid", label: "Paid" },
-];
-
 function resolveFinanceErrorMessage(error: unknown, fallback: string) {
   if (error instanceof CrmApiError) {
     return financeApiErrorMessage(error.code, error.message || fallback);
@@ -129,8 +125,8 @@ export default function JobInvoiceSection({
   onToast,
 }: JobInvoiceSectionProps) {
   const isOwnerComposer = variant === "owner";
-  const [status, setStatus] = useState<InvoiceStatus>(invoice?.status ?? "unpaid");
   const [invoiceDetail, setInvoiceDetail] = useState<JobInvoiceRecord | null>(invoice ?? null);
+  const [partialPaymentInput, setPartialPaymentInput] = useState("");
   const [lines, setLines] = useState<InvoiceBuilderLine[]>(() =>
     invoiceLinesFromPersistedSnapshot(invoice?.line_items ?? [], invoice?.amount_cents),
   );
@@ -140,7 +136,6 @@ export default function JobInvoiceSection({
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingInvoice, setIsLoadingInvoice] = useState(false);
   const [ownerSaveAcknowledged, setOwnerSaveAcknowledged] = useState(false);
-  const paymentIdempotencyKeyRef = useRef<string | null>(null);
   const ignoreOwnerAckResetRef = useRef(false);
   const [sourceLanguageCode, setSourceLanguageCode] = useState<string | null>(null);
 
@@ -158,7 +153,6 @@ export default function JobInvoiceSection({
 
   function applyInvoiceDetail(nextInvoice: JobInvoiceRecord | null, nextLines?: InvoiceBuilderLine[]) {
     publishInvoice(nextInvoice);
-    setStatus(nextInvoice?.status ?? "unpaid");
     setTaxRateInput(bpsToTaxRateInput(nextInvoice?.tax_rate_bps_snapshot));
     setLines(nextLines ?? invoiceLinesFromPersistedSnapshot(nextInvoice?.line_items ?? [], nextInvoice?.amount_cents));
   }
@@ -182,7 +176,7 @@ export default function JobInvoiceSection({
     }
 
     setOwnerSaveAcknowledged(false);
-  }, [isOwnerComposer, lines, taxRateInput, status]);
+  }, [isOwnerComposer, lines, taxRateInput]);
 
   useEffect(() => {
     let ignore = false;
@@ -225,7 +219,7 @@ export default function JobInvoiceSection({
     };
   }, [invoice?.id]);
 
-  async function saveInvoice(nextStatus: InvoiceStatus, successText: string) {
+  async function saveInvoice(successText: string) {
     if (isSaving) {
       return;
     }
@@ -250,7 +244,7 @@ export default function JobInvoiceSection({
         method: "PUT",
         body: JSON.stringify({
           amountCents: previewTotals.totalCents,
-          status: nextStatus,
+          status: "unpaid",
           lineItems,
           taxRateBps,
         }),
@@ -260,8 +254,7 @@ export default function JobInvoiceSection({
         ignoreOwnerAckResetRef.current = true;
       }
 
-      const detail = await loadInvoiceDetailById(response.id);
-      setStatus(detail.status);
+      await loadInvoiceDetailById(response.id);
       if (isOwnerComposer) {
         setOwnerSaveAcknowledged(true);
         onToast?.("Saved.", "success");
@@ -276,6 +269,62 @@ export default function JobInvoiceSection({
     } finally {
       setIsSaving(false);
     }
+  }
+
+  async function recordLedgerPayment(amountCents: number, note: string) {
+    setErrorMessage(null);
+    const targetInvoiceId = invoiceDetail?.id;
+
+    if (!targetInvoiceId) {
+      const nextMessage = "Save the invoice before recording a payment.";
+      setErrorMessage(nextMessage);
+      onToast?.(nextMessage, "warning");
+      return;
+    }
+
+    if (amountCents <= 0) {
+      onToast?.("Enter a payment amount greater than zero.", "warning");
+      return;
+    }
+
+    setIsSaving(true);
+
+    const idempotencyKey = crypto.randomUUID();
+
+    try {
+      await crmApiFetch(`/api/invoices/${targetInvoiceId}/payments`, {
+        method: "POST",
+        body: JSON.stringify({
+          idempotencyKey,
+          entryType: "payment",
+          amountCents,
+          method: "other",
+          note,
+        }),
+      });
+
+      await loadInvoiceDetailById(targetInvoiceId);
+      setPartialPaymentInput("");
+      onToast?.("Payment recorded.", "success");
+    } catch (error) {
+      const nextMessage = resolveFinanceErrorMessage(error, "The payment could not be recorded.");
+      setErrorMessage(nextMessage);
+      onToast?.(nextMessage, "error");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function recordPartialPayment() {
+    const normalized = partialPaymentInput.replace(/[^0-9.]/g, "");
+    const dollars = Number.parseFloat(normalized);
+    if (!Number.isFinite(dollars) || dollars <= 0) {
+      onToast?.("Enter a valid partial payment amount.", "warning");
+      return;
+    }
+
+    const amountCents = Math.round(dollars * 100);
+    await recordLedgerPayment(amountCents, "Partial payment recorded from job invoice workflow.");
   }
 
   async function recordFullPayment() {
@@ -296,35 +345,7 @@ export default function JobInvoiceSection({
       return;
     }
 
-    setIsSaving(true);
-
-    const idempotencyKey = paymentIdempotencyKeyRef.current ?? crypto.randomUUID();
-    paymentIdempotencyKeyRef.current = idempotencyKey;
-
-    try {
-      await crmApiFetch(`/api/invoices/${targetInvoiceId}/payments`, {
-        method: "POST",
-        body: JSON.stringify({
-          idempotencyKey,
-          entryType: "payment",
-          amountCents: remainingBalanceCents,
-          method: "other",
-          note: "Recorded from job invoice workflow.",
-        }),
-      });
-
-      paymentIdempotencyKeyRef.current = null;
-
-      const finalInvoice = await loadInvoiceDetailById(targetInvoiceId);
-      setStatus(finalInvoice.status);
-      onToast?.("Full payment recorded.", "success");
-    } catch (error) {
-      const nextMessage = resolveFinanceErrorMessage(error, "The payment could not be recorded.");
-      setErrorMessage(nextMessage);
-      onToast?.(nextMessage, "error");
-    } finally {
-      setIsSaving(false);
-    }
+    await recordLedgerPayment(remainingBalanceCents, "Recorded from job invoice workflow.");
   }
 
   const canConvertFromEstimate = Boolean(
@@ -519,21 +540,6 @@ export default function JobInvoiceSection({
             />
           ) : null}
 
-          <label className="block space-y-2 text-sm text-white/66">
-            <span>Legacy Invoice Status</span>
-            <select
-              value={status}
-              onChange={(event) => setStatus(event.target.value as InvoiceStatus)}
-              className="w-full rounded-[18px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
-            >
-              {invoiceStatuses.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
           <div className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/54">
             {canReflectPaidOnJob
               ? "Ledger-recorded full payment will also move the job to Paid when the balance reaches zero."
@@ -573,7 +579,7 @@ export default function JobInvoiceSection({
               type="button"
               disabled={isSaving}
               onClick={() => {
-                void saveInvoice(status, invoiceDetail ? "Invoice updated." : "Invoice generated.");
+                void saveInvoice(invoiceDetail ? "Invoice updated." : "Invoice generated.");
               }}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] border border-[color:rgba(212,175,55,0.24)] bg-[linear-gradient(135deg,rgba(212,175,55,0.24),rgba(212,175,55,0.08))] px-5 py-3 text-sm font-medium text-[#f7df97] transition hover:bg-[linear-gradient(135deg,rgba(212,175,55,0.3),rgba(212,175,55,0.12))] disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -590,17 +596,42 @@ export default function JobInvoiceSection({
               </Link>
             ) : null}
             {!isOwnerComposer ? (
-              <button
-                type="button"
-                disabled={isSaving || !canMarkPaid}
-                onClick={() => {
-                  void recordFullPayment();
-                }}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                Record full payment
-              </button>
+              <div className="flex flex-1 flex-col gap-3">
+                <label className="block space-y-2 text-xs text-white/54">
+                  <span className="uppercase tracking-[0.18em]">Partial payment</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={partialPaymentInput}
+                    onChange={(event) => setPartialPaymentInput(event.target.value)}
+                    placeholder="0.00"
+                    className="w-full rounded-[18px] border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none transition focus:border-[color:rgba(212,175,55,0.34)]"
+                  />
+                </label>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    disabled={isSaving || !canMarkPaid}
+                    onClick={() => {
+                      void recordPartialPayment();
+                    }}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Record partial payment
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSaving || !canMarkPaid}
+                    onClick={() => {
+                      void recordFullPayment();
+                    }}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.06] px-5 py-3 text-sm text-white/76 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    Record full payment
+                  </button>
+                </div>
+              </div>
             ) : null}
           </div>
         </div>
@@ -647,6 +678,12 @@ export default function JobInvoiceSection({
                   <span>Refunded</span>
                   <span className="text-white/72">{formatCurrencyFromCents(invoiceDetail.refunded_cents ?? 0)}</span>
                 </div>
+                {(invoiceDetail.overpayment_cents ?? 0) > 0 ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Overpayment</span>
+                    <span className="text-white/72">{formatCurrencyFromCents(invoiceDetail.overpayment_cents ?? 0)}</span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between gap-3">
                   <span>Issued</span>
                   <span className="text-white/72">{formatDateTime(invoiceDetail.issued_at)}</span>

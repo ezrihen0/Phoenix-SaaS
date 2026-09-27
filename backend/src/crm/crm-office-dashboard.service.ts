@@ -16,6 +16,7 @@ import { getJobStatusLabel, openJobStatuses } from "./constants";
 import { endOfLocalDashboardDay, startOfLocalDashboardDay } from "./crm-dashboard-time-window";
 import { formatAddress } from "./display";
 import { sanitizeJobTitle } from "./user-facing-text";
+import { classifyFinanceInvoiceOrigin } from "./finance-invoice-origin";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 
 type RelatedValue<T> = T | T[] | null;
@@ -94,6 +95,7 @@ export class CrmOfficeDashboardService {
       payments: invoice.payments ?? [],
       voidedAt: invoice.voided_at,
       cancelledAt: invoice.cancelled_at,
+      financeOrigin: classifyFinanceInvoiceOrigin(invoice),
     });
   }
 

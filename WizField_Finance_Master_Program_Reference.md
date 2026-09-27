@@ -583,10 +583,14 @@ The owner-approved contract decides the final rule.
 
 ## Part 4 implementation truth (2026-09)
 
-**Ledger (Phase 6)**
+**Ledger (Phase 6 — CLOSED)**
 
-- Canonical summarize logic: [`invoice-financial-lifecycle.core.ts`](backend/src/crm/invoice-financial-lifecycle.core.ts) via [`InvoicePaymentLedgerService`](backend/src/crm/invoice-payment-ledger.service.ts).
-- API exposes `lifecycle_status`, `balance_cents`, `overpayment_cents`, `paid_reason` (internal on ledger summary); legacy `invoice.status` sync still binary paid/unpaid from lifecycle paid/overpaid.
+- **Status:** **CLOSED** (2026-09-26). Ledger is canonical for native payment lifecycle; configured local DB closeout: `FINANCE_SMOKE_USE_CONFIGURED_DATABASE=true npm run finance-part6:configured-db-verification` (2026-09-26 **PASS** on `wizfield`; includes Phase 5 regression).
+- Canonical math: [`invoice-financial-lifecycle.core.ts`](backend/src/crm/invoice-financial-lifecycle.core.ts) via [`InvoicePaymentLedgerService`](backend/src/crm/invoice-payment-ledger.service.ts). Native writes: [`invoice-native-ledger-policy.ts`](backend/src/crm/invoice-native-ledger-policy.ts) (`resolveNativeUpsertInvoiceStatus`, refund caps, void/cancelled payment guard).
+- Legacy `invoices.status` / `paid_at`: synced from ledger on payment recording only; native upsert cannot set `paid` without ledger evidence (`409 invoice_paid_requires_ledger`). Workiz historical may still read `legacy_status_migration` when `status=paid` and zero payment rows.
+- API: `lifecycle_status`, `balance_cents`, `overpayment_cents`, `amount_paid_cents`, `paid_reason` on payment record response; job status → paid no longer sets invoice paid without ledger.
+- Product defaults (owner): overpayment allowed; payments blocked on void/cancelled; payments allowed after customer snapshot freeze; full refund → `refunded` lifecycle.
+- Checks: `npm run finance-part6:checks` (lifecycle unit + native write contract + Phase 5 checks).
 - Document-terminal lifecycle: `void` / `cancelled` when `invoices.voided_at` / `cancelled_at` set (columns present; workflow UI deferred).
 - Office dashboard open-invoice counts/lists use ledger summaries, not `invoices.status = unpaid` alone.
 

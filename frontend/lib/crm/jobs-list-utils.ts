@@ -29,8 +29,10 @@ export type JobListService = {
 
 export type JobListInvoice = {
   amount_cents: number;
+  total_cents?: number;
   status: "unpaid" | "paid";
   balance_cents?: number;
+  lifecycle_status?: "sent" | "partial" | "paid" | "refunded" | "overpaid" | "void" | "cancelled";
 };
 
 export type JobListRecord = {
@@ -90,6 +92,14 @@ export function getJobBalanceCents(job: JobListRecord): number | null {
   if (invoice) {
     if (typeof invoice.balance_cents === "number") {
       return invoice.balance_cents;
+    }
+
+    if (
+      invoice.lifecycle_status === "sent"
+      || invoice.lifecycle_status === "partial"
+      || invoice.lifecycle_status === "refunded"
+    ) {
+      return invoice.total_cents ?? invoice.amount_cents;
     }
 
     return invoice.status === "unpaid" ? invoice.amount_cents : 0;

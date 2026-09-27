@@ -15,6 +15,12 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
     "This invoice already has payments and cannot be replaced by conversion.",
   invoice_payment_manage_forbidden:
     "Your account cannot record payments on this invoice.",
+  invoice_paid_requires_ledger:
+    "Mark this invoice paid by recording a payment on the ledger. Paid status cannot be set without payment evidence.",
+  invoice_terminal:
+    "This invoice is void or cancelled and cannot accept new ledger entries.",
+  invoice_refund_exceeds_net_paid:
+    "Refund amount exceeds the net amount paid on this invoice.",
 };
 
 export function financeApiErrorMessage(code: string | undefined, fallback: string) {

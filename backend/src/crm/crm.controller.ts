@@ -126,7 +126,12 @@ import { type InvoicePdfBrandingSnapshot, InvoicePdfService } from "./invoice-pd
 import { InvoiceCustomerFacingSnapshotService } from "./invoice-customer-facing-snapshot.service";
 import { InvoicePdfViewModelService } from "./invoice-pdf-view-model.service";
 import { InvoiceSendPipelineService } from "./invoice-send-pipeline.service";
+import { classifyFinanceInvoiceOrigin } from "./finance-invoice-origin";
 import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
+import {
+  NativeInvoicePaidRequiresLedgerError,
+  resolveNativeUpsertInvoiceStatus,
+} from "./invoice-native-ledger-policy";
 import { FinanceAuditService } from "./finance-audit.service";
 import { BranchScopeService } from "./branch-scope.service";
 
@@ -1074,19 +1079,6 @@ export class CrmController {
         })),
       );
 
-      if (payload.status === "paid") {
-        await this.invoicesRepository.update(
-          {
-            job_id: jobId,
-            organization_id: organizationId,
-          },
-          {
-            status: "paid",
-            paid_at: paidAtTimestamp as unknown as Date,
-          },
-        );
-      }
-
       const detail = await this.loadJobDetail(jobId, organizationId);
 
       return apiSuccess(detail ? this.buildJobDetailResponse(detail) : null);
@@ -1228,6 +1220,7 @@ export class CrmController {
       payments: invoice.payments ?? [],
       voidedAt: invoice.voided_at,
       cancelledAt: invoice.cancelled_at,
+      financeOrigin: classifyFinanceInvoiceOrigin(invoice),
     });
   }
 
@@ -2030,6 +2023,8 @@ export class CrmController {
         lifecycle_status: result.ledger.lifecycleStatus,
         balance_cents: result.ledger.balanceCents,
         amount_paid_cents: result.ledger.netPaidCents,
+        overpayment_cents: result.ledger.overpaymentCents,
+        paid_reason: result.ledger.paidReason,
       });
     } catch (error) {
       this.rethrowHttpException(error);
@@ -2449,20 +2444,46 @@ export class CrmController {
       }
 
       const timestamp = new Date();
-      const paidAtTimestamp = this.formatSqlTimestamp(timestamp);
       const orgSettings = await this.findOrganizationSettings(organizationId);
       const dueDays = this.readDefaultDueDays(orgSettings);
       const invoiceDescription =
         payload.description
         ?? existingInvoice?.description
         ?? `Invoice for ${job.title}`;
-      const paid_at = payload.status === "paid"
-        ? existingInvoice?.paid_at ?? (paidAtTimestamp as unknown as Date)
-        : null;
       const issuedAt = existingInvoice?.issued_at ?? timestamp;
       const dueAt = existingInvoice?.due_at ?? this.computeDueAt(issuedAt, dueDays);
 
       const invoicePayments = existingInvoice?.payments ?? [];
+      const financeOrigin = classifyFinanceInvoiceOrigin(
+        existingInvoice ?? {
+          branding_snapshot_json: null,
+          customer_facing_snapshot_json: null,
+        },
+      );
+
+      let resolvedStatus: InvoiceStatus;
+      let resolvedPaidAt: Date | null;
+
+      try {
+        const resolved = resolveNativeUpsertInvoiceStatus({
+          requestedStatus: payload.status,
+          totalCents: invoiceTotals.totalCents,
+          existingStatus: existingInvoice?.status ?? "unpaid",
+          existingPaidAt: existingInvoice?.paid_at ?? null,
+          payments: invoicePayments,
+          voidedAt: existingInvoice?.voided_at,
+          cancelledAt: existingInvoice?.cancelled_at,
+          financeOrigin,
+        });
+        resolvedStatus = resolved.status;
+        resolvedPaidAt = resolved.paidAt;
+      } catch (error) {
+        if (error instanceof NativeInvoicePaidRequiresLedgerError) {
+          apiError(409, error.code, error.message);
+        }
+
+        throw error;
+      }
 
       const invoice = await this.dataSource.transaction((manager) =>
         persistInvoiceHeaderAndLineItems(manager, this.documentSnapshotService, {
@@ -2471,8 +2492,8 @@ export class CrmController {
           existingInvoice: existingInvoice ?? null,
           description: invoiceDescription,
           invoiceTotals,
-          status: payload.status,
-          paid_at,
+          status: resolvedStatus,
+          paid_at: resolvedPaidAt,
           due_at: dueAt,
           hasSnapshotLineItems,
           lineDrafts: invoiceLineDrafts,
@@ -2482,59 +2503,6 @@ export class CrmController {
       if (invoicePayments.length > 0) {
         invoice.payments = invoicePayments;
         await this.syncInvoiceJobPaymentState(invoice, job, actor);
-        return apiSuccess(invoice);
-      }
-
-      if (
-        payload.status === "paid"
-        && job.status !== "paid"
-        && canTransitionJobStatus(job.status, "paid")
-      ) {
-        await this.jobsRepository.update(
-          {
-            id: jobId,
-            organization_id: organizationId,
-          },
-          {
-            status: "paid",
-            paid_at,
-            updated_by_auth_user_id: actor.user.id,
-          },
-        );
-
-        await this.jobStatusEventsRepository.save(
-          this.jobStatusEventsRepository.create({
-            organization_id: organizationId,
-            job_id: jobId,
-            author_profile_id: actor.profile.id,
-            status: "paid",
-            note: "Invoice marked paid.",
-          }),
-        );
-      }
-
-      if (payload.status === "unpaid" && job.status === "paid") {
-        await this.jobsRepository.update(
-          {
-            id: jobId,
-            organization_id: organizationId,
-          },
-          {
-            status: "completed",
-            paid_at: null,
-            updated_by_auth_user_id: actor.user.id,
-          },
-        );
-
-        await this.jobStatusEventsRepository.save(
-          this.jobStatusEventsRepository.create({
-            organization_id: organizationId,
-            job_id: jobId,
-            author_profile_id: actor.profile.id,
-            status: "completed",
-            note: "Invoice payment status changed to unpaid.",
-          }),
-        );
       }
 
       await this.financeAuditService.log({

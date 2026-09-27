@@ -72,6 +72,7 @@ async function main() {
       payments: invoice.payments ?? [],
       voidedAt: invoice.voided_at,
       cancelledAt: invoice.cancelled_at,
+      financeOrigin: origin,
     });
 
     const invoiceDocs = docsByInvoice.get(invoice.id) ?? [];

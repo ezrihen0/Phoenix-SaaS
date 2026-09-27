@@ -11,6 +11,14 @@ import {
   canTransitionJobStatus,
   type InvoiceStatus,
 } from "./constants";
+import { classifyFinanceInvoiceOrigin } from "./finance-invoice-origin";
+import {
+  assertInvoiceAcceptsLedgerEntry,
+  assertRefundAmountAllowed,
+  deriveLegacyInvoiceStatusFields,
+  InvoiceTerminalForPaymentsError,
+  RefundExceedsNetPaidError,
+} from "./invoice-native-ledger-policy";
 import {
   InvoicePaymentLedgerService,
   type InvoiceLedgerSummary,
@@ -64,6 +72,10 @@ export class InvoicePaymentRecordingService {
   async recordNativePayment(
     input: RecordNativeInvoicePaymentInput,
   ): Promise<RecordNativeInvoicePaymentResult> {
+    if (input.payload.amountCents <= 0) {
+      apiError(400, "invalid_invoice_payment_amount", "Invoice payments must be greater than zero.");
+    }
+
     const existingPayment = await this.findPaymentByIdempotencyKey(
       this.dataSource.getRepository(InvoicePaymentEntity),
       input.organizationId,
@@ -119,6 +131,28 @@ export class InvoicePaymentRecordingService {
 
         if (!job) {
           apiError(404, "invoice_job_not_found", "The related job could not be found.");
+        }
+
+        try {
+          assertInvoiceAcceptsLedgerEntry(invoice);
+        } catch (error) {
+          if (error instanceof InvoiceTerminalForPaymentsError) {
+            apiError(409, error.code, error.message);
+          }
+
+          throw error;
+        }
+
+        if (input.payload.entryType === "refund") {
+          try {
+            assertRefundAmountAllowed(invoice.payments ?? [], input.payload.amountCents);
+          } catch (error) {
+            if (error instanceof RefundExceedsNetPaidError) {
+              apiError(400, error.code, error.message);
+            }
+
+            throw error;
+          }
         }
 
         const occurredAt = input.payload.occurredAt
@@ -391,22 +425,12 @@ export class InvoicePaymentRecordingService {
       payments: invoice.payments ?? [],
       voidedAt: invoice.voided_at,
       cancelledAt: invoice.cancelled_at,
+      financeOrigin: classifyFinanceInvoiceOrigin(invoice),
     });
   }
 
   private deriveLegacyInvoiceStatusFromLedger(invoice: InvoiceEntity) {
-    const ledgerSummary = this.summarizeInvoiceLedger(invoice);
-
-    return {
-      status:
-        ledgerSummary.lifecycleStatus === "paid" || ledgerSummary.lifecycleStatus === "overpaid"
-          ? ("paid" as InvoiceStatus)
-          : ("unpaid" as InvoiceStatus),
-      paidAt:
-        ledgerSummary.lifecycleStatus === "paid" || ledgerSummary.lifecycleStatus === "overpaid"
-          ? ledgerSummary.paidAt
-          : null,
-    };
+    return deriveLegacyInvoiceStatusFields(this.summarizeInvoiceLedger(invoice));
   }
 
   private relationValue<T>(value: T | T[] | null | undefined): T | null {

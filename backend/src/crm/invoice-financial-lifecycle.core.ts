@@ -1,4 +1,5 @@
 import type { InvoiceStatus } from "./constants";
+import type { FinanceInvoiceOrigin } from "./finance-invoice-origin";
 import type { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
 
 export type InvoicePaymentLifecycleStatus =
@@ -36,6 +37,7 @@ export type SummarizeInvoiceLedgerInput = {
   payments: InvoicePaymentEntity[];
   voidedAt?: Date | null;
   cancelledAt?: Date | null;
+  financeOrigin?: FinanceInvoiceOrigin;
 };
 
 export function summarizeInvoiceLedger(input: SummarizeInvoiceLedgerInput): InvoiceLedgerSummary {
@@ -53,7 +55,10 @@ export function summarizeInvoiceLedger(input: SummarizeInvoiceLedgerInput): Invo
   );
 
   if (payments.length === 0) {
-    const legacyPaid = input.legacyStatus === "paid";
+    const financeOrigin = input.financeOrigin ?? "unknown";
+    const legacyPaid =
+      input.legacyStatus === "paid"
+      && financeOrigin === "workiz_historical";
     const netPaidCents = legacyPaid ? totalCents : 0;
     const overpaymentCents = 0;
 

@@ -38,6 +38,7 @@ export class FinanceInvoicePresentationService {
       payments: invoice.payments ?? [],
       voidedAt: invoice.voided_at,
       cancelledAt: invoice.cancelled_at,
+      financeOrigin: classifyFinanceInvoiceOrigin(invoice),
     });
   }
 
@@ -127,6 +128,7 @@ export function summarizeCustomerOpenFinanceFromRows(
       payments: invoice.payments ?? [],
       voidedAt: invoice.voided_at,
       cancelledAt: invoice.cancelled_at,
+      financeOrigin: classifyFinanceInvoiceOrigin(invoice as InvoiceEntity),
     });
 
     const isOpen =
