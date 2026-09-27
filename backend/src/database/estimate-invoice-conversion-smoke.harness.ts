@@ -27,8 +27,10 @@ import type { SmokeDatabasePlan } from "./db-smoke-database-plan";
 import { buildDataSourceOptions } from "./typeorm.config";
 
 export type SmokePhaseStatus = "PASS" | "FAIL" | "SKIP";
+export type SmokeOutcome = "PASS" | "SKIP" | "FAIL";
 
 const EPHEMERAL_DATABASE_ACCESS_DENIED = /Access denied.*database/i;
+const PRODUCTION_DATABASE_MARKERS = [/production/i, /\bprod\b/i, /\brailway\b/i, /\blive\b/i];
 
 export type ConversionSmokeFixture = {
   token: string;
@@ -79,9 +81,66 @@ export function isEphemeralDatabaseAccessDeniedMessage(message: string) {
   return EPHEMERAL_DATABASE_ACCESS_DENIED.test(message);
 }
 
+export function assertConfiguredSmokeDatabaseIsSafe(databaseName: string) {
+  const normalized = databaseName.trim();
+  if (!normalized) {
+    throw new Error("Configured database name is empty; refusing conversion smoke mutations.");
+  }
+
+  for (const pattern of PRODUCTION_DATABASE_MARKERS) {
+    if (pattern.test(normalized)) {
+      throw new Error(
+        `Refusing conversion smoke mutations on potentially production database "${normalized}". Use local/test/staging only.`,
+      );
+    }
+  }
+}
+
+export function finalizeSmokeSummary<
+  TSummary extends {
+    ok: boolean;
+    outcome?: SmokeOutcome;
+    errors: string[];
+    phases: Record<string, SmokePhaseStatus>;
+    results: Array<{ name: string; status: "PASS" | "FAIL" | "SKIP"; detail?: unknown }>;
+  },
+>(summary: TSummary, ephemeralSkipped: boolean) {
+  if (ephemeralSkipped) {
+    summary.outcome = "SKIP";
+    summary.ok = false;
+    return;
+  }
+
+  const hasFail =
+    summary.errors.length > 0 || summary.results.some((result) => result.status === "FAIL");
+  const hasSkip = summary.results.some((result) => result.status === "SKIP");
+
+  if (hasFail) {
+    summary.outcome = "FAIL";
+    summary.ok = false;
+    return;
+  }
+
+  if (hasSkip || summary.phases.tests === "SKIP") {
+    summary.outcome = "SKIP";
+    summary.ok = false;
+    return;
+  }
+
+  if (summary.phases.tests === "PASS") {
+    summary.outcome = "PASS";
+    summary.ok = true;
+    return;
+  }
+
+  summary.outcome = "FAIL";
+  summary.ok = false;
+}
+
 export function applyEphemeralDatabaseAccessSkip<
   TSummary extends {
     ok: boolean;
+    outcome?: SmokeOutcome;
     errors: string[];
     phases: Record<string, SmokePhaseStatus>;
     results: Array<{ name: string; status: "PASS" | "FAIL" | "SKIP"; detail?: unknown }>;
@@ -115,7 +174,8 @@ export function applyEphemeralDatabaseAccessSkip<
   summary.phases.migrations = "SKIP";
   summary.phases.schemaVerify = "SKIP";
   summary.phases.tests = "SKIP";
-  summary.ok = true;
+  summary.outcome = "SKIP";
+  summary.ok = false;
   return true;
 }
 
@@ -479,6 +539,77 @@ export async function seedDraftEstimateJob(dataSource: DataSource, organizationI
   );
 
   return { jobId: job.id, quoteId: quote.id };
+}
+
+export async function seedEmptyInvoiceShell(
+  dataSource: DataSource,
+  input: { organizationId: string; jobId: string },
+) {
+  const invoiceRepo = dataSource.getRepository(InvoiceEntity);
+
+  return invoiceRepo.save(
+    invoiceRepo.create({
+      organization_id: input.organizationId,
+      job_id: input.jobId,
+      description: "Empty invoice shell",
+      amount_cents: 0,
+      subtotal_cents: 0,
+      tax_rate_bps_snapshot: 0,
+      tax_cents: 0,
+      total_cents: 0,
+      status: "unpaid",
+      issued_at: new Date(),
+      due_at: new Date(Date.now() + 86_400_000 * 14),
+      paid_at: null,
+      approval_requested_at: null,
+      approved_at: null,
+      signature_requested_at: null,
+      signed_at: null,
+      signed_by_name: null,
+      email_sent_at: null,
+      sms_sent_at: null,
+      last_sent_at: null,
+      last_sent_via: null,
+      branding_snapshot_json: null,
+      source_quote_id: null,
+    }),
+  );
+}
+
+export async function seedLockedEmptyInvoice(
+  dataSource: DataSource,
+  input: { organizationId: string; jobId: string },
+) {
+  const invoiceRepo = dataSource.getRepository(InvoiceEntity);
+  const lockedAt = new Date();
+
+  return invoiceRepo.save(
+    invoiceRepo.create({
+      organization_id: input.organizationId,
+      job_id: input.jobId,
+      description: "Locked invoice shell",
+      amount_cents: 0,
+      subtotal_cents: 0,
+      tax_rate_bps_snapshot: 0,
+      tax_cents: 0,
+      total_cents: 0,
+      status: "unpaid",
+      issued_at: lockedAt,
+      due_at: new Date(Date.now() + 86_400_000 * 14),
+      paid_at: null,
+      approval_requested_at: lockedAt,
+      approved_at: lockedAt,
+      signature_requested_at: null,
+      signed_at: null,
+      signed_by_name: null,
+      email_sent_at: null,
+      sms_sent_at: null,
+      last_sent_at: null,
+      last_sent_via: null,
+      branding_snapshot_json: null,
+      source_quote_id: null,
+    }),
+  );
 }
 
 export async function seedInvoiceWithManualLine(

@@ -73,6 +73,7 @@
     "estimate-invoice-conversion:contract-check": "node -r ts-node/register src/crm/estimate-invoice-conversion-contract-check.ts",
     "estimate-invoice-conversion:smoke": "node -r ts-node/register src/database/estimate-invoice-conversion-smoke.ts",
     "estimate-invoice-conversion:pricebook-drift:smoke": "node -r ts-node/register src/database/estimate-invoice-conversion-pricebook-drift-smoke.ts",
+    "estimate-invoice-conversion:smoke:suite": "node -r ts-node/register src/database/estimate-invoice-conversion-smoke-closeout.ts",
     "estimate-invoice-conversion:checks": "npm run estimate-invoice-conversion:contract-check && npm run estimate-invoice-conversion:smoke && npm run estimate-invoice-conversion:pricebook-drift:smoke",
     "finance-part3:checks": "npm run money-engine:unit-check && npm run estimate-invoice-conversion:contract-check && npm run jobs:access:check && npm run estimate-invoice-conversion:smoke && npm run estimate-invoice-conversion:pricebook-drift:smoke",
     "invoice-ledger-lifecycle:unit-check": "node -r ts-node/register src/crm/invoice-ledger-lifecycle-unit-check.ts",

@@ -10,17 +10,21 @@ import { PricebookItemEntity } from "./entities/pricebook-item.entity";
 import { resolveSmokeDatabasePlan } from "./db-smoke-database-plan";
 import {
   applyEphemeralDatabaseAccessSkip,
+  assertConfiguredSmokeDatabaseIsSafe,
   buildConversionService,
   cleanupConversionSmokeOrganizations,
   extractErrorCode,
+  finalizeSmokeSummary,
   requireMySqlOptions,
   seedConversionSmokeFixture,
+  type SmokeOutcome,
   type SmokePhaseStatus,
 } from "./estimate-invoice-conversion-smoke.harness";
 import { verifyDatabaseSchema } from "./verify-schema";
 
 type SmokeSummary = {
   ok: boolean;
+  outcome?: SmokeOutcome;
   database: string;
   phases: Record<string, SmokePhaseStatus>;
   results: Array<{ name: string; status: "PASS" | "FAIL" | "SKIP"; detail?: unknown }>;
@@ -52,6 +56,10 @@ async function main() {
   let dataSource: DataSource | null = null;
 
   try {
+    if (plan.mode === "configured") {
+      assertConfiguredSmokeDatabaseIsSafe(plan.databaseName);
+    }
+
     if (plan.mode === "ephemeral") {
       adminConnection = await mysql.createConnection({
         host: options.host,
@@ -154,9 +162,8 @@ async function main() {
     }
   }
 
-  if (!applyEphemeralDatabaseAccessSkip(summary, plan)) {
-    summary.ok = summary.errors.length === 0 && summary.phases.tests === "PASS";
-  }
+  const ephemeralSkipped = applyEphemeralDatabaseAccessSkip(summary, plan);
+  finalizeSmokeSummary(summary, ephemeralSkipped);
 
   console.log(JSON.stringify(summary, null, 2));
   if (!summary.ok) {

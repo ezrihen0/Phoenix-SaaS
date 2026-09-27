@@ -12,19 +12,25 @@ import { QuoteEntity } from "./entities/quote.entity";
 import { resolveSmokeDatabasePlan } from "./db-smoke-database-plan";
 import {
   applyEphemeralDatabaseAccessSkip,
+  assertConfiguredSmokeDatabaseIsSafe,
   buildConversionService,
   cleanupConversionSmokeOrganizations,
   extractErrorCode,
+  finalizeSmokeSummary,
   requireMySqlOptions,
   seedConversionSmokeFixture,
   seedDraftEstimateJob,
+  seedEmptyInvoiceShell,
   seedInvoiceWithManualLine,
+  seedLockedEmptyInvoice,
+  type SmokeOutcome,
   type SmokePhaseStatus,
 } from "./estimate-invoice-conversion-smoke.harness";
 import { verifyDatabaseSchema } from "./verify-schema";
 
 type SmokeSummary = {
   ok: boolean;
+  outcome?: SmokeOutcome;
   database: string;
   phases: Record<string, SmokePhaseStatus>;
   results: Array<{ name: string; status: "PASS" | "FAIL" | "SKIP"; detail?: unknown }>;
@@ -233,6 +239,46 @@ async function runTests(summary: SmokeSummary, dataSource: DataSource) {
         actor: rejectedJobFixture.actor,
       }),
   );
+
+  const shellFixture = await seedConversionSmokeFixture(dataSource);
+  await seedEmptyInvoiceShell(dataSource, {
+    organizationId: shellFixture.organizationId,
+    jobId: shellFixture.jobId,
+  });
+
+  await expectPass(summary, "empty invoice shell converts without overwriting manual compose path", async () => {
+    const invoice = await conversionService.convertFromEstimate({
+      organizationId: shellFixture.organizationId,
+      jobId: shellFixture.jobId,
+      estimateId: shellFixture.quoteId,
+      actor: shellFixture.actor,
+    });
+
+    const lines = await dataSource.getRepository(InvoiceLineItemEntity).find({
+      where: { invoice_id: invoice.id },
+    });
+    assert.equal(lines.length, 1);
+    return { invoiceId: invoice.id, lineCount: lines.length };
+  });
+
+  const lockedFixture = await seedConversionSmokeFixture(dataSource);
+  await seedLockedEmptyInvoice(dataSource, {
+    organizationId: lockedFixture.organizationId,
+    jobId: lockedFixture.jobId,
+  });
+
+  await expectFailCode(
+    summary,
+    "locked invoice returns invoice_locked",
+    "invoice_locked",
+    async () =>
+      conversionService.convertFromEstimate({
+        organizationId: lockedFixture.organizationId,
+        jobId: lockedFixture.jobId,
+        estimateId: lockedFixture.quoteId,
+        actor: lockedFixture.actor,
+      }),
+  );
 }
 
 async function main() {
@@ -242,8 +288,13 @@ async function main() {
 
   let adminConnection: mysql.Connection | null = null;
   let dataSource: DataSource | null = null;
+  let ephemeralSkipped = false;
 
   try {
+    if (plan.mode === "configured") {
+      assertConfiguredSmokeDatabaseIsSafe(plan.databaseName);
+    }
+
     if (plan.mode === "ephemeral") {
       adminConnection = await mysql.createConnection({
         host: options.host,
@@ -306,10 +357,8 @@ async function main() {
     }
   }
 
-  if (!applyEphemeralDatabaseAccessSkip(summary, plan)) {
-    const failedResults = summary.results.filter((result) => result.status === "FAIL");
-    summary.ok = summary.errors.length === 0 && failedResults.length === 0;
-  }
+  ephemeralSkipped = applyEphemeralDatabaseAccessSkip(summary, plan);
+  finalizeSmokeSummary(summary, ephemeralSkipped);
 
   console.log(JSON.stringify(summary, null, 2));
   if (!summary.ok) {
