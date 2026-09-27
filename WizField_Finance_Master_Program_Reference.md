@@ -326,7 +326,7 @@ Quick Create
 - Invoice owner composer: `/invoices/create/[jobId]`.
 - Estimate chooser: `/estimates/create` (legacy `/estimates/new` redirects).
 - Estimate owner composer: `/estimates/create/[jobId]`.
-- Job detail tabs remain the full workflow surface (`?tab=invoice`, `?tab=quote`).
+- Job detail tabs (`?tab=invoice`, `?tab=quote`) are **action hubs**: summary plus **Create / Open / Edit** links to owner composers (`/invoices/create/[jobId]`, `/estimates/create/[jobId]`) and document detail—no embedded second composer on the job page.
 
 **Post-save (owner composers — locked)**
 
@@ -343,7 +343,7 @@ Quick Create
 **Owner vs job-tab composer**
 
 - Owner: no pull-from-quote, no record-full-payment (invoice), no mark-approved shortcut (estimate).
-- Job tab: unchanged (pull from quote, payments, approval actions).
+- Job tab: convert-from-estimate, record-full-payment, and mark-approved shortcuts remain on the job finance tabs; line editing lives only in owner composers.
 
 ### Product question to resolve
 

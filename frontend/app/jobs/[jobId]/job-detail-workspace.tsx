@@ -35,8 +35,9 @@ import {
 } from "@/lib/crm/statuses";
 import type { Database } from "@/lib/types/database";
 
-import JobInvoiceSection, { type JobInvoiceRecord } from "./job-invoice-section";
-import JobQuoteSection, { type JobQuoteRecord } from "./job-quote-section";
+import { JobEstimateTabPanel, JobInvoiceTabPanel } from "./job-finance-tab-panels";
+import type { JobInvoiceRecord } from "./job-invoice-section";
+import type { JobQuoteRecord } from "./job-quote-section";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -511,8 +512,8 @@ export default function JobDetailWorkspace({
     () => [
       { id: "scheduling" as const, label: "Scheduling", count: null, icon: CalendarDays },
       { id: "notes" as const, label: "Job Notes", count: job.notes.length, icon: FileText },
-      { id: "quote" as const, label: "Create Quote", count: quote ? 1 : 0, icon: FileText },
-      { id: "invoice" as const, label: "Create Invoice", count: invoice ? 1 : 0, icon: Receipt },
+      { id: "quote" as const, label: quote ? "Estimate" : "Create Estimate", count: quote ? 1 : 0, icon: FileText },
+      { id: "invoice" as const, label: invoice ? "Invoice" : "Create Invoice", count: invoice ? 1 : 0, icon: Receipt },
     ],
     [invoice, job.notes.length, quote],
   );
@@ -1150,7 +1151,7 @@ export default function JobDetailWorkspace({
                   {job.title}
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--sem-text-secondary)] sm:text-base">
-                  Keep scheduling, field notes, quote creation, and invoice work in one place without leaving the job record.
+                  Keep scheduling, field notes, and finance actions in one place—open or create estimates and invoices from the tabs below.
                 </p>
               </div>
 
@@ -1555,7 +1556,7 @@ export default function JobDetailWorkspace({
             ) : null}
 
             {activeTab === "quote" ? (
-              <JobQuoteSection
+              <JobEstimateTabPanel
                 key={`${quote?.id ?? "new"}:${quote?.status ?? "draft"}:${quote?.price_cents ?? 0}:${quote?.approved_at ?? ""}`}
                 jobId={job.id}
                 quote={quote}
@@ -1570,14 +1571,13 @@ export default function JobDetailWorkspace({
             ) : null}
 
             {activeTab === "invoice" ? (
-              <JobInvoiceSection
+              <JobInvoiceTabPanel
                 key={`${invoice?.id ?? "new"}:${invoice?.status ?? "unpaid"}:${invoice?.amount_cents ?? 0}:${invoice?.paid_at ?? ""}:${job.status}`}
                 jobId={job.id}
                 invoice={invoice}
                 quoteId={quote?.id ?? null}
                 quoteApprovedAt={quote?.approved_at ?? null}
                 quoteSignedAt={quote?.signed_at ?? null}
-                currentJobStatus={job.status}
                 onInvoiceChange={(nextInvoice) => {
                   setJob((current) => ({
                     ...current,
