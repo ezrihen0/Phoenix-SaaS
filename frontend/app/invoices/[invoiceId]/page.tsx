@@ -21,6 +21,7 @@ import { MetricTile } from "@/components/board/metric-tile";
 import DocumentApprovalActions from "@/components/document-approval-actions";
 import PhoenixInvoiceDocumentTemplate from "@/components/phoenix-invoice-document-template";
 import type { PhoenixInvoiceDocumentViewModel } from "@/lib/crm/phoenix-invoice-document.types";
+import InvoiceDocumentHistoryPanel from "./invoice-document-history-panel";
 import InvoiceHeaderActions from "./invoice-header-actions";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerRoles } from "@/lib/auth/server-session";
@@ -524,6 +525,8 @@ export default async function InvoiceDetailPage({
                 )}
               </div>
             </section>
+
+            <InvoiceDocumentHistoryPanel invoiceId={invoice.id} />
 
             {warrantyCertificateAvailable ? (
               <section className="rounded-[30px] border border-[color:var(--cmp-status-warning-border)] bg-[color:var(--cmp-status-warning-bg)]/30 p-5 shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-board-glow)_40%,transparent)]">

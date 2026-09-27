@@ -97,15 +97,24 @@ export function jobStatusToneClass(status: JobStatus | string) {
 }
 
 type PaymentSignalInput = {
-  invoice?: { amount_cents: number; status: string } | null;
+  invoice?: {
+    amount_cents: number;
+    status: string;
+    lifecycle_status?: string;
+    balance_cents?: number;
+  } | null;
   quote?: { price_cents: number; status: string } | null;
   service?: { default_price_cents: number } | null;
 };
 
 export function getJobPaymentSignal(input: PaymentSignalInput): string | null {
   if (input.invoice) {
-    const amount = formatJobCurrency(input.invoice.amount_cents);
-    return `Invoice · ${formatLifecycleStatus(input.invoice.status)}${amount ? ` · ${amount}` : ""}`;
+    const balanceCents = input.invoice.balance_cents ?? input.invoice.amount_cents;
+    const amount = formatJobCurrency(balanceCents);
+    const statusLabel = input.invoice.lifecycle_status
+      ? input.invoice.lifecycle_status.charAt(0).toUpperCase() + input.invoice.lifecycle_status.slice(1)
+      : formatLifecycleStatus(input.invoice.status);
+    return `Invoice · ${statusLabel}${amount ? ` · ${amount}` : ""}`;
   }
 
   if (input.quote) {

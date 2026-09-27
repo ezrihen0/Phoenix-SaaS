@@ -50,9 +50,13 @@ type InvoiceRecord = {
   total_cents?: number;
   status: "unpaid" | "paid";
   lifecycle_status?: "sent" | "partial" | "paid" | "refunded" | "overpaid";
+  document_number?: string;
+  display_document_number?: string;
+  source_estimate_id?: string | null;
   amount_paid_cents?: number;
   refunded_cents?: number;
   balance_cents?: number;
+  overpayment_cents?: number;
   issued_at: string;
   paid_at: string | null;
 };

@@ -423,16 +423,11 @@ export class CrmController {
     const invoice = this.relationValue(job.invoice as RelatedValue<InvoiceEntity>);
 
     if (invoice) {
-      const ledgerSummary = this.summarizeInvoiceLedger(invoice);
-
+      const embed = this.financeInvoicePresentationService.buildJobInvoiceEmbed(invoice);
       Object.assign(invoice, {
-        subtotal_cents: invoice.subtotal_cents || invoice.amount_cents,
-        tax_cents: invoice.tax_cents ?? 0,
-        total_cents: invoice.total_cents || ledgerSummary.totalCents,
-        amount_paid_cents: ledgerSummary.netPaidCents,
-        refunded_cents: ledgerSummary.refundedCents,
-        balance_cents: ledgerSummary.balanceCents,
-        lifecycle_status: ledgerSummary.lifecycleStatus,
+        ...embed,
+        issued_at: invoice.issued_at,
+        paid_at: embed.paid_at,
       });
 
       delete (invoice as InvoiceEntity & { payments?: InvoicePaymentEntity[] }).payments;
@@ -457,8 +452,14 @@ export class CrmController {
 
   private buildJobDetailResponse(job: JobEntity) {
     const customer = this.relationValue(job.customer as RelatedValue<CustomerEntity>);
+    const rawInvoice = this.relationValue(job.invoice as RelatedValue<InvoiceEntity>);
+    const invoice = rawInvoice
+      ? this.financeInvoicePresentationService.buildJobInvoiceEmbed(rawInvoice)
+      : null;
+
     return {
       ...job,
+      invoice,
       title: sanitizeJobTitle(job.title, {
         customerName: customer?.full_name,
         serviceType: job.requested_service_type,
@@ -2170,7 +2171,9 @@ export class CrmController {
         relations: {
           job: {
             customer: true,
-            invoice: true,
+            invoice: {
+              payments: true,
+            },
           },
         },
         order: {
@@ -2249,6 +2252,11 @@ export class CrmController {
                   : "approved"
                 : quote.status;
 
+          const convertedInvoice = this.relationValue(relatedJob?.invoice as RelatedValue<InvoiceEntity>);
+          const convertedPresentation = convertedInvoice
+            ? this.financeInvoicePresentationService.buildListPresentation(convertedInvoice)
+            : null;
+
           return {
             id: quote.id,
             job_id: relatedJob?.id ?? quote.job_id,
@@ -2260,6 +2268,9 @@ export class CrmController {
             }),
             document_number: this.buildEstimateDocumentNumber(quote),
             lifecycle_status: lifecycle,
+            converted_invoice_id: lifecycle === "converted" ? convertedInvoice?.id ?? null : null,
+            converted_invoice_document_number:
+              lifecycle === "converted" ? convertedPresentation?.document_number ?? null : null,
             description: sanitizeUserFacingText(quote.description) || quote.description,
             price_cents: quote.price_cents,
             status: quote.status,
@@ -2291,7 +2302,9 @@ export class CrmController {
         relations: {
           job: {
             customer: true,
-            invoice: true,
+            invoice: {
+              payments: true,
+            },
           },
           line_items: true,
         },
@@ -2321,6 +2334,10 @@ export class CrmController {
               : "approved"
             : quote.status;
       const totalCents = quote.total_cents || quote.price_cents;
+      const convertedInvoice = this.relationValue(job.invoice as RelatedValue<InvoiceEntity>);
+      const convertedPresentation = convertedInvoice
+        ? this.financeInvoicePresentationService.buildListPresentation(convertedInvoice)
+        : null;
 
       return apiSuccess({
         id: quote.id,
@@ -2334,6 +2351,9 @@ export class CrmController {
           serviceType: job.requested_service_type,
         }),
         lifecycle_status: lifecycle,
+        converted_invoice_id: lifecycle === "converted" ? convertedInvoice?.id ?? null : null,
+        converted_invoice_document_number:
+          lifecycle === "converted" ? convertedPresentation?.document_number ?? null : null,
         description: sanitizeUserFacingText(quote.description) || quote.description,
         price_cents: quote.price_cents,
         subtotal_cents: quote.subtotal_cents || quote.price_cents,
@@ -3279,11 +3299,24 @@ export class CrmController {
         apiError(404, "customer_not_found", "The customer could not be found.");
       }
 
+      const jobIds = relatedJobs.map((job) => job.id);
+      const customerInvoices = jobIds.length
+        ? await this.invoicesRepository.find({
+          where: {
+            organization_id: organizationId,
+            job_id: In(jobIds),
+          },
+          relations: { payments: true },
+        })
+        : [];
+      const financeSummary = this.financeInvoicePresentationService.summarizeCustomerOpenFinance(customerInvoices);
+
       return apiSuccess({
         customer: {
           ...customer,
           notes: sanitizeCustomerNotes(customer.notes),
         },
+        finance_summary: financeSummary,
         relatedJobs: relatedJobs.map((job) => this.buildJobDetailResponse(job)),
       });
     } catch (error) {

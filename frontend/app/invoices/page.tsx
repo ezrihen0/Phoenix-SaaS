@@ -642,7 +642,7 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageContext
   }
 
   if (SHOW_LEGACY_INVOICES_INDEX) {
-    const paidCount = filteredInvoices.filter((invoice) => invoice.status === "paid").length;
+    const paidCount = filteredInvoices.filter((invoice) => isFullyPaid(invoice)).length;
 
     return (
       <main className="min-h-screen bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">

@@ -26,6 +26,7 @@ import {
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import { formatAddress, formatDateTime } from "@/lib/crm/display";
+import { formatInvoiceLifecycleStatus } from "@/lib/crm/invoice-lifecycle";
 import {
   canTransitionJobStatus,
   getJobStatusLabel,
@@ -971,7 +972,9 @@ export default function JobDetailWorkspace({
                   <div>
                     <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">Invoice</p>
                     <p className="text-xs text-[color:var(--sem-text-secondary)]">
-                      {invoice ? `${invoice.status?.toUpperCase() ?? "UNPAID"} · Balance ${formatCurrency(invoiceBalanceCents)}` : "No invoice yet"}
+                      {invoice
+                        ? `${invoice.lifecycle_status ? formatInvoiceLifecycleStatus(invoice.lifecycle_status) : "Invoice"} · Balance ${formatCurrency(invoiceBalanceCents)}`
+                        : "No invoice yet"}
                     </p>
                   </div>
                 </div>

@@ -80,6 +80,35 @@ export class FinanceInvoicePresentationService {
     return { open_balance_cents: openBalanceCents, open_invoice_count: openInvoiceCount };
   }
 
+  buildJobInvoiceEmbed(invoice: InvoiceEntity) {
+    const presentation = this.buildListPresentation(invoice);
+    const ledger = this.summarizeLedger(invoice);
+
+    return {
+      id: invoice.id,
+      job_id: invoice.job_id,
+      source_estimate_id: invoice.source_quote_id,
+      description: invoice.description,
+      amount_cents: invoice.amount_cents,
+      subtotal_cents: invoice.subtotal_cents || invoice.amount_cents,
+      tax_rate_bps_snapshot: invoice.tax_rate_bps_snapshot,
+      tax_cents: invoice.tax_cents ?? 0,
+      total_cents: presentation.total_cents,
+      status: invoice.status,
+      lifecycle_status: presentation.lifecycle_status,
+      document_number: presentation.document_number,
+      display_document_number: presentation.display_document_number,
+      amount_paid_cents: presentation.amount_paid_cents,
+      refunded_cents: presentation.refunded_cents,
+      balance_cents: presentation.balance_cents,
+      overpayment_cents: presentation.overpayment_cents,
+      finance_origin: presentation.finance_origin,
+      snapshot_frozen: presentation.snapshot_frozen,
+      issued_at: invoice.issued_at,
+      paid_at: ledger.paidAt,
+    };
+  }
+
   buildListItem(
     invoice: InvoiceEntity,
     job: JobEntity | null,

@@ -36,6 +36,8 @@ type EstimateDetailRecord = {
   signed_at: string | null;
   signed_by_name: string | null;
   is_locked: boolean;
+  converted_invoice_id?: string | null;
+  converted_invoice_document_number?: string | null;
   line_items: PersistedQuoteLineItem[];
 };
 
@@ -125,6 +127,17 @@ export default async function EstimateDetailPage({ params }: EstimateDetailPageP
 
           {estimate ? (
             <div className="mt-8">
+              {estimate.lifecycle_status === "converted" && estimate.converted_invoice_id ? (
+                <div className="theme-surface-card mb-6 rounded-[24px] border border-[color:var(--cmp-border-subtle)] px-5 py-4 text-sm print:hidden">
+                  Converted to{" "}
+                  <Link
+                    href={`/invoices/${estimate.converted_invoice_id}`}
+                    className="font-semibold text-[color:var(--sem-accent-primary)]"
+                  >
+                    Invoice #{estimate.converted_invoice_document_number ?? estimate.converted_invoice_id.slice(0, 8)}
+                  </Link>
+                </div>
+              ) : null}
               <DocumentPreview
                 documentKind="estimate"
                 documentNumber={estimate.document_number}

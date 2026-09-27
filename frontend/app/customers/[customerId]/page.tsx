@@ -52,6 +52,8 @@ type EstimateListItem = {
   job_title: string;
   document_number: string;
   lifecycle_status: "draft" | "sent" | "approved" | "void" | "converted";
+  converted_invoice_id?: string | null;
+  converted_invoice_document_number?: string | null;
   description: string;
   price_cents: number;
   status: "draft" | "sent" | "approved" | "rejected";
@@ -75,16 +77,19 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageC
   let invoices: InvoiceListItem[] = [];
   let estimates: EstimateListItem[] = [];
   let inspections: InspectionListRow[] = [];
+  let financeSummary: { open_balance_cents: number; open_invoice_count: number } | null = null;
   let loadError: string | null = null;
 
   try {
     const detail = await serverApiFetch<{
       customer: CustomerRecord;
       relatedJobs: CustomerJobSummary[];
+      finance_summary?: { open_balance_cents: number; open_invoice_count: number };
     }>(`/api/customers/${customerId}`);
 
     customer = detail.customer;
     relatedJobs = detail.relatedJobs ?? [];
+    financeSummary = detail.finance_summary ?? null;
   } catch (error) {
     const message = error instanceof Error ? error.message : "The customer detail page could not be loaded.";
 
@@ -136,6 +141,7 @@ export default async function CustomerDetailPage({ params }: CustomerDetailPageC
       invoices={invoices}
       estimates={estimates}
       inspections={inspections}
+      financeSummary={financeSummary}
       loadError={loadError}
       canMintPortalMagicLink={canMintPortalMagicLink}
     />

@@ -63,6 +63,8 @@ type Seed = {
   customerBId: string;
   certAId: string;
   certBId: string;
+  invoiceAId: string;
+  invoiceBId: string;
 };
 
 const SMOKE_PHOENIX_INTEGRATION_SECRET = "portal-phoenix-integration-smoke-secret";
@@ -330,6 +332,75 @@ async function seedHarness(dataSource: DataSource, token: string): Promise<Seed>
     }),
   );
 
+  const jobRepo = dataSource.getRepository(JobEntity);
+  const invoiceRepo = dataSource.getRepository(InvoiceEntity);
+
+  const jobA = await jobRepo.save(
+    jobRepo.create({
+      organization_id: orgA.id,
+      customer_id: customerA.id,
+      assigned_technician_id: null,
+      title: "Portal smoke job A",
+      description: null,
+      lead_source: "website",
+      requested_service_type: "repair",
+      job_type: "installation_repair",
+      status: "completed",
+      service_address_line_1: "1 A St",
+      service_city: "Phoenix",
+      service_state_or_region: "AZ",
+      service_postal_code: "85001",
+      scheduled_for: null,
+    }),
+  );
+  const jobB = await jobRepo.save(
+    jobRepo.create({
+      organization_id: orgB.id,
+      customer_id: customerB.id,
+      assigned_technician_id: null,
+      title: "Portal smoke job B",
+      description: null,
+      lead_source: "website",
+      requested_service_type: "repair",
+      job_type: "installation_repair",
+      status: "completed",
+      service_address_line_1: "2 B St",
+      service_city: "Apollo",
+      service_state_or_region: "AZ",
+      service_postal_code: "85002",
+      scheduled_for: null,
+    }),
+  );
+
+  const invoiceA = await invoiceRepo.save(
+    invoiceRepo.create({
+      organization_id: orgA.id,
+      job_id: jobA.id,
+      description: "Portal smoke invoice A",
+      amount_cents: 10_000,
+      subtotal_cents: 10_000,
+      tax_rate_bps_snapshot: 0,
+      tax_cents: 0,
+      total_cents: 10_000,
+      status: "unpaid",
+      document_number: "P12-1001",
+    }),
+  );
+  const invoiceB = await invoiceRepo.save(
+    invoiceRepo.create({
+      organization_id: orgB.id,
+      job_id: jobB.id,
+      description: "Portal smoke invoice B",
+      amount_cents: 20_000,
+      subtotal_cents: 20_000,
+      tax_rate_bps_snapshot: 0,
+      tax_cents: 0,
+      total_cents: 20_000,
+      status: "unpaid",
+      document_number: "P12-2001",
+    }),
+  );
+
   return {
     orgAId: orgA.id,
     orgBId: orgB.id,
@@ -337,6 +408,8 @@ async function seedHarness(dataSource: DataSource, token: string): Promise<Seed>
     customerBId: customerB.id,
     certAId: certA.id,
     certBId: certB.id,
+    invoiceAId: invoiceA.id,
+    invoiceBId: invoiceB.id,
   };
 }
 
@@ -514,7 +587,23 @@ async function runCases(summary: SmokeSummary, dataSource: DataSource, seed: See
     if (!home.warranty_certificates.some((row) => row.id === seed.certAId)) {
       throw new Error("Expected org A warranty certificate on BFF session home.");
     }
-    return { invoiceCount: home.invoices.length };
+    const invoiceRow = home.invoices.find((row) => row.id === seed.invoiceAId);
+    if (!invoiceRow || !invoiceRow.lifecycle_status || invoiceRow.balance_cents !== 10_000) {
+      throw new Error("Expected portal home invoice row with ledger lifecycle and balance.");
+    }
+    return { invoiceCount: home.invoices.length, lifecycle: invoiceRow.lifecycle_status };
+  });
+
+  await expectPass(summary, "P8 — portal home invoice rows are customer-scoped with ledger fields", async () => {
+    const home = await portal.getPortalHome(seed.orgAId, seed.customerAId);
+    if (home.invoices.some((row) => row.id === seed.invoiceBId)) {
+      throw new Error("Foreign customer invoice leaked into portal home.");
+    }
+    const own = home.invoices.find((row) => row.id === seed.invoiceAId);
+    if (!own?.lifecycle_status || own.balance_cents !== 10_000) {
+      throw new Error("Expected owned invoice row with lifecycle and balance.");
+    }
+    return { lifecycle: own.lifecycle_status };
   });
 
   await expectPass(summary, "P7 — expired magic link rejected", async () => {
@@ -546,6 +635,8 @@ async function cleanupPortalSmokeSeed(dataSource: DataSource, seed: Seed) {
   await dataSource.getRepository(PortalSessionEntity).delete({ organization_id: In(orgIds) });
   await dataSource.getRepository(PortalAccessEventEntity).delete({ organization_id: In(orgIds) });
   await dataSource.getRepository(WarrantyCertificateEntity).delete({ id: In([seed.certAId, seed.certBId]) });
+  await dataSource.getRepository(InvoiceEntity).delete({ id: In([seed.invoiceAId, seed.invoiceBId]) });
+  await dataSource.getRepository(JobEntity).delete({ organization_id: In(orgIds) });
   await dataSource.getRepository(CustomerEntity).delete({ id: In([seed.customerAId, seed.customerBId]) });
   await dataSource.getRepository(OrganizationEntity).delete({ id: In(orgIds) });
 }

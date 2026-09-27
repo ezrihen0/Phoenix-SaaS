@@ -795,26 +795,29 @@ Old documents remain stable
 
 ## Goal
 
-Reconcile legacy historical Finance and reconnect the finished Finance spine to the rest of WizField.
+Prepare and validate **historical Finance compatibility** with the finished native spine (Phases 4–10). Reconnect Finance to the rest of WizField in Phase 12.
 
-## Phase 11 — Workiz Historical Reconciliation
+**Owner override:** The actual Workiz Historical Data + Document Intelligence Migration is a **separate workstream** that runs **only after Phase 15**. Phase 11 does **not** import Workiz data, attach PDFs, reconstruct ledgers, or mutate production historical rows.
 
-Audit real imported Workiz Finance for:
+## Phase 11 — Historical Finance Reconciliation & Workiz Readiness
 
-- totals
-- tax
-- discounts
-- payments
-- overpayments
-- original PDFs
-- provenance
-- invoice identifiers
-- customer/job relationships
-- anomalies
+Prove native WizField Finance can accept historical business data later without redesign.
 
-Classify anomalies rather than blindly repairing them.
+**Deliverables:**
 
-Potential classifications:
+- Compatibility report: [`docs/finance/phase11-historical-compatibility-report.md`](docs/finance/phase11-historical-compatibility-report.md)
+- Internal provenance contract: [`docs/finance/phase11-provenance-contract.md`](docs/finance/phase11-provenance-contract.md)
+- Checks: `npm run finance-part11:checks` (historical compatibility unit tests + readiness gate + Phase 10 regression chain)
+- Read-only org audit (optional): `npm run finance-part11:readonly-audit` with `FINANCE_AUDIT_ORG_ID` / `PHOENIX_ORG_ID`
+- Readiness artifact: `backend/_runtime_harness/finance-part11/workiz-migration-readiness-gate.json`
+
+**In scope:** model audit, gap register, compatibility tests, migration readiness gate, documentation.
+
+**Out of scope:** Workiz customer/job/invoice import, PDF attach, payment ledger reconstruction, native historical PDF generation, Workiz identifiers in normal customer UI.
+
+**Production row audit (read-only, when org set):** `npm run finance-part6:workiz-audit` — classify existing imported rows; do not repair.
+
+Part 6 classifications (existing rows):
 
 ```text
 Historical source truth
@@ -825,48 +828,56 @@ Safe repair candidate
 Do not repair
 ```
 
+Pre-import classification vocabulary (future migration) is documented in the Phase 11 compatibility report.
+
 Any write repair requires a separate approved correction plan.
+
+**ACTUAL WORKIZ MIGRATION: DEFERRED UNTIL AFTER PHASE 15**
+
+**Historical compatibility (Phase 11 — CLOSED)**
+
+- **Status:** **CLOSED** (2026-09-26). Checks: `npm run finance-part11:checks` (includes Phase 10 regression chain).
+- **Artifacts:** [`docs/finance/phase11-historical-compatibility-report.md`](docs/finance/phase11-historical-compatibility-report.md), [`docs/finance/phase11-provenance-contract.md`](docs/finance/phase11-provenance-contract.md), `backend/_runtime_harness/finance-part11/workiz-migration-readiness-gate.json`.
+- **Tenant guard:** [`assertHistoricalImportTargetOrganizationId`](backend/src/crm/finance-historical-import-contract.ts) for future import entrypoints.
+- **Certify fix:** Criterion 9 maps to `finance-part10:checks` (includes Part 9 document contract). `finance-cross-surface:readonly-check` wired in `package.json`.
 
 ## Phase 12 — Customer / Job / Portal Integration
 
-Reconnect Finance consistently into:
+**Status:** **CLOSED** (2026-09-26).
 
-- Customer history
-- Job Finance tab
-- Estimate relationship
-- Invoice relationship
-- Payments
-- Customer Portal
-- dashboard
-- reporting
-- AI read surfaces where applicable
+Reconnect Finance consistently into Customer, Job, Portal, dashboard, and read surfaces using one presentation layer.
 
-One domain truth should feed every surface.
+**Deliverables:**
 
-Do not create separate status logic per screen.
+- Cross-surface audit: [`docs/finance/phase12-cross-surface-audit.md`](docs/finance/phase12-cross-surface-audit.md)
+- [`FinanceInvoicePresentationService.buildJobInvoiceEmbed`](backend/src/crm/finance-invoice-presentation.service.ts) on job detail/list invoice embeds
+- Customer `GET /api/customers/:id` → `finance_summary` (FIPS open balance/count)
+- Estimate converted invoice pointers; staff invoice document history panel; portal home lifecycle/balance UI
+- Dashboard open-invoice parity (balance > 0 + lifecycle); portal isolation P8 finance negative
+
+**Checks:** `npm run finance-part12:checks` (contract gate + Phase 11/10/9 regression chain). Optional DB: `npm run finance-cross-surface:readonly-check`, `npm run portal:isolation:smoke`.
 
 ## Part 6 implementation truth (2026-09)
 
-**Unified Finance reads (Phase 12)**
+**Unified Finance reads (Phase 12 — CLOSED)**
 
-- [`FinanceInvoicePresentationService`](backend/src/crm/finance-invoice-presentation.service.ts) builds invoice list/detail fields: ledger totals, `finance_origin`, `display_document_number`, `snapshot_frozen`.
-- Customer portal home invoice rows expose `lifecycle_status`, `balance_cents`, `finance_origin`, `document_origin`; `payment_state` uses ledger (not legacy `invoice.status` alone).
+- [`FinanceInvoicePresentationService`](backend/src/crm/finance-invoice-presentation.service.ts) builds invoice list/detail and job embed fields: ledger totals, numbering, `finance_origin`, `snapshot_frozen`.
+- Customer portal home invoice rows expose `lifecycle_status`, `balance_cents`, `amount_paid_cents`; UI uses lifecycle (not legacy `status` alone).
 - Home AI money widget and invoice tool reads use ledger open-balance rules via presentation service.
 
-**Workiz audit (Phase 11 — read-only)**
+**Phase 11 compatibility (read-only audit optional)**
 
-- `npm run finance-part6:workiz-audit` (requires `FINANCE_AUDIT_ORG_ID` or `PHOENIX_ORG_ID`) writes classification JSON under `_runtime_harness/finance-part6-workiz-audit/`.
-- **No bulk repair** in Part 6; `workiz:final:reconcile` remains out of scope for automated closeout.
-
-**Checks:** `npm run finance-part6:checks`
+- `npm run finance-part11:checks` — historical compatibility + Phase 10 regression.
+- `npm run finance-part6:workiz-audit` — optional row classification when org env is set.
+- **No bulk repair**; Workiz import deferred until after Phase 15.
 
 ## Exit gate
 
 ```text
-Historical Workiz truth classified
-Native vs imported behavior understood
-Customer/Job/Portal read the same canonical Finance truth
-No duplicate lifecycle models
+finance-part12:checks PASS
+Cross-surface audit published
+Customer/Job/Portal/dashboard read same ledger + numbering truth
+ACTUAL WORKIZ MIGRATION deferred until after Phase 15
 ```
 
 ---
@@ -1025,7 +1036,7 @@ Production evidence recorded
 | 8 — Invoice PDF V2 | Part 5 |
 | 9 — Document Storage & Versioning | Part 5 |
 | 10 — Invoice Numbering | Part 5 |
-| 11 — Workiz Historical Reconciliation | Part 6 |
+| 11 — Historical Finance Reconciliation & Workiz Readiness | Part 6 |
 | 12 — Customer / Job / Portal Integration | Part 6 |
 | 13 — Permissions / Tenant / Audit Trail | Part 7 |
 | 14 — Owner UX Polish | Part 7 |

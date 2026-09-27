@@ -3,17 +3,27 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { formatInvoiceLifecycleStatus, type InvoiceLifecycleStatus } from "@/lib/crm/invoice-lifecycle";
 import { portalApiFetch } from "@/lib/portal/browser-api";
 
 type PortalHomePayload = {
   active_inspection: { id: string; status: string } | null;
   active_quote: { id: string; status: string; price_cents: number } | null;
-  payment_state: { invoice_id: string; invoice_status: string; paid_at: string | null } | null;
+  payment_state: {
+    invoice_id: string;
+    invoice_status: string;
+    lifecycle_status?: string;
+    balance_cents?: number;
+    paid_at: string | null;
+  } | null;
   invoices: Array<{
     id: string;
     invoice_number: string | null;
     status: string;
+    lifecycle_status: string;
     total_cents: number;
+    amount_paid_cents: number;
+    balance_cents: number;
     issued_at: string;
     portal_invoice_path?: string | null;
     pdf_url?: string | null;
@@ -92,11 +102,21 @@ export default function PortalHomePage() {
               <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Payment</p>
               {data.payment_state ? (
                 <>
-                  <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Invoice status: {data.payment_state.invoice_status}</p>
+                  <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
+                    Status:{" "}
+                    {formatInvoiceLifecycleStatus(
+                      (data.payment_state.lifecycle_status ?? "sent") as InvoiceLifecycleStatus,
+                    )}
+                  </p>
+                  {typeof data.payment_state.balance_cents === "number" && data.payment_state.balance_cents > 0 ? (
+                    <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
+                      Balance due: {formatCurrency(data.payment_state.balance_cents)}
+                    </p>
+                  ) : null}
                   <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
                     {data.payment_state.paid_at
-                      ? `Paid ${new Date(data.payment_state.paid_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                      : "Payment has not been recorded yet."}
+                      ? `Last payment ${new Date(data.payment_state.paid_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                      : "No payments recorded yet."}
                   </p>
                 </>
               ) : (
@@ -123,7 +143,10 @@ export default function PortalHomePage() {
                           {invoice.invoice_number ? `Invoice #${invoice.invoice_number}` : `Invoice (draft)`}
                         </p>
                         <p className="mt-1 text-xs text-[color:var(--text-secondary)]">
-                          {formatCurrency(invoice.total_cents)} • {invoice.status} • {new Date(invoice.issued_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {formatCurrency(invoice.total_cents)} · Paid {formatCurrency(invoice.amount_paid_cents)} · Balance{" "}
+                          {formatCurrency(invoice.balance_cents)} ·{" "}
+                          {formatInvoiceLifecycleStatus(invoice.lifecycle_status as InvoiceLifecycleStatus)} ·{" "}
+                          {new Date(invoice.issued_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">

@@ -88,11 +88,18 @@ type EstimateListItem = {
   job_title: string;
   document_number: string;
   lifecycle_status: EstimateLifecycleStatus;
+  converted_invoice_id?: string | null;
+  converted_invoice_document_number?: string | null;
   description: string;
   price_cents: number;
   status: EstimateStatus;
   sent_at: string | null;
   approved_at: string | null;
+};
+
+type CustomerFinanceSummary = {
+  open_balance_cents: number;
+  open_invoice_count: number;
 };
 
 type CustomerProfileWorkspaceProps = {
@@ -101,6 +108,7 @@ type CustomerProfileWorkspaceProps = {
   invoices: InvoiceListItem[];
   estimates: EstimateListItem[];
   inspections: InspectionListRow[];
+  financeSummary?: CustomerFinanceSummary | null;
   loadError: string | null;
   canMintPortalMagicLink?: boolean;
 };
@@ -284,11 +292,14 @@ function deriveCustomerMetrics(params: {
   estimates: EstimateListItem[];
   inspections: InspectionListRow[];
   activeJobs: number;
+  financeSummary?: CustomerFinanceSummary | null;
 }) {
-  const { customer, relatedJobs, invoices, estimates, inspections, activeJobs } = params;
+  const { customer, relatedJobs, invoices, estimates, inspections, activeJobs, financeSummary } = params;
   const totalRevenueCents = invoices.reduce((total, invoice) => total + invoice.total_cents, 0);
-  const openBalanceCents = invoices.reduce((total, invoice) => total + (invoice.balance_cents > 0 ? invoice.balance_cents : 0), 0);
-  const unpaidInvoiceCount = invoices.filter((invoice) => invoice.balance_cents > 0).length;
+  const openBalanceCents = financeSummary?.open_balance_cents
+    ?? invoices.reduce((total, invoice) => total + (invoice.balance_cents > 0 ? invoice.balance_cents : 0), 0);
+  const unpaidInvoiceCount = financeSummary?.open_invoice_count
+    ?? invoices.filter((invoice) => invoice.balance_cents > 0).length;
   const pendingEstimates = estimates.filter((estimate) => estimate.lifecycle_status === "sent").length;
   const now = Date.now();
 
@@ -1038,6 +1049,7 @@ export default function CustomerProfileWorkspace({
   invoices,
   estimates,
   inspections,
+  financeSummary = null,
   loadError,
   canMintPortalMagicLink = false,
 }: CustomerProfileWorkspaceProps) {
@@ -1067,8 +1079,16 @@ export default function CustomerProfileWorkspace({
   const pagedInspections = usePagedItems(inspections, inspectionsPage);
 
   const metrics = useMemo(
-    () => deriveCustomerMetrics({ customer: customerRecord, relatedJobs, invoices, estimates, inspections, activeJobs }),
-    [activeJobs, customerRecord, estimates, inspections, invoices, relatedJobs],
+    () => deriveCustomerMetrics({
+      customer: customerRecord,
+      relatedJobs,
+      invoices,
+      estimates,
+      inspections,
+      activeJobs,
+      financeSummary,
+    }),
+    [activeJobs, customerRecord, estimates, financeSummary, inspections, invoices, relatedJobs],
   );
 
   const formattedAddress = formatAddress(
@@ -1306,6 +1326,13 @@ export default function CustomerProfileWorkspace({
                     href={`/estimates/${estimate.id}`}
                   >
                     {estimate.description ? <p>{estimate.description}</p> : null}
+                    {estimate.lifecycle_status === "converted" && estimate.converted_invoice_id ? (
+                      <p>
+                        <Link href={`/invoices/${estimate.converted_invoice_id}`} className="text-[color:var(--sem-accent-primary)]">
+                          Invoice #{estimate.converted_invoice_document_number ?? "view"}
+                        </Link>
+                      </p>
+                    ) : null}
                   </ActivityTimelineCard>
                 ))}
               </ActivityFeedList>
@@ -1316,6 +1343,13 @@ export default function CustomerProfileWorkspace({
                     <p>{estimate.job_title}</p>
                     <p>{formatCurrency(estimate.price_cents, locale)}</p>
                     <p>{t("sentDate", { date: formatOptionalDate(estimate.sent_at, locale) })}</p>
+                    {estimate.lifecycle_status === "converted" && estimate.converted_invoice_id ? (
+                      <p>
+                        <Link href={`/invoices/${estimate.converted_invoice_id}`} className="text-[color:var(--sem-accent-primary)]">
+                          Invoice #{estimate.converted_invoice_document_number ?? "view"}
+                        </Link>
+                      </p>
+                    ) : null}
                   </RecordCard>
                 ))}
               </div>
@@ -1349,6 +1383,8 @@ export default function CustomerProfileWorkspace({
                     amount={formatCurrency(invoice.total_cents, locale)}
                     href={`/invoices/${invoice.id}`}
                   >
+                    <p>{t("invoiceTotal", { amount: formatCurrency(invoice.total_cents, locale) })}</p>
+                    <p>Paid {formatCurrency(invoice.amount_paid_cents, locale)}</p>
                     <p>{t("invoiceBalance", { amount: formatCurrency(invoice.balance_cents, locale) })}</p>
                   </ActivityTimelineCard>
                 ))}
@@ -1359,6 +1395,7 @@ export default function CustomerProfileWorkspace({
                   <RecordCard key={invoice.id} title={invoice.document_number} href={`/invoices/${invoice.id}`} badge={formatInvoiceStatus(invoice.lifecycle_status)} badgeTone={invoiceBadgeTone(invoice.lifecycle_status)}>
                     <p>{invoice.job_title}</p>
                     <p>{t("invoiceTotal", { amount: formatCurrency(invoice.total_cents, locale) })}</p>
+                    <p>Paid {formatCurrency(invoice.amount_paid_cents, locale)}</p>
                     <p>{t("invoiceBalance", { amount: formatCurrency(invoice.balance_cents, locale) })}</p>
                   </RecordCard>
                 ))}

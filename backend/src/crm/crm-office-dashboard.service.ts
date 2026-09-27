@@ -17,6 +17,7 @@ import { endOfLocalDashboardDay, startOfLocalDashboardDay } from "./crm-dashboar
 import { formatAddress } from "./display";
 import { sanitizeJobTitle } from "./user-facing-text";
 import { classifyFinanceInvoiceOrigin } from "./finance-invoice-origin";
+import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 
 type RelatedValue<T> = T | T[] | null;
@@ -85,6 +86,7 @@ export class CrmOfficeDashboardService {
     @InjectRepository(ServiceEntity)
     private readonly servicesRepository: Repository<ServiceEntity>,
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
+    private readonly financeInvoicePresentationService: FinanceInvoicePresentationService,
   ) {}
 
   private summarizeInvoiceLedger(invoice: InvoiceEntity) {
@@ -100,8 +102,29 @@ export class CrmOfficeDashboardService {
   }
 
   private isOpenInvoice(invoice: InvoiceEntity) {
-    const lifecycle = this.summarizeInvoiceLedger(invoice).lifecycleStatus;
-    return lifecycle === "sent" || lifecycle === "partial" || lifecycle === "refunded";
+    const ledger = this.summarizeInvoiceLedger(invoice);
+    const lifecycle = ledger.lifecycleStatus;
+    const isOpenLifecycle = lifecycle === "sent" || lifecycle === "partial" || lifecycle === "refunded";
+    return isOpenLifecycle && ledger.balanceCents > 0;
+  }
+
+  private invoiceLifecycleStatusLabel(lifecycle: string) {
+    switch (lifecycle) {
+      case "partial":
+        return "Partially paid";
+      case "paid":
+        return "Paid";
+      case "overpaid":
+        return "Overpaid";
+      case "refunded":
+        return "Refunded";
+      case "void":
+        return "Void";
+      case "cancelled":
+        return "Cancelled";
+      default:
+        return "Balance due";
+    }
   }
 
   private relationValue<T>(value: RelatedValue<T> | undefined) {
@@ -173,6 +196,7 @@ export class CrmOfficeDashboardService {
     const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
     const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
     const technician = this.relationValue(job?.technician as RelatedValue<TechnicianEntity>);
+    const presentation = this.financeInvoicePresentationService.buildListPresentation(invoice);
 
     return {
       id: invoice.id,
@@ -192,10 +216,10 @@ export class CrmOfficeDashboardService {
           )
         : "Address unavailable",
       technicianName: technician?.display_name ?? null,
-      amountCents: invoice.amount_cents,
+      amountCents: presentation.balance_cents,
       scheduledFor: job?.scheduled_for ?? null,
       occurredAt: invoice.issued_at,
-      statusLabel: "Unpaid",
+      statusLabel: this.invoiceLifecycleStatusLabel(presentation.lifecycle_status),
     };
   }
 

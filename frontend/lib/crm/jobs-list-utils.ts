@@ -102,7 +102,10 @@ export function getJobBalanceCents(job: JobListRecord): number | null {
       return invoice.total_cents ?? invoice.amount_cents;
     }
 
-    return invoice.status === "unpaid" ? invoice.amount_cents : 0;
+    if (invoice.lifecycle_status === "paid" || invoice.lifecycle_status === "overpaid") {
+      return 0;
+    }
+    return invoice.amount_cents;
   }
 
   const quote = relationValue(job.quote);
@@ -128,6 +131,9 @@ export function isJobUnpaid(job: JobListRecord) {
     return invoice.balance_cents > 0;
   }
 
+  if (invoice.lifecycle_status === "paid" || invoice.lifecycle_status === "overpaid") {
+    return false;
+  }
   return invoice.status === "unpaid";
 }
 

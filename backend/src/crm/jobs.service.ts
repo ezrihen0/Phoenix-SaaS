@@ -6,12 +6,14 @@ import type { ActorContext } from "../common/request-types";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
 import { JobEntity } from "../database/entities/job.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
+import { applyBranchAccessToJobQueryBuilder } from "./branch-access";
 import {
   actorCanFilterByTechnicianId,
   applyJobVisibilityToQueryBuilder,
   findJobForActor,
   requireJobListPermission,
 } from "./jobs-access";
+import { BranchScopeService } from "./branch-scope.service";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -27,6 +29,7 @@ export class JobsService {
   constructor(
     @InjectRepository(JobEntity)
     private readonly jobsRepository: Repository<JobEntity>,
+    private readonly branchScopeService: BranchScopeService,
   ) {}
 
   private relationValue<T>(value: RelatedValue<T> | undefined) {
@@ -89,10 +92,13 @@ export class JobsService {
       .leftJoinAndSelect("job.technician", "technician")
       .leftJoinAndSelect("job.quote", "quote")
       .leftJoinAndSelect("job.invoice", "invoice")
+      .leftJoinAndSelect("invoice.payments", "invoice_payments")
       .orderBy("job.scheduled_for", "ASC")
       .addOrderBy("job.created_at", "DESC");
 
     applyJobVisibilityToQueryBuilder(queryBuilder, actor, organizationId);
+    const accessibleBranchIds = await this.branchScopeService.listAccessibleBranchIds(actor);
+    applyBranchAccessToJobQueryBuilder(queryBuilder, actor, accessibleBranchIds);
 
     if (filters.status?.trim()) {
       queryBuilder.andWhere("job.status = :status", { status: filters.status.trim() });
@@ -118,7 +124,15 @@ export class JobsService {
     organizationId: string,
     jobId: string,
   ): Promise<JobEntity> {
-    const job = await findJobForActor(this.jobsRepository, jobId, organizationId, actor);
+    const accessibleBranchIds = await this.branchScopeService.listAccessibleBranchIds(actor);
+    const job = await findJobForActor(
+      this.jobsRepository,
+      jobId,
+      organizationId,
+      actor,
+      undefined,
+      accessibleBranchIds,
+    );
     return this.normalizeJobDetail(job);
   }
 
