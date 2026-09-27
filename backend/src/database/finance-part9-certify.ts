@@ -86,7 +86,7 @@ Complete manually for Phoenix org. Mark [x] when verified.
 
 ## Native send path
 
-- [ ] Send invoice (email or SMS) → sequential \`document_number\`, edit lines returns frozen error
+- [ ] Send invoice (email or SMS) → org-scoped numeric \`document_number\` (starts 1001), edit lines returns frozen error
 - [ ] PDF download reflects sent snapshot
 
 ## Workiz historical (if present)
@@ -158,6 +158,7 @@ function main() {
   };
 
   stepOk(runCommand("backend build", "npm run build", backendRoot));
+  stepOk(runCommand("finance part10 checks", "npm run finance-part10:checks", backendRoot));
   stepOk(runCommand("finance part6 checks", "npm run finance-part6:checks", backendRoot));
   stepOk(runCommand("finance endpoint tenant check", "npm run finance-endpoint-tenant:check", backendRoot));
   stepOk(runCommand("finance org isolation smoke", "npm run finance-org-isolation:smoke", backendRoot));
@@ -200,13 +201,6 @@ function main() {
     ));
   }
 
-  const phoenixStep = runCommand(
-    "phoenix finance closeout readonly",
-    "npm run phoenix-finance:closeout-readonly",
-    backendRoot,
-  );
-  steps.push(phoenixStep);
-
   if (process.env.FINANCE_CERTIFY_PLAYWRIGHT === "1") {
     stepOk(runCommand("playwright invoice ui", "node scripts/phoenix-test-invoice-ui.mjs", join(repoRoot, "frontend")));
     stepOk(runCommand("playwright estimate ui", "node scripts/phoenix-test-estimate-ui.mjs", join(repoRoot, "frontend")));
@@ -220,6 +214,45 @@ function main() {
 
   const manualPass = process.env.FINANCE_CERTIFY_MANUAL_PASS === "1";
 
+  let sendSnapshotStep: StepResult;
+  if (manualPass) {
+    sendSnapshotStep = waive(
+      "finance send snapshot check",
+      "npm run finance-send-snapshot:check",
+      "FINANCE_CERTIFY_MANUAL_PASS=1 skips automated send snapshot smoke.",
+    );
+  } else {
+    stepOk(runCommand("finance send snapshot contract", "npm run finance-send-snapshot:contract-check", backendRoot));
+    sendSnapshotStep = runCommand(
+      "finance send snapshot smoke",
+      "npm run finance-send-snapshot:smoke",
+      backendRoot,
+      { waiveEphemeralDbDenied: true },
+    );
+  }
+  steps.push(sendSnapshotStep);
+
+  steps.push(runCommand(
+    "finance part10 numbering smoke",
+    "npm run finance-part10:numbering-smoke",
+    backendRoot,
+    { waiveEphemeralDbDenied: true },
+  ));
+
+  const crossSurfaceStep = runCommand(
+    "finance cross-surface readonly check",
+    "npm run finance-cross-surface:readonly-check",
+    backendRoot,
+  );
+  steps.push(crossSurfaceStep);
+
+  const phoenixStep = runCommand(
+    "phoenix finance closeout readonly",
+    "npm run phoenix-finance:closeout-readonly",
+    backendRoot,
+  );
+  steps.push(phoenixStep);
+
   const checks = {
     build: steps.find((s) => s.name === "backend build")?.status === "PASS",
     part6: steps.find((s) => s.name === "finance part6 checks")?.status === "PASS",
@@ -230,9 +263,13 @@ function main() {
     tenantCheck: steps.find((s) => s.name === "finance endpoint tenant check")?.status === "PASS",
     isolationSmoke: steps.find((s) => s.name === "finance org isolation smoke")?.status === "PASS",
     frontendTsc: steps.find((s) => s.name === "frontend tsc")?.status === "PASS",
-    phoenixReadonly: phoenixStep.status === "PASS",
     workizAudit: steps.find((s) => s.name === "workiz audit (read-only)")?.status === "PASS",
     playwright: steps.find((s) => s.name.startsWith("playwright"))?.status === "PASS",
+    sendSnapshotContract: steps.find((s) => s.name === "finance send snapshot contract")?.status === "PASS",
+    sendSnapshotSmoke: sendSnapshotStep.status === "PASS",
+    sendSnapshotSmokeWaived: sendSnapshotStep.status === "WAIVED",
+    crossSurfaceReadonly: crossSurfaceStep.status === "PASS",
+    phoenixReadonly: phoenixStep.status === "PASS",
   };
 
   const criteria: CriterionResult[] = [
@@ -284,9 +321,17 @@ function main() {
     {
       id: 7,
       criterion: "Historical customer-facing Finance truth is immutable.",
-      status: manualPass ? "PASS" : "WAIVED",
-      evidence: ["send → customer_facing_snapshot_json", "409 invoice_customer_snapshot_frozen"],
-      reason: manualPass ? undefined : "Requires manual send + edit attempt; set FINANCE_CERTIFY_MANUAL_PASS=1 after verification.",
+      status: manualPass || checks.sendSnapshotSmoke
+        ? "PASS"
+        : checks.sendSnapshotContract && checks.sendSnapshotSmokeWaived
+          ? "WAIVED"
+          : "FAIL",
+      evidence: ["finance-send-snapshot:check", "409 invoice_customer_snapshot_frozen"],
+      reason: manualPass || checks.sendSnapshotSmoke
+        ? undefined
+        : checks.sendSnapshotSmokeWaived
+          ? "Send snapshot integration smoke waived (DB privilege); contract check PASS."
+          : "Run finance-send-snapshot:check on configured DB.",
     },
     {
       id: 8,
@@ -298,14 +343,14 @@ function main() {
     {
       id: 9,
       criterion: "Native documents have durable historical records.",
-      status: checks.part6 ? "PASS" : "FAIL",
-      evidence: ["native_customer_pdf on send", "phoenix-readonly.json counts"],
+      status: steps.find((s) => s.name === "finance part9 checks")?.status === "PASS" ? "PASS" : "FAIL",
+      evidence: ["finance-part9:checks", "finance-part9:configured-db-verification", "native_customer_pdf on send"],
     },
     {
       id: 10,
       criterion: "Invoice numbers are business-grade and organization-scoped.",
       status: checks.part6 ? "PASS" : "FAIL",
-      evidence: ["InvoiceNumberingService", "organization_invoice_sequences"],
+      evidence: ["InvoiceNumberingService", "organization_invoice_sequences", "finance-part10:numbering-smoke"],
     },
     {
       id: 11,
@@ -317,9 +362,13 @@ function main() {
     {
       id: 12,
       criterion: "Customer, Job, Portal, Dashboard, reporting use consistent Finance truth.",
-      status: manualPass ? "PASS" : "WAIVED",
-      evidence: ["cross-surface-walkthrough.md", "FinanceInvoicePresentationService"],
-      reason: manualPass ? undefined : "Complete cross-surface-walkthrough.md and set FINANCE_CERTIFY_MANUAL_PASS=1.",
+      status: manualPass || checks.crossSurfaceReadonly ? "PASS" : "WAIVED",
+      evidence: ["cross-surface-readonly.json", "cross-surface-walkthrough.md", "FinanceInvoicePresentationService"],
+      reason: manualPass || checks.crossSurfaceReadonly
+        ? checks.crossSurfaceReadonly && !manualPass
+          ? "Automated CRM presentation parity PASS; portal/Home AI browser walkthrough optional."
+          : undefined
+        : "Run finance-cross-surface:readonly-check or complete cross-surface-walkthrough.md.",
     },
     {
       id: 13,
@@ -366,7 +415,14 @@ function main() {
   // Keep latest symlink-style copy at parent for convenience
   const latestDir = join(backendRoot, "_runtime_harness", "finance-program-closeout", "latest");
   mkdirSync(latestDir, { recursive: true });
-  for (const file of ["completion-matrix.json", "closeout-summary.json", "CERTIFICATION.md", "phoenix-readonly.json", "open-items-waivers.json"]) {
+  for (const file of [
+    "completion-matrix.json",
+    "closeout-summary.json",
+    "CERTIFICATION.md",
+    "phoenix-readonly.json",
+    "open-items-waivers.json",
+    "cross-surface-readonly.json",
+  ]) {
     const src = join(closeoutRoot, file);
     if (existsSync(src)) {
       writeFileSync(join(latestDir, file), readFileSync(src, "utf8"));

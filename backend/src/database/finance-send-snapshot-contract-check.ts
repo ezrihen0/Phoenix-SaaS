@@ -47,7 +47,6 @@ expect("send pipeline service freezes snapshot on finalizeCustomerFacingSend", (
   const pipelineSource = readFileSync(pipelinePath, "utf8");
   assert.match(pipelineSource, /freezeInvoiceRecord/);
   assert.match(pipelineSource, /allocateDocumentNumberIfNeeded/);
-  assert.match(pipelineSource, /branch/);
 });
 
 function buildHarnessSnapshotService() {

@@ -11,6 +11,7 @@ import { InvoiceEntity } from "../database/entities/invoice.entity";
 import { JobEntity } from "../database/entities/job.entity";
 import { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
 import { WarrantyCertificateEntity } from "../database/entities/warranty-certificate.entity";
+import { resolveInvoiceDisplayNumber } from "../crm/invoice-display-number";
 import { DocumentBrandingSnapshotService } from "../documents/pdf/document-branding-snapshot.service";
 import { WarrantyCertificatePdfSnapshot, WarrantyPdfService } from "./warranty-pdf.service";
 
@@ -335,7 +336,7 @@ export class WarrantyCertificatesService {
       customerPhone: this.normalizeString(customer.phone),
       customerAddressLines,
       invoiceId: invoice.id,
-      invoiceNumber: `INV-${invoice.id.slice(0, 8).toUpperCase()}`,
+      invoiceNumber: resolveInvoiceDisplayNumber(invoice),
       jobId: invoice.job_id,
       completionDateLabel: completionLabel,
       warrantyStartDateLabel: startLabel,

@@ -121,8 +121,10 @@ import { InvoicePaymentRecordingService } from "./invoice-payment-recording.serv
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
 import { TxtService } from "../messaging/txt/txt.service";
+import { InvoiceDocumentsService } from "../documents/invoice-documents/invoice-documents.service";
 import { InvoiceNativeDocumentService } from "../documents/invoice-documents/invoice-native-document.service";
 import { type InvoicePdfBrandingSnapshot, InvoicePdfService } from "./invoice-pdf.service";
+import { normalizeInvoiceNumberSearchQuery } from "./invoice-display-number";
 import { InvoiceCustomerFacingSnapshotService } from "./invoice-customer-facing-snapshot.service";
 import { InvoicePdfViewModelService } from "./invoice-pdf-view-model.service";
 import { PhoenixInvoiceDocumentPresentationService } from "./phoenix-invoice-document-presentation.service";
@@ -238,6 +240,7 @@ export class CrmController {
     private readonly invoiceCustomerFacingSnapshotService: InvoiceCustomerFacingSnapshotService,
     private readonly invoiceSendPipelineService: InvoiceSendPipelineService,
     private readonly invoiceNativeDocumentService: InvoiceNativeDocumentService,
+    private readonly invoiceDocumentsService: InvoiceDocumentsService,
     private readonly financeInvoicePresentationService: FinanceInvoicePresentationService,
     private readonly financeAuditService: FinanceAuditService,
     private readonly branchScopeService: BranchScopeService,
@@ -1377,6 +1380,7 @@ export class CrmController {
   async listInvoices(
     @Req() request: RequestWithActor,
     @Query("customerId") customerId?: string,
+    @Query("q") searchQuery?: string,
   ) {
     const actor = this.requireActor(request);
     const organizationId = this.requireActiveOrganizationId(actor);
@@ -1412,12 +1416,28 @@ export class CrmController {
         return canAccessInvoiceResource(actor, job.assigned_technician_id);
       });
 
-      const filteredInvoices = customerId
+      let filteredInvoices = customerId
         ? visibleInvoices.filter((invoice) => {
           const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
           return job?.customer_id === customerId;
         })
         : visibleInvoices;
+
+      const normalizedSearch = normalizeInvoiceNumberSearchQuery(searchQuery ?? "");
+      if (normalizedSearch) {
+        const needle = normalizedSearch.toLowerCase();
+        filteredInvoices = filteredInvoices.filter((invoice) => {
+          const listItem = this.buildInvoiceListItem(invoice);
+          const haystack = [
+            listItem.document_number,
+            listItem.display_document_number,
+            invoice.id,
+          ]
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(needle);
+        });
+      }
 
       return apiSuccess(filteredInvoices.map((invoice) => this.buildInvoiceListItem(invoice)));
     } catch (error) {
@@ -1590,6 +1610,90 @@ export class CrmController {
     return new StreamableFile(pdfBuffer);
   }
 
+  @Get("invoices/:invoiceId/documents")
+  async listInvoiceDocuments(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+  ) {
+    const actor = this.requireActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    const invoice = await this.invoicesRepository.findOne({
+      where: { id: invoiceId, organization_id: organizationId },
+      relations: { job: true },
+    });
+
+    if (!invoice) {
+      apiError(404, "invoice_not_found", "The invoice could not be found.");
+    }
+
+    const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
+    if (!canAccessInvoiceResource(actor, job?.assigned_technician_id)) {
+      apiError(403, "invoice_access_denied", "You do not have access to this invoice.");
+    }
+
+    const documents = await this.invoiceNativeDocumentService.listNativeDocumentsForInvoice(
+      organizationId,
+      invoice.id,
+    );
+
+    return apiSuccess({
+      documents: documents.map((document) => ({
+        id: document.id,
+        document_kind: document.document_kind,
+        generation_sequence: document.generation_sequence,
+        file_hash: document.file_hash,
+        snapshot_hash: document.snapshot_hash,
+        document_number_at_generation: document.document_number_at_generation,
+        sent_via: document.sent_via,
+        renderer_version: document.renderer_version,
+        created_at: document.created_at.toISOString(),
+      })),
+    });
+  }
+
+  @Get("invoices/:invoiceId/documents/:documentId/pdf")
+  async downloadStoredInvoiceDocument(
+    @Req() request: RequestWithActor,
+    @Param("invoiceId") invoiceId: string,
+    @Param("documentId") documentId: string,
+    @Query("download") download: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const actor = this.requireActor(request);
+    const organizationId = this.requireActiveOrganizationId(actor);
+
+    const invoice = await this.invoicesRepository.findOne({
+      where: { id: invoiceId, organization_id: organizationId },
+      relations: { job: true },
+    });
+
+    if (!invoice) {
+      apiError(404, "invoice_not_found", "The invoice could not be found.");
+    }
+
+    const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
+    if (!canAccessInvoiceResource(actor, job?.assigned_technician_id)) {
+      apiError(403, "invoice_access_denied", "You do not have access to this invoice.");
+    }
+
+    const documents = await this.invoiceNativeDocumentService.listNativeDocumentsForInvoice(
+      organizationId,
+      invoice.id,
+    );
+    const document = documents.find((row) => row.id === documentId);
+    if (!document) {
+      apiError(404, "invoice_document_not_found", "The stored invoice document could not be found.");
+    }
+
+    const pdfBuffer = await this.invoiceDocumentsService.readPdfBuffer(document);
+    setPdfDownloadResponseHeaders(response, {
+      download,
+      filename: document.original_filename || `invoice-${invoice.id.slice(0, 8)}.pdf`,
+    });
+    return new StreamableFile(pdfBuffer);
+  }
+
   @Post("invoices/:invoiceId/send-email")
   async sendInvoiceEmail(
     @Req() request: RequestWithActor,
@@ -1672,21 +1776,13 @@ export class CrmController {
       vars,
     );
 
-    const pdfBuffer = this.buildInvoicePdfBuffer({
-      invoice,
-      customer,
-      job,
-      orgSettings,
-      dueDays,
-    });
-
     const emailResult = await this.emailService.send({
       to: toEmail,
       subject,
       body: emailBody,
       attachments: [{
         filename: `invoice-${documentNumber}.pdf`,
-        content: pdfBuffer,
+        content: sendResult.pdfBuffer,
         contentType: "application/pdf",
       }],
     });
@@ -4196,7 +4292,7 @@ export class CrmController {
       dueDays,
     });
 
-    await this.invoiceNativeDocumentService.persistNativePdfAfterSend({
+    const nativeDocument = await this.invoiceNativeDocumentService.persistNativePdfAfterSend({
       organizationId: input.organizationId,
       customerId: input.customerId,
       invoice: input.invoice,
@@ -4223,7 +4319,11 @@ export class CrmController {
       metadata: { document_number: sendResult.documentNumber },
     });
 
-    return sendResult;
+    return {
+      ...sendResult,
+      pdfBuffer,
+      nativeDocument,
+    };
   }
 
   private readDefaultDueDays(settings: OrganizationSettingEntity | null) {

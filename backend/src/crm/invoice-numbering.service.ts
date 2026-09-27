@@ -5,8 +5,13 @@ import { EntityManager, Repository } from "typeorm";
 import { OrganizationInvoiceSequenceEntity } from "../database/entities/organization-invoice-sequence.entity";
 import type { InvoiceEntity } from "../database/entities/invoice.entity";
 
-const DEFAULT_SEQUENCE_START = 1001;
+/** First business invoice number for a new organization sequence. */
+export const DEFAULT_INVOICE_SEQUENCE_START = 1001;
 
+/**
+ * Phase 10 V1: organization-wide sequences only.
+ * Branch-scoped numbering remains in schema but is intentionally not used until a future owner-approved phase.
+ */
 @Injectable()
 export class InvoiceNumberingService {
   constructor(
@@ -23,6 +28,14 @@ export class InvoiceNumberingService {
       return invoice.document_number.trim();
     }
 
+    return this.allocateOrganizationDocumentNumber(manager, organizationId, invoice);
+  }
+
+  private async allocateOrganizationDocumentNumber(
+    manager: EntityManager,
+    organizationId: string,
+    invoice: InvoiceEntity,
+  ) {
     const sequenceRepo = manager.getRepository(OrganizationInvoiceSequenceEntity);
     let sequence = await sequenceRepo.findOne({
       where: { organization_id: organizationId },
@@ -30,12 +43,15 @@ export class InvoiceNumberingService {
     });
 
     if (!sequence) {
-      sequence = sequenceRepo.create({
-        organization_id: organizationId,
-        next_value: String(DEFAULT_SEQUENCE_START),
-        prefix: "",
-      });
-      await sequenceRepo.save(sequence);
+      try {
+        await sequenceRepo.insert({
+          organization_id: organizationId,
+          next_value: String(DEFAULT_INVOICE_SEQUENCE_START),
+          prefix: "",
+        });
+      } catch {
+        // Another transaction initialized the sequence row first.
+      }
       sequence = await sequenceRepo.findOneOrFail({
         where: { organization_id: organizationId },
         lock: { mode: "pessimistic_write" },
@@ -43,6 +59,10 @@ export class InvoiceNumberingService {
     }
 
     const numericValue = Number(sequence.next_value);
+    if (!Number.isFinite(numericValue)) {
+      throw new Error("invoice_sequence_corrupted");
+    }
+
     const assigned = `${sequence.prefix ?? ""}${numericValue}`;
     sequence.next_value = String(numericValue + 1);
     await sequenceRepo.save(sequence);

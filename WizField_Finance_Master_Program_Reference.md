@@ -713,15 +713,14 @@ The **same** canonical view model and **section order** must drive:
 
 ## Phase 9 — Document Storage & Versioning
 
-Define durable native WizField document history.
+Durable native WizField invoice PDF history (implemented — see Part 5 **Document storage**).
 
-Potential concepts:
+**Contract (summary):**
 
-- generated invoice document
-- finalized invoice PDF
-- sent invoice version
-- immutable customer-facing document record
-- original imported Workiz PDF
+- **Version rule:** new `native_customer_pdf` row when PDF `file_hash` changes; idempotent resend when bytes unchanged.
+- **Frozen vs ledger:** Phase 7 snapshot immutability in `snapshot_hash`; paid/balance on PDF reflects ledger at render time.
+- **Surfaces:** staff download = live; portal PDF = live; email/send = persisted artifact bytes.
+- **Workiz:** `workiz_source_pdf` preserved separately; no customer-facing “Workiz” labeling.
 
 Required ability:
 
@@ -731,16 +730,25 @@ Imported source PDFs must remain distinguishable from native WizField PDFs.
 
 ## Phase 10 — Invoice Numbering
 
-Replace UUID-prefix display numbering with business-grade organization-scoped numbering.
+Replace UUID-prefix draft display with business-grade **organization-scoped** numbering stored on the invoice row.
+
+**Domain rule:** `invoices.id` (UUID) is the internal identity; `invoices.document_number` is the customer-facing business number (never used alone for authz).
+
+**V1 product truth (owner-approved):**
+
+- **Scope:** one sequence per **organization** (`organization_invoice_sequences`); branch-specific sequences deferred.
+- **Format:** numeric string stored in `document_number` (e.g. `1001`, `1002`); optional display prefixes are presentation-only, not required in storage.
+- **Assignment:** allocated **once** on first customer-facing send / Phase 7 snapshot freeze via [`InvoiceSendPipelineService`](backend/src/crm/invoice-send-pipeline.service.ts) + [`InvoiceNumberingService`](backend/src/crm/invoice-numbering.service.ts) (pessimistic lock on sequence row). **Not** on invoice upsert.
+- **Drafts (unsent native):** [`resolveInvoiceDisplayNumber`](backend/src/crm/invoice-display-number.ts) falls back to `INV-{uuid8}` until send.
+- **Legacy / Workiz historical:** rows without native `document_number` keep provenance-based or uuid fallback; no production backfill in Phase 10.
 
 Required properties:
 
-- immutable
-- organization-scoped
-- unique
-- concurrency-safe
-- historical compatibility
-- deterministic display
+- immutable after assignment
+- unique per `(organization_id, document_number)`
+- concurrency-safe (sequence row lock, not `MAX+1`)
+- retry/idempotent on resend
+- gaps acceptable; numbers never reused after void/cancel
 
 Do not rewrite historical imported invoice identifiers without explicit owner approval.
 
@@ -754,18 +762,21 @@ Do not rewrite historical imported invoice identifiers without explicit owner ap
 - **Draft:** `legacy_live` + explicit draft banner pre-freeze; frozen snapshot authoritative after Phase 7 freeze.
 - **Checks:** `npm run finance-part8:checks`.
 
-**Document storage (Phase 9)**
+**Document storage (Phase 9 — CLOSED)**
 
-- Native PDF kind: `native_customer_pdf` on `invoice_documents` with `generation_sequence`, `snapshot_hash`, `sent_via`, `renderer_version` (`invoice-pdf-v2`).
-- Persisted on send after freeze via [`InvoiceNativeDocumentService`](backend/src/documents/invoice-documents/invoice-native-document.service.ts).
-- Portal PDF prefers latest native document, else `workiz_source_pdf`.
+- **Status:** **CLOSED** (2026-09-26). Checks: `npm run finance-part9:checks`; configured DB: `FINANCE_SMOKE_USE_CONFIGURED_DATABASE=true npm run finance-part9:configured-db-verification` (includes Phase 8/7/6 regression).
+- **Kinds:** `native_customer_pdf` (WizField send artifacts) vs `workiz_source_pdf` (imported source) — never conflated ([`InvoiceDocumentEntity`](backend/src/database/entities/invoice-document.entity.ts)).
+- **Native artifact:** immutable rows keyed by `file_hash` (SHA-256 of PDF bytes); `generation_sequence` increments when bytes change (e.g. ledger-at-render differs on resend). `snapshot_hash` records frozen Phase 7 truth only.
+- **Send path:** single render in [`completeInvoiceCustomerSend`](backend/src/crm/crm.controller.ts) → persist → email attaches **same** `pdfBuffer`.
+- **Staff CRM PDF:** live render (current ledger). **Portal PDF:** live native render ([`InvoiceDocumentsPortalController`](backend/src/documents/invoice-documents/invoice-documents.portal.controller.ts)). Stored bytes = send/audit history (`GET /api/crm/invoices/:id/documents`, `.../documents/:documentId/pdf`).
+- **Bytes on disk:** `uploads/invoice-documents/` (require durable volume in production; metadata in MySQL).
 
-**Invoice numbering (Phase 10)**
+**Invoice numbering (Phase 10 — CLOSED)**
 
-- Column: `invoices.document_number` unique per org; allocated on first send from `organization_invoice_sequences` ([`InvoiceNumberingService`](backend/src/crm/invoice-numbering.service.ts)).
-- Draft display falls back to Workiz provenance or `INV-{uuid8}` until send.
-
-**Checks:** `npm run finance-part4-part5:checks` (backend).
+- **Status:** **CLOSED** (2026-09-26). Org-wide numeric sequence; allocation on send/freeze only.
+- Column: `invoices.document_number` unique per org; [`InvoiceNumberingService`](backend/src/crm/invoice-numbering.service.ts) + `organization_invoice_sequences`.
+- Display: [`resolveInvoiceDisplayNumber`](backend/src/crm/invoice-display-number.ts) — assigned number → Workiz historical provenance only → native draft `INV-{uuid8}`.
+- **Checks:** `npm run finance-part10:checks`; configured DB: `FINANCE_SMOKE_USE_CONFIGURED_DATABASE=true npm run finance-part10:configured-db-verification`.
 
 ## Exit gate
 

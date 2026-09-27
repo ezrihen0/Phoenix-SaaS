@@ -120,7 +120,7 @@ export default function PortalHomePage() {
                     <div key={invoice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-[color:var(--border-subtle)] px-4 py-3">
                       <div>
                         <p className="text-sm font-medium text-[color:var(--text-primary)]">
-                          {invoice.invoice_number ? `Invoice #${invoice.invoice_number}` : `Invoice ${invoice.id.slice(0, 8).toUpperCase()}`}
+                          {invoice.invoice_number ? `Invoice #${invoice.invoice_number}` : `Invoice (draft)`}
                         </p>
                         <p className="mt-1 text-xs text-[color:var(--text-secondary)]">
                           {formatCurrency(invoice.total_cents)} • {invoice.status} • {new Date(invoice.issued_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
