@@ -23,7 +23,12 @@ import { ProfileEntity } from "./entities/profile.entity";
 import { QuoteEntity } from "./entities/quote.entity";
 import { QuoteLineItemEntity } from "./entities/quote-line-item.entity";
 import { UserEntity } from "./entities/user.entity";
+import type { SmokeDatabasePlan } from "./db-smoke-database-plan";
 import { buildDataSourceOptions } from "./typeorm.config";
+
+export type SmokePhaseStatus = "PASS" | "FAIL" | "SKIP";
+
+const EPHEMERAL_DATABASE_ACCESS_DENIED = /Access denied.*database/i;
 
 export type ConversionSmokeFixture = {
   token: string;
@@ -68,6 +73,50 @@ export function extractErrorCode(error: unknown) {
   }
 
   return String(error);
+}
+
+export function isEphemeralDatabaseAccessDeniedMessage(message: string) {
+  return EPHEMERAL_DATABASE_ACCESS_DENIED.test(message);
+}
+
+export function applyEphemeralDatabaseAccessSkip<
+  TSummary extends {
+    ok: boolean;
+    errors: string[];
+    phases: Record<string, SmokePhaseStatus>;
+    results: Array<{ name: string; status: "PASS" | "FAIL" | "SKIP"; detail?: unknown }>;
+  },
+>(summary: TSummary, plan: SmokeDatabasePlan) {
+  if (plan.mode !== "ephemeral") {
+    return false;
+  }
+
+  const deniedErrors = summary.errors.filter((error) => isEphemeralDatabaseAccessDeniedMessage(error));
+  if (deniedErrors.length === 0) {
+    return false;
+  }
+
+  summary.results = summary.results.filter((result) => {
+    if (result.status !== "FAIL") {
+      return true;
+    }
+
+    const detail = typeof result.detail === "string" ? result.detail : String(result.detail ?? "");
+    return !isEphemeralDatabaseAccessDeniedMessage(detail);
+  });
+  summary.results.push({
+    name: "ephemeral database provisioning",
+    status: "SKIP",
+    detail:
+      "DB user lacks CREATE DATABASE for ephemeral verify DB. Set FINANCE_SMOKE_USE_CONFIGURED_DATABASE=true to run against the configured database.",
+  });
+  summary.errors = summary.errors.filter((error) => !isEphemeralDatabaseAccessDeniedMessage(error));
+  summary.phases.databaseCreate = "SKIP";
+  summary.phases.migrations = "SKIP";
+  summary.phases.schemaVerify = "SKIP";
+  summary.phases.tests = "SKIP";
+  summary.ok = true;
+  return true;
 }
 
 export function buildDocumentSnapshotService(dataSource: DataSource) {

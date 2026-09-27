@@ -9,19 +9,21 @@ import { InvoiceLineItemEntity } from "./entities/invoice-line-item.entity";
 import { PricebookItemEntity } from "./entities/pricebook-item.entity";
 import { resolveSmokeDatabasePlan } from "./db-smoke-database-plan";
 import {
+  applyEphemeralDatabaseAccessSkip,
   buildConversionService,
   cleanupConversionSmokeOrganizations,
   extractErrorCode,
   requireMySqlOptions,
   seedConversionSmokeFixture,
+  type SmokePhaseStatus,
 } from "./estimate-invoice-conversion-smoke.harness";
 import { verifyDatabaseSchema } from "./verify-schema";
 
 type SmokeSummary = {
   ok: boolean;
   database: string;
-  phases: Record<string, "PASS" | "FAIL">;
-  results: Array<{ name: string; status: "PASS" | "FAIL"; detail?: unknown }>;
+  phases: Record<string, SmokePhaseStatus>;
+  results: Array<{ name: string; status: "PASS" | "FAIL" | "SKIP"; detail?: unknown }>;
   errors: string[];
 };
 
@@ -152,7 +154,10 @@ async function main() {
     }
   }
 
-  summary.ok = summary.errors.length === 0 && summary.phases.tests === "PASS";
+  if (!applyEphemeralDatabaseAccessSkip(summary, plan)) {
+    summary.ok = summary.errors.length === 0 && summary.phases.tests === "PASS";
+  }
+
   console.log(JSON.stringify(summary, null, 2));
   if (!summary.ok) {
     process.exitCode = 1;

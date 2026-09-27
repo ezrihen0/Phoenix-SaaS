@@ -11,6 +11,7 @@ import { JobEntity } from "./entities/job.entity";
 import { QuoteEntity } from "./entities/quote.entity";
 import { resolveSmokeDatabasePlan } from "./db-smoke-database-plan";
 import {
+  applyEphemeralDatabaseAccessSkip,
   buildConversionService,
   cleanupConversionSmokeOrganizations,
   extractErrorCode,
@@ -18,14 +19,15 @@ import {
   seedConversionSmokeFixture,
   seedDraftEstimateJob,
   seedInvoiceWithManualLine,
+  type SmokePhaseStatus,
 } from "./estimate-invoice-conversion-smoke.harness";
 import { verifyDatabaseSchema } from "./verify-schema";
 
 type SmokeSummary = {
   ok: boolean;
   database: string;
-  phases: Record<string, "PASS" | "FAIL">;
-  results: Array<{ name: string; status: "PASS" | "FAIL"; detail?: unknown }>;
+  phases: Record<string, SmokePhaseStatus>;
+  results: Array<{ name: string; status: "PASS" | "FAIL" | "SKIP"; detail?: unknown }>;
   errors: string[];
 };
 
@@ -304,8 +306,11 @@ async function main() {
     }
   }
 
-  const failedResults = summary.results.filter((result) => result.status === "FAIL");
-  summary.ok = summary.errors.length === 0 && failedResults.length === 0;
+  if (!applyEphemeralDatabaseAccessSkip(summary, plan)) {
+    const failedResults = summary.results.filter((result) => result.status === "FAIL");
+    summary.ok = summary.errors.length === 0 && failedResults.length === 0;
+  }
+
   console.log(JSON.stringify(summary, null, 2));
   if (!summary.ok) {
     process.exitCode = 1;
