@@ -5,13 +5,11 @@ import type { RequestWithPortalSession } from "../../common/request-types";
 import { PortalIntegratedSessionGuard } from "../../customer-portal/portal-integrated-session.guard";
 import { setPdfDownloadResponseHeaders } from "../pdf/pdf-download-response";
 import { PortalNativeInvoicePdfService } from "../../crm/portal-native-invoice-pdf.service";
-import { InvoiceDocumentsService } from "./invoice-documents.service";
 
 @Controller("api/portal/invoices")
 @UseGuards(PortalIntegratedSessionGuard)
 export class InvoiceDocumentsPortalController {
   constructor(
-    private readonly invoiceDocumentsService: InvoiceDocumentsService,
     private readonly portalNativeInvoicePdfService: PortalNativeInvoicePdfService,
   ) {}
 
@@ -33,25 +31,12 @@ export class InvoiceDocumentsPortalController {
       });
     }
 
-    const { invoice, document } = await this.invoiceDocumentsService.getInvoiceForPortal(
-      invoiceId,
+    const rendered = await this.portalNativeInvoicePdfService.renderForPortal({
       organizationId,
       customerId,
-    );
-
-    if (!document) {
-      const rendered = await this.portalNativeInvoicePdfService.renderForPortal({
-        organizationId,
-        customerId,
-        invoiceId: invoice.id,
-      });
-      setPdfDownloadResponseHeaders(response, { download, filename: rendered.filename });
-      return new StreamableFile(rendered.buffer);
-    }
-
-    const pdfBuffer = await this.invoiceDocumentsService.readPdfBuffer(document);
-    const filename = document.original_filename || `invoice-${invoice.id.slice(0, 8)}.pdf`;
-    setPdfDownloadResponseHeaders(response, { download, filename });
-    return new StreamableFile(pdfBuffer);
+      invoiceId,
+    });
+    setPdfDownloadResponseHeaders(response, { download, filename: rendered.filename });
+    return new StreamableFile(rendered.buffer);
   }
 }

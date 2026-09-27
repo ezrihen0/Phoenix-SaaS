@@ -11,6 +11,8 @@ import { DataSource } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
 import { InvoiceDocumentsService } from "../documents/invoice-documents/invoice-documents.service";
+import { InvoiceNativeDocumentService } from "../documents/invoice-documents/invoice-native-document.service";
+import type { InvoiceCustomerFacingSnapshotAny } from "../crm/invoice-customer-facing-snapshot.types";
 import { CustomerEntity } from "./entities/customer.entity";
 import { InvoiceDocumentEntity } from "./entities/invoice-document.entity";
 import { InvoiceEntity } from "./entities/invoice.entity";
@@ -592,6 +594,41 @@ async function main() {
       }
       return { isolated: true };
     });
+
+    await expectPass(results, "12 native duplicate file_hash is idempotent", async () => {
+      const invoice = await createHarnessInvoice(dataSource!, {
+        organizationId: fixture.orgA.id,
+        customerId: fixture.customerA.id,
+        workizCode: "DOCN12",
+      });
+      const nativeService = new InvoiceNativeDocumentService(
+        dataSource!,
+        dataSource!.getRepository(InvoiceDocumentEntity),
+      );
+      const snapshot = {
+        schema_version: 3,
+        document_kind: "invoice",
+        frozen_at: new Date().toISOString(),
+        document_number: "DOCN12",
+      } as InvoiceCustomerFacingSnapshotAny;
+      const pdfBuffer = Buffer.from("%PDF-1.4 native durability idempotent");
+      const input = {
+        organizationId: fixture.orgA.id,
+        customerId: fixture.customerA.id,
+        invoice,
+        pdfBuffer,
+        snapshot,
+        sentVia: "email",
+      };
+      const first = await nativeService.persistNativePdf(input);
+      const before = await countDocuments(dataSource!);
+      const second = await nativeService.persistNativePdf(input);
+      const after = await countDocuments(dataSource!);
+      if (first.id !== second.id || after !== before) {
+        throw new Error("Expected native duplicate to reuse same document row");
+      }
+      return { documentId: first.id };
+    });
   } catch (error) {
     errors.push(extractErrorCode(error));
   } finally {
@@ -622,7 +659,7 @@ async function main() {
     errors.push(`phoenix_probe: ${extractErrorCode(error)}`);
   }
 
-  await expectPass(results, "12 existing Phoenix document records remain untouched", async () => {
+  await expectPass(results, "13 existing Phoenix document records remain untouched", async () => {
     if (phoenixDocumentCountBefore !== phoenixDocumentCountAfter) {
       throw new Error(`Expected ${phoenixDocumentCountBefore} Phoenix documents unchanged, got ${phoenixDocumentCountAfter}`);
     }
