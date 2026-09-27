@@ -252,4 +252,15 @@ export class InvoiceNativeDocumentService {
       },
     });
   }
+
+  findNativeDocumentForInvoice(organizationId: string, invoiceId: string, documentId: string) {
+    return this.invoiceDocumentsRepository.findOne({
+      where: {
+        id: documentId,
+        organization_id: organizationId,
+        invoice_id: invoiceId,
+        document_kind: "native_customer_pdf",
+      },
+    });
+  }
 }

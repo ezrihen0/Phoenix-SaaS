@@ -19,8 +19,12 @@ export const financeAuditActions = [
   "invoice.refund",
   "invoice.adjustment",
   "estimate.upsert",
+  "estimate.approved",
+  "estimate.signed",
+  "estimate.rejected",
   "estimate.convert_to_invoice",
   "invoice.snapshot_frozen",
+  "invoice.number_allocated",
 ] as const;
 
 export type FinanceAuditAction = (typeof financeAuditActions)[number];

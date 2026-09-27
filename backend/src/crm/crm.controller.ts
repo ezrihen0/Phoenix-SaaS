@@ -1187,6 +1187,13 @@ export class CrmController {
           }),
         );
         const frozenExisting = await this.maybeFreezeEstimateCustomerFacingSnapshot(organizationId, jobId, result.id);
+        await this.logEstimateFinanceAudit({
+          organizationId,
+          actorProfileId: actor.profile.id,
+          quoteId: result.id,
+          status: payload.status,
+          jobId,
+        });
         return apiSuccess(frozenExisting ?? result);
       }
 
@@ -1206,6 +1213,13 @@ export class CrmController {
       );
 
       const frozenNew = await this.maybeFreezeEstimateCustomerFacingSnapshot(organizationId, jobId, result.id);
+      await this.logEstimateFinanceAudit({
+        organizationId,
+        actorProfileId: actor.profile.id,
+        quoteId: result.id,
+        status: payload.status,
+        jobId,
+      });
       return apiSuccess(frozenNew ?? result);
     } catch (error) {
       this.rethrowHttpException(error);
@@ -1454,6 +1468,10 @@ export class CrmController {
     const actor = this.requireActor(request);
     const organizationId = this.requireActiveOrganizationId(actor);
 
+    if (!actorHasPermission(actor, "invoices.view") && !actorHasPermission(actor, "invoices.assigned.view")) {
+      apiError(403, "invoice_view_forbidden", "This account cannot view invoices.");
+    }
+
     try {
       const invoice = await this.invoicesRepository.findOne({
         where: {
@@ -1678,11 +1696,11 @@ export class CrmController {
       apiError(403, "invoice_access_denied", "You do not have access to this invoice.");
     }
 
-    const documents = await this.invoiceNativeDocumentService.listNativeDocumentsForInvoice(
+    const document = await this.invoiceNativeDocumentService.findNativeDocumentForInvoice(
       organizationId,
       invoice.id,
+      documentId,
     );
-    const document = documents.find((row) => row.id === documentId);
     if (!document) {
       apiError(404, "invoice_document_not_found", "The stored invoice document could not be found.");
     }
@@ -1721,8 +1739,8 @@ export class CrmController {
 
     const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
 
-    if (!canAccessInvoiceResource(actor, job?.assigned_technician_id)) {
-      apiError(403, "invoice_access_denied", "You do not have access to this invoice.");
+    if (!canManageInvoiceResource(actor, job?.assigned_technician_id)) {
+      apiError(403, "invoice_manage_forbidden", "This account cannot send invoices.");
     }
 
     const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
@@ -1744,6 +1762,7 @@ export class CrmController {
     const ledgerSummary = this.summarizeInvoiceLedger(invoice);
     const dueDays = this.readDefaultDueDays(orgSettings);
 
+    const hadDocumentNumber = Boolean(invoice.document_number?.trim());
     const sendResult = await this.completeInvoiceCustomerSend({
       organizationId,
       customerId: customer.id,
@@ -1754,6 +1773,16 @@ export class CrmController {
       orgSettings,
       frozenVia: "email",
     });
+    if (!hadDocumentNumber && sendResult.documentNumber) {
+      await this.financeAuditService.log({
+        organizationId,
+        actorProfileId: actor.profile.id,
+        entityType: "invoice",
+        entityId: invoice.id,
+        action: "invoice.number_allocated",
+        metadata: { document_number: sendResult.documentNumber },
+      });
+    }
     const documentNumber = sendResult.documentNumber;
     const dueDateLabel = this.formatDueDate(invoice.due_at, invoice.issued_at, dueDays);
 
@@ -1826,8 +1855,8 @@ export class CrmController {
 
     const job = this.relationValue(invoice.job as RelatedValue<JobEntity>);
 
-    if (!canAccessInvoiceResource(actor, job?.assigned_technician_id)) {
-      apiError(403, "invoice_access_denied", "You do not have access to this invoice.");
+    if (!canManageInvoiceResource(actor, job?.assigned_technician_id)) {
+      apiError(403, "invoice_manage_forbidden", "This account cannot send invoices.");
     }
 
     const customer = this.relationValue(job?.customer as RelatedValue<CustomerEntity>);
@@ -1842,6 +1871,7 @@ export class CrmController {
 
     const orgSettings = await this.findOrganizationSettings(organizationId);
     const businessName = this.normalizeOptionalString(orgSettings?.business_name);
+    const hadDocumentNumber = Boolean(invoice.document_number?.trim());
     const sendResult = await this.completeInvoiceCustomerSend({
       organizationId,
       customerId: customer.id,
@@ -1852,6 +1882,16 @@ export class CrmController {
       orgSettings,
       frozenVia: "sms",
     });
+    if (!hadDocumentNumber && sendResult.documentNumber) {
+      await this.financeAuditService.log({
+        organizationId,
+        actorProfileId: actor.profile.id,
+        entityType: "invoice",
+        entityId: invoice.id,
+        action: "invoice.number_allocated",
+        metadata: { document_number: sendResult.documentNumber },
+      });
+    }
     const documentNumber = sendResult.documentNumber;
     const totalCents = invoice.total_cents || (invoice.subtotal_cents || invoice.amount_cents);
     const dueDays = this.readDefaultDueDays(orgSettings);
@@ -2436,6 +2476,15 @@ export class CrmController {
       await this.quotesRepository.save(quote);
       await this.maybeFreezeEstimateCustomerFacingSnapshot(organizationId, quote.job_id, quote.id);
 
+      await this.financeAuditService.log({
+        organizationId,
+        actorProfileId: actor.profile.id,
+        entityType: "estimate",
+        entityId: quote.id,
+        action: "estimate.approved",
+        metadata: { job_id: quote.job_id },
+      });
+
       return apiSuccess({ ok: true });
     } catch (error) {
       this.rethrowHttpException(error);
@@ -2503,6 +2552,15 @@ export class CrmController {
       quote.signed_by_name = payload.signedByName;
       await this.quotesRepository.save(quote);
       await this.maybeFreezeEstimateCustomerFacingSnapshot(organizationId, quote.job_id, quote.id);
+
+      await this.financeAuditService.log({
+        organizationId,
+        actorProfileId: actor.profile.id,
+        entityType: "estimate",
+        entityId: quote.id,
+        action: "estimate.signed",
+        metadata: { job_id: quote.job_id },
+      });
 
       return apiSuccess({ ok: true });
     } catch (error) {
@@ -4290,6 +4348,30 @@ export class CrmController {
     });
 
     return this.invoicePdfService.renderInvoicePdf(viewModel);
+  }
+
+  private async logEstimateFinanceAudit(input: {
+    organizationId: string;
+    actorProfileId: string;
+    quoteId: string;
+    status: string;
+    jobId: string;
+  }) {
+    const action =
+      input.status === "rejected"
+        ? "estimate.rejected"
+        : input.status === "approved"
+          ? "estimate.approved"
+          : "estimate.upsert";
+
+    await this.financeAuditService.log({
+      organizationId: input.organizationId,
+      actorProfileId: input.actorProfileId,
+      entityType: "estimate",
+      entityId: input.quoteId,
+      action,
+      metadata: { job_id: input.jobId, status: input.status },
+    });
   }
 
   private async completeInvoiceCustomerSend(input: {

@@ -14,8 +14,14 @@ import { CustomerPortalService } from "../customer-portal/customer-portal.servic
 import type { SettingsService } from "../settings/settings.service";
 import { PhoenixIntegrationAuthService } from "../integrations/phoenix/phoenix-integration-auth.service";
 import { PortalIntegratedSessionGuard } from "../customer-portal/portal-integrated-session.guard";
+import { InvoiceCustomerFacingSnapshotService } from "../crm/invoice-customer-facing-snapshot.service";
 import { InvoicePaymentLedgerService } from "../crm/invoice-payment-ledger.service";
+import { InvoicePdfViewModelService } from "../crm/invoice-pdf-view-model.service";
+import { InvoicePdfService } from "../crm/invoice-pdf.service";
+import { PortalNativeInvoicePdfService } from "../crm/portal-native-invoice-pdf.service";
+import { PhoenixInvoiceDocumentPresentationService } from "../crm/phoenix-invoice-document-presentation.service";
 import { DocumentBrandingSnapshotService } from "../documents/pdf/document-branding-snapshot.service";
+import { PdfRenderService } from "../documents/pdf/pdf-render.service";
 import { WarrantyCertificatesService } from "../warranty/warranty-certificates.service";
 import { WarrantyPdfService } from "../warranty/warranty-pdf.service";
 import { CustomerEntity } from "./entities/customer.entity";
@@ -60,6 +66,7 @@ type Seed = {
   orgAId: string;
   orgBId: string;
   customerAId: string;
+  customerA2Id: string;
   customerBId: string;
   certAId: string;
   certBId: string;
@@ -177,6 +184,23 @@ async function expectApiError(
   }
 }
 
+function buildPortalNativeInvoicePdfService(dataSource: DataSource) {
+  const ledger = new InvoicePaymentLedgerService();
+  const brandingSnapshotService = new DocumentBrandingSnapshotService();
+  return new PortalNativeInvoicePdfService(
+    dataSource.getRepository(InvoiceEntity),
+    dataSource.getRepository(OrganizationSettingEntity),
+    new PhoenixInvoiceDocumentPresentationService(
+      new InvoicePdfViewModelService(
+        new InvoiceCustomerFacingSnapshotService(brandingSnapshotService),
+        brandingSnapshotService,
+      ),
+      ledger,
+    ),
+    new InvoicePdfService(new PdfRenderService()),
+  );
+}
+
 function buildPortalService(dataSource: DataSource) {
   return new CustomerPortalService(
     dataSource.getRepository(CustomerEntity),
@@ -276,6 +300,25 @@ async function seedHarness(dataSource: DataSource, token: string): Promise<Seed>
       service_state_or_region: "AZ",
       service_postal_code: "85001",
       phone: "5551110001",
+      legacy_created_at: null,
+      source: "website",
+      preferred_service_type: "inspection",
+      notes: null,
+      lifecycle_status: "active",
+    }),
+  );
+  const customerA2 = await customerRepo.save(
+    customerRepo.create({
+      organization_id: orgA.id,
+      full_name: "Portal Customer A2",
+      email: "a2@example.com",
+      company_name: null,
+      service_address_line_1: "3 A St",
+      service_address_line_2: null,
+      service_city: "Phoenix",
+      service_state_or_region: "AZ",
+      service_postal_code: "85003",
+      phone: "5551110003",
       legacy_created_at: null,
       source: "website",
       preferred_service_type: "inspection",
@@ -405,6 +448,7 @@ async function seedHarness(dataSource: DataSource, token: string): Promise<Seed>
     orgAId: orgA.id,
     orgBId: orgB.id,
     customerAId: customerA.id,
+    customerA2Id: customerA2.id,
     customerBId: customerB.id,
     certAId: certA.id,
     certBId: certB.id,
@@ -415,6 +459,7 @@ async function seedHarness(dataSource: DataSource, token: string): Promise<Seed>
 
 async function runCases(summary: SmokeSummary, dataSource: DataSource, seed: Seed) {
   const portal = buildPortalService(dataSource);
+  const portalInvoicePdf = buildPortalNativeInvoicePdfService(dataSource);
   const warranty = buildWarrantyService(dataSource);
   const request = mockRequest();
   const response = mockResponse();
@@ -606,6 +651,42 @@ async function runCases(summary: SmokeSummary, dataSource: DataSource, seed: See
     return { lifecycle: own.lifecycle_status };
   });
 
+  await expectApiError(
+    summary,
+    "P9 — portal document-view rejects foreign org invoice UUID",
+    ["invoice_not_found"],
+    () =>
+      portalInvoicePdf.getDocumentViewForPortal({
+        organizationId: seed.orgAId,
+        customerId: seed.customerAId,
+        invoiceId: seed.invoiceBId,
+      }),
+  );
+
+  await expectApiError(
+    summary,
+    "P10 — portal document-view rejects same-org other customer invoice",
+    ["invoice_not_found"],
+    () =>
+      portalInvoicePdf.getDocumentViewForPortal({
+        organizationId: seed.orgAId,
+        customerId: seed.customerA2Id,
+        invoiceId: seed.invoiceAId,
+      }),
+  );
+
+  await expectApiError(
+    summary,
+    "P11 — portal PDF render rejects foreign org invoice UUID",
+    ["invoice_not_found"],
+    () =>
+      portalInvoicePdf.renderForPortal({
+        organizationId: seed.orgAId,
+        customerId: seed.customerAId,
+        invoiceId: seed.invoiceBId,
+      }),
+  );
+
   await expectPass(summary, "P7 — expired magic link rejected", async () => {
     const expiredToken = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
     const tokenHash = createHash("sha256").update(expiredToken).digest("hex");
@@ -637,7 +718,9 @@ async function cleanupPortalSmokeSeed(dataSource: DataSource, seed: Seed) {
   await dataSource.getRepository(WarrantyCertificateEntity).delete({ id: In([seed.certAId, seed.certBId]) });
   await dataSource.getRepository(InvoiceEntity).delete({ id: In([seed.invoiceAId, seed.invoiceBId]) });
   await dataSource.getRepository(JobEntity).delete({ organization_id: In(orgIds) });
-  await dataSource.getRepository(CustomerEntity).delete({ id: In([seed.customerAId, seed.customerBId]) });
+  await dataSource.getRepository(CustomerEntity).delete({
+    id: In([seed.customerAId, seed.customerA2Id, seed.customerBId]),
+  });
   await dataSource.getRepository(OrganizationEntity).delete({ id: In(orgIds) });
 }
 
