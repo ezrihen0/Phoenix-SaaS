@@ -81,6 +81,121 @@ type ManageableOrganization = {
   isCurrent: boolean;
 };
 
+type BranchOption = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+function StaffBranchAccessSection({
+  members,
+  branches,
+  saving,
+  onMessage,
+}: {
+  members: TeamMember[];
+  branches: BranchOption[];
+  saving: boolean;
+  onMessage: (message: string | null) => void;
+}) {
+  const [accessByProfile, setAccessByProfile] = useState<Record<string, string[]>>({});
+  const staffMembers = useMemo(
+    () => members.filter((member) => member.role !== "owner" && member.role !== "admin" && member.status === "active"),
+    [members],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(
+      staffMembers.map(async (member) => {
+        const payload = await teamFetch<{ branchIds: string[] }>(
+          `/api/team/members/${encodeURIComponent(member.id)}/branch-access`,
+        );
+        return [member.id, payload.branchIds] as const;
+      }),
+    )
+      .then((entries) => {
+        if (!cancelled) {
+          setAccessByProfile(Object.fromEntries(entries));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAccessByProfile({});
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [staffMembers]);
+
+  async function saveAccess(profileId: string) {
+    onMessage(null);
+    try {
+      await teamFetch(`/api/team/members/${encodeURIComponent(profileId)}/branch-access`, {
+        method: "PUT",
+        body: JSON.stringify({ branchIds: accessByProfile[profileId] ?? [] }),
+      });
+      onMessage("Branch access updated.");
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "Branch access could not be saved.");
+    }
+  }
+
+  if (staffMembers.length === 0 || branches.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mx-6 mb-6 rounded-[26px] border border-[color:var(--cmp-border-subtle)] p-5">
+      <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-accent-primary)]">Branch access</p>
+      <h3 className="mt-1 text-lg font-semibold text-[color:var(--sem-text-primary)]">Staff branch visibility</h3>
+      <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
+        Restrict technicians and office staff to Alberta, Ontario, or both. Owners and admins always see every branch.
+      </p>
+      <div className="mt-4 space-y-3">
+        {staffMembers.map((member) => (
+          <div key={member.id} className="rounded-[16px] border border-[color:var(--cmp-border-subtle)] px-4 py-3">
+            <p className="font-medium text-[color:var(--sem-text-primary)]">{member.full_name}</p>
+            <div className="mt-3 flex flex-wrap gap-4">
+              {branches.map((branch) => {
+                const selected = (accessByProfile[member.id] ?? []).includes(branch.id);
+                return (
+                  <label key={branch.id} className="inline-flex items-center gap-2 text-sm text-[color:var(--sem-text-secondary)]">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={(event) => {
+                        setAccessByProfile((current) => {
+                          const existing = current[member.id] ?? [];
+                          const next = event.target.checked
+                            ? [...new Set([...existing, branch.id])]
+                            : existing.filter((id) => id !== branch.id);
+                          return { ...current, [member.id]: next };
+                        });
+                      }}
+                    />
+                    {branch.name} ({branch.code})
+                  </label>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void saveAccess(member.id)}
+              className="theme-control-surface mt-3 rounded-full border px-3 py-2 text-xs font-medium"
+            >
+              Save branch access
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type CreateMemberResult = {
   userCreated: boolean;
   userReused: boolean;
@@ -164,18 +279,20 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
   const [organizationAccessMode, setOrganizationAccessMode] = useState<OrganizationAccessMode>("single");
   const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<string[]>([]);
   const [singleOrganizationId, setSingleOrganizationId] = useState<string>("");
+  const [branchOptions, setBranchOptions] = useState<BranchOption[]>([]);
 
   const loadTeam = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
 
     try {
-      const [nextSummary, nextMembers, nextCustomRoles, registry, organizations] = await Promise.all([
+      const [nextSummary, nextMembers, nextCustomRoles, registry, organizations, branches] = await Promise.all([
         teamFetch<TeamSummary>("/api/team/summary"),
         teamFetch<TeamMember[]>("/api/team/members"),
         teamFetch<CustomRole[]>("/api/team/custom-roles"),
         teamFetch<{ groups: PermissionRegistryGroup[] }>("/api/team/permissions/registry"),
         teamFetch<ManageableOrganization[]>("/api/team/organizations"),
+        teamFetch<BranchOption[]>("/api/branches").catch(() => [] as BranchOption[]),
       ]);
 
       setSummary(nextSummary);
@@ -183,6 +300,7 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
       setCustomRoles(nextCustomRoles);
       setRegistryGroups(registry.groups);
       setManageableOrganizations(organizations);
+      setBranchOptions(branches);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Team data could not be loaded.");
     } finally {
@@ -815,6 +933,13 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
             </div>
           ))}
         </div>
+
+        <StaffBranchAccessSection
+          members={sortedMembers}
+          branches={branchOptions}
+          saving={saving}
+          onMessage={setMessage}
+        />
 
         <div className="mx-6 mb-6 rounded-[26px] border border-[color:var(--cmp-border-subtle)] p-5">
           <div className="flex items-center gap-3">

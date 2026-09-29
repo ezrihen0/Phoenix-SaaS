@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthModule } from "../auth/auth.module";
+import { CrmModule } from "../crm/crm.module";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationCustomRoleEntity } from "../database/entities/organization-custom-role.entity";
 import { OrganizationTeamEntitlementEntity } from "../database/entities/organization-team-entitlement.entity";
@@ -14,6 +15,7 @@ import { TeamService } from "./team.service";
 @Module({
   imports: [
     AuthModule,
+    CrmModule,
     TypeOrmModule.forFeature([
       MembershipEntity,
       ProfileEntity,

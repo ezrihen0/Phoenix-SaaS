@@ -39,6 +39,8 @@ export default async function NewJobPage({ searchParams }: NewJobPageContext) {
   const session = await requireOfficeCrmRoute(nextPath);
   const permissions = session.permissions ?? [];
   const canManageCustomers = permissions.includes("customers.manage");
+  const role = session.profile?.role ?? "technician";
+  const canOverrideJobBranch = role === "owner" || role === "admin";
 
   if (customerId && leadId) {
     return (
@@ -158,6 +160,7 @@ export default async function NewJobPage({ searchParams }: NewJobPageContext) {
         technicians={technicians}
         services={services}
         canManageCustomers={canManageCustomers}
+        canOverrideJobBranch={canOverrideJobBranch}
         initialSource={initialSource}
       />
     </main>

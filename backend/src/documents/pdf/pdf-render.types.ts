@@ -3,9 +3,20 @@ export type PdfFontDefinition = {
   baseFont: string;
 };
 
+export type PdfEmbeddedJpegLogo = {
+  jpegBuffer: Buffer;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  displayWidth: number;
+  displayHeight: number;
+};
+
 export type PdfRenderOptions = {
   fonts: PdfFontDefinition[];
   mediaBox?: string;
+  logo?: PdfEmbeddedJpegLogo;
 };
 
 export type PdfRenderableDocument = PdfRenderOptions & {

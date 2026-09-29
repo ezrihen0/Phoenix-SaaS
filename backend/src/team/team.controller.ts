@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -19,6 +20,7 @@ import {
   type RoleModePermission,
 } from "../auth/permissions";
 import { SessionGuard } from "../auth/session.guard";
+import { BranchScopeService } from "../crm/branch-scope.service";
 import { TeamService } from "./team.service";
 
 type CreateMemberPayload = {
@@ -118,7 +120,10 @@ function parseCustomRolePayload(payload: CustomRolePayload) {
 @Controller("api/team")
 @UseGuards(SessionGuard)
 export class TeamController {
-  constructor(private readonly teamService: TeamService) {}
+  constructor(
+    private readonly teamService: TeamService,
+    private readonly branchScopeService: BranchScopeService,
+  ) {}
 
   @Get("summary")
   async summary(@Req() request: RequestWithActor) {
@@ -209,5 +214,50 @@ export class TeamController {
   async deleteCustomRole(@Param("roleId") roleId: string, @Req() request: RequestWithActor) {
     requirePermission(request.actor, "team.manage", "team_manage_forbidden", "You cannot manage custom roles.");
     return apiSuccess(await this.teamService.deleteCustomRole(roleId, request.actor!));
+  }
+
+  @Get("members/:profileId/branch-access")
+  async getMemberBranchAccess(@Param("profileId") profileId: string, @Req() request: RequestWithActor) {
+    requirePermission(request.actor, "team.manage", "team_manage_forbidden", "You cannot manage branch access.");
+    const organizationId = request.actor?.organization_id;
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required.");
+    }
+
+    const membershipId = await this.teamService.resolveMembershipIdForProfile(profileId, organizationId);
+    const branchIds = await this.branchScopeService.getMembershipBranchAccess(membershipId, organizationId);
+    return apiSuccess({ membershipId, branchIds });
+  }
+
+  @Put("members/:profileId/branch-access")
+  async replaceMemberBranchAccess(
+    @Param("profileId") profileId: string,
+    @Body() payload: { branchIds?: unknown },
+    @Req() request: RequestWithActor,
+  ) {
+    requirePermission(request.actor, "team.manage", "team_manage_forbidden", "You cannot manage branch access.");
+    const organizationId = request.actor?.organization_id;
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required.");
+    }
+
+    if (!Array.isArray(payload?.branchIds)) {
+      apiError(400, "invalid_branch_access_payload", "branchIds must be an array.");
+    }
+
+    const branchIds = payload.branchIds
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    const membershipId = await this.teamService.resolveMembershipIdForProfile(profileId, organizationId);
+    const saved = await this.branchScopeService.replaceMembershipBranchAccess(
+      request.actor!,
+      organizationId,
+      membershipId,
+      branchIds,
+    );
+
+    return apiSuccess({ membershipId, branchIds: saved });
   }
 }

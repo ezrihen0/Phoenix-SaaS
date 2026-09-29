@@ -668,6 +668,11 @@ const messages = {
       title: "Organization identity & document defaults",
       helper: "Identity, documents, and invoice defaults for customer-facing output.",
     },
+    branches: {
+      label: "Branches",
+      title: "Alberta & Ontario branch profiles",
+      helper: "Business identity, tax labels, and document branding per province branch.",
+    },
     appearance: {
       label: "Appearance",
       title: "Workspace theme",
@@ -1014,6 +1019,7 @@ const messages = {
     unscheduled: "Unscheduled",
     activeTechnicians: "Active Technicians",
     selectedRange: "Selected Range",
+    scheduleNewJob: "Schedule a new job",
     refreshSchedule: "Refresh schedule",
     refreshed: "Schedule data was refreshed.",
     refreshError: "The schedule board could not be refreshed.",
@@ -1059,6 +1065,7 @@ const messages = {
     timeNotSet: "Time not set",
     fieldCommand: {
       eyebrow: "Field Command",
+      scheduleNewJob: "Schedule a new job",
       backToSchedule: "Back to schedule",
       timeNotSet: "Time not set",
       openJob: "Open job",

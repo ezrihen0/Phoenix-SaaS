@@ -1,4 +1,4 @@
-﻿import { Module } from "@nestjs/common";
+import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthModule } from "../auth/auth.module";
@@ -16,7 +16,11 @@ import { JobEntity } from "../database/entities/job.entity";
 import { LeadEntity } from "../database/entities/lead.entity";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
+import { BranchEntity } from "../database/entities/branch.entity";
+import { BranchInvoiceSequenceEntity } from "../database/entities/branch-invoice-sequence.entity";
+import { MembershipBranchAccessEntity } from "../database/entities/membership-branch-access.entity";
 import { OrganizationInvoiceSequenceEntity } from "../database/entities/organization-invoice-sequence.entity";
+import { BranchScopeService } from "./branch-scope.service";
 import { PricebookBundleItemEntity } from "../database/entities/pricebook-bundle-item.entity";
 import { PricebookBundleEntity } from "../database/entities/pricebook-bundle.entity";
 import { PricebookItemEntity } from "../database/entities/pricebook-item.entity";
@@ -28,6 +32,7 @@ import { TechnicianEntity } from "../database/entities/technician.entity";
 import { LanguageStoreModule } from "../language-store/language-store.module";
 import { MessagingModule } from "../messaging/messaging.module";
 import { CrmController } from "./crm.controller";
+import { BranchesController } from "./branches.controller";
 import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
 import { CustomerLedgerService } from "./customer-ledger.service";
 import { CustomerDeletionService } from "./customer-deletion.service";
@@ -77,10 +82,14 @@ import { FinanceAuditEventEntity } from "../database/entities/finance-audit-even
       PricebookBundleItemEntity,
       OrganizationSettingEntity,
       OrganizationInvoiceSequenceEntity,
+      MembershipEntity,
+      BranchEntity,
+      BranchInvoiceSequenceEntity,
+      MembershipBranchAccessEntity,
       FinanceAuditEventEntity,
     ]),
   ],
-  controllers: [CrmController],
+  controllers: [CrmController, BranchesController],
   providers: [
     MoneyEngineService,
     DocumentPricingService,
@@ -99,6 +108,7 @@ import { FinanceAuditEventEntity } from "../database/entities/finance-audit-even
     CustomerLedgerService,
     CustomerDeletionService,
     InvoicePdfService,
+    BranchScopeService,
     JobsService,
   ],
   exports: [
@@ -108,6 +118,7 @@ import { FinanceAuditEventEntity } from "../database/entities/finance-audit-even
     FinanceInvoicePresentationService,
     InvoicePaymentLedgerService,
     FinanceAuditService,
+    BranchScopeService,
     PhoenixInvoiceDocumentPresentationService,
     InvoicePdfViewModelService,
     InvoicePdfService,

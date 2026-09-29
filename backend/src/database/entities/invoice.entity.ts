@@ -13,6 +13,7 @@ import {
 import { invoiceStatuses, type InvoiceStatus } from "../../crm/constants";
 import { InvoiceLineItemEntity } from "./invoice-line-item.entity";
 import { InvoicePaymentEntity } from "./invoice-payment.entity";
+import { BranchEntity } from "./branch.entity";
 import { JobEntity } from "./job.entity";
 import { OrganizationEntity } from "./organization.entity";
 
@@ -32,6 +33,9 @@ export class InvoiceEntity {
 
   @Column({ type: "varchar", length: 36, nullable: true })
   organization_id!: string | null;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  branch_id!: string | null;
 
   @Column({ type: "text" })
   description!: string;
@@ -124,6 +128,13 @@ export class InvoiceEntity {
   })
   @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
   organization?: OrganizationEntity | null;
+
+  @ManyToOne(() => BranchEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "branch_id", referencedColumnName: "id" })
+  branch?: BranchEntity | null;
 
   @OneToMany(() => InvoiceLineItemEntity, (lineItem) => lineItem.invoice)
   line_items?: InvoiceLineItemEntity[];

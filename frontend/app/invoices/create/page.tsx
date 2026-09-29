@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Receipt, Search, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Receipt, Search, UserRound, UserRoundPlus } from "lucide-react";
 
 import { requireServerPermission } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
+import { buildCustomerCreateHref } from "@/lib/crm/customer-create-return";
 import { getJobStatusLabel, type JobStatus } from "@/lib/crm/statuses";
 import type { Database } from "@/lib/types/database";
 
@@ -182,13 +183,22 @@ export default async function CreateInvoiceChooserPage({ searchParams }: CreateI
                 Invoices are created from jobs. Select a customer, then choose the job you want to invoice.
                 </p>
               </div>
-              <Link
-                href="/invoices"
-                className="theme-control-surface inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm text-[color:var(--sem-text-secondary)] transition hover:text-[color:var(--sem-text-primary)]"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to invoices
-              </Link>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/invoices"
+                  className="theme-control-surface inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm text-[color:var(--sem-text-secondary)] transition hover:text-[color:var(--sem-text-primary)]"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to invoices
+                </Link>
+                <Link
+                  href={buildCustomerCreateHref("/invoices/create")}
+                  className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition"
+                >
+                  <UserRoundPlus className="h-4 w-4" />
+                  New Customer
+                </Link>
+              </div>
             </div>
           </section>
 

@@ -9,7 +9,12 @@ import { DataSource } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
 import type { ActorContext } from "../common/request-types";
+import { BranchScopeService } from "../crm/branch-scope.service";
 import { JobsService } from "../crm/jobs.service";
+import { BranchEntity } from "./entities/branch.entity";
+import { MembershipBranchAccessEntity } from "./entities/membership-branch-access.entity";
+import { InvoiceEntity } from "./entities/invoice.entity";
+import { QuoteEntity } from "./entities/quote.entity";
 import { findJobForActor } from "../crm/jobs-access";
 import type { JobType } from "../crm/constants";
 import { CustomerEntity } from "./entities/customer.entity";
@@ -130,7 +135,17 @@ async function main() {
     const customerRepo = dataSource.getRepository(CustomerEntity);
     const jobRepo = dataSource.getRepository(JobEntity);
     const technicianRepo = dataSource.getRepository(TechnicianEntity);
-    const jobsService = new JobsService(jobRepo);
+    const branchScopeService = new BranchScopeService(
+      dataSource.getRepository(BranchEntity),
+      dataSource.getRepository(MembershipBranchAccessEntity),
+      jobRepo,
+      dataSource.getRepository(QuoteEntity),
+      dataSource.getRepository(InvoiceEntity),
+      dataSource,
+    );
+    const jobsService = new JobsService(jobRepo, branchScopeService);
+    const branchRepo = dataSource.getRepository(BranchEntity);
+    const branchAccessRepo = dataSource.getRepository(MembershipBranchAccessEntity);
 
     const orgA = await orgRepo.save(orgRepo.create({
       id: randomUUID(),
@@ -193,6 +208,37 @@ async function main() {
       last_seen_at: null,
     }));
 
+    const branchA = await branchRepo.save(branchRepo.create({
+      id: randomUUID(),
+      organization_id: orgA.id,
+      name: "Alberta",
+      code: "AB",
+      tax_label: "GST",
+      default_tax_rate_bps: 500,
+      invoice_prefix: "AB-INV-",
+      estimate_prefix: "AB-EST-",
+      active: true,
+      sort_order: 1,
+    }));
+
+    await branchAccessRepo.save([
+      branchAccessRepo.create({
+        id: randomUUID(),
+        membership_id: officeA.membership.id,
+        branch_id: branchA.id,
+      }),
+      branchAccessRepo.create({
+        id: randomUUID(),
+        membership_id: tech1User.membership.id,
+        branch_id: branchA.id,
+      }),
+      branchAccessRepo.create({
+        id: randomUUID(),
+        membership_id: tech2User.membership.id,
+        branch_id: branchA.id,
+      }),
+    ]);
+
     const customerA = await customerRepo.save(customerRepo.create({
       id: randomUUID(),
       organization_id: orgA.id,
@@ -230,6 +276,7 @@ async function main() {
       return jobRepo.save(jobRepo.create({
         id: randomUUID(),
         organization_id: input.orgId,
+        branch_id: input.orgId === orgA.id ? branchA.id : null,
         customer_id: input.customerId,
         assigned_technician_id: input.assignedTechnicianId,
         title: input.title,

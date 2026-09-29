@@ -93,6 +93,7 @@ export type CreateJobPayload = {
   jobType: JobType;
   serviceType: ServiceType;
   serviceId: string | null;
+  branchId: string | null;
   serviceAddressLine1: string;
   serviceAddressLine2: string | null;
   serviceCity: string;
@@ -110,6 +111,7 @@ export type UpdateJobPayload = {
   description?: string | null;
   assignedTechnicianId?: string | null;
   serviceId?: string | null;
+  branchId?: string | null;
   scheduledFor?: string | null;
   scheduledWindow?: string | null;
   jobType?: JobType;
@@ -656,6 +658,7 @@ export function parseCreateJobPayload(jsonBody: unknown): CreateJobPayload {
     jobType: requireEnumValue(payload.jobType, "jobType", operationalJobTypes),
     serviceType: requireEnumValue(payload.serviceType, "serviceType", serviceTypes),
     serviceId: optionalUuid(payload.serviceId, "serviceId"),
+    branchId: optionalUuid(payload.branchId, "branchId"),
     serviceAddressLine1: requireTrimmedString(
       payload.serviceAddressLine1,
       "serviceAddressLine1",
@@ -703,6 +706,10 @@ export function parseUpdateJobPayload(jsonBody: unknown): UpdateJobPayload {
       payload.serviceId === undefined
         ? undefined
         : optionalUuid(payload.serviceId, "serviceId"),
+    branchId:
+      payload.branchId === undefined
+        ? undefined
+        : optionalUuid(payload.branchId, "branchId"),
     scheduledFor:
       payload.scheduledFor === undefined
         ? undefined

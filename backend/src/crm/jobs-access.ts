@@ -7,6 +7,7 @@ import {
 import { apiError } from "../common/api-response";
 import type { ActorContext } from "../common/request-types";
 import type { JobEntity } from "../database/entities/job.entity";
+import { assertActorCanAccessJobBranch } from "./branch-access";
 
 export function isAssignedOnlyJobActor(actor: ActorContext | null | undefined): boolean {
   return !actorHasPermission(actor, "jobs.view")
@@ -92,6 +93,7 @@ export async function findJobForActor(
   organizationId: string,
   actor: ActorContext,
   relations: JobDetailRelations = defaultJobDetailRelations,
+  accessibleBranchIds?: string[] | null,
 ): Promise<JobEntity> {
   const job = await findJobInOrganization(jobsRepository, jobId, organizationId, relations);
 
@@ -100,6 +102,10 @@ export async function findJobForActor(
   }
 
   assertCanAccessJob(actor, job.assigned_technician_id);
+
+  if (accessibleBranchIds !== undefined) {
+    assertActorCanAccessJobBranch(actor, job, accessibleBranchIds);
+  }
 
   return job;
 }

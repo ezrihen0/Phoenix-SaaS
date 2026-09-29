@@ -12,6 +12,9 @@ export const requiredTables = [
   "organization_enabled_languages",
   "organization_language_entitlements",
   "memberships",
+  "membership_branch_access",
+  "branches",
+  "branch_invoice_sequences",
   "organization_custom_roles",
   "organization_team_entitlements",
   "team_rbac_audit_events",
@@ -252,8 +255,8 @@ export const requiredColumns = [
       "created_at",
     ],
   },
-  { table: "jobs", columns: ["organization_id", "customer_id", "job_type", "status"] },
-  { table: "quotes", columns: ["organization_id", "job_id", "status"] },
+  { table: "jobs", columns: ["organization_id", "branch_id", "customer_id", "job_type", "status"] },
+  { table: "quotes", columns: ["organization_id", "branch_id", "job_id", "status"] },
   {
     table: "quote_line_items",
     columns: [
@@ -266,7 +269,7 @@ export const requiredColumns = [
       "sort_order",
     ],
   },
-  { table: "invoices", columns: ["organization_id", "job_id", "status", "due_at", "branding_snapshot_json"] },
+  { table: "invoices", columns: ["organization_id", "branch_id", "job_id", "status", "due_at", "branding_snapshot_json"] },
   {
     table: "invoice_line_items",
     columns: [
@@ -926,8 +929,30 @@ export const requiredForeignKeys = [
   },
   { table: "jobs", column: "customer_id", referencedTable: "customers", referencedColumn: "id" },
   { table: "jobs", column: "organization_id", referencedTable: "organizations", referencedColumn: "id" },
+  { table: "jobs", column: "branch_id", referencedTable: "branches", referencedColumn: "id" },
+  { table: "quotes", column: "branch_id", referencedTable: "branches", referencedColumn: "id" },
   { table: "quotes", column: "job_id", referencedTable: "jobs", referencedColumn: "id" },
+  { table: "invoices", column: "branch_id", referencedTable: "branches", referencedColumn: "id" },
   { table: "invoices", column: "job_id", referencedTable: "jobs", referencedColumn: "id" },
+  { table: "branches", column: "organization_id", referencedTable: "organizations", referencedColumn: "id" },
+  {
+    table: "membership_branch_access",
+    column: "membership_id",
+    referencedTable: "memberships",
+    referencedColumn: "id",
+  },
+  {
+    table: "membership_branch_access",
+    column: "branch_id",
+    referencedTable: "branches",
+    referencedColumn: "id",
+  },
+  {
+    table: "branch_invoice_sequences",
+    column: "branch_id",
+    referencedTable: "branches",
+    referencedColumn: "id",
+  },
   { table: "invoice_payments", column: "invoice_id", referencedTable: "invoices", referencedColumn: "id" },
   {
     table: "warranty_certificates",

@@ -29,6 +29,7 @@ import { AiUsagePanel } from "./ai-usage-panel";
 import type { BillingSummaryPayload } from "./billing-panel";
 import { BillingPanel } from "./billing-panel";
 import { OrganizationProfilePanel, type OrganizationSettings } from "./organization-profile-panel";
+import { BranchSettingsPanel } from "./branch-settings-panel";
 import { TeamPermissionsPanel } from "./team-permissions-panel";
 import {
   getVisibleSections,
@@ -261,6 +262,19 @@ function renderSettingsPanel(sectionId: SettingsTopicId, ctx: SettingsPanelConte
           billingSummary={billingSummary}
           platformCapabilities={platformCapabilities}
           permissions={permissions}
+        />
+      );
+    case "branches":
+      if (ownerMode || role === "admin") {
+        return <BranchSettingsPanel />;
+      }
+
+      return (
+        <SettingsLockedState
+          icon={LockKeyhole}
+          eyebrow={t("branches.label")}
+          title={t("roles.restrictedTitle")}
+          body={t("roles.restrictedBody", { role: formatRoleLabel(role) })}
         />
       );
     case "profile":

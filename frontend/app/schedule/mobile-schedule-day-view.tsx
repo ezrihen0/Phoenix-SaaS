@@ -1,7 +1,8 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { CalendarPlus, ChevronLeft, ChevronRight, LoaderCircle, RefreshCw } from "lucide-react";
 
 import { MobileJobCard } from "@/components/jobs/mobile-job-card";
 import { MobileJobDetailPane } from "@/components/jobs/mobile-job-detail-pane";
@@ -171,6 +172,14 @@ export function MobileScheduleDayView({
           {errorMessage ?? statusMessage}
         </div>
       ) : null}
+
+      <Link
+        href="/schedule/new"
+        className="theme-btn-primary mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold"
+      >
+        <CalendarPlus className="h-4 w-4" />
+        {t("scheduleNewJob")}
+      </Link>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button

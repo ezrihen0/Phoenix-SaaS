@@ -343,8 +343,8 @@ function main() {
     {
       id: 9,
       criterion: "Native documents have durable historical records.",
-      status: steps.find((s) => s.name === "finance part9 checks")?.status === "PASS" ? "PASS" : "FAIL",
-      evidence: ["finance-part9:checks", "finance-part9:configured-db-verification", "native_customer_pdf on send"],
+      status: steps.find((s) => s.name === "finance part10 checks")?.status === "PASS" ? "PASS" : "FAIL",
+      evidence: ["finance-part10:checks", "finance-part9:document-contract-check", "native_customer_pdf on send"],
     },
     {
       id: 10,

@@ -1,4 +1,4 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "dist", "**/*.spec.ts", "src/crm/money-engine-parity-check.ts", "src/database/money-engine-phase5-db-verification.ts", "src/database/invoice-ledger-phase6-db-verification.ts"]
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "src/crm/money-engine-parity-check.ts", "src/database/money-engine-phase5-db-verification.ts", "src/database/invoice-ledger-phase6-db-verification.ts", "src/integrations/phoenix/phoenix-request-service-scheduling.unit-check.ts", "src/integrations/phoenix/phoenix-request-service-scheduling.integration.harness.ts"]
 }

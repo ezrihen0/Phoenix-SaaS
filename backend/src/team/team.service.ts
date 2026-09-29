@@ -123,6 +123,32 @@ export class TeamService {
       .filter((member): member is NonNullable<typeof member> => Boolean(member));
   }
 
+  async resolveMembershipIdForProfile(profileId: string, organizationId: string) {
+    const profile = await this.profilesRepository.findOne({
+      where: { id: profileId },
+      select: { id: true, auth_user_id: true },
+    });
+
+    if (!profile) {
+      apiError(404, "team_member_not_found", "The team member could not be found.");
+    }
+
+    const membership = await this.membershipsRepository.findOne({
+      where: {
+        organization_id: organizationId,
+        user_id: profile.auth_user_id,
+        status: In([...seatOccupyingStatuses, "suspended"]),
+      },
+      select: { id: true },
+    });
+
+    if (!membership) {
+      apiError(404, "membership_not_found", "The team member could not be found in this organization.");
+    }
+
+    return membership.id;
+  }
+
   async createMember(
     input: {
       email: string;

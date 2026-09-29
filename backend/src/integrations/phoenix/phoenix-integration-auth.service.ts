@@ -36,6 +36,14 @@ export class PhoenixIntegrationAuthService {
     return this.configService.get<string>("WIZFIELD_INTEGRATION_SECRET")?.trim() || "";
   }
 
+  getIntegrationOrganizationId() {
+    const configured =
+      this.configService.get<string>("PHOENIX_INTEGRATION_ORGANIZATION_ID")?.trim() ||
+      this.configService.get<string>("PHOENIX_WIZFIELD_ORGANIZATION_ID")?.trim() ||
+      "";
+    return configured;
+  }
+
   private readBearerToken(request: Request) {
     const header = request.get("authorization")?.trim();
     if (!header || !header.toLowerCase().startsWith("bearer ")) {

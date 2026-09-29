@@ -4,6 +4,7 @@ import {
   CreditCard,
   Globe2,
   Languages,
+  MapPin,
   Palette,
   ShieldCheck,
   Sparkles,
@@ -13,6 +14,7 @@ import {
 
 export type SettingsTopicId =
   | "business"
+  | "branches"
   | "profile"
   | "appearance"
   | "roles"
@@ -44,6 +46,7 @@ export type SettingsSectionConfig = {
 
 const SETTINGS_TOPIC_IDS: SettingsTopicId[] = [
   "business",
+  "branches",
   "profile",
   "appearance",
   "roles",
@@ -61,6 +64,15 @@ export const SETTINGS_SECTIONS: SettingsSectionConfig[] = [
     helperKey: "business.helper",
     icon: Building2,
     metricKey: "businessProfile",
+  },
+  {
+    id: "branches",
+    kind: "panel",
+    labelKey: "branches.label",
+    titleKey: "branches.title",
+    helperKey: "branches.helper",
+    icon: MapPin,
+    ownerOrAdminNav: true,
   },
   {
     id: "profile",

@@ -69,6 +69,7 @@ type JobsNewWorkspaceProps = {
   technicians: TechnicianOption[];
   services: ServiceCatalogRow[];
   canManageCustomers: boolean;
+  canOverrideJobBranch: boolean;
   initialSource: JobsNewInitialSource | null;
 };
 
@@ -180,6 +181,7 @@ export default function JobsNewWorkspace({
   technicians,
   services,
   canManageCustomers,
+  canOverrideJobBranch,
   initialSource,
 }: JobsNewWorkspaceProps) {
   const router = useRouter();
@@ -205,6 +207,11 @@ export default function JobsNewWorkspace({
   const [serviceCity, setServiceCity] = useState(initialSource?.serviceCity ?? "");
   const [serviceStateOrRegion, setServiceStateOrRegion] = useState(initialSource?.serviceStateOrRegion ?? "");
   const [servicePostalCode, setServicePostalCode] = useState(initialSource?.servicePostalCode ?? "");
+  const [branchOverrideId, setBranchOverrideId] = useState<string>("");
+  const [branchOptions, setBranchOptions] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [resolvedBranchId, setResolvedBranchId] = useState<string | null>(null);
+  const [resolvedBranchLabel, setResolvedBranchLabel] = useState<string | null>(null);
+  const [branchResolveError, setBranchResolveError] = useState<string | null>(null);
 
   const [jobType, setJobType] = useState<JobTypeValue>(initialSource?.defaultJobType ?? "inspection");
   const [serviceId, setServiceId] = useState("");
@@ -360,6 +367,66 @@ export default function JobsNewWorkspace({
     serviceStateOrRegion,
     startTime,
   ]);
+
+  useEffect(() => {
+    if (!canOverrideJobBranch) {
+      return;
+    }
+
+    let cancelled = false;
+    void crmApiFetch<Array<{ id: string; code: string; name: string }>>("/api/branches")
+      .then((rows) => {
+        if (!cancelled) {
+          setBranchOptions(rows);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBranchOptions([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canOverrideJobBranch]);
+
+  useEffect(() => {
+    const province = serviceStateOrRegion.trim();
+    if (!province) {
+      setResolvedBranchId(null);
+      setResolvedBranchLabel(null);
+      setBranchResolveError(null);
+      return;
+    }
+
+    let cancelled = false;
+    void crmApiFetch<{ branchId: string; code: string; name: string }>(
+      `/api/branches/resolve?province=${encodeURIComponent(province)}`,
+    )
+      .then((resolved) => {
+        if (cancelled) {
+          return;
+        }
+
+        setResolvedBranchId(resolved.branchId);
+        setResolvedBranchLabel(`${resolved.name} (${resolved.code})`);
+        setBranchResolveError(null);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setResolvedBranchId(null);
+        setResolvedBranchLabel(null);
+        setBranchResolveError(error instanceof Error ? error.message : "Branch could not be resolved from province.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [serviceStateOrRegion]);
 
   useEffect(() => {
     let ignore = false;
@@ -589,6 +656,9 @@ export default function JobsNewWorkspace({
               serviceCity: serviceCity.trim(),
               serviceStateOrRegion: serviceStateOrRegion.trim() || null,
               servicePostalCode: servicePostalCode.trim(),
+              ...(canOverrideJobBranch && branchOverrideId
+                ? { branchId: branchOverrideId }
+                : {}),
               scheduledFor,
               scheduledWindow,
               assignedTechnicianId: requireSchedule ? assignedTechnicianId : null,
@@ -813,6 +883,35 @@ export default function JobsNewWorkspace({
                     autoComplete="postal-code"
                   />
                 </FieldLabel>
+              </div>
+              <div className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-4 py-3 text-sm">
+                <p className="font-medium text-[color:var(--sem-text-primary)]">Operating branch</p>
+                <p className="mt-1 text-[color:var(--sem-text-secondary)]">
+                  {branchResolveError
+                    ? branchResolveError
+                    : resolvedBranchLabel
+                      ? `Resolved from province: ${resolvedBranchLabel}`
+                      : "Enter AB or ON on the service address to resolve Alberta or Ontario."}
+                </p>
+                {canOverrideJobBranch && branchOptions.length > 0 ? (
+                  <label className="mt-3 grid gap-2">
+                    <span className="text-xs uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">
+                      Owner/admin override
+                    </span>
+                    <select
+                      className={inputClass}
+                      value={branchOverrideId || resolvedBranchId || ""}
+                      onChange={(event) => setBranchOverrideId(event.target.value)}
+                    >
+                      <option value="">Use province resolution</option>
+                      {branchOptions.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name} ({branch.code})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
               </div>
             </section>
 

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowLeft,
+  CalendarPlus,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -1000,10 +1001,17 @@ export default function ScheduleWorkspace({
                 <ArrowLeft className="h-4 w-4" />
                 {t("backToJobs")}
               </Link>
+              <Link
+                href="/schedule/new"
+                className="theme-btn-primary inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold"
+              >
+                <CalendarPlus className="h-4 w-4" />
+                {t("scheduleNewJob")}
+              </Link>
               <button
                 type="button"
                 onClick={handleRefresh}
-                className="theme-btn-primary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+                className="theme-btn-secondary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium"
               >
                 <RefreshCw className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`} />
                 {t("refreshSchedule")}

@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { ArrowLeft, UserRoundPlus, Loader2 } from "lucide-react";
 
 import { BoardShell } from "@/components/board/board-shell";
+import { isSafeInternalAppPath } from "@/lib/auth/post-login-redirect";
+import { resolveHrefAfterCustomerCreate } from "@/lib/crm/customer-create-return";
 
 function backendBaseUrl() {
   return process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
@@ -20,6 +22,9 @@ type ApiEnvelope<T> = {
 export default function NewCustomerPage() {
   const t = useTranslations("customerCreate");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next");
+  const cancelHref = nextPath && isSafeInternalAppPath(nextPath) ? nextPath : "/customers";
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,9 +98,9 @@ export default function NewCustomerPage() {
 
       const createdId = payload?.data?.id;
       if (createdId) {
-        router.push(`/customers/${createdId}`);
+        router.push(resolveHrefAfterCustomerCreate(nextPath, createdId));
       } else {
-        router.push("/customers");
+        router.push(nextPath && isSafeInternalAppPath(nextPath) ? nextPath : "/customers");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t("createError"));
@@ -119,7 +124,7 @@ export default function NewCustomerPage() {
         {/* Header */}
         <div className="mb-8">
           <Link
-            href="/customers"
+            href={cancelHref}
             className="mb-4 inline-flex items-center gap-1.5 text-sm text-[color:var(--sem-text-muted)] transition hover:text-[color:var(--sem-text-primary)]"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -324,7 +329,7 @@ export default function NewCustomerPage() {
             </button>
 
             <Link
-              href="/customers"
+              href={cancelHref}
               className="inline-flex items-center gap-1.5 rounded-xl border border-[color:var(--cmp-border-subtle)] px-5 py-3 text-sm font-medium text-[color:var(--sem-text-secondary)] transition hover:bg-[color:var(--cmp-hover-surface)] disabled:opacity-50"
             >
               <ArrowLeft className="h-4 w-4" />

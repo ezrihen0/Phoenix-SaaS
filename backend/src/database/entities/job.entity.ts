@@ -25,6 +25,7 @@ import { InvoiceEntity } from "./invoice.entity";
 import { JobNoteEntity } from "./job-note.entity";
 import { JobStatusEventEntity } from "./job-status-event.entity";
 import { LeadEntity } from "./lead.entity";
+import { BranchEntity } from "./branch.entity";
 import { OrganizationEntity } from "./organization.entity";
 import { QuoteEntity } from "./quote.entity";
 import { ServiceEntity } from "./service.entity";
@@ -37,6 +38,9 @@ export class JobEntity {
 
   @Column({ type: "varchar", length: 36, nullable: true })
   organization_id!: string | null;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  branch_id!: string | null;
 
   @Column({ type: "varchar", length: 36 })
   customer_id!: string;
@@ -149,6 +153,13 @@ export class JobEntity {
   })
   @JoinColumn({ name: "organization_id", referencedColumnName: "id" })
   organization?: OrganizationEntity | null;
+
+  @ManyToOne(() => BranchEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "branch_id", referencedColumnName: "id" })
+  branch?: BranchEntity | null;
 
   @ManyToOne(() => ServiceEntity, (service) => service.jobs, {
     nullable: true,
