@@ -1,0 +1,11 @@
+# Railway builds with NODE_ENV=production. A production install omits the
+# TypeScript types the backend compile needs. Keep the runtime start command
+# on the production process; only the install and build steps include dev packages.
+[phases.install]
+cmds = ["npm install --include=dev"]
+
+[phases.build]
+cmds = ["npm install --include=dev && npm run build"]
+
+[start]
+cmd = "npm run start"
