@@ -1,6 +1,8 @@
 # WizField Language Store
 # Source of Truth
 
+**Published product truth:** [What Is WizField Language Store?](https://docs.wizfield.com/docs/what-is-wizfield-language-store) · [Published docs map](WIZFIELD_PUBLISHED_DOCS_MAP.md)
+
 **Document status:** Canonical active Language Store product and architecture truth  
 **Project:** WizField  
 **Scope:** Billing architecture, entitlement scope, V1 product contract, and execution guardrails for Language Store  
