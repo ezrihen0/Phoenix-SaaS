@@ -21,6 +21,7 @@ import { MobileScheduleDayView } from "@/app/schedule/mobile-schedule-day-view";
 import { BoardShell } from "@/components/board/board-shell";
 import { formatAddress, buildAddressQuery, buildGoogleMapsSearchUrl } from "@/lib/crm/display";
 import { crmApiFetch } from "@/lib/crm/browser-api";
+import { buildScheduledWindow } from "@/lib/crm/scheduling-utils";
 import { getJobStatusLabel, getServiceTypeLabel, type JobStatus } from "@/lib/crm/statuses";
 
 type CustomerRecord = {
@@ -917,6 +918,7 @@ export default function ScheduleWorkspace({
       body: JSON.stringify({
         assignedTechnicianId: scheduleForm.assignedTechnicianId || null,
         scheduledFor,
+        scheduledServiceDate: scheduleForm.scheduledDate || null,
         scheduledWindow: buildScheduledWindow(scheduleForm.scheduledTime, scheduleForm.scheduledEndTime),
       }),
     });
@@ -1404,10 +1406,3 @@ function deriveScheduledEndTime(job: JobRecord | null, scheduledTime: string) {
   return deriveEndTimeFromStartTime(scheduledTime);
 }
 
-function buildScheduledWindow(startTime: string, endTime: string) {
-  if (!startTime || !endTime) {
-    return null;
-  }
-
-  return `${formatTimeInputLabel(startTime)} - ${formatTimeInputLabel(endTime)}`;
-}

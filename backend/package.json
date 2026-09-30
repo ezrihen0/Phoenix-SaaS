@@ -136,6 +136,7 @@
     "phoenix:owner-portal-qa:verify": "node src/integrations/phoenix/owner-portal-qa-verify.mjs",
     "phoenix:activate": "node -r ts-node/register src/database/phoenix-activation.ts",
     "phoenix:activate:verify": "node -r ts-node/register src/database/phoenix-activation-verify.ts",
+    "job-scheduling:unit-check": "node -r ts-node/register src/crm/job-scheduling-normalization.unit-check.ts",
     "phoenix:request-service:scheduling:unit-check": "node -r ts-node/register src/integrations/phoenix/phoenix-request-service-scheduling.unit-check.ts",
     "phoenix:request-service:scheduling:harness": "node -r ts-node/register src/integrations/phoenix/phoenix-request-service-scheduling.integration.harness.ts",
     "phoenix:request-service:scheduling:checks": "npm run phoenix:request-service:scheduling:unit-check && npm run phoenix:request-service:scheduling:harness",

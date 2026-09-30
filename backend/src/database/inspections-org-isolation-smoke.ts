@@ -307,6 +307,9 @@ async function createHarnessContext(dataSource: DataSource): Promise<HarnessCont
       dataSource.getRepository(CustomerEntity),
       dataSource.getRepository(JobEntity),
       new InspectionWorkflowService(),
+      {
+        resolveBranchIdFromServiceProvince: async () => "branch-stub",
+      } as never,
     ),
     organizationRepo: dataSource.getRepository(OrganizationEntity),
     userRepo: dataSource.getRepository(UserEntity),

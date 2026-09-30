@@ -137,6 +137,9 @@ import {
 } from "./invoice-native-ledger-policy";
 import { FinanceAuditService } from "./finance-audit.service";
 import { BranchScopeService } from "./branch-scope.service";
+import type { BranchProvinceCode } from "./branch-province-resolution";
+import { normalizeServiceProvinceToBranchCode } from "./branch-province-resolution";
+import { alignScheduledForToBranchLocalWindow } from "./job-scheduling-normalization";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -436,6 +439,21 @@ export class CrmController {
     return job;
   }
 
+  private async resolveJobBranchProvinceCode(
+    organizationId: string,
+    branchId: string | null | undefined,
+    serviceStateOrRegion: string | null | undefined,
+  ): Promise<BranchProvinceCode | null> {
+    if (branchId) {
+      const branch = await this.branchScopeService.findBranchForOrganization(organizationId, branchId);
+      if (branch?.code === "AB" || branch?.code === "ON") {
+        return branch.code;
+      }
+    }
+
+    return normalizeServiceProvinceToBranchCode(serviceStateOrRegion);
+  }
+
   private buildJobNoteResponse(note: JobNoteEntity & { author_profile?: ProfileEntity | null }) {
     return {
       id: note.id,
@@ -680,6 +698,19 @@ export class CrmController {
         }
       }
 
+      const branchProvinceCode = await this.resolveJobBranchProvinceCode(
+        organizationId,
+        branchId,
+        payload.serviceStateOrRegion,
+      );
+      const normalizedSchedule = alignScheduledForToBranchLocalWindow({
+        scheduledFor: payload.scheduledFor ? new Date(payload.scheduledFor) : null,
+        scheduledWindow: payload.scheduledWindow,
+        scheduledServiceDate: payload.scheduledServiceDate,
+        serviceStateOrRegion: payload.serviceStateOrRegion,
+        branchProvinceCode,
+      });
+
       const job = await this.jobsRepository.save(
         this.jobsRepository.create({
           organization_id: organizationId,
@@ -698,8 +729,8 @@ export class CrmController {
           service_city: payload.serviceCity,
           service_state_or_region: payload.serviceStateOrRegion,
           service_postal_code: payload.servicePostalCode,
-          scheduled_for: payload.scheduledFor ? new Date(payload.scheduledFor) : null,
-          scheduled_window: payload.scheduledWindow,
+          scheduled_for: normalizedSchedule.scheduledFor,
+          scheduled_window: normalizedSchedule.scheduledWindow,
           requested_at: requestTimestamp,
           created_by_auth_user_id: actor.user.id,
           updated_by_auth_user_id: actor.user.id,
@@ -961,12 +992,29 @@ export class CrmController {
         updates.service_id = payload.serviceId;
       }
 
-      if (payload.scheduledFor !== undefined) {
-        updates.scheduled_for = payload.scheduledFor ? new Date(payload.scheduledFor) : null;
-      }
-
-      if (payload.scheduledWindow !== undefined) {
-        updates.scheduled_window = payload.scheduledWindow;
+      if (
+        payload.scheduledFor !== undefined
+        || payload.scheduledWindow !== undefined
+        || payload.scheduledServiceDate !== undefined
+      ) {
+        const branchProvinceCode = await this.resolveJobBranchProvinceCode(
+          organizationId,
+          payload.branchId ?? job.branch_id,
+          job.service_state_or_region,
+        );
+        const normalizedSchedule = alignScheduledForToBranchLocalWindow({
+          scheduledFor:
+            payload.scheduledFor !== undefined
+              ? (payload.scheduledFor ? new Date(payload.scheduledFor) : null)
+              : job.scheduled_for,
+          scheduledWindow:
+            payload.scheduledWindow !== undefined ? payload.scheduledWindow : job.scheduled_window,
+          scheduledServiceDate: payload.scheduledServiceDate,
+          serviceStateOrRegion: job.service_state_or_region,
+          branchProvinceCode,
+        });
+        updates.scheduled_for = normalizedSchedule.scheduledFor;
+        updates.scheduled_window = normalizedSchedule.scheduledWindow;
       }
 
       if (payload.jobType !== undefined) {

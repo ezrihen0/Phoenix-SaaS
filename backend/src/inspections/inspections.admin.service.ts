@@ -23,6 +23,7 @@ import {
   inspectionArchiveReasonCodes,
 } from "../database/entities/inspection.entity";
 import { JobEntity } from "../database/entities/job.entity";
+import { BranchScopeService } from "../crm/branch-scope.service";
 import { InspectionWorkflowService, TemplateNotConfiguredError } from "./inspection-workflow.service";
 
 export const INSPECTION_PHOTO_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -296,6 +297,7 @@ export class InspectionsAdminService {
     @InjectRepository(JobEntity)
     private readonly jobsRepository: Repository<JobEntity>,
     private readonly workflowService: InspectionWorkflowService,
+    private readonly branchScopeService: BranchScopeService,
   ) {}
 
   async createInspection(input: {
@@ -2948,9 +2950,20 @@ export class InspectionsAdminService {
     actor: ActorContext,
     organizationId: string,
   ) {
+    let branchId: string | null = null;
+    try {
+      branchId = await this.branchScopeService.resolveBranchIdFromServiceProvince(
+        organizationId,
+        customer.service_state_or_region,
+      );
+    } catch {
+      branchId = null;
+    }
+
     return this.jobsRepository.save(
       this.jobsRepository.create({
         organization_id: organizationId,
+        branch_id: branchId,
         customer_id: customer.id,
         service_id: null,
         assigned_technician_id: null,

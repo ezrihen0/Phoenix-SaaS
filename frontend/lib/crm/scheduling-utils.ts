@@ -1,6 +1,16 @@
 export const DEFAULT_DURATION_MINUTES = 120;
 export const INTAKE_SLOT_STARTS = ["09:00", "11:00", "13:00"] as const;
 
+export const PHOENIX_BLOCKING_WINDOW_KEYS = [
+  "09:00-11:00",
+  "11:00-13:00",
+  "13:00-15:00",
+  "15:00-17:00",
+  "17:00-19:00",
+] as const;
+
+const PHOENIX_BLOCKING_WINDOW_KEY_SET = new Set<string>(PHOENIX_BLOCKING_WINDOW_KEYS);
+
 export type SchedulingJobRecord = {
   id: string;
   assigned_technician_id: string | null;
@@ -117,12 +127,34 @@ export function formatTimeInputLabel(value: string) {
   }).format(date);
 }
 
+export function toCanonicalScheduledWindow(startTime: string, endTime: string) {
+  if (!startTime || !endTime) {
+    return null;
+  }
+
+  const key = `${startTime}-${endTime}`;
+  return PHOENIX_BLOCKING_WINDOW_KEY_SET.has(key) ? key : null;
+}
+
 export function buildScheduledWindow(startTime: string, endTime: string) {
   if (!startTime || !endTime) {
     return null;
   }
 
-  return `${formatTimeInputLabel(startTime)} - ${formatTimeInputLabel(endTime)}`;
+  return toCanonicalScheduledWindow(startTime, endTime)
+    ?? `${formatTimeInputLabel(startTime)} - ${formatTimeInputLabel(endTime)}`;
+}
+
+export function formatCanonicalScheduledWindowLabel(canonicalKey: string) {
+  const labels: Record<string, string> = {
+    "09:00-11:00": "9–11 AM",
+    "11:00-13:00": "11 AM–1 PM",
+    "13:00-15:00": "1–3 PM",
+    "15:00-17:00": "3–5 PM",
+    "17:00-19:00": "5–7 PM",
+  };
+
+  return labels[canonicalKey] ?? canonicalKey;
 }
 
 export function buildComparisonWindow(

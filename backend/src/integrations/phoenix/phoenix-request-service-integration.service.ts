@@ -7,6 +7,7 @@ import { apiError } from "../../common/api-response";
 import { normalizeServiceProvinceToBranchCode } from "../../crm/branch-province-resolution";
 import { mapServiceTypeToDefaultJobType, type ServiceType } from "../../crm/constants";
 import { BranchScopeService } from "../../crm/branch-scope.service";
+import { occupiedBlockingWindowKey } from "../../crm/job-scheduling-normalization";
 import { CustomerEntity } from "../../database/entities/customer.entity";
 import { JobEntity } from "../../database/entities/job.entity";
 import { LeadEntity } from "../../database/entities/lead.entity";
@@ -224,8 +225,13 @@ export class PhoenixRequestServiceIntegrationService {
         continue;
       }
 
+      const windowKey = occupiedBlockingWindowKey(job.scheduled_window);
+      if (!windowKey) {
+        continue;
+      }
+
       const windows = occupiedByDate.get(dateKey) ?? new Set<string>();
-      windows.add(job.scheduled_window);
+      windows.add(windowKey);
       occupiedByDate.set(dateKey, windows);
     }
 
@@ -253,30 +259,20 @@ export class PhoenixRequestServiceIntegrationService {
     const windowKey = formatScheduledWindowKey(params.windowStart, params.windowEnd);
     const { start: dayStart, end: dayEnd } = dayRangeUtc(params.date, params.provinceCode);
 
-    const count = await this.dataSource.getRepository(JobEntity).count({
-      where: {
-        organization_id: params.organizationId,
-        branch_id: params.branchId,
-        scheduled_window: windowKey,
-        status: In([...PHOENIX_SLOT_BLOCKING_JOB_STATUSES]),
-      },
-    });
-
-    if (count === 0) {
-      return true;
-    }
-
     const jobs = await this.dataSource.getRepository(JobEntity).find({
       where: {
         organization_id: params.organizationId,
         branch_id: params.branchId,
-        scheduled_window: windowKey,
         status: In([...PHOENIX_SLOT_BLOCKING_JOB_STATUSES]),
+        scheduled_for: And(MoreThanOrEqual(dayStart), LessThan(dayEnd)),
       },
-      select: { scheduled_for: true },
+      select: { scheduled_for: true, scheduled_window: true },
     });
 
     return !jobs.some((job) => {
+      if (occupiedBlockingWindowKey(job.scheduled_window) !== windowKey) {
+        return false;
+      }
       if (!job.scheduled_for) {
         return false;
       }

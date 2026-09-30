@@ -164,6 +164,9 @@ function buildService(dataSource: DataSource) {
     dataSource.getRepository(CustomerEntity),
     dataSource.getRepository(JobEntity),
     new InspectionWorkflowService(),
+    {
+      resolveBranchIdFromServiceProvince: async () => "branch-stub",
+    } as never,
   );
 }
 

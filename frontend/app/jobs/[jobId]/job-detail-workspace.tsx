@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
+import { toCanonicalScheduledWindow } from "@/lib/crm/scheduling-utils";
 import { formatAddress, formatDateTime } from "@/lib/crm/display";
 import { formatInvoiceLifecycleStatus } from "@/lib/crm/invoice-lifecycle";
 import {
@@ -295,7 +296,10 @@ function buildScheduledWindow(startTime: string, endTime: string, arrivalWindow:
     return null;
   }
 
-  return `${formatTimeLabel(startTime)} - ${formatTimeLabel(endTime)} • Arrival ${arrivalWindow}`;
+  return (
+    toCanonicalScheduledWindow(startTime, endTime)
+    ?? `${formatTimeLabel(startTime)} - ${formatTimeLabel(endTime)} • Arrival ${arrivalWindow}`
+  );
 }
 
 function buildScheduleForm(job: JobDetailRecord): ScheduleFormState {
@@ -734,6 +738,7 @@ export default function JobDetailWorkspace({
         body: JSON.stringify({
           assignedTechnicianId: scheduleForm.assignedTechnicianId || null,
           scheduledFor: nextScheduledStart.toISOString(),
+          scheduledServiceDate: scheduleForm.scheduledDate || null,
           scheduledWindow: buildScheduledWindow(
             scheduleForm.startTime,
             scheduleForm.endTime,

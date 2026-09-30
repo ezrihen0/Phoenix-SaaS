@@ -660,6 +660,7 @@ export default function JobsNewWorkspace({
                 ? { branchId: branchOverrideId }
                 : {}),
               scheduledFor,
+              scheduledServiceDate: requireSchedule && selectedDate ? selectedDate : null,
               scheduledWindow,
               assignedTechnicianId: requireSchedule ? assignedTechnicianId : null,
               customerConcern: customerConcern.trim() || null,

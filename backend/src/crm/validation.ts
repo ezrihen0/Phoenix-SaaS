@@ -101,6 +101,7 @@ export type CreateJobPayload = {
   servicePostalCode: string;
   scheduledFor: string | null;
   scheduledWindow: string | null;
+  scheduledServiceDate: string | null;
   assignedTechnicianId: string | null;
   customerConcern: string | null;
   internalNotes: string | null;
@@ -114,6 +115,7 @@ export type UpdateJobPayload = {
   branchId?: string | null;
   scheduledFor?: string | null;
   scheduledWindow?: string | null;
+  scheduledServiceDate?: string | null;
   jobType?: JobType;
 };
 
@@ -383,6 +385,19 @@ function optionalIsoDateTime(value: unknown, fieldName: string) {
   }
 
   return date.toISOString();
+}
+
+function optionalIsoDate(value: unknown, fieldName: string) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const parsedValue = requireTrimmedString(value, fieldName, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(parsedValue)) {
+    throw new Error(`${fieldName} must be a YYYY-MM-DD date string.`);
+  }
+
+  return parsedValue;
 }
 
 function requireIsoDateTime(value: unknown, fieldName: string) {
@@ -680,6 +695,7 @@ export function parseCreateJobPayload(jsonBody: unknown): CreateJobPayload {
     ),
     scheduledFor,
     scheduledWindow: optionalTrimmedString(payload.scheduledWindow, "scheduledWindow", 120),
+    scheduledServiceDate: optionalIsoDate(payload.scheduledServiceDate, "scheduledServiceDate"),
     assignedTechnicianId,
     customerConcern: optionalTrimmedString(payload.customerConcern, "customerConcern", 3000),
     internalNotes: optionalTrimmedString(payload.internalNotes, "internalNotes", 3000),
@@ -718,6 +734,10 @@ export function parseUpdateJobPayload(jsonBody: unknown): UpdateJobPayload {
       payload.scheduledWindow === undefined
         ? undefined
         : optionalTrimmedString(payload.scheduledWindow, "scheduledWindow", 120),
+    scheduledServiceDate:
+      payload.scheduledServiceDate === undefined
+        ? undefined
+        : optionalIsoDate(payload.scheduledServiceDate, "scheduledServiceDate"),
     jobType:
       payload.jobType === undefined
         ? undefined

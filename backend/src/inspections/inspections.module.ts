@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuthModule } from "../auth/auth.module";
+import { CrmModule } from "../crm/crm.module";
 import { CustomerEntity } from "../database/entities/customer.entity";
 import { InspectionItemEntity } from "../database/entities/inspection-item.entity";
 import { InspectionPhotoEntity } from "../database/entities/inspection-photo.entity";
@@ -15,6 +16,7 @@ import { InspectionWorkflowService } from "./inspection-workflow.service";
 @Module({
   imports: [
     AuthModule,
+    CrmModule,
     TypeOrmModule.forFeature([
       InspectionEntity,
       InspectionItemEntity,
