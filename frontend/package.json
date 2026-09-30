@@ -11,6 +11,7 @@
     "i18n:check": "node scripts/check-i18n-catalog-parity.mjs",
     "shell-nav-policy:check": "node scripts/check-shell-nav-policy.mjs",
     "quick-create:check": "node scripts/check-quick-create-registry.mjs",
+    "job-invoice-create:check": "node scripts/check-job-invoice-create-access.mjs",
     "pricebook-warranty:check": "node scripts/check-pricebook-warranty.mjs",
     "pricebook-add-item:check": "node scripts/check-pricebook-add-item.mjs",
     "pricebook-navigation:check": "node scripts/check-pricebook-navigation.mjs"

@@ -17,12 +17,15 @@ import {
 } from "lucide-react";
 
 import { BoardShell } from "@/components/board/board-shell";
+import { ShowAboveLg, ShowBelowLg } from "@/components/client-media-query";
 import { MetricTile } from "@/components/board/metric-tile";
 import DocumentApprovalActions from "@/components/document-approval-actions";
 import PhoenixInvoiceDocumentTemplate from "@/components/phoenix-invoice-document-template";
 import type { PhoenixInvoiceDocumentViewModel } from "@/lib/crm/phoenix-invoice-document.types";
-import InvoicePaymentForm, { formatPaymentEntryType } from "@/lib/crm/invoice-payment-form";
+import InvoicePaymentForm from "@/lib/crm/invoice-payment-form";
+import { formatPaymentEntryType } from "@/lib/crm/invoice-payment-labels";
 import InvoiceDocumentHistoryPanel from "./invoice-document-history-panel";
+import InvoiceDetailCollapsible from "./invoice-detail-collapsible";
 import InvoiceHeaderActions from "./invoice-header-actions";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerRoles } from "@/lib/auth/server-session";
@@ -437,7 +440,9 @@ export default async function InvoiceDetailPage({
                 </span>
               </div>
             </div>
-            <InvoiceHeaderActions {...headerActionsProps} />
+            <div className="hidden w-full lg:block lg:w-auto">
+              <InvoiceHeaderActions {...headerActionsProps} />
+            </div>
           </div>
         </header>
 
@@ -458,7 +463,140 @@ export default async function InvoiceDetailPage({
           />
         </section>
 
-        <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <ShowBelowLg>
+          <div className="mt-8 print:hidden">
+          <InvoiceDetailCollapsible
+            paymentCount={invoice.payments?.length ?? 0}
+            actionsPanel={<InvoiceHeaderActions {...headerActionsProps} />}
+            documentPanel={
+              invoice.document_view ? (
+                <div className="overflow-hidden rounded-[28px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-3">
+                  <PhoenixInvoiceDocumentTemplate
+                    documentView={invoice.document_view}
+                    pdfHref={`/api/invoices/${invoice.id}/pdf`}
+                  />
+                </div>
+              ) : null
+            }
+            lifecyclePanel={
+              <>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--sem-text-muted)]">{t("cashLifecycle")}</p>
+                    <h3 className="mt-2 text-xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">
+                      {t("percentPaid", { percent: paidPercent })}
+                    </h3>
+                  </div>
+                  <WalletCards className="h-6 w-6 text-[color:var(--cmp-status-success-text)]" />
+                </div>
+                <div className="mt-5 h-3 overflow-hidden rounded-full bg-[color:var(--cmp-surface-panel)]">
+                  <div className={cx("h-full rounded-full", progressTone(invoice.lifecycle_status))} style={{ width: `${paidPercent}%` }} />
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-[color:var(--cmp-status-success-border)] bg-[color:var(--cmp-status-success-bg)]/40 p-3">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--cmp-status-success-text)]/70">{t("collected")}</p>
+                    <p className="mt-1 font-semibold text-[color:var(--cmp-status-success-text)]">{formatCurrency(invoice.amount_paid_cents, locale)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-[color:var(--cmp-status-warning-border)] bg-[color:var(--cmp-status-warning-bg)]/40 p-3">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--cmp-status-warning-text)]/70">{t("open")}</p>
+                    <p className="mt-1 font-semibold text-[color:var(--cmp-status-warning-text)]">{formatCurrency(invoice.balance_cents, locale)}</p>
+                  </div>
+                </div>
+              </>
+            }
+            recordPaymentPanel={
+              <InvoicePaymentForm
+                invoiceId={invoice.id}
+                balanceCents={invoice.balance_cents}
+                canRecordPayment={canRecordPayment}
+                notePrefix="Recorded from invoice detail."
+                variant="compact"
+              />
+            }
+            transactionsPanel={
+              <div className="space-y-3">
+                {(invoice.payments ?? []).length ? (
+                  invoice.payments?.map((payment) => (
+                    <div key={payment.id} className="rounded-2xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/80 p-4">
+                      <div className="flex justify-between gap-3">
+                        <span className="font-semibold text-[color:var(--sem-text-primary)]">
+                          {formatPaymentMethod(payment.method)} · {formatPaymentEntryType(payment.entry_type)}
+                        </span>
+                        <span className="text-[color:var(--cmp-status-success-text)]">{formatCurrency(payment.amount_cents, locale)}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-[color:var(--sem-text-muted)]">
+                        {formatDate(payment.occurred_at, locale)}
+                        {payment.reference ? ` · ${payment.reference}` : ""}
+                      </p>
+                      {payment.note ? <p className="mt-2 text-xs text-[color:var(--sem-text-secondary)]">{payment.note}</p> : null}
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-[color:var(--cmp-border-subtle)] px-4 py-6 text-sm text-[color:var(--sem-text-secondary)]">
+                    {t("noPayments")}
+                  </div>
+                )}
+              </div>
+            }
+            approvalPanel={
+              <>
+                <DocumentApprovalActions {...approvalActionsProps} />
+                <div className="mt-5">
+                  <InvoiceDocumentHistoryPanel invoiceId={invoice.id} />
+                </div>
+              </>
+            }
+            warrantyPanel={
+              warrantyCertificateAvailable ? (
+                <div className="flex items-start gap-4">
+                  <ShieldCheck className="mt-1 h-6 w-6 text-[color:var(--cmp-status-warning-text)]" />
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--cmp-status-warning-text)]/70">{t("warrantyStatus")}</p>
+                    <h3 className="mt-2 text-xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">{t("warrantyReady")}</h3>
+                    <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{t("warrantyReadyBody")}</p>
+                    <Link
+                      href={`/invoices/${invoice.id}/warranty-certificate`}
+                      className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-[color:var(--cmp-status-warning-border)] bg-[color:var(--cmp-status-warning-bg)] px-4 py-2 text-sm font-semibold text-[color:var(--cmp-status-warning-text)] transition hover:brightness-110"
+                    >
+                      {t("openWarrantyCertificate")}
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-4">
+                  <LockKeyhole className="mt-1 h-6 w-6 text-[color:var(--cmp-status-warning-text)]" />
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--cmp-status-warning-text)]/70">{t("warrantyStatus")}</p>
+                    <h3 className="mt-2 text-xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">{t("warrantyLocked")}</h3>
+                    <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{t("warrantyLockedBody")}</p>
+                  </div>
+                </div>
+              )
+            }
+            aiPanel={
+              <div className="flex items-start gap-4">
+                <Sparkles className="mt-1 h-6 w-6 text-violet-200" />
+                <div>
+                  <p className="text-xs uppercase tracking-[0.28em] text-violet-100/70">{t("aiCollectionDesk")}</p>
+                  <h3 className="mt-2 text-xl font-semibold tracking-tight text-[color:var(--sem-display-headline)]">{t("aiReadyTitle")}</h3>
+                  <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{t("aiReadyBody")}</p>
+                  <p className="mt-2 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{t("aiNoAutonomy")}</p>
+                  <p className="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-[color:var(--sem-text-muted)]">{t("aiStandby")}</p>
+                  <div className={cx("mt-4 rounded-2xl border px-3 py-2", collectionSignalToneClass(collectionSignal.tone))}>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-80">{t("statusBased")}</span>
+                    <p className="mt-1 text-sm font-semibold">{collectionSignal.label}</p>
+                    <p className="mt-1 text-xs leading-5 opacity-80">{collectionSignal.detail}</p>
+                  </div>
+                </div>
+              </div>
+            }
+          />
+          </div>
+        </ShowBelowLg>
+
+        <ShowAboveLg>
+        <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_400px] print:grid print:grid-cols-1">
           <section className="relative print:col-span-full">
             <div
               aria-hidden="true"
@@ -593,6 +731,7 @@ export default async function InvoiceDetailPage({
         <section className="mt-8 rounded-[30px] border border-[color:var(--sem-board-border)] bg-[color:var(--sem-board-glass)] p-2 shadow-[0_24px_70px_color-mix(in_srgb,var(--sem-board-glow)_65%,transparent)] print:hidden">
           <DocumentApprovalActions {...approvalActionsProps} />
         </section>
+        </ShowAboveLg>
       </div>
     </BoardShell>
   );

@@ -132,6 +132,7 @@ type JobDetailWorkspaceProps = {
   assignmentTechnicians: TechnicianRecord[];
   googleMapsUrl: string;
   canRecordInvoicePayment?: boolean;
+  canManageJobInvoice?: boolean;
 };
 
 const ITEMS_PER_PAGE = 4;

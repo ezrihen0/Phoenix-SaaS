@@ -29,16 +29,27 @@ export class EmailService {
   constructor(private readonly configService: ConfigService) {
     const host = this.configService.get<string>("SMTP_HOST")?.trim();
     const port = this.configService.get<string>("SMTP_PORT")?.trim();
-    const user = this.configService.get<string>("SMTP_USER")?.trim();
-    const pass = this.configService.get<string>("SMTP_PASS")?.trim();
-    this.fromAddress = this.configService.get<string>("SMTP_FROM")?.trim() ?? "";
+    const userFromEnv = this.configService.get<string>("SMTP_USER")?.trim();
+    const pass =
+      this.configService.get<string>("SMTP_PASS")?.trim()
+      || this.configService.get<string>("CF_API_TOKEN")?.trim();
+    const user =
+      userFromEnv
+      || (host === "smtp.mx.cloudflare.net" ? "api_token" : undefined);
+    const ownerEmail = this.configService.get<string>("PHOENIX_OWNER_EMAIL")?.trim();
+    this.fromAddress =
+      this.configService.get<string>("SMTP_FROM")?.trim()
+      || (ownerEmail ? `Phoenix Fireplace <${ownerEmail}>` : "");
 
-    if (host && port) {
+    const portNumber = Number(port) || 587;
+    const hasAuth = Boolean(user && pass);
+
+    if (host && port && this.fromAddress && hasAuth) {
       this.transporter = createTransport({
         host,
-        port: Number(port) || 587,
-        secure: Number(port) === 465,
-        ...(user && pass ? { auth: { user, pass } } : {}),
+        port: portNumber,
+        secure: portNumber === 465,
+        auth: { user: user!, pass: pass! },
       });
       this.configured = true;
     }

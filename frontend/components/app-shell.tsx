@@ -135,6 +135,7 @@ export function AppShell({ children }: AppShellProps) {
   const searchPopoverRef = useRef<HTMLDivElement | null>(null);
   const searchSheetRef = useRef<HTMLDivElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [sidebarPreferencesReady, setSidebarPreferencesReady] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [collapsedPreferenceReady, setCollapsedPreferenceReady] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -174,14 +175,9 @@ export function AppShell({ children }: AppShellProps) {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
-      setCollapsed(window.localStorage.getItem(COLLAPSED_KEY) === "true");
-      setCollapsedPreferenceReady(true);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
+    setCollapsed(window.localStorage.getItem(COLLAPSED_KEY) === "true");
+    setCollapsedPreferenceReady(true);
+    setSidebarPreferencesReady(true);
   }, []);
 
   useEffect(() => {
@@ -311,9 +307,11 @@ export function AppShell({ children }: AppShellProps) {
     return items;
   })();
   const showMobileShellNav = !activationMode && (mobilePrimaryNav.length > 0 || mobileNavCatalog.length > 0);
+  const sidebarCollapsed = sidebarPreferencesReady ? collapsed : false;
 
   function renderSidebarContent(options: { collapsed: boolean }) {
-    const { collapsed: sidebarCollapsed } = options;
+    const { collapsed: sidebarCollapsedForRender } = options;
+    const sidebarCollapsed = sidebarCollapsedForRender;
 
     return (
       <>
@@ -384,10 +382,10 @@ export function AppShell({ children }: AppShellProps) {
         <aside
           className={[
             "sticky top-0 hidden h-screen shrink-0 flex-col gap-4 border-r border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]/90 px-3 py-4 shadow-[inset_-1px_0_0_color-mix(in_srgb,var(--sem-accent-primary)_16%,transparent)] backdrop-blur-xl transition-[width] duration-200 lg:flex",
-            collapsed ? "w-20" : "w-72",
+            sidebarCollapsed ? "w-20" : "w-72",
           ].join(" ")}
         >
-          {renderSidebarContent({ collapsed })}
+          {renderSidebarContent({ collapsed: sidebarCollapsed })}
         </aside>
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">

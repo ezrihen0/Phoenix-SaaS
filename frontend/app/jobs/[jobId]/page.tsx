@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
+import { canManageJobInvoiceForAssignedJob } from "@/lib/auth/job-invoice-create-access";
 import { requireServerSession } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { buildAddressQuery, buildGoogleMapsSearchUrl } from "@/lib/crm/display";
@@ -223,6 +224,7 @@ export default async function JobDetailPage({ params }: JobDetailPageContext) {
   );
 
   const canRecordInvoicePayment = session.permissions.includes("invoices.payment.manage");
+  const canManageJobInvoice = canManageJobInvoiceForAssignedJob(session, job.assigned_technician_id);
 
   return (
     <JobDetailWorkspace
@@ -230,6 +232,7 @@ export default async function JobDetailPage({ params }: JobDetailPageContext) {
       assignmentTechnicians={assignmentTechnicians}
       googleMapsUrl={googleMapsUrl}
       canRecordInvoicePayment={canRecordInvoicePayment}
+      canManageJobInvoice={canManageJobInvoice}
     />
   );
 }
