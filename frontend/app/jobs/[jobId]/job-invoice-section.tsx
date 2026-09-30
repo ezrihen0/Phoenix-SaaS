@@ -6,9 +6,10 @@ import { CheckCircle2, ExternalLink, LoaderCircle, Receipt, Save, ShieldCheck, S
 
 import JobInvoiceCatalogPicker from "@/components/job-invoice-catalog-picker";
 import InvoiceLineItemsEditor from "@/components/invoice-line-items-editor";
-import { formatPaymentEntryType } from "@/lib/crm/invoice-payment-form";
+import { formatPaymentEntryType } from "@/lib/crm/invoice-payment-labels";
 import { CrmApiError, crmApiFetch } from "@/lib/crm/browser-api";
 import { financeApiErrorMessage } from "@/lib/crm/finance-api-errors";
+import { resolvePaymentAttempt } from "@/lib/crm/invoice-payment-attempt.mjs";
 import { ESTIMATE_TO_INVOICE_CONVERT_CONFIRM } from "@/lib/crm/finance-owner-copy";
 import {
   formatInvoiceLifecycleStatus,
@@ -97,6 +98,7 @@ type JobInvoiceSectionProps = {
   quoteSignedAt?: string | null;
   currentJobStatus: JobStatus;
   variant?: "job-tab" | "owner";
+  serverTaxRateBps?: number | null;
   onInvoiceChange?: (invoice: JobInvoiceRecord | null) => void;
   onInvoiceSaved?: (invoiceId: string) => void;
   onToast?: (message: string, tone?: ToastTone) => void;
@@ -114,6 +116,18 @@ function resolveFinanceErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function composerTaxBps(serverTaxRateBps: number | null | undefined, snapshotBps: number | null | undefined) {
+  if (typeof serverTaxRateBps === "number") {
+    return serverTaxRateBps;
+  }
+
+  if (typeof snapshotBps === "number") {
+    return snapshotBps;
+  }
+
+  return null;
+}
+
 export default function JobInvoiceSection({
   jobId,
   invoice,
@@ -122,6 +136,7 @@ export default function JobInvoiceSection({
   quoteSignedAt,
   currentJobStatus,
   variant = "job-tab",
+  serverTaxRateBps = null,
   onInvoiceChange,
   onInvoiceSaved,
   onToast,
@@ -132,7 +147,14 @@ export default function JobInvoiceSection({
   const [lines, setLines] = useState<InvoiceBuilderLine[]>(() =>
     invoiceLinesFromPersistedSnapshot(invoice?.line_items ?? [], invoice?.amount_cents),
   );
-  const [taxRateInput, setTaxRateInput] = useState(() => bpsToTaxRateInput(invoice?.tax_rate_bps_snapshot));
+  const [taxRateInput, setTaxRateInput] = useState(() =>
+    bpsToTaxRateInput(composerTaxBps(serverTaxRateBps, invoice?.tax_rate_bps_snapshot)),
+  );
+  const paymentAttemptRef = useRef<{
+    fingerprint: string;
+    idempotencyKey: string;
+    succeeded: boolean;
+  } | null>(null);
   const [showCatalogPicker, setShowCatalogPicker] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -155,7 +177,7 @@ export default function JobInvoiceSection({
 
   function applyInvoiceDetail(nextInvoice: JobInvoiceRecord | null, nextLines?: InvoiceBuilderLine[]) {
     publishInvoice(nextInvoice);
-    setTaxRateInput(bpsToTaxRateInput(nextInvoice?.tax_rate_bps_snapshot));
+    setTaxRateInput(bpsToTaxRateInput(composerTaxBps(serverTaxRateBps, nextInvoice?.tax_rate_bps_snapshot)));
     setLines(nextLines ?? invoiceLinesFromPersistedSnapshot(nextInvoice?.line_items ?? [], nextInvoice?.amount_cents));
   }
 
@@ -239,9 +261,18 @@ export default function JobInvoiceSection({
     setErrorMessage(null);
     setIsSaving(true);
 
+    const lockedTaxRateBps = composerTaxBps(serverTaxRateBps, invoiceDetail?.tax_rate_bps_snapshot);
+    if (lockedTaxRateBps == null) {
+      const nextMessage = "This job has no branch tax rate. Assign a branch with a tax rate before saving the invoice.";
+      setErrorMessage(nextMessage);
+      onToast?.(nextMessage, "error");
+      setIsSaving(false);
+      return;
+    }
+
     try {
       const lineItems = buildInvoiceLineItemPayload(lines);
-      const taxRateBps = taxRateInputToBps(taxRateInput);
+      const taxRateBps = lockedTaxRateBps;
       const response = await crmApiFetch<{ id: string; status: InvoiceStatus }>(`/api/jobs/${jobId}/invoice`, {
         method: "PUT",
         body: JSON.stringify({
@@ -289,21 +320,33 @@ export default function JobInvoiceSection({
       return;
     }
 
-    setIsSaving(true);
+    const balanceCents = invoiceDetail?.balance_cents ?? 0;
+    if (amountCents > balanceCents) {
+      onToast?.("Payment cannot exceed the remaining balance.", "warning");
+      return;
+    }
 
-    const idempotencyKey = crypto.randomUUID();
+    const attempt = resolvePaymentAttempt(
+      paymentAttemptRef.current,
+      { amountCents, method: "other", note },
+      () => crypto.randomUUID(),
+    );
+    paymentAttemptRef.current = attempt;
+
+    setIsSaving(true);
 
     try {
       await crmApiFetch(`/api/invoices/${targetInvoiceId}/payments`, {
         method: "POST",
         body: JSON.stringify({
-          idempotencyKey,
+          idempotencyKey: attempt.idempotencyKey,
           entryType: "payment",
           amountCents,
           method: "other",
           note,
         }),
       });
+      paymentAttemptRef.current = { ...attempt, succeeded: true };
 
       await loadInvoiceDetailById(targetInvoiceId);
       setPartialPaymentInput("");
@@ -521,6 +564,7 @@ export default function JobInvoiceSection({
           <InvoiceLineItemsEditor
             lines={lines}
             taxRateInput={taxRateInput}
+            taxRateLocked
             onTaxRateInputChange={setTaxRateInput}
             onLineChange={updateLine}
             onLineBooleanChange={updateLineBoolean}

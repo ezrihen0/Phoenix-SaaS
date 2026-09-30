@@ -902,7 +902,7 @@ export function parseUpsertInvoicePayload(jsonBody: unknown): UpsertInvoicePaylo
     amountCents: requireNonNegativeInteger(payload.amountCents, "amountCents"),
     status: requireEnumValue(payload.status ?? "unpaid", "status", invoiceStatuses),
     lineItems: parseDocumentLineItems(payload.lineItems),
-    taxRateBps: optionalNonNegativeInteger(payload.taxRateBps, "taxRateBps") ?? 0,
+    taxRateBps: optionalNonNegativeInteger(payload.taxRateBps, "taxRateBps"),
   };
 }
 

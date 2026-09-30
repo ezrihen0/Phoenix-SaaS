@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle, ShieldCheck } from "lucide-react";
 
 import { CrmApiError, crmApiFetch } from "@/lib/crm/browser-api";
 import { financeApiErrorMessage, financeApiErrorSupportRef } from "@/lib/crm/finance-api-errors";
+import { resolvePaymentAttempt } from "@/lib/crm/invoice-payment-attempt.mjs";
 import { formatCurrencyFromCents } from "@/lib/crm/invoice-line-model";
 
 export type InvoicePaymentMethod = "cash" | "check" | "card_manual" | "bank_transfer" | "other";
@@ -60,6 +61,11 @@ export default function InvoicePaymentForm({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorSupportRef, setErrorSupportRef] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const paymentAttemptRef = useRef<{
+    fingerprint: string;
+    idempotencyKey: string;
+    succeeded: boolean;
+  } | null>(null);
 
   const canAcceptPayment = canRecordPayment && balanceCents > 0;
 
@@ -74,6 +80,19 @@ export default function InvoicePaymentForm({
       return;
     }
 
+    if (amountCents > balanceCents) {
+      setErrorMessage("Payment cannot exceed the remaining balance.");
+      setErrorSupportRef(null);
+      return;
+    }
+
+    const attempt = resolvePaymentAttempt(
+      paymentAttemptRef.current,
+      { amountCents, method, note },
+      () => crypto.randomUUID(),
+    );
+    paymentAttemptRef.current = attempt;
+
     setIsBusy(true);
     setErrorMessage(null);
     setErrorSupportRef(null);
@@ -83,13 +102,14 @@ export default function InvoicePaymentForm({
       await crmApiFetch(`/api/invoices/${invoiceId}/payments`, {
         method: "POST",
         body: JSON.stringify({
-          idempotencyKey: crypto.randomUUID(),
+          idempotencyKey: attempt.idempotencyKey,
           entryType: "payment",
           amountCents,
           method,
           note,
         }),
       });
+      paymentAttemptRef.current = { ...attempt, succeeded: true };
 
       setAmountInput("");
       setSuccessMessage("Payment recorded.");
@@ -224,17 +244,4 @@ export default function InvoicePaymentForm({
       </div>
     </div>
   );
-}
-
-export function formatPaymentEntryType(entryType: "payment" | "refund" | "adjustment") {
-  switch (entryType) {
-    case "payment":
-      return "Payment";
-    case "refund":
-      return "Refund";
-    case "adjustment":
-      return "Adjustment";
-    default:
-      return entryType;
-  }
 }

@@ -17,6 +17,7 @@ type InvoiceCreateWorkspaceProps = {
   customerName: string;
   invoice: JobInvoiceRecord | null;
   quoteId: string | null;
+  serverTaxRateBps?: number | null;
 };
 
 export default function InvoiceCreateWorkspace({
@@ -27,6 +28,7 @@ export default function InvoiceCreateWorkspace({
   customerName,
   invoice,
   quoteId,
+  serverTaxRateBps = null,
 }: InvoiceCreateWorkspaceProps) {
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
 
@@ -97,6 +99,7 @@ export default function InvoiceCreateWorkspace({
             jobId={jobId}
             invoice={invoice}
             quoteId={quoteId}
+            serverTaxRateBps={serverTaxRateBps}
             currentJobStatus={jobStatus}
             variant="owner"
             onToast={pushToast}

@@ -450,7 +450,7 @@ const messages = {
   customerProfile: {
     profile: "Профіль клієнта",
     description: "Переглядайте інформацію про клієнта, роботи, кошториси, рахунки та інспекції в одному профілі з вкладками.",
-    totalRevenue: "Загальний дохід",
+    totalRevenue: "Виставлено",
     totalInvoices: "Усього рахунків",
     customerInfo: "Інформація про клієнта",
     relatedJobs: "Пов'язані роботи",

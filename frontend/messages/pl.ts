@@ -450,7 +450,7 @@ const messages = {
   customerProfile: {
     profile: "Profil klienta",
     description: "Przegladaj informacje o kliencie, zlecenia, wyceny, faktury i inspekcje w jednym profilowanym widoku z zakladkami.",
-    totalRevenue: "Laczny przychod",
+    totalRevenue: "Zafakturowano",
     totalInvoices: "Liczba faktur",
     customerInfo: "Informacje o kliencie",
     relatedJobs: "Powiazane zlecenia",

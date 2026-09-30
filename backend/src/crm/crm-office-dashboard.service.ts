@@ -17,6 +17,7 @@ import { endOfLocalDashboardDay, startOfLocalDashboardDay } from "./crm-dashboar
 import { formatAddress } from "./display";
 import { sanitizeJobTitle } from "./user-facing-text";
 import { classifyFinanceInvoiceOrigin } from "./finance-invoice-origin";
+import { isCollectibleOpenInvoice } from "./finance-metrics.core";
 import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 
@@ -103,9 +104,7 @@ export class CrmOfficeDashboardService {
 
   private isOpenInvoice(invoice: InvoiceEntity) {
     const ledger = this.summarizeInvoiceLedger(invoice);
-    const lifecycle = ledger.lifecycleStatus;
-    const isOpenLifecycle = lifecycle === "sent" || lifecycle === "partial" || lifecycle === "refunded";
-    return isOpenLifecycle && ledger.balanceCents > 0;
+    return isCollectibleOpenInvoice(ledger.lifecycleStatus, ledger.balanceCents);
   }
 
   private invoiceLifecycleStatusLabel(lifecycle: string) {

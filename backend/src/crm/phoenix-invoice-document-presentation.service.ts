@@ -22,6 +22,8 @@ export class PhoenixInvoiceDocumentPresentationService {
     job: JobEntity | null;
     orgSettings: OrganizationSettingEntity | null;
     dueDays?: number;
+    customerFacingSnapshot?: Parameters<InvoicePdfViewModelService["build"]>[0]["customerFacingSnapshot"];
+    branchTaxLabel?: string | null;
   }): PhoenixInvoiceDocumentViewModel {
     const dueDays = input.dueDays ?? input.orgSettings?.default_due_days ?? 30;
     const ledgerSummary = this.invoicePaymentLedgerService.summarizeInvoice({
@@ -47,6 +49,8 @@ export class PhoenixInvoiceDocumentPresentationService {
       sanitizeDescription: (value) =>
         this.normalizeOptionalString(sanitizeInvoiceDescription(value)) ?? "",
       sanitizeLineText: (value) => sanitizeUserFacingText(value ?? "") || null,
+      customerFacingSnapshot: input.customerFacingSnapshot,
+      branchTaxLabel: input.branchTaxLabel,
     });
   }
 

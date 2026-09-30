@@ -59,6 +59,7 @@ export function summarizeInvoiceLedger(input: SummarizeInvoiceLedgerInput): Invo
     const legacyPaid =
       input.legacyStatus === "paid"
       && financeOrigin === "workiz_historical";
+    const zeroTotalPaid = !legacyPaid && totalCents === 0;
     const netPaidCents = legacyPaid ? totalCents : 0;
     const overpaymentCents = 0;
 
@@ -67,11 +68,11 @@ export function summarizeInvoiceLedger(input: SummarizeInvoiceLedgerInput): Invo
       grossPaidCents: legacyPaid ? totalCents : 0,
       refundedCents: 0,
       netPaidCents,
-      balanceCents: legacyPaid ? 0 : totalCents,
+      balanceCents: legacyPaid || zeroTotalPaid ? 0 : totalCents,
       overpaymentCents,
       paidAt: legacyPaid ? input.legacyPaidAt : null,
-      paidReason: legacyPaid ? "legacy_status_migration" : null,
-      lifecycleStatus: legacyPaid ? "paid" : "sent",
+      paidReason: legacyPaid ? "legacy_status_migration" : zeroTotalPaid ? "zero_total" : null,
+      lifecycleStatus: legacyPaid || zeroTotalPaid ? "paid" : "sent",
       legacyStatus: input.legacyStatus,
     };
   }

@@ -129,9 +129,20 @@ import { InvoiceCustomerFacingSnapshotService } from "./invoice-customer-facing-
 import { InvoicePdfViewModelService } from "./invoice-pdf-view-model.service";
 import { PhoenixInvoiceDocumentPresentationService } from "./phoenix-invoice-document-presentation.service";
 import { InvoiceSendPipelineService } from "./invoice-send-pipeline.service";
+import { executeCustomerSend } from "./customer-send-sequence";
+import type { InvoiceCustomerFacingSnapshotAny } from "./invoice-customer-facing-snapshot.types";
+import {
+  InvoiceTaxContextMissingError,
+  InvoiceTaxRateMismatchError,
+  InvoiceTaxRateOutOfRangeError,
+  resolveServerDocumentTaxRateBps,
+} from "./invoice-tax-policy";
 import { classifyFinanceInvoiceOrigin } from "./finance-invoice-origin";
 import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
 import {
+  assertInvoiceCanBeReopened,
+  InvoiceLedgerLocksFinancialsError,
+  InvoiceReopenFrozenError,
   NativeInvoicePaidRequiresLedgerError,
   resolveNativeUpsertInvoiceStatus,
 } from "./invoice-native-ledger-policy";
@@ -435,6 +446,14 @@ export class CrmController {
 
       delete (invoice as InvoiceEntity & { payments?: InvoicePaymentEntity[] }).payments;
     }
+
+    const branch = job.branch_id
+      ? await this.branchScopeService.findBranchForOrganization(organizationId, job.branch_id)
+      : null;
+    Object.assign(job, {
+      branch_tax_rate_bps: branch ? branch.default_tax_rate_bps : null,
+      branch_tax_label: branch?.tax_label ?? null,
+    });
 
     return job;
   }
@@ -1555,6 +1574,7 @@ export class CrmController {
         job: job ?? null,
         orgSettings,
         dueDays: this.readDefaultDueDays(orgSettings),
+        branchTaxLabel: await this.loadInvoiceBranchTaxLabel(organizationId, job ?? null),
       });
 
       return apiSuccess({
@@ -1669,6 +1689,7 @@ export class CrmController {
       job: job ?? null,
       orgSettings,
       dueDays,
+      branchTaxLabel: await this.loadInvoiceBranchTaxLabel(organizationId, job ?? null),
     });
     setPdfDownloadResponseHeaders(response, {
       download,
@@ -1811,6 +1832,7 @@ export class CrmController {
     const dueDays = this.readDefaultDueDays(orgSettings);
 
     const hadDocumentNumber = Boolean(invoice.document_number?.trim());
+    let emailMessageId = "";
     const sendResult = await this.completeInvoiceCustomerSend({
       organizationId,
       customerId: customer.id,
@@ -1820,7 +1842,42 @@ export class CrmController {
       customer,
       orgSettings,
       frozenVia: "email",
+      deliver: async ({ pdfBuffer, documentNumber }) => {
+        const dueDateLabel = this.formatDueDate(invoice.due_at, invoice.issued_at, dueDays);
+        const vars = {
+          business_name: businessName ?? "",
+          invoice_number: documentNumber,
+          customer_name: customer.full_name ?? "Customer",
+          total: `$${((invoice.total_cents || ledgerSummary.totalCents) / 100).toFixed(2)}`,
+          due_date: dueDateLabel,
+          invoice_link: "",
+          business_phone: this.normalizeOptionalString(orgSettings?.phone) ?? "",
+          business_email: this.normalizeOptionalString(orgSettings?.company_email) ?? "",
+        };
+        const subject = this.resolveTemplate(
+          payload.subject || orgSettings?.invoice_email_subject || "Invoice {invoice_number} from {business_name}",
+          vars,
+        );
+        const emailBody = this.resolveTemplate(
+          payload.body || orgSettings?.invoice_email_body || "Hi {customer_name},\n\nYour invoice {invoice_number} for {total} is ready.\n\nThank you for your business.",
+          vars,
+        );
+        const emailResult = await this.emailService.send({
+          to: toEmail,
+          subject,
+          body: emailBody,
+          attachments: [{
+            filename: `invoice-${documentNumber}.pdf`,
+            content: pdfBuffer,
+            contentType: "application/pdf",
+          }],
+        });
+        emailMessageId = emailResult.messageId;
+      },
     });
+    if (!emailMessageId) {
+      apiError(500, "invoice_send_failed", "The invoice email was not sent.");
+    }
     if (!hadDocumentNumber && sendResult.documentNumber) {
       await this.financeAuditService.log({
         organizationId,
@@ -1832,38 +1889,6 @@ export class CrmController {
       });
     }
     const documentNumber = sendResult.documentNumber;
-    const dueDateLabel = this.formatDueDate(invoice.due_at, invoice.issued_at, dueDays);
-
-    const vars = {
-      business_name: businessName ?? "",
-      invoice_number: documentNumber,
-      customer_name: customer.full_name ?? "Customer",
-      total: `$${((invoice.total_cents || ledgerSummary.totalCents) / 100).toFixed(2)}`,
-      due_date: dueDateLabel,
-      invoice_link: "",
-      business_phone: this.normalizeOptionalString(orgSettings?.phone) ?? "",
-      business_email: this.normalizeOptionalString(orgSettings?.company_email) ?? "",
-    };
-
-    const subject = this.resolveTemplate(
-      payload.subject || orgSettings?.invoice_email_subject || "Invoice {invoice_number} from {business_name}",
-      vars,
-    );
-    const emailBody = this.resolveTemplate(
-      payload.body || orgSettings?.invoice_email_body || "Hi {customer_name},\n\nYour invoice {invoice_number} for {total} is ready.\n\nThank you for your business.",
-      vars,
-    );
-
-    const emailResult = await this.emailService.send({
-      to: toEmail,
-      subject,
-      body: emailBody,
-      attachments: [{
-        filename: `invoice-${documentNumber}.pdf`,
-        content: sendResult.pdfBuffer,
-        contentType: "application/pdf",
-      }],
-    });
 
     const now = new Date();
     invoice.email_sent_at = now;
@@ -1876,7 +1901,7 @@ export class CrmController {
       document_number: documentNumber,
       sent_at: now.toISOString(),
       to: [toEmail],
-      message_id: emailResult.messageId,
+      message_id: emailMessageId,
     });
   }
 
@@ -1920,6 +1945,7 @@ export class CrmController {
     const orgSettings = await this.findOrganizationSettings(organizationId);
     const businessName = this.normalizeOptionalString(orgSettings?.business_name);
     const hadDocumentNumber = Boolean(invoice.document_number?.trim());
+    let invoiceLink = "";
     const sendResult = await this.completeInvoiceCustomerSend({
       organizationId,
       customerId: customer.id,
@@ -1929,6 +1955,39 @@ export class CrmController {
       customer,
       orgSettings,
       frozenVia: "sms",
+      deliver: async ({ documentNumber }) => {
+        const totalCents = invoice.total_cents || (invoice.subtotal_cents || invoice.amount_cents);
+        const dueDays = this.readDefaultDueDays(orgSettings);
+        const dueDateLabel = this.formatDueDate(invoice.due_at, invoice.issued_at, dueDays);
+        const portalLink = await this.customerPortalService.createMagicLinkForStaff({
+          organizationId,
+          customerId: job.customer_id,
+          actorProfileId: actor.profile.id,
+          request: request as unknown as Request,
+        });
+        const baseUrl = this.configService.get<string>("PUBLIC_BASE_URL") ?? "http://localhost:3000";
+        invoiceLink = `${baseUrl}/access/${portalLink.raw_token}`;
+        const smsVars = {
+          business_name: businessName ?? "your service provider",
+          invoice_number: documentNumber,
+          customer_name: customer?.full_name ?? "Customer",
+          total: `$${(totalCents / 100).toFixed(2)}`,
+          due_date: dueDateLabel,
+          invoice_link: invoiceLink,
+          business_phone: this.normalizeOptionalString(orgSettings?.phone) ?? "",
+          business_email: this.normalizeOptionalString(orgSettings?.company_email) ?? "",
+        };
+        const smsBody = this.resolveTemplate(
+          orgSettings?.invoice_sms_body || "Invoice {invoice_number} from {business_name}: {total}. View: {invoice_link}",
+          smsVars,
+        );
+        await this.txtService.sendMessage({
+          conversationId: `customer:${customer.id}`,
+          body: smsBody,
+          sentByUserId: actor.user.id,
+          organizationIdForCustomerScope: organizationId,
+        });
+      },
     });
     if (!hadDocumentNumber && sendResult.documentNumber) {
       await this.financeAuditService.log({
@@ -1941,49 +2000,6 @@ export class CrmController {
       });
     }
     const documentNumber = sendResult.documentNumber;
-    const totalCents = invoice.total_cents || (invoice.subtotal_cents || invoice.amount_cents);
-    const dueDays = this.readDefaultDueDays(orgSettings);
-    const dueDateLabel = this.formatDueDate(invoice.due_at, invoice.issued_at, dueDays);
-
-    const smsVars = {
-      business_name: businessName ?? "your service provider",
-      invoice_number: documentNumber,
-      customer_name: customer?.full_name ?? "Customer",
-      total: `$${(totalCents / 100).toFixed(2)}`,
-      due_date: dueDateLabel,
-      invoice_link: "", // filled below
-      business_phone: this.normalizeOptionalString(orgSettings?.phone) ?? "",
-      business_email: this.normalizeOptionalString(orgSettings?.company_email) ?? "",
-    };
-
-    // Generate portal magic link for invoice
-    const portalLink = await this.customerPortalService.createMagicLinkForStaff({
-      organizationId,
-      customerId: job.customer_id,
-      actorProfileId: actor.profile.id,
-      request: request as unknown as Request,
-    });
-
-    // Build the invoice portal URL
-    const baseUrl = this.configService.get<string>("PUBLIC_BASE_URL") ?? "http://localhost:3000";
-    const invoiceLink = `${baseUrl}/access/${portalLink.raw_token}`;
-    smsVars.invoice_link = invoiceLink;
-
-    const smsBody = this.resolveTemplate(
-      orgSettings?.invoice_sms_body || "Invoice {invoice_number} from {business_name}: {total}. View: {invoice_link}",
-      smsVars,
-    );
-
-    // Send SMS via TxtService
-    // Build a conversation key for this customer
-    const conversationId = `customer:${customer.id}`;
-
-    await this.txtService.sendMessage({
-      conversationId,
-      body: smsBody,
-      sentByUserId: actor.user.id,
-      organizationIdForCustomerScope: organizationId,
-    });
 
     const now = new Date();
     invoice.sms_sent_at = now;
@@ -2147,6 +2163,15 @@ export class CrmController {
 
       if (!invoice) {
         apiError(404, "invoice_not_found", "The invoice could not be found.");
+      }
+
+      try {
+        assertInvoiceCanBeReopened(this.invoiceCustomerFacingSnapshotService.isFrozen(invoice));
+      } catch (error) {
+        if (error instanceof InvoiceReopenFrozenError) {
+          apiError(409, error.code, error.message);
+        }
+        throw error;
       }
 
       invoice.approval_requested_at = null;
@@ -2665,6 +2690,14 @@ export class CrmController {
         );
       }
 
+      if ((existingInvoice?.payments?.length ?? 0) > 0) {
+        apiError(
+          409,
+          "invoice_has_ledger_activity",
+          "This invoice already has recorded payments. Financial lines and totals cannot be changed.",
+        );
+      }
+
       const hasSnapshotLineItems = payload.lineItems !== undefined;
       const invoiceLineDrafts = hasSnapshotLineItems
         ? await this.buildDocumentLineDrafts(
@@ -2674,14 +2707,16 @@ export class CrmController {
             existingInvoice?.id ?? null,
           )
         : [];
-      const defaultInvoiceTaxRateBps = await this.resolveJobBranchDefaultTaxRateBps(organizationId, job);
+      const invoiceTaxRateBps = hasSnapshotLineItems
+        ? await this.resolveServerInvoiceTaxRateBps(organizationId, job, payload.taxRateBps)
+        : 0;
       const invoiceTotals = hasSnapshotLineItems
         ? this.moneyEngineService.computeSnapshotTotals(
             invoiceLineDrafts.map((lineDraft) => ({
               quantity: lineDraft.quantity,
               unitPriceCents: lineDraft.unit_price_cents_snapshot,
             })),
-            payload.taxRateBps ?? defaultInvoiceTaxRateBps,
+            invoiceTaxRateBps,
           )
         : this.moneyEngineService.buildLegacyTotals(payload.amountCents);
 
@@ -2765,6 +2800,14 @@ export class CrmController {
       this.rethrowHttpException(error);
       if (error instanceof Error && error.message.includes("total mismatch")) {
         apiError(400, "totals_mismatch", error.message);
+      }
+      if (
+        error instanceof InvoiceTaxContextMissingError
+        || error instanceof InvoiceTaxRateMismatchError
+        || error instanceof InvoiceTaxRateOutOfRangeError
+        || error instanceof InvoiceLedgerLocksFinancialsError
+      ) {
+        apiError(error instanceof InvoiceLedgerLocksFinancialsError ? 409 : 400, error.code, error.message);
       }
       apiError(400, "invalid_invoice_payload", "The invoice payload is invalid.", error);
     }
@@ -4386,6 +4429,8 @@ export class CrmController {
     job: JobEntity | null;
     orgSettings: OrganizationSettingEntity | null;
     dueDays: number;
+    customerFacingSnapshot?: InvoiceCustomerFacingSnapshotAny | null;
+    branchTaxLabel?: string | null;
   }) {
     const viewModel = this.phoenixInvoiceDocumentPresentationService.buildInvoiceDocumentView({
       invoice: input.invoice,
@@ -4393,6 +4438,8 @@ export class CrmController {
       job: input.job,
       orgSettings: input.orgSettings,
       dueDays: input.dueDays,
+      customerFacingSnapshot: input.customerFacingSnapshot ?? undefined,
+      branchTaxLabel: input.branchTaxLabel,
     });
 
     return this.invoicePdfService.renderInvoicePdf(viewModel);
@@ -4431,59 +4478,89 @@ export class CrmController {
     customer: CustomerEntity | null;
     orgSettings: OrganizationSettingEntity | null;
     frozenVia: "email" | "sms";
+    deliver: (delivery: {
+      pdfBuffer: Buffer;
+      documentNumber: string;
+      snapshot: InvoiceCustomerFacingSnapshotAny;
+    }) => Promise<void>;
   }) {
     const branch = input.job.branch_id
       ? await this.branchScopeService.findBranchForOrganization(input.organizationId, input.job.branch_id)
       : null;
+    let pdfBuffer: Buffer | null = null;
+    let nativeDocument: Awaited<ReturnType<InvoiceNativeDocumentService["persistNativePdfAfterSend"]>> | null = null;
 
-    const sendResult = await this.invoiceSendPipelineService.finalizeCustomerFacingSend({
-      organizationId: input.organizationId,
-      invoice: input.invoice,
-      job: input.job,
-      customer: input.customer,
-      orgSettings: input.orgSettings,
-      frozenVia: input.frozenVia,
-      branch,
-    });
-
-    const dueDays = this.readDefaultDueDays(input.orgSettings);
-    const pdfBuffer = this.buildInvoicePdfBuffer({
-      invoice: input.invoice,
-      customer: input.customer,
-      job: input.job,
-      orgSettings: input.orgSettings,
-      dueDays,
-    });
-
-    const nativeDocument = await this.invoiceNativeDocumentService.persistNativePdfAfterSend({
-      organizationId: input.organizationId,
-      customerId: input.customerId,
-      invoice: input.invoice,
-      pdfBuffer,
-      snapshot: sendResult.snapshot,
-      sentVia: input.frozenVia,
-    });
-
-    await this.financeAuditService.log({
-      organizationId: input.organizationId,
-      actorProfileId: input.actorProfileId,
-      entityType: "invoice",
-      entityId: input.invoice.id,
-      action: "invoice.snapshot_frozen",
-      metadata: { document_number: sendResult.documentNumber, sent_via: input.frozenVia },
-    });
-
-    await this.financeAuditService.log({
-      organizationId: input.organizationId,
-      actorProfileId: input.actorProfileId,
-      entityType: "invoice",
-      entityId: input.invoice.id,
-      action: input.frozenVia === "email" ? "invoice.send_email" : "invoice.send_sms",
-      metadata: { document_number: sendResult.documentNumber },
+    const sendResult = await executeCustomerSend({
+      reserveDocumentNumber: () => this.invoiceSendPipelineService.reserveDocumentNumber(
+        input.organizationId,
+        input.invoice,
+      ),
+      buildUnsavedSnapshot: (documentNumber) => this.invoiceSendPipelineService.buildUnsavedCustomerSnapshot({
+        organizationId: input.organizationId,
+        invoice: input.invoice,
+        job: input.job,
+        customer: input.customer,
+        orgSettings: input.orgSettings,
+        frozenVia: input.frozenVia,
+        branch,
+        documentNumber,
+      }),
+      deliver: async ({ documentNumber, snapshot }) => {
+        input.invoice.document_number = documentNumber;
+        pdfBuffer = this.buildInvoicePdfBuffer({
+          invoice: input.invoice,
+          customer: input.customer,
+          job: input.job,
+          orgSettings: input.orgSettings,
+          dueDays: this.readDefaultDueDays(input.orgSettings),
+          customerFacingSnapshot: snapshot,
+          branchTaxLabel: branch?.tax_label ?? null,
+        });
+        await input.deliver({
+          pdfBuffer,
+          documentNumber,
+          snapshot,
+        });
+      },
+      commitFrozenSnapshot: async ({ documentNumber, snapshot }) => {
+        await this.invoiceSendPipelineService.commitFrozenSnapshot({
+          organizationId: input.organizationId,
+          invoice: input.invoice,
+          snapshot,
+        });
+        if (!pdfBuffer) {
+          throw new Error("invoice_pdf_missing");
+        }
+        nativeDocument = await this.invoiceNativeDocumentService.persistNativePdfAfterSend({
+          organizationId: input.organizationId,
+          customerId: input.customerId,
+          invoice: input.invoice,
+          pdfBuffer,
+          snapshot,
+          sentVia: input.frozenVia,
+        });
+        await this.financeAuditService.log({
+          organizationId: input.organizationId,
+          actorProfileId: input.actorProfileId,
+          entityType: "invoice",
+          entityId: input.invoice.id,
+          action: "invoice.snapshot_frozen",
+          metadata: { document_number: documentNumber, sent_via: input.frozenVia },
+        });
+        await this.financeAuditService.log({
+          organizationId: input.organizationId,
+          actorProfileId: input.actorProfileId,
+          entityType: "invoice",
+          entityId: input.invoice.id,
+          action: input.frozenVia === "email" ? "invoice.send_email" : "invoice.send_sms",
+          metadata: { document_number: documentNumber },
+        });
+      },
     });
 
     return {
-      ...sendResult,
+      documentNumber: sendResult.documentNumber,
+      snapshot: sendResult.snapshot,
       pdfBuffer,
       nativeDocument,
     };
@@ -4501,6 +4578,30 @@ export class CrmController {
     const dueAt = new Date(issuedAt);
     dueAt.setDate(dueAt.getDate() + dueDays);
     return dueAt;
+  }
+
+  private async loadInvoiceBranchTaxLabel(organizationId: string, job: JobEntity | null) {
+    if (!job?.branch_id?.trim()) {
+      return null;
+    }
+    const branch = await this.branchScopeService.findBranchForOrganization(organizationId, job.branch_id);
+    return branch?.tax_label ?? null;
+  }
+
+  private async resolveServerInvoiceTaxRateBps(
+    organizationId: string,
+    job: JobEntity,
+    clientTaxRateBps: number | undefined,
+  ) {
+    const branch = job.branch_id?.trim()
+      ? await this.branchScopeService.findBranchForOrganization(organizationId, job.branch_id)
+      : null;
+
+    return resolveServerDocumentTaxRateBps({
+      branchId: branch?.id ?? null,
+      branchDefaultTaxRateBps: branch ? branch.default_tax_rate_bps : null,
+      clientTaxRateBps,
+    });
   }
 
   private async resolveJobBranchDefaultTaxRateBps(organizationId: string, job: JobEntity) {

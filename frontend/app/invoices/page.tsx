@@ -64,6 +64,7 @@ type InvoiceListItem = {
   document_number: string;
   total_cents: number;
   amount_paid_cents: number;
+  cash_collected_cents?: number;
   refunded_cents?: number;
   balance_cents: number;
   lifecycle_status: InvoiceLifecycleStatus;
@@ -164,8 +165,12 @@ function isFullyPaid(invoice: InvoiceListItem) {
   return invoice.lifecycle_status === "paid" || invoice.lifecycle_status === "overpaid";
 }
 
-function isUnpaidOpen(invoice: InvoiceListItem) {
-  return invoice.balance_cents > 0 && invoice.lifecycle_status === "sent";
+function isCollectibleOpen(invoice: InvoiceListItem) {
+  return invoice.balance_cents > 0 && (
+    invoice.lifecycle_status === "sent"
+    || invoice.lifecycle_status === "partial"
+    || invoice.lifecycle_status === "refunded"
+  );
 }
 
 
@@ -179,7 +184,7 @@ function getInvoicePaymentAiReadyState(insights: InvoicePaymentInsight[] = []): 
 
 function applyPipelineFilter(invoices: InvoiceListItem[], pipeline: PipelineFilter) {
   if (pipeline === "open") {
-    return invoices.filter((invoice) => isUnpaidOpen(invoice));
+    return invoices.filter((invoice) => isCollectibleOpen(invoice));
   }
 
   if (pipeline === "partial") {
@@ -212,12 +217,12 @@ function buildOpenBalanceQueue(invoices: InvoiceListItem[]) {
 }
 
 function deriveInvoiceMetrics(invoices: InvoiceListItem[]) {
-  const outstandingCents = invoices.reduce((sum, invoice) => sum + Math.max(0, invoice.balance_cents), 0);
+  const openInvoices = invoices.filter((invoice) => isCollectibleOpen(invoice));
+  const outstandingCents = openInvoices.reduce((sum, invoice) => sum + invoice.balance_cents, 0);
   const partialInvoices = invoices.filter((invoice) => invoice.lifecycle_status === "partial");
   const depositsHeldCents = partialInvoices.reduce((sum, invoice) => sum + invoice.amount_paid_cents, 0);
   const paidInvoices = invoices.filter((invoice) => isFullyPaid(invoice));
-  const paidValueCents = paidInvoices.reduce((sum, invoice) => sum + invoice.total_cents, 0);
-  const openInvoices = invoices.filter((invoice) => invoice.balance_cents > 0);
+  const paidValueCents = invoices.reduce((sum, invoice) => sum + (invoice.cash_collected_cents ?? 0), 0);
 
   return {
     outstandingCents,

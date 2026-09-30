@@ -15,6 +15,7 @@ import type { CustomerOutputTranslationStatus } from "@/lib/language-store/clien
 type InvoiceLineItemsEditorProps = {
   lines: InvoiceBuilderLine[];
   taxRateInput?: string;
+  taxRateLocked?: boolean;
   onTaxRateInputChange?: (value: string) => void;
   onLineChange?: (clientId: string, field: keyof InvoiceBuilderLine, value: string) => void;
   onLineBooleanChange?: (clientId: string, field: "warrantyEnabled", value: boolean) => void;
@@ -56,6 +57,7 @@ function DetailValue({ label, value }: { label: string; value: string }) {
 export default function InvoiceLineItemsEditor({
   lines,
   taxRateInput = "0",
+  taxRateLocked = false,
   onTaxRateInputChange,
   onLineChange,
   onLineBooleanChange,
@@ -277,7 +279,13 @@ export default function InvoiceLineItemsEditor({
 
       <div className="mt-5 grid gap-4 rounded-[20px] border border-white/10 bg-black/20 p-4 lg:grid-cols-[minmax(0,1fr)_220px]">
         <div>
-          {!readOnly && onTaxRateInputChange ? (
+          {!readOnly && taxRateLocked ? (
+            <div className="space-y-1 text-xs uppercase tracking-[0.18em] text-white/38">
+              <span>Tax rate</span>
+              <p className="text-sm normal-case tracking-normal text-white">{taxRateInput}%</p>
+              <p className="normal-case tracking-normal text-white/48">Set by the branch tax rate.</p>
+            </div>
+          ) : !readOnly && onTaxRateInputChange ? (
             <label className="block space-y-2 text-xs uppercase tracking-[0.18em] text-white/38">
               <span>Tax Rate %</span>
               <input

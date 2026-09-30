@@ -450,7 +450,7 @@ const messages = {
   customerProfile: {
     profile: "פרופיל לקוח",
     description: "סקור פרטי לקוח, עבודות, הצעות מחיר, חשבוניות, ובדיקות מתוך פרופיל אחד עם כרטיסיות.",
-    totalRevenue: "סה\"כ הכנסות",
+    totalRevenue: "סכום שחויב",
     totalInvoices: "סה\"כ חשבוניות",
     customerInfo: "פרטי לקוח",
     relatedJobs: "עבודות קשורות",

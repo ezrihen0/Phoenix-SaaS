@@ -33,6 +33,7 @@ export class PortalNativeInvoicePdfService {
         payments: true,
         job: {
           customer: true,
+          branch: true,
         },
       },
     });
@@ -55,6 +56,7 @@ export class PortalNativeInvoicePdfService {
       customer: customer ?? null,
       job,
       orgSettings,
+      branchTaxLabel: job.branch?.tax_label ?? null,
     });
 
     const buffer = this.invoicePdfService.renderInvoicePdf(documentView);
@@ -77,6 +79,7 @@ export class PortalNativeInvoicePdfService {
         payments: true,
         job: {
           customer: true,
+          branch: true,
         },
       },
     });
@@ -100,6 +103,7 @@ export class PortalNativeInvoicePdfService {
       customer: customer ?? null,
       job,
       orgSettings,
+      branchTaxLabel: job.branch?.tax_label ?? null,
     });
   }
 

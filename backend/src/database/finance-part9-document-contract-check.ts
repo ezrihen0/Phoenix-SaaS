@@ -23,8 +23,9 @@ const nativeService = readFileSync(
   "utf8",
 );
 
-expect("send email attaches buffer from completeInvoiceCustomerSend", () => {
-  assert.match(crmController, /content: sendResult\.pdfBuffer/);
+expect("send email attaches the pre-commit invoice pdf buffer", () => {
+  assert.match(crmController, /content: pdfBuffer/);
+  assert.match(crmController, /executeCustomerSend/);
 });
 
 expect("completeInvoiceCustomerSend returns pdfBuffer", () => {

@@ -14,9 +14,11 @@ import {
 import { classifyFinanceInvoiceOrigin } from "./finance-invoice-origin";
 import {
   assertInvoiceAcceptsLedgerEntry,
+  assertPaymentDoesNotExceedBalance,
   assertRefundAmountAllowed,
   deriveLegacyInvoiceStatusFields,
   InvoiceTerminalForPaymentsError,
+  PaymentExceedsBalanceError,
   RefundExceedsNetPaidError,
 } from "./invoice-native-ledger-policy";
 import {
@@ -117,21 +119,30 @@ export class InvoicePaymentRecordingService {
             id: input.invoiceId,
             organization_id: input.organizationId,
           },
-          relations: {
-            payments: true,
-            job: true,
-          },
+          lock: { mode: "pessimistic_write" },
         });
 
         if (!invoice) {
           apiError(404, "invoice_not_found", "The invoice could not be found.");
         }
 
-        const job = this.relationValue(invoice.job as JobEntity | JobEntity[] | null | undefined);
+        const payments = await paymentRepo.find({
+          where: { invoice_id: invoice.id },
+        });
+        invoice.payments = payments;
+
+        const job = await manager.getRepository(JobEntity).findOne({
+          where: {
+            id: invoice.job_id,
+            organization_id: input.organizationId,
+          },
+        });
 
         if (!job) {
           apiError(404, "invoice_job_not_found", "The related job could not be found.");
         }
+
+        invoice.job = job;
 
         try {
           assertInvoiceAcceptsLedgerEntry(invoice);
@@ -153,6 +164,21 @@ export class InvoicePaymentRecordingService {
 
             throw error;
           }
+        }
+
+        const ledgerBeforeEntry = this.summarizeInvoiceLedger(invoice);
+        try {
+          assertPaymentDoesNotExceedBalance({
+            entryType: input.payload.entryType,
+            amountCents: input.payload.amountCents,
+            balanceCents: ledgerBeforeEntry.balanceCents,
+          });
+        } catch (error) {
+          if (error instanceof PaymentExceedsBalanceError) {
+            apiError(409, error.code, error.message);
+          }
+
+          throw error;
         }
 
         const occurredAt = input.payload.occurredAt

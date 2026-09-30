@@ -30,6 +30,13 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   estimate_not_found: "That estimate could not be found.",
   invoice_send_failed: "The invoice could not be sent. Check the customer email or phone and try again.",
   invoice_payment_failed: "The payment could not be recorded. Check the amount and try again.",
+  invoice_has_ledger_activity:
+    "This invoice already has recorded payments. Financial lines and totals cannot be changed.",
+  invoice_payment_exceeds_balance: "Payment cannot exceed the remaining balance.",
+  invoice_tax_context_missing:
+    "This job has no branch tax rate. Assign a branch with a tax rate before saving the invoice.",
+  invoice_tax_rate_mismatch: "Invoice tax rate must match the branch tax rate.",
+  invoice_tax_rate_out_of_range: "Branch tax rate is outside the supported range.",
 };
 
 export function financeApiErrorMessage(code: string | undefined, fallback: string) {

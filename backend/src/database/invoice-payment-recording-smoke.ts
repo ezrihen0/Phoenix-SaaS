@@ -8,10 +8,14 @@ import mysql from "mysql2/promise";
 import { DataSource, Repository } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
+import { persistInvoiceHeaderAndLineItems } from "../crm/crm-document-persistence";
+import { InvoiceLedgerLocksFinancialsError } from "../crm/invoice-native-ledger-policy";
 import { InvoicePaymentLedgerService } from "../crm/invoice-payment-ledger.service";
 import { InvoicePaymentRecordingService } from "../crm/invoice-payment-recording.service";
 import { CustomerEntity } from "./entities/customer.entity";
+import { InvoiceDocumentEntity } from "./entities/invoice-document.entity";
 import { InvoiceEntity } from "./entities/invoice.entity";
+import { InvoiceLineItemEntity } from "./entities/invoice-line-item.entity";
 import { InvoicePaymentEntity } from "./entities/invoice-payment.entity";
 import { JobEntity } from "./entities/job.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
@@ -580,6 +584,291 @@ async function runTests(summary: SmokeSummary, dataSource: DataSource) {
     }
 
     return { paymentCount: payments.length, reference: payments[0]?.reference };
+  });
+
+  const balanceFixture = await seedPaymentFixture(dataSource);
+  const balanceInput = {
+    organizationId: balanceFixture.organizationId,
+    invoiceId: balanceFixture.invoiceId,
+    actorUserId: balanceFixture.userId,
+    actorProfileId: balanceFixture.profileId,
+  };
+
+  await expectPass(summary, "I full balance payment succeeds and one cent over fails", async () => {
+    const paid = await recordingService.recordNativePayment({
+      ...balanceInput,
+      payload: {
+        idempotencyKey: randomUUID(),
+        entryType: "payment",
+        amountCents: 10_000,
+        method: "cash",
+        reference: null,
+        note: "Paid in full",
+        occurredAt: null,
+      },
+    });
+
+    let overpayCode = "";
+    try {
+      await recordingService.recordNativePayment({
+        ...balanceInput,
+        payload: {
+          idempotencyKey: randomUUID(),
+          entryType: "payment",
+          amountCents: 1,
+          method: "cash",
+          reference: null,
+          note: "One cent over",
+          occurredAt: null,
+        },
+      });
+    } catch (error) {
+      overpayCode = extractErrorCode(error);
+    }
+
+    const payments = await paymentRepo.find({ where: { invoice_id: balanceFixture.invoiceId } });
+    const netPaid = payments
+      .filter((row) => row.entry_type === "payment")
+      .reduce((sum, row) => sum + row.amount_cents, 0);
+    if (overpayCode !== "invoice_payment_exceeds_balance") {
+      throw new Error(`expected_exceeds_balance_got_${overpayCode}`);
+    }
+    if (payments.length !== 1 || netPaid !== 10_000 || paid.paymentId !== payments[0]?.id) {
+      throw new Error(`unexpected_balance_rows_${payments.length}_${netPaid}`);
+    }
+
+    return { overpayCode, netPaid };
+  });
+
+  const raceFixture = await seedPaymentFixture(dataSource);
+  await expectPass(summary, "J concurrent full payments create one cash row", async () => {
+    const results = await Promise.allSettled([
+      recordingService.recordNativePayment({
+        organizationId: raceFixture.organizationId,
+        invoiceId: raceFixture.invoiceId,
+        actorUserId: raceFixture.userId,
+        actorProfileId: raceFixture.profileId,
+        payload: {
+          idempotencyKey: randomUUID(),
+          entryType: "payment",
+          amountCents: 10_000,
+          method: "cash",
+          reference: null,
+          note: "Race A",
+          occurredAt: null,
+        },
+      }),
+      recordingService.recordNativePayment({
+        organizationId: raceFixture.organizationId,
+        invoiceId: raceFixture.invoiceId,
+        actorUserId: raceFixture.userId,
+        actorProfileId: raceFixture.profileId,
+        payload: {
+          idempotencyKey: randomUUID(),
+          entryType: "payment",
+          amountCents: 10_000,
+          method: "cash",
+          reference: null,
+          note: "Race B",
+          occurredAt: null,
+        },
+      }),
+    ]);
+
+    const fulfilled = results.filter((result) => result.status === "fulfilled");
+    const rejected = results.filter((result) => result.status === "rejected");
+    const payments = await paymentRepo.find({ where: { invoice_id: raceFixture.invoiceId } });
+    const netPaid = payments.reduce((sum, row) => sum + (row.entry_type === "payment" ? row.amount_cents : 0), 0);
+    if (fulfilled.length !== 1 || rejected.length !== 1 || payments.length !== 1 || netPaid !== 10_000) {
+      throw new Error(`race_unexpected_${fulfilled.length}_${rejected.length}_${payments.length}_${netPaid}_${rejected.map((result) => extractErrorCode(result.reason)).join(",")}`);
+    }
+    if (extractErrorCode(rejected[0]?.reason) !== "invoice_payment_exceeds_balance") {
+      throw new Error(`race_reject_${extractErrorCode(rejected[0]?.reason)}`);
+    }
+
+    return { netPaid };
+  });
+
+  const lockedFixture = await seedPaymentFixture(dataSource);
+  await expectPass(summary, "K ledger activity rejects invoice financial replacement", async () => {
+    const line = await dataSource.getRepository(InvoiceLineItemEntity).save(
+      dataSource.getRepository(InvoiceLineItemEntity).create({
+        invoice_id: lockedFixture.invoiceId,
+        sku_snapshot: "SKU-LOCK",
+        name_snapshot: "Original line",
+        item_type_snapshot: "service",
+        unit_of_measure_snapshot: "each",
+        unit_price_cents_snapshot: 10_000,
+        quantity: "1",
+        line_subtotal_cents: 10_000,
+        sort_order: 0,
+      }),
+    );
+
+    const payment = await recordingService.recordNativePayment({
+      organizationId: lockedFixture.organizationId,
+      invoiceId: lockedFixture.invoiceId,
+      actorUserId: lockedFixture.userId,
+      actorProfileId: lockedFixture.profileId,
+      payload: {
+        idempotencyKey: randomUUID(),
+        entryType: "payment",
+        amountCents: 4_000,
+        method: "check",
+        reference: "lock-check",
+        note: "Partial before edit",
+        occurredAt: null,
+      },
+    });
+
+    const existing = await invoiceRepo.findOneOrFail({
+      where: { id: lockedFixture.invoiceId },
+      relations: { payments: true, line_items: true },
+    });
+
+    let locked = false;
+    try {
+      await dataSource.transaction((manager) => persistInvoiceHeaderAndLineItems(
+        manager,
+        {} as never,
+        {
+          organizationId: lockedFixture.organizationId,
+          jobId: lockedFixture.jobId,
+          existingInvoice: existing,
+          description: "Rewritten after payment",
+          invoiceTotals: {
+            totalCents: 5_000,
+            subtotalCents: 5_000,
+            taxRateBpsSnapshot: 0,
+            taxCents: 0,
+          },
+          status: "unpaid",
+          paid_at: null,
+          due_at: new Date(),
+          hasSnapshotLineItems: true,
+          lineDrafts: [],
+        },
+      ));
+    } catch (error) {
+      locked = error instanceof InvoiceLedgerLocksFinancialsError;
+      if (!locked) {
+        throw error;
+      }
+    }
+
+    const reloaded = await invoiceRepo.findOneOrFail({
+      where: { id: lockedFixture.invoiceId },
+      relations: { payments: true, line_items: true },
+    });
+    const paymentRow = await paymentRepo.findOneOrFail({ where: { id: payment.paymentId } });
+    if (!locked || reloaded.total_cents !== 10_000 || reloaded.line_items?.length !== 1) {
+      throw new Error(`ledger_lock_failed_${locked}_${reloaded.total_cents}_${reloaded.line_items?.length}`);
+    }
+    if (reloaded.line_items[0]?.id !== line.id || reloaded.line_items[0]?.name_snapshot !== "Original line") {
+      throw new Error("line_changed_after_rejected_upsert");
+    }
+    if (paymentRow.amount_cents !== 4_000 || paymentRow.reference !== "lock-check") {
+      throw new Error("payment_changed_after_rejected_upsert");
+    }
+    const balance = 10_000 - 4_000;
+    if (balance !== 6_000) {
+      throw new Error("balance_changed");
+    }
+
+    return { balance, paymentId: payment.paymentId };
+  });
+
+  const zeroFixture = await seedPaymentFixture(dataSource);
+  await expectPass(summary, "L zero-dollar invoice rejects a normal payment", async () => {
+    await invoiceRepo.update(zeroFixture.invoiceId, {
+      amount_cents: 0,
+      subtotal_cents: 0,
+      tax_cents: 0,
+      total_cents: 0,
+    });
+
+    let code = "";
+    try {
+      await recordingService.recordNativePayment({
+        organizationId: zeroFixture.organizationId,
+        invoiceId: zeroFixture.invoiceId,
+        actorUserId: zeroFixture.userId,
+        actorProfileId: zeroFixture.profileId,
+        payload: {
+          idempotencyKey: randomUUID(),
+          entryType: "payment",
+          amountCents: 1,
+          method: "cash",
+          reference: null,
+          note: "Should not land",
+          occurredAt: null,
+        },
+      });
+    } catch (error) {
+      code = extractErrorCode(error);
+    }
+
+    const paymentCount = await countPaymentsForInvoice(paymentRepo, zeroFixture.invoiceId);
+    if (code !== "invoice_payment_exceeds_balance" || paymentCount !== 0) {
+      throw new Error(`zero_payment_${code}_${paymentCount}`);
+    }
+
+    return { code, paymentCount };
+  });
+
+  const durabilityFixture = await seedPaymentFixture(dataSource);
+  await expectPass(summary, "M job delete is restricted while invoice payment and document remain", async () => {
+    const payment = await recordingService.recordNativePayment({
+      organizationId: durabilityFixture.organizationId,
+      invoiceId: durabilityFixture.invoiceId,
+      actorUserId: durabilityFixture.userId,
+      actorProfileId: durabilityFixture.profileId,
+      payload: {
+        idempotencyKey: randomUUID(),
+        entryType: "payment",
+        amountCents: 2_000,
+        method: "cash",
+        reference: null,
+        note: "Durability",
+        occurredAt: null,
+      },
+    });
+
+    const document = await dataSource.getRepository(InvoiceDocumentEntity).save(
+      dataSource.getRepository(InvoiceDocumentEntity).create({
+        organization_id: durabilityFixture.organizationId,
+        customer_id: durabilityFixture.customerId,
+        invoice_id: durabilityFixture.invoiceId,
+        document_kind: "native_customer_pdf",
+        generation_sequence: 1,
+        storage_key: `smoke/${durabilityFixture.invoiceId}.pdf`,
+        storage_path: `smoke/${durabilityFixture.invoiceId}.pdf`,
+        file_hash: randomUUID().replace(/-/g, ""),
+        original_filename: "invoice.pdf",
+        mime_type: "application/pdf",
+      }),
+    );
+
+    let deleteFailed = false;
+    try {
+      await jobRepo.delete(durabilityFixture.jobId);
+    } catch (error) {
+      deleteFailed = true;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/foreign key|ER_ROW_IS_REFERENCED|restrict/i.test(message)) {
+        throw error;
+      }
+    }
+
+    const invoice = await invoiceRepo.findOne({ where: { id: durabilityFixture.invoiceId } });
+    const paymentRow = await paymentRepo.findOne({ where: { id: payment.paymentId } });
+    const documentRow = await dataSource.getRepository(InvoiceDocumentEntity).findOne({ where: { id: document.id } });
+    const job = await jobRepo.findOne({ where: { id: durabilityFixture.jobId } });
+    if (!deleteFailed || !invoice || !paymentRow || !documentRow || !job) {
+      throw new Error(`job_delete_did_not_preserve_finance_${deleteFailed}_${Boolean(invoice)}_${Boolean(paymentRow)}_${Boolean(documentRow)}`);
+    }
+
+    return { invoiceId: invoice.id, paymentId: paymentRow.id, documentId: documentRow.id };
   });
 }
 

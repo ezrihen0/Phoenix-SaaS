@@ -589,7 +589,7 @@ const messages = {
   customerProfile: {
     profile: "Perfil del cliente",
     description: "Revisa informacion del cliente, trabajos, presupuestos, facturas e inspecciones desde un perfil con pestañas.",
-    totalRevenue: "Ingresos totales",
+    totalRevenue: "Importe facturado",
     totalInvoices: "Facturas totales",
     customerInfo: "Informacion del cliente",
     relatedJobs: "Trabajos relacionados",

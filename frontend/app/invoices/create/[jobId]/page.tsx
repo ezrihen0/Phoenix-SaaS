@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
-import { requireServerPermission } from "@/lib/auth/server-session";
+import { canManageJobInvoiceForAssignedJob } from "@/lib/auth/job-invoice-create-access";
+import { getServerDestination, requireServerSession } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import type { JobStatus } from "@/lib/crm/statuses";
 
@@ -25,8 +26,10 @@ type InvoiceRecord = JobInvoiceRecord;
 type JobDetailRecord = {
   id: string;
   customer_id: string | null;
+  assigned_technician_id: string | null;
   title: string;
   status: JobStatus;
+  branch_tax_rate_bps?: number | null;
   customer: RelatedValue<CustomerRecord>;
   quote: RelatedValue<QuoteRecord>;
   invoice: RelatedValue<InvoiceRecord>;
@@ -48,7 +51,7 @@ function relationValue<T>(value: RelatedValue<T> | undefined) {
 
 export default async function InvoiceCreateJobPage({ params }: InvoiceCreateJobPageContext) {
   const { jobId } = await params;
-  await requireServerPermission(`/invoices/create/${jobId}`, "invoices.manage");
+  const session = await requireServerSession(`/invoices/create/${jobId}`);
 
   let job: JobDetailRecord | null = null;
 
@@ -83,6 +86,16 @@ export default async function InvoiceCreateJobPage({ params }: InvoiceCreateJobP
     notFound();
   }
 
+  if (!canManageJobInvoiceForAssignedJob(session, job.assigned_technician_id)) {
+    const destination = await getServerDestination();
+
+    if (destination) {
+      redirect(destination);
+    }
+
+    redirect("/login?reason=unsupported-account");
+  }
+
   const customer = relationValue(job.customer);
   const quote = relationValue(job.quote);
   const invoice = relationValue(job.invoice);
@@ -96,6 +109,7 @@ export default async function InvoiceCreateJobPage({ params }: InvoiceCreateJobP
       customerName={customer?.full_name ?? "Customer"}
       invoice={invoice}
       quoteId={quote?.id ?? null}
+      serverTaxRateBps={job.branch_tax_rate_bps ?? null}
     />
   );
 }

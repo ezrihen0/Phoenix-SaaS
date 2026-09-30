@@ -117,7 +117,7 @@ export class InvoiceEntity {
   updated_at!: Date;
 
   @OneToOne(() => JobEntity, (job) => job.invoice, {
-    onDelete: "CASCADE",
+    onDelete: "RESTRICT",
   })
   @JoinColumn({ name: "job_id", referencedColumnName: "id" })
   job?: JobEntity;

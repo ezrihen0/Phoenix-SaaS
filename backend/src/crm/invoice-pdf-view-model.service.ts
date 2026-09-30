@@ -11,6 +11,10 @@ import {
   snapshotDescription,
 } from "./invoice-customer-facing-snapshot.types";
 import {
+  readSnapshottedBranchTaxLabel,
+  resolveCustomerDocumentTaxLabel,
+} from "./document-tax-label";
+import {
   resolveHistoricalDocumentRenderMode,
   type HistoricalDocumentRenderMode,
 } from "./historical-document-render.types";
@@ -40,8 +44,11 @@ export class InvoicePdfViewModelService {
     formatDueDate: (dueAt: Date | null, issuedAt: Date, dueDays: number) => string | null;
     sanitizeDescription: (value: string) => string;
     sanitizeLineText: (value: string | null | undefined) => string | null;
+    customerFacingSnapshot?: ReturnType<InvoiceCustomerFacingSnapshotService["parseSnapshot"]>;
+    branchTaxLabel?: string | null;
   }): PhoenixInvoiceDocumentViewModel {
-    const frozen = this.invoiceCustomerFacingSnapshotService.parseSnapshot(input.invoice.customer_facing_snapshot_json);
+    const frozen = input.customerFacingSnapshot
+      ?? this.invoiceCustomerFacingSnapshotService.parseSnapshot(input.invoice.customer_facing_snapshot_json);
     const renderMode = resolveHistoricalDocumentRenderMode(frozen);
     if (renderMode === "frozen" && frozen) {
       return this.buildFromSnapshot(frozen, input);
@@ -62,7 +69,10 @@ export class InvoicePdfViewModelService {
     },
   ): PhoenixInvoiceDocumentViewModel {
     const taxRateBps = snapshot.financial.tax_rate_bps;
-    const taxLabel = taxRateBps > 0 ? `Tax (${(taxRateBps / 100).toFixed(2)}%)` : "Tax";
+    const taxLabel = resolveCustomerDocumentTaxLabel({
+      taxRateBps,
+      snapshottedTaxLabel: readSnapshottedBranchTaxLabel(snapshot),
+    });
     const copy = isInvoiceCustomerFacingSnapshotV3(snapshot)
       ? snapshot.copy
       : {
@@ -151,6 +161,7 @@ export class InvoicePdfViewModelService {
       formatDueDate: (dueAt: Date | null, issuedAt: Date, dueDays: number) => string | null;
       sanitizeDescription: (value: string) => string;
       sanitizeLineText: (value: string | null | undefined) => string | null;
+      branchTaxLabel?: string | null;
     },
     renderMode: HistoricalDocumentRenderMode,
   ): PhoenixInvoiceDocumentViewModel {
@@ -175,7 +186,10 @@ export class InvoicePdfViewModelService {
     const sortedLineItems = [...(input.invoice.line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
     const subtotalCents = input.invoice.subtotal_cents || input.invoice.amount_cents;
     const taxRateBps = input.invoice.tax_rate_bps_snapshot ?? 0;
-    const taxLabel = taxRateBps > 0 ? `Tax (${(taxRateBps / 100).toFixed(2)}%)` : "Tax";
+    const taxLabel = resolveCustomerDocumentTaxLabel({
+      taxRateBps,
+      snapshottedTaxLabel: input.branchTaxLabel,
+    });
     const totalCents = input.invoice.total_cents || input.ledgerSummary.totalCents;
 
     return this.composeViewModel({

@@ -158,6 +158,63 @@ export function assertInvoiceAcceptsLedgerEntry(invoice: {
   }
 }
 
+/** Normal cash payments cannot exceed the open balance. Historical overpaid rows can still be summarized. */
+export function assertPaymentDoesNotExceedBalance(input: {
+  entryType: "payment" | "refund" | "adjustment";
+  amountCents: number;
+  balanceCents: number;
+}) {
+  if (input.entryType !== "payment") {
+    return;
+  }
+
+  if (input.amountCents > input.balanceCents) {
+    throw new PaymentExceedsBalanceError(input.amountCents, input.balanceCents);
+  }
+}
+
+export class PaymentExceedsBalanceError extends Error {
+  readonly code = "invoice_payment_exceeds_balance";
+
+  constructor(
+    readonly amountCents: number,
+    readonly balanceCents: number,
+  ) {
+    super("Payment amount exceeds the remaining balance.");
+    this.name = "PaymentExceedsBalanceError";
+  }
+}
+
+export function assertInvoiceFinancialsMutable(ledgerEntryCount: number) {
+  if (ledgerEntryCount > 0) {
+    throw new InvoiceLedgerLocksFinancialsError();
+  }
+}
+
+export class InvoiceReopenFrozenError extends Error {
+  readonly code = "invoice_customer_snapshot_frozen";
+
+  constructor() {
+    super("This invoice was already sent to the customer and cannot be reopened.");
+    this.name = "InvoiceReopenFrozenError";
+  }
+}
+
+export function assertInvoiceCanBeReopened(isFrozen: boolean) {
+  if (isFrozen) {
+    throw new InvoiceReopenFrozenError();
+  }
+}
+
+export class InvoiceLedgerLocksFinancialsError extends Error {
+  readonly code = "invoice_has_ledger_activity";
+
+  constructor() {
+    super("This invoice already has recorded payments. Financial lines and totals cannot be changed.");
+    this.name = "InvoiceLedgerLocksFinancialsError";
+  }
+}
+
 export class InvoiceTerminalForPaymentsError extends Error {
   readonly code = "invoice_terminal";
 

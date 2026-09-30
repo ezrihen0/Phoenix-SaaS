@@ -2,6 +2,7 @@ import type { EntityManager } from "typeorm";
 
 import type { InvoiceStatus, QuoteStatus } from "./constants";
 import type { DocumentSnapshotService, SnapshotLineDraft } from "./document-snapshot.service";
+import { assertInvoiceFinancialsMutable } from "./invoice-native-ledger-policy";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
 import { JobEntity } from "../database/entities/job.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
@@ -44,6 +45,7 @@ export async function persistInvoiceHeaderAndLineItems(
 ) {
   const invoiceRepository = manager.getRepository(InvoiceEntity);
   const jobBranchId = await resolveJobBranchId(manager, input.organizationId, input.jobId);
+  assertInvoiceFinancialsMutable(input.existingInvoice?.payments?.length ?? 0);
   assertPersistedDocumentTotals(input.invoiceTotals);
   let invoice: InvoiceEntity;
 

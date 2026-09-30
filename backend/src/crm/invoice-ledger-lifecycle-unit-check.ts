@@ -122,6 +122,24 @@ expect("adjustment increases net paid", () => {
   }
 });
 
+expect("zero total with no payments is paid no-charge", () => {
+  const summary = summarizeInvoiceLedger({
+    totalCents: 0,
+    legacyStatus: "unpaid",
+    legacyPaidAt: null,
+    payments: [],
+    financeOrigin: "native_wizfield",
+  });
+  if (
+    summary.lifecycleStatus !== "paid"
+    || summary.balanceCents !== 0
+    || summary.netPaidCents !== 0
+    || summary.paidReason !== "zero_total"
+  ) {
+    throw new Error(JSON.stringify(summary));
+  }
+});
+
 expect("void trumps payment lifecycle", () => {
   const summary = summarizeInvoiceLedger({
     totalCents: 10000,

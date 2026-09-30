@@ -82,6 +82,7 @@
     "estimate-invoice-conversion:checks": "npm run estimate-invoice-conversion:contract-check && npm run estimate-invoice-conversion:smoke && npm run estimate-invoice-conversion:pricebook-drift:smoke",
     "finance-part3:checks": "npm run money-engine:unit-check && npm run estimate-invoice-conversion:contract-check && npm run jobs:access:check && npm run estimate-invoice-conversion:smoke && npm run estimate-invoice-conversion:pricebook-drift:smoke",
     "invoice-ledger-lifecycle:unit-check": "node -r ts-node/register src/crm/invoice-ledger-lifecycle-unit-check.ts",
+    "finance-integrity:unit-check": "node -r ts-node/register src/crm/finance-integrity-unit-check.ts",
     "invoice-ledger-native-write-contract-check": "node -r ts-node/register src/crm/invoice-ledger-native-write-contract-check.ts",
     "invoice-ledger:phase6-db-verification": "node -r ts-node/register src/database/invoice-ledger-phase6-db-verification.ts",
     "finance-part6:configured-db-verification": "npm run invoice-ledger:phase6-db-verification",

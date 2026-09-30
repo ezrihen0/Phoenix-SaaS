@@ -4,6 +4,7 @@ import type { CustomerEntity } from "../database/entities/customer.entity";
 import type { InvoiceEntity } from "../database/entities/invoice.entity";
 import type { JobEntity } from "../database/entities/job.entity";
 import { classifyFinanceInvoiceOrigin } from "./finance-invoice-origin";
+import { cashCollectedCentsFromPayments, isCollectibleOpenInvoice } from "./finance-metrics.core";
 import type { InvoiceLedgerSummary } from "./invoice-financial-lifecycle.core";
 import { summarizeInvoiceLedger } from "./invoice-financial-lifecycle.core";
 import { InvoiceCustomerFacingSnapshotService } from "./invoice-customer-facing-snapshot.service";
@@ -16,6 +17,7 @@ export type FinanceInvoiceListPresentation = {
   finance_origin: ReturnType<typeof classifyFinanceInvoiceOrigin>;
   total_cents: number;
   amount_paid_cents: number;
+  cash_collected_cents: number;
   refunded_cents: number;
   balance_cents: number;
   overpayment_cents: number;
@@ -52,6 +54,7 @@ export class FinanceInvoicePresentationService {
       finance_origin: classifyFinanceInvoiceOrigin(invoice),
       total_cents: ledgerSummary.totalCents,
       amount_paid_cents: ledgerSummary.netPaidCents,
+      cash_collected_cents: cashCollectedCentsFromPayments(invoice.payments ?? []),
       refunded_cents: ledgerSummary.refundedCents,
       balance_cents: ledgerSummary.balanceCents,
       overpayment_cents: ledgerSummary.overpaymentCents,
@@ -66,12 +69,7 @@ export class FinanceInvoicePresentationService {
 
     for (const invoice of invoices) {
       const ledger = this.summarizeLedger(invoice);
-      const isOpen =
-        ledger.lifecycleStatus === "sent"
-        || ledger.lifecycleStatus === "partial"
-        || ledger.lifecycleStatus === "refunded";
-
-      if (isOpen && ledger.balanceCents > 0) {
+      if (isCollectibleOpenInvoice(ledger.lifecycleStatus, ledger.balanceCents)) {
         openInvoiceCount += 1;
         openBalanceCents += ledger.balanceCents;
       }
@@ -99,6 +97,7 @@ export class FinanceInvoicePresentationService {
       document_number: presentation.document_number,
       display_document_number: presentation.display_document_number,
       amount_paid_cents: presentation.amount_paid_cents,
+      cash_collected_cents: presentation.cash_collected_cents,
       refunded_cents: presentation.refunded_cents,
       balance_cents: presentation.balance_cents,
       overpayment_cents: presentation.overpayment_cents,
@@ -125,6 +124,7 @@ export class FinanceInvoicePresentationService {
       finance_origin: presentation.finance_origin,
       total_cents: presentation.total_cents,
       amount_paid_cents: presentation.amount_paid_cents,
+      cash_collected_cents: presentation.cash_collected_cents,
       refunded_cents: presentation.refunded_cents,
       balance_cents: presentation.balance_cents,
       overpayment_cents: presentation.overpayment_cents,
@@ -160,12 +160,7 @@ export function summarizeCustomerOpenFinanceFromRows(
       financeOrigin: classifyFinanceInvoiceOrigin(invoice as InvoiceEntity),
     });
 
-    const isOpen =
-      ledger.lifecycleStatus === "sent"
-      || ledger.lifecycleStatus === "partial"
-      || ledger.lifecycleStatus === "refunded";
-
-    if (isOpen && ledger.balanceCents > 0) {
+    if (isCollectibleOpenInvoice(ledger.lifecycleStatus, ledger.balanceCents)) {
       openInvoiceCount += 1;
       openBalanceCents += ledger.balanceCents;
     }
