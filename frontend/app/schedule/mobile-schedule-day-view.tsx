@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
-import { CalendarPlus, ChevronLeft, ChevronRight, LoaderCircle, RefreshCw } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, LoaderCircle, RefreshCw, Trash2 } from "lucide-react";
 
 import { MobileJobCard } from "@/components/jobs/mobile-job-card";
 import { MobileJobDetailPane } from "@/components/jobs/mobile-job-detail-pane";
@@ -54,6 +54,8 @@ type MobileScheduleDayViewProps = {
   onRefresh: () => void;
   getNextDispatchMove: (job: MobileScheduleDayJob) => { title: string; detail: string } | null;
   getJobValueCents: (job: MobileScheduleDayJob) => number;
+  onRemoveJob?: (jobId: string) => void | Promise<void>;
+  canRemoveJob?: (job: MobileScheduleDayJob) => boolean;
 };
 
 function buildMapsUrl(job: MobileScheduleDayJob) {
@@ -91,6 +93,8 @@ export function MobileScheduleDayView({
   onRefresh,
   getNextDispatchMove,
   getJobValueCents,
+  onRemoveJob,
+  canRemoveJob,
 }: MobileScheduleDayViewProps) {
   const t = useTranslations("schedule.fieldCommand");
   const locale = useLocale();
@@ -141,6 +145,16 @@ export function MobileScheduleDayView({
           callCustomerLabel={t("callCustomer")}
           mapsLabel={t("openMaps")}
         />
+        {onRemoveJob && canRemoveJob?.(selectedJob) ? (
+          <button
+            type="button"
+            onClick={() => void onRemoveJob(selectedJob.id)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[color:var(--sem-state-error)] px-4 py-3 text-sm font-semibold text-[color:var(--sem-state-error)]"
+          >
+            <Trash2 className="h-4 w-4" />
+            {t("deleteJob")}
+          </button>
+        ) : null}
       </div>
     );
   }

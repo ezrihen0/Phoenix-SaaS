@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Save,
   ShieldAlert,
+  Trash2,
   UserRound,
 } from "lucide-react";
 
@@ -22,7 +23,12 @@ import { BoardShell } from "@/components/board/board-shell";
 import { formatAddress, buildAddressQuery, buildGoogleMapsSearchUrl } from "@/lib/crm/display";
 import { crmApiFetch } from "@/lib/crm/browser-api";
 import { buildScheduledWindow } from "@/lib/crm/scheduling-utils";
-import { getJobStatusLabel, getServiceTypeLabel, type JobStatus } from "@/lib/crm/statuses";
+import {
+  canTransitionJobStatus,
+  getJobStatusLabel,
+  getServiceTypeLabel,
+  type JobStatus,
+} from "@/lib/crm/statuses";
 
 type CustomerRecord = {
   id: string;
@@ -86,6 +92,8 @@ const WORK_DAY_START_MINUTES = 8 * 60;
 const WORK_DAY_END_MINUTES = 17 * 60;
 const MIN_GAP_MINUTES = 30;
 const DAY_CAPACITY_MINUTES = 8 * 60;
+/** One scheduled job counts as 20% of the 8-hour dispatch day for load/timeline math. */
+const SCHEDULE_JOB_BLOCK_MINUTES = Math.round(DAY_CAPACITY_MINUTES * 0.2);
 
 /** Reserved for future secondary calendar view toggle. */
 const SHOW_LEGACY_WEEK_GRID = false;
@@ -170,7 +178,7 @@ function getJobValueCents(job: JobRecord) {
 }
 
 function getJobDurationMinutes(job: JobRecord) {
-  return relationValue(job.service)?.duration_minutes ?? 120;
+  return relationValue(job.service)?.duration_minutes ?? SCHEDULE_JOB_BLOCK_MINUTES;
 }
 
 function getJobEndDate(job: JobRecord) {
@@ -897,6 +905,22 @@ export default function ScheduleWorkspace({
     setJobs(sortJobs(nextJobs));
   }
 
+  async function removeJobFromSchedule(jobId: string, cancellationReason: string) {
+    await crmApiFetch(`/api/jobs/${jobId}/status`, {
+      method: "POST",
+      body: JSON.stringify({
+        status: "cancelled",
+        note: cancellationReason.trim(),
+      }),
+    });
+
+    setJobs((currentJobs) => sortJobs(currentJobs.filter((job) => job.id !== jobId)));
+    setSelectedJobId(null);
+    setMobileDetailJobId(null);
+    setStatusMessage(t("jobRemoved"));
+    setErrorMessage(null);
+  }
+
   async function saveSchedule(jobId: string, scheduleForm: ScheduleFormState) {
     if (!jobId) {
       return;
@@ -943,6 +967,35 @@ export default function ScheduleWorkspace({
     });
   }
 
+  function promptAndRemoveJob(jobId: string) {
+    const reason = window.prompt(t("deleteJobReasonPrompt"));
+
+    if (reason === null) {
+      return;
+    }
+
+    if (!reason.trim()) {
+      setErrorMessage(t("deleteJobReasonRequired"));
+      setStatusMessage(null);
+      return;
+    }
+
+    if (!window.confirm(t("deleteJobConfirm"))) {
+      return;
+    }
+
+    startTransition(() => {
+      void (async () => {
+        try {
+          await removeJobFromSchedule(jobId, reason);
+        } catch (error) {
+          setErrorMessage(error instanceof Error ? error.message : t("deleteJobError"));
+          setStatusMessage(null);
+        }
+      })();
+    });
+  }
+
   function riskToneClass(tone: DispatchRiskRecord["tone"]) {
     if (tone === "danger") {
       return "theme-status-error";
@@ -981,6 +1034,10 @@ export default function ScheduleWorkspace({
         onRefresh={handleRefresh}
         getNextDispatchMove={(job) => getNextDispatchMove(job, t)}
         getJobValueCents={(job) => relationValue(job.service)?.default_price_cents ?? 0}
+        onRemoveJob={(jobId) => {
+          promptAndRemoveJob(jobId);
+        }}
+        canRemoveJob={(job) => job.status !== "cancelled" && canTransitionJobStatus(job.status, "cancelled")}
       />
       <div className="hidden lg:block">
       <div className="mx-auto max-w-[1720px] px-5 py-6 lg:px-8">
@@ -1244,6 +1301,17 @@ export default function ScheduleWorkspace({
                         {t("mapRoute")}
                       </a>
                     ) : null}
+                    {selectedJob.status !== "cancelled" && canTransitionJobStatus(selectedJob.status, "cancelled") ? (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => promptAndRemoveJob(selectedJob.id)}
+                        className="inline-flex items-center justify-center gap-2 rounded-full border border-[color:var(--sem-state-error)] px-3 py-2 text-sm font-semibold text-[color:var(--sem-state-error)] sm:col-span-2 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {t("deleteJob")}
+                      </button>
+                    ) : null}
                   </div>
 
                   <ScheduleEditor
@@ -1392,7 +1460,7 @@ function deriveEndTimeFromStartTime(scheduledTime: string) {
     return "";
   }
 
-  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  const end = new Date(start.getTime() + SCHEDULE_JOB_BLOCK_MINUTES * 60_000);
   return end.toTimeString().slice(0, 5);
 }
 
