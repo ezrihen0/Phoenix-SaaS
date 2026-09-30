@@ -8,6 +8,7 @@ import { CrmApiError, crmApiFetch } from "@/lib/crm/browser-api";
 import { financeApiErrorMessage, financeApiErrorSupportRef } from "@/lib/crm/finance-api-errors";
 import { resolvePaymentAttempt } from "@/lib/crm/invoice-payment-attempt.mjs";
 import { formatCurrencyFromCents } from "@/lib/crm/invoice-line-model";
+export { formatPaymentEntryType } from "@/lib/crm/invoice-payment-labels";
 
 export type InvoicePaymentMethod = "cash" | "check" | "card_manual" | "bank_transfer" | "other";
 
