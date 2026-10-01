@@ -447,9 +447,12 @@ export class CrmController {
       delete (invoice as InvoiceEntity & { payments?: InvoicePaymentEntity[] }).payments;
     }
 
-    const branch = job.branch_id
-      ? await this.branchScopeService.findBranchForOrganization(organizationId, job.branch_id)
-      : null;
+    const customer = this.relationValue(job.customer as RelatedValue<CustomerEntity>);
+    const branch = await this.resolveInvoiceBranch(
+      organizationId,
+      job,
+      customer?.service_state_or_region,
+    );
     Object.assign(job, {
       branch_tax_rate_bps: branch ? branch.default_tax_rate_bps : null,
       branch_tax_label: branch?.tax_label ?? null,
@@ -2698,6 +2701,17 @@ export class CrmController {
         );
       }
 
+      if (!job.branch_id?.trim()) {
+        const resolvedBranch = await this.resolveInvoiceBranch(organizationId, job);
+        if (resolvedBranch) {
+          await this.jobsRepository.update(
+            { id: job.id, organization_id: organizationId },
+            { branch_id: resolvedBranch.id },
+          );
+          job.branch_id = resolvedBranch.id;
+        }
+      }
+
       const hasSnapshotLineItems = payload.lineItems !== undefined;
       const invoiceLineDrafts = hasSnapshotLineItems
         ? await this.buildDocumentLineDrafts(
@@ -4588,14 +4602,43 @@ export class CrmController {
     return branch?.tax_label ?? null;
   }
 
+  private async resolveInvoiceBranch(
+    organizationId: string,
+    job: Pick<JobEntity, "branch_id" | "service_state_or_region" | "customer_id">,
+    fallbackProvince?: string | null,
+  ) {
+    if (job.branch_id?.trim()) {
+      const assigned = await this.branchScopeService.findBranchForOrganization(organizationId, job.branch_id);
+      if (assigned) {
+        return assigned;
+      }
+    }
+
+    let province = job.service_state_or_region;
+    if (!normalizeServiceProvinceToBranchCode(province) && fallbackProvince === undefined && job.customer_id) {
+      const customer = await this.customersRepository.findOne({
+        where: { id: job.customer_id, organization_id: organizationId },
+        select: { id: true, service_state_or_region: true },
+      });
+      province = customer?.service_state_or_region ?? null;
+    } else if (!normalizeServiceProvinceToBranchCode(province)) {
+      province = fallbackProvince ?? null;
+    }
+
+    const code = normalizeServiceProvinceToBranchCode(province);
+    if (!code) {
+      return null;
+    }
+
+    return this.branchScopeService.findActiveBranchByCode(organizationId, code);
+  }
+
   private async resolveServerInvoiceTaxRateBps(
     organizationId: string,
     job: JobEntity,
     clientTaxRateBps: number | undefined,
   ) {
-    const branch = job.branch_id?.trim()
-      ? await this.branchScopeService.findBranchForOrganization(organizationId, job.branch_id)
-      : null;
+    const branch = await this.resolveInvoiceBranch(organizationId, job);
 
     return resolveServerDocumentTaxRateBps({
       branchId: branch?.id ?? null,

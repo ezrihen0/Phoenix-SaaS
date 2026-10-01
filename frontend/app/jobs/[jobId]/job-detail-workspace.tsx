@@ -983,20 +983,23 @@ export default function JobDetailWorkspace({
                 </div>
                 <ChevronRight className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
               </button>
-              <button type="button" onClick={() => setTab("invoice")} className="flex w-full items-center justify-between px-4 py-4 text-left active:bg-[color:var(--cmp-hover-surface)]">
+              <Link
+                href={invoice?.id ? `/invoices/${invoice.id}` : `/invoices/create/${job.id}`}
+                className="flex w-full items-center justify-between px-4 py-4 text-left active:bg-[color:var(--cmp-hover-surface)]"
+              >
                 <div className="flex items-center gap-3">
                   <Receipt className={`h-4 w-4 ${invoiceBalanceCents > 0 ? "text-[color:var(--sem-state-error)]" : "text-[color:var(--sem-state-success)]"}`} />
                   <div>
-                    <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">Invoice</p>
+                    <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{invoice ? "Invoice" : "Create Invoice"}</p>
                     <p className="text-xs text-[color:var(--sem-text-secondary)]">
                       {invoice
                         ? `${invoice.lifecycle_status ? formatInvoiceLifecycleStatus(invoice.lifecycle_status) : "Invoice"} · Balance ${formatCurrency(invoiceBalanceCents)}`
-                        : "No invoice yet"}
+                        : "Open the invoice composer"}
                     </p>
                   </div>
                 </div>
                 <ChevronRight className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
-              </button>
+              </Link>
             </div>
             {activeTab === "quote" || activeTab === "invoice" ? (
                 <div ref={mobileFinanceRef} className="border-t border-[color:var(--cmp-border-subtle)] p-4">
