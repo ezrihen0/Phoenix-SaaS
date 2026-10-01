@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -471,6 +471,7 @@ export default function JobDetailWorkspace({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const mobileFinanceRef = useRef<HTMLDivElement | null>(null);
 
   const [job, setJob] = useState<JobDetailRecord>(initialJob);
   const [scheduleForm, setScheduleForm] = useState<ScheduleFormState>(() => buildScheduleForm(initialJob));
@@ -533,6 +534,14 @@ export default function JobDetailWorkspace({
       tone,
     });
   }
+
+  useEffect(() => {
+    if (activeTab !== "invoice" && activeTab !== "quote") {
+      return;
+    }
+
+    mobileFinanceRef.current?.scrollIntoView({ block: "nearest" });
+  }, [activeTab]);
 
   useEffect(() => {
     if (!toast) {
@@ -989,6 +998,41 @@ export default function JobDetailWorkspace({
                 <ChevronRight className="h-4 w-4 text-[color:var(--sem-text-muted)]" />
               </button>
             </div>
+            {activeTab === "quote" || activeTab === "invoice" ? (
+                <div ref={mobileFinanceRef} className="border-t border-[color:var(--cmp-border-subtle)] p-4">
+                  {activeTab === "quote" ? (
+                    <JobEstimateTabPanel
+                      key={`${quote?.id ?? "new"}:${quote?.status ?? "draft"}:${quote?.price_cents ?? 0}:${quote?.approved_at ?? ""}`}
+                      jobId={job.id}
+                      quote={quote}
+                      onQuoteChange={(nextQuote) => {
+                        setJob((current) => ({
+                          ...current,
+                          quote: nextQuote,
+                        }));
+                      }}
+                      onToast={pushToast}
+                    />
+                  ) : (
+                    <JobInvoiceTabPanel
+                      key={`${invoice?.id ?? "new"}:${invoice?.status ?? "unpaid"}:${invoice?.amount_cents ?? 0}:${invoice?.paid_at ?? ""}:${job.status}`}
+                      jobId={job.id}
+                      invoice={invoice}
+                      quoteId={quote?.id ?? null}
+                      quoteApprovedAt={quote?.approved_at ?? null}
+                      quoteSignedAt={quote?.signed_at ?? null}
+                      canRecordPayment={canRecordInvoicePayment}
+                      onInvoiceChange={(nextInvoice) => {
+                        setJob((current) => ({
+                          ...current,
+                          invoice: nextInvoice,
+                        }));
+                      }}
+                      onToast={pushToast}
+                    />
+                  )}
+                </div>
+              ) : null}
           </div>
 
           {/* Intel Feed — Notes */}
