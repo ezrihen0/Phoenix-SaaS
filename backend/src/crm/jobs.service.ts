@@ -8,7 +8,7 @@ import { JobEntity } from "../database/entities/job.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
 import { applyBranchAccessToJobQueryBuilder } from "./branch-access";
 import {
-  actorCanFilterByTechnicianId,
+  actorCanViewOtherTechnicianCalendars,
   applyJobVisibilityToQueryBuilder,
   findJobForActor,
   requireJobListPermission,
@@ -106,7 +106,7 @@ export class JobsService {
       queryBuilder.andWhere("job.status != :cancelled", { cancelled: "cancelled" });
     }
 
-    if (filters.technicianId && actorCanFilterByTechnicianId(actor)) {
+    if (filters.technicianId && actorCanViewOtherTechnicianCalendars(actor)) {
       queryBuilder.andWhere("job.assigned_technician_id = :technicianId", {
         technicianId: filters.technicianId,
       });

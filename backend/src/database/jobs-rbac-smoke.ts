@@ -402,6 +402,29 @@ async function main() {
       await expectNotFound(() => findJobForActor(jobRepo, orgBJob.id, orgA.id, tech1Actor));
     });
 
+    await record(summary, "admin listJobs filtered by tech1 returns only tech1 assignments", async () => {
+      const jobs = await jobsService.listJobs(adminActor, orgA.id, { technicianId: tech1.id });
+      const ids = new Set(jobs.map((job) => job.id));
+      assert.equal(ids.has(inspectionJob.id), true);
+      assert.equal(ids.has(callbackJob.id), true);
+      assert.equal(ids.has(installJob.id), false);
+      assert.equal(ids.has(unassignedJob.id), false);
+    });
+
+    await record(summary, "admin listJobs filtered by tech2 returns only tech2 assignments", async () => {
+      const jobs = await jobsService.listJobs(adminActor, orgA.id, { technicianId: tech2.id });
+      const ids = new Set(jobs.map((job) => job.id));
+      assert.equal(ids.has(installJob.id), true);
+      assert.equal(ids.size, 1);
+    });
+
+    await record(summary, "tech1 listJobs with other technicianId still scoped to self", async () => {
+      const jobs = await jobsService.listJobs(tech1Actor, orgA.id, { technicianId: tech2.id });
+      const ids = new Set(jobs.map((job) => job.id));
+      assert.equal(ids.has(installJob.id), false);
+      assert.equal(ids.has(inspectionJob.id), true);
+    });
+
     await record(summary, "all three job types persist and read correctly", async () => {
       const inspection = await findJobForActor(jobRepo, inspectionJob.id, orgA.id, adminActor);
       const install = await findJobForActor(jobRepo, installJob.id, orgA.id, adminActor);

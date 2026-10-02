@@ -39,10 +39,19 @@ export type MobileScheduleDayJob = {
   technician: { display_name: string } | { display_name: string }[] | null;
 };
 
+type ScheduleTechnicianOption = {
+  id: string;
+  display_name: string;
+};
+
 type MobileScheduleDayViewProps = {
   dayJobs: MobileScheduleDayJob[];
   selectedDate: Date;
   mobileDetailJobId: string | null;
+  technicians: ScheduleTechnicianOption[];
+  technicianFilter: string;
+  onTechnicianFilterChange: (value: string) => void;
+  emptyDayMessage: string;
   isPending: boolean;
   errorMessage: string | null;
   statusMessage: string | null;
@@ -82,6 +91,10 @@ export function MobileScheduleDayView({
   dayJobs,
   selectedDate,
   mobileDetailJobId,
+  technicians,
+  technicianFilter,
+  onTechnicianFilterChange,
+  emptyDayMessage,
   isPending,
   errorMessage,
   statusMessage,
@@ -97,6 +110,7 @@ export function MobileScheduleDayView({
   canRemoveJob,
 }: MobileScheduleDayViewProps) {
   const t = useTranslations("schedule.fieldCommand");
+  const tSchedule = useTranslations("schedule");
   const locale = useLocale();
 
   const selectedJob = mobileDetailJobId
@@ -187,6 +201,29 @@ export function MobileScheduleDayView({
         </div>
       ) : null}
 
+      <div
+        className={`mt-4 rounded-[18px] border px-3 py-2 ${
+          technicianFilter !== "all"
+            ? "theme-selected-card"
+            : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]"
+        }`}
+      >
+        <label className="block text-[10px] font-semibold uppercase tracking-wide text-[color:var(--sem-text-muted)]">
+          {tSchedule("technicianCalendarSwitcher")}
+          <select
+            value={technicianFilter}
+            onChange={(event) => onTechnicianFilterChange(event.target.value)}
+            aria-label={tSchedule("technicianCalendarSwitcher")}
+            className="mt-1 w-full rounded-xl border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] px-3 py-2 text-sm text-[color:var(--sem-text-primary)]"
+          >
+            <option value="all">{tSchedule("allTechnicians")}</option>
+            {technicians.map((technician) => (
+              <option key={technician.id} value={technician.id}>{technician.display_name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       <Link
         href="/schedule/new"
         className="theme-btn-primary mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold"
@@ -232,7 +269,7 @@ export function MobileScheduleDayView({
         </div>
       ) : dayJobs.length === 0 ? (
         <div className="theme-control-surface-soft mt-4 rounded-[20px] border border-dashed px-4 py-10 text-center text-sm text-[color:var(--sem-text-muted)]">
-          {t("empty")}
+          {emptyDayMessage}
         </div>
       ) : (
         <div className="mt-4 space-y-3">
