@@ -4,10 +4,13 @@ import type { ActorContext } from "../common/request-types";
 import type { ProfileEntity } from "../database/entities/profile.entity";
 import type { TechnicianEntity } from "../database/entities/technician.entity";
 import {
+  actorCanViewOtherTechnicianCalendars,
+  actorCanViewTechnicianRoster,
   applyJobVisibilityToQueryBuilder,
   assertCanAccessJob,
   isAssignedOnlyJobActor,
   requireJobListPermission,
+  requireTechnicianRosterViewPermission,
 } from "./jobs-access";
 
 function expect(name: string, run: () => void) {
@@ -89,6 +92,42 @@ expect("assertCanAccessJob blocks technician from another technician job", () =>
 
   assert.throws(() => assertCanAccessJob(tech, "tech-2"));
   assert.doesNotThrow(() => assertCanAccessJob(tech, "tech-1"));
+});
+
+expect("actorCanViewOtherTechnicianCalendars requires jobs.view", () => {
+  const dispatcher = buildActor({ role: "dispatcher", permissions: ["jobs.view"] });
+  const tech = buildActor({
+    role: "technician",
+    permissions: ["jobs.assigned.view"],
+    technicianId: "tech-1",
+  });
+
+  assert.equal(actorCanViewOtherTechnicianCalendars(dispatcher), true);
+  assert.equal(actorCanViewOtherTechnicianCalendars(tech), false);
+});
+
+expect("actorCanViewTechnicianRoster allows jobs.view or jobs.update", () => {
+  const viewer = buildActor({ role: "viewer", permissions: ["jobs.view"] });
+  const dispatcher = buildActor({ role: "dispatcher", permissions: ["jobs.view"] });
+  const techOnlyAssigned = buildActor({
+    role: "technician",
+    permissions: ["jobs.assigned.view"],
+    technicianId: "tech-1",
+  });
+
+  assert.equal(actorCanViewTechnicianRoster(viewer), true);
+  assert.equal(actorCanViewTechnicianRoster(dispatcher), true);
+  assert.equal(actorCanViewTechnicianRoster(techOnlyAssigned), false);
+});
+
+expect("requireTechnicianRosterViewPermission blocks assigned-only technicians", () => {
+  const tech = buildActor({
+    role: "technician",
+    permissions: ["jobs.assigned.view"],
+    technicianId: "tech-1",
+  });
+
+  assert.throws(() => requireTechnicianRosterViewPermission(tech));
 });
 
 expect("applyJobVisibilityToQueryBuilder adds assigned filter for technicians", () => {

@@ -1,7 +1,8 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowLeft,
@@ -22,6 +23,10 @@ import { MobileScheduleDayView } from "@/app/schedule/mobile-schedule-day-view";
 import { BoardShell } from "@/components/board/board-shell";
 import { formatAddress, buildAddressQuery, buildGoogleMapsSearchUrl } from "@/lib/crm/display";
 import { crmApiFetch } from "@/lib/crm/browser-api";
+import {
+  buildScheduleJobsApiPath,
+  type ScheduleTechnicianFilter,
+} from "@/lib/crm/schedule-technician-query";
 import { buildScheduledWindow } from "@/lib/crm/scheduling-utils";
 import {
   canTransitionJobStatus,
@@ -684,25 +689,56 @@ function ScheduleEditor({
 export default function ScheduleWorkspace({
   initialJobs,
   technicians,
+  initialTechnicianFilter,
   initialErrorMessage,
+  techniciansLoadWarning,
 }: {
   initialJobs: JobRecord[];
   technicians: TechnicianRecord[];
+  initialTechnicianFilter: ScheduleTechnicianFilter;
   initialErrorMessage: string | null;
+  techniciansLoadWarning: string | null;
 }) {
   const locale = useLocale();
   const t = useTranslations("schedule");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [jobs, setJobs] = useState<JobRecord[]>(() => sortJobs(initialJobs));
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [mobileDetailJobId, setMobileDetailJobId] = useState<string | null>(null);
-  const [technicianFilter, setTechnicianFilter] = useState<string>("all");
+  const [technicianFilter, setTechnicianFilter] = useState<ScheduleTechnicianFilter>(initialTechnicianFilter);
   const [schedulePage, setSchedulePage] = useState(1);
   const [unscheduledPage, setUnscheduledPage] = useState(1);
   const [errorMessage, setErrorMessage] = useState<string | null>(initialErrorMessage);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(techniciansLoadWarning);
   const [isPending, startTransition] = useTransition();
+
+  const selectedTechnicianName = useMemo(() => {
+    if (technicianFilter === "all") {
+      return null;
+    }
+
+    return technicians.find((technician) => technician.id === technicianFilter)?.display_name ?? null;
+  }, [technicianFilter, technicians]);
+
+  const syncTechnicianQueryParam = useCallback((filter: ScheduleTechnicianFilter) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (filter === "all") {
+      params.delete("technician");
+    } else {
+      params.set("technician", filter);
+    }
+
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  const timelineEmptyMessage = selectedTechnicianName
+    ? t("noJobsForTechnicianDate", { name: selectedTechnicianName })
+    : t("noJobsForDate");
 
   const activeDay = startOfDay(selectedDate);
   const weekStripDays = useMemo(
@@ -834,6 +870,24 @@ export default function ScheduleWorkspace({
     return loads.sort((left, right) => right.loadPercent - left.loadPercent);
   }, [technicians, dayJobs, t]);
 
+  const displayedTechnicianLoads = useMemo(() => {
+    if (technicianFilter === "all") {
+      return technicianLoads;
+    }
+
+    return technicianLoads.filter(
+      (entry) => entry.technicianId === technicianFilter || entry.technicianId === "unassigned",
+    );
+  }, [technicianFilter, technicianLoads]);
+
+  const calendarTechnicians = useMemo(() => {
+    if (technicianFilter === "all") {
+      return technicians;
+    }
+
+    return technicians.filter((technician) => technician.id === technicianFilter);
+  }, [technicianFilter, technicians]);
+
   const avgJobValueCents = useMemo(() => {
     const values = [...dayJobs, ...unscheduledJobs].map(getJobValueCents).filter((value) => value > 0);
     if (values.length === 0) {
@@ -845,19 +899,19 @@ export default function ScheduleWorkspace({
 
   const openWindows = useMemo(
     () => buildOpenWindows(
-      technicians,
+      calendarTechnicians,
       dayJobs,
       avgJobValueCents,
       unscheduledJobs,
-      technicianLoads,
+      displayedTechnicianLoads,
       { fillHighValue: t("windowFillHighValue"), followUp: t("windowFollowUp") },
     ),
-    [technicians, dayJobs, avgJobValueCents, unscheduledJobs, technicianLoads, t],
+    [calendarTechnicians, dayJobs, avgJobValueCents, unscheduledJobs, displayedTechnicianLoads, t],
   );
 
   const dispatchRisks = useMemo(
-    () => buildDispatchRisks(dayJobs, unscheduledJobs, technicianLoads, openWindows, locale, t),
-    [dayJobs, unscheduledJobs, technicianLoads, openWindows, locale, t],
+    () => buildDispatchRisks(dayJobs, unscheduledJobs, displayedTechnicianLoads, openWindows, locale, t),
+    [dayJobs, unscheduledJobs, displayedTechnicianLoads, openWindows, locale, t],
   );
 
   const nextDispatchMove = selectedJob ? getNextDispatchMove(selectedJob, t) : null;
@@ -900,9 +954,27 @@ export default function ScheduleWorkspace({
     }
   }, [unscheduledPage, unscheduledTotalPages]);
 
-  async function refreshJobs() {
-    const nextJobs = await crmApiFetch<JobRecord[]>("/api/jobs");
+  async function refreshJobs(filter: ScheduleTechnicianFilter = technicianFilter) {
+    const nextJobs = await crmApiFetch<JobRecord[]>(buildScheduleJobsApiPath(filter));
     setJobs(sortJobs(nextJobs));
+  }
+
+  function handleTechnicianFilterChange(nextFilter: ScheduleTechnicianFilter) {
+    setTechnicianFilter(nextFilter);
+    syncTechnicianQueryParam(nextFilter);
+    setSelectedJobId(null);
+    setMobileDetailJobId(null);
+
+    startTransition(() => {
+      void (async () => {
+        try {
+          await refreshJobs(nextFilter);
+          setErrorMessage(null);
+        } catch (error) {
+          setErrorMessage(error instanceof Error ? error.message : t("refreshError"));
+        }
+      })();
+    });
   }
 
   async function removeJobFromSchedule(jobId: string, cancellationReason: string) {
@@ -947,10 +1019,10 @@ export default function ScheduleWorkspace({
       }),
     });
 
-    setJobs((currentJobs) => sortJobs(currentJobs.map((job) => (job.id === updatedJob.id ? { ...job, ...updatedJob } : job))));
     setStatusMessage(t("scheduleSaved"));
     setErrorMessage(null);
     setSelectedJobId(updatedJob.id);
+    await refreshJobs(technicianFilter);
   }
 
   function handleRefresh() {
@@ -1014,6 +1086,10 @@ export default function ScheduleWorkspace({
         dayJobs={mobileDayJobs}
         selectedDate={activeDay}
         mobileDetailJobId={mobileDetailJobId}
+        technicians={technicians}
+        technicianFilter={technicianFilter}
+        onTechnicianFilterChange={handleTechnicianFilterChange}
+        emptyDayMessage={timelineEmptyMessage}
         isPending={isPending}
         errorMessage={errorMessage}
         statusMessage={statusMessage}
@@ -1095,6 +1171,28 @@ export default function ScheduleWorkspace({
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              <div
+                className={`min-w-[200px] rounded-[22px] border px-3 py-2 ${
+                  technicianFilter !== "all"
+                    ? "theme-selected-card"
+                    : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)]"
+                }`}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[color:var(--sem-text-muted)]">
+                  {t("technicianCalendarSwitcher")}
+                </p>
+                <FieldSelect
+                  value={technicianFilter}
+                  onChange={(event) => handleTechnicianFilterChange(event.target.value as ScheduleTechnicianFilter)}
+                  aria-label={t("technicianCalendarSwitcher")}
+                  className="mt-1 border-0 bg-transparent px-0 py-1 shadow-none"
+                >
+                  <option value="all">{t("allTechnicians")}</option>
+                  {technicians.map((technician) => (
+                    <option key={technician.id} value={technician.id}>{technician.display_name}</option>
+                  ))}
+                </FieldSelect>
+              </div>
               <div className="inline-flex rounded-full border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-1">
                 {(["day", "week"] as ViewMode[]).map((mode) => (
                   <button
@@ -1106,14 +1204,6 @@ export default function ScheduleWorkspace({
                     {mode === "day" ? t("day") : t("week")}
                   </button>
                 ))}
-              </div>
-              <div className="min-w-[180px]">
-                <FieldSelect value={technicianFilter} onChange={(event) => setTechnicianFilter(event.target.value)}>
-                  <option value="all">{t("allTechnicians")}</option>
-                  {technicians.map((technician) => (
-                    <option key={technician.id} value={technician.id}>{technician.display_name}</option>
-                  ))}
-                </FieldSelect>
               </div>
             </div>
           </div>
@@ -1202,7 +1292,7 @@ export default function ScheduleWorkspace({
                     </button>
                   );
                 }) : (
-                  <div className="px-4 py-10 text-center text-sm text-[color:var(--sem-text-secondary)]">{t("noJobsForDate")}</div>
+                  <div className="px-4 py-10 text-center text-sm text-[color:var(--sem-text-secondary)]">{timelineEmptyMessage}</div>
                 )}
               </div>
 
@@ -1346,7 +1436,7 @@ export default function ScheduleWorkspace({
           <section className={`${schedulePanelClass} p-5`}>
             <p className={scheduleEyebrowClass}>{t("technicianLoad")}</p>
             <div className="mt-4 space-y-3">
-              {technicianLoads.map((entry) => (
+              {displayedTechnicianLoads.map((entry) => (
                 <div key={entry.technicianId} className="rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-panel)] p-3">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{entry.name}</p>

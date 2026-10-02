@@ -46,9 +46,11 @@ import {
   type InvoiceStatus,
 } from "./constants";
 import {
+  actorCanViewOtherTechnicianCalendars,
   assertCanAccessJob,
   findJobForActor,
   requireJobListPermission,
+  requireTechnicianRosterViewPermission,
 } from "./jobs-access";
 import { JobsService } from "./jobs.service";
 import {
@@ -611,6 +613,14 @@ export class CrmController {
       );
 
       if (technicianId) {
+        if (!actorCanViewOtherTechnicianCalendars(actor)) {
+          apiError(
+            403,
+            "job_technician_filter_forbidden",
+            "This account cannot filter jobs by technician.",
+          );
+        }
+
         await this.requireTechnicianInOrganization(technicianId, organizationId);
       }
 
@@ -3322,9 +3332,9 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Query("active") active?: string,
   ) {
-    const actor = this.requireCrmPermissionActor(
-      request,
-      "jobs.update",
+    const actor = this.requireActor(request);
+    requireTechnicianRosterViewPermission(
+      actor,
       "technician_list_forbidden",
       "This account cannot view the technician roster.",
     );

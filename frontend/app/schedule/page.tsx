@@ -1,25 +1,48 @@
 import { requireOfficeCrmRoute } from "@/lib/auth/server-session";
 import { serverApiFetch } from "@/lib/api/server-fetch";
+import {
+  buildScheduleJobsApiPath,
+  resolveInitialTechnicianFilter,
+} from "@/lib/crm/schedule-technician-query";
 import { getTranslations } from "next-intl/server";
 
 import ScheduleWorkspace from "./schedule-workspace";
 
-export default async function SchedulePage() {
+type TechnicianRecord = { id: string };
+
+export default async function SchedulePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ technician?: string }>;
+}) {
   const t = await getTranslations("schedule");
   await requireOfficeCrmRoute("/schedule");
 
+  const resolvedSearchParams = await searchParams;
+
   let initialJobs: unknown[] = [];
-  let technicians: unknown[] = [];
+  let technicians: TechnicianRecord[] = [];
   let initialErrorMessage: string | null = null;
+  let techniciansLoadWarning: string | null = null;
 
   try {
-    const [jobsResponse, techniciansResponse] = await Promise.all([
-      serverApiFetch<unknown[]>("/api/jobs"),
-      serverApiFetch<unknown[]>("/api/technicians"),
-    ]);
+    technicians = await serverApiFetch<TechnicianRecord[]>("/api/technicians");
+  } catch (error) {
+    techniciansLoadWarning = error instanceof Error
+      ? error.message
+      : t("technicianRosterLoadError");
+  }
 
-    initialJobs = jobsResponse;
-    technicians = techniciansResponse;
+  const rosterIds = new Set(technicians.map((technician) => technician.id));
+  const initialTechnicianFilter = resolveInitialTechnicianFilter(
+    resolvedSearchParams.technician,
+    rosterIds,
+  );
+
+  try {
+    initialJobs = await serverApiFetch<unknown[]>(
+      buildScheduleJobsApiPath(initialTechnicianFilter),
+    );
   } catch (error) {
     initialErrorMessage = error instanceof Error
       ? error.message
@@ -30,7 +53,9 @@ export default async function SchedulePage() {
     <ScheduleWorkspace
       initialJobs={initialJobs as never[]}
       technicians={technicians as never[]}
+      initialTechnicianFilter={initialTechnicianFilter}
       initialErrorMessage={initialErrorMessage}
+      techniciansLoadWarning={techniciansLoadWarning}
     />
   );
 }

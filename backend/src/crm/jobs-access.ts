@@ -110,6 +110,28 @@ export async function findJobForActor(
   return job;
 }
 
-export function actorCanFilterByTechnicianId(actor: ActorContext): boolean {
+/** V1: office schedule users with jobs.view. Future: schedule.view_other_technicians. */
+export function actorCanViewOtherTechnicianCalendars(actor: ActorContext): boolean {
   return actorHasPermission(actor, "jobs.view");
+}
+
+export function actorCanFilterByTechnicianId(actor: ActorContext): boolean {
+  return actorCanViewOtherTechnicianCalendars(actor);
+}
+
+export function actorCanViewTechnicianRoster(actor: ActorContext): boolean {
+  return actorHasPermission(actor, "jobs.view")
+    || actorHasPermission(actor, "jobs.update");
+}
+
+export function requireTechnicianRosterViewPermission(
+  actor: ActorContext,
+  code = "technician_list_forbidden",
+  message = "This account cannot view the technician roster.",
+): ActorContext {
+  if (!actorCanViewTechnicianRoster(actor)) {
+    apiError(403, code, message);
+  }
+
+  return actor;
 }
