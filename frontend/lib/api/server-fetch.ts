@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 
+import { resolveServerApiOrigin } from "@/lib/api/backend-base-url";
+
 type ApiEnvelope<T> = {
   data?: T;
   error?: {
@@ -8,10 +10,6 @@ type ApiEnvelope<T> = {
     details?: unknown;
   };
 };
-
-function backendBaseUrl() {
-  return process.env.BACKEND_INTERNAL_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
-}
 
 export async function serverApiFetch<T>(
   input: string,
@@ -29,7 +27,8 @@ export async function serverApiFetch<T>(
     headers.set("cookie", cookieHeader);
   }
 
-  const response = await fetch(`${backendBaseUrl()}${input}`, {
+  const origin = await resolveServerApiOrigin();
+  const response = await fetch(`${origin}${input}`, {
     ...init,
     headers,
     cache: "no-store",

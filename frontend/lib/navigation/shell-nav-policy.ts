@@ -76,7 +76,10 @@ export function isShellNavHrefVisible(
       return true;
 
     case "/jobs":
-      return role !== null;
+      return (
+        permissions.includes("jobs.view")
+        || permissions.includes("jobs.assigned.view")
+      );
 
     case "/customers":
     case "/schedule":

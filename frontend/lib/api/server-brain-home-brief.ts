@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 
 import type { AiBrainHomeBriefResponse } from "@/lib/ai/brain-brief-types";
+import { resolveServerApiOrigin } from "@/lib/api/backend-base-url";
 
 type ApiEnvelope<T> = {
   data?: T;
@@ -9,10 +10,6 @@ type ApiEnvelope<T> = {
     message?: string;
   };
 };
-
-function backendBaseUrl() {
-  return process.env.BACKEND_INTERNAL_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
-}
 
 /**
  * Telemetry-oriented Brain brief (`GET /api/ai/brain/home-brief`). Returns `null` when
@@ -28,7 +25,8 @@ export async function fetchBrainHomeBriefSilent(): Promise<AiBrainHomeBriefRespo
     headers.set("cookie", cookieHeader);
   }
 
-  const response = await fetch(`${backendBaseUrl()}/api/ai/brain/home-brief`, {
+  const origin = await resolveServerApiOrigin();
+  const response = await fetch(`${origin}/api/ai/brain/home-brief`, {
     headers,
     cache: "no-store",
   });

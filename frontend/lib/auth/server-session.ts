@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { resolveServerApiOrigin } from "@/lib/api/backend-base-url";
+
 type ApiEnvelope<T> = {
   data?: T;
   error?: {
@@ -61,15 +63,12 @@ type SessionData = {
   platform_capabilities: string[];
 };
 
-function backendBaseUrl() {
-  return process.env.BACKEND_INTERNAL_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
-}
-
 async function serverAuthFetch<T>(input: string): Promise<T> {
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
 
-  const response = await fetch(`${backendBaseUrl()}${input}`, {
+  const origin = await resolveServerApiOrigin();
+  const response = await fetch(`${origin}${input}`, {
     method: "GET",
     headers: {
       cookie: cookieHeader,

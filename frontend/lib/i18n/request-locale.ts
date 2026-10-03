@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { cache } from "react";
 
+import { resolveServerApiOrigin } from "@/lib/api/backend-base-url";
 import {
   getDefaultWorkerUiLocale,
   getWorkerUiDirection,
@@ -32,10 +33,6 @@ export type RequestLocaleState = {
 
 const defaultLocale = getDefaultWorkerUiLocale();
 
-function backendBaseUrl() {
-  return process.env.BACKEND_INTERNAL_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
-}
-
 export const getRequestLocaleState = cache(async (): Promise<RequestLocaleState> => {
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
@@ -50,7 +47,8 @@ export const getRequestLocaleState = cache(async (): Promise<RequestLocaleState>
   }
 
   try {
-    const response = await fetch(`${backendBaseUrl()}/api/language-store/preference`, {
+    const origin = await resolveServerApiOrigin();
+    const response = await fetch(`${origin}/api/language-store/preference`, {
       method: "GET",
       headers: {
         cookie: cookieHeader,
