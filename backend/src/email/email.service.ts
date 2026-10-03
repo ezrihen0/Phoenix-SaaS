@@ -12,6 +12,7 @@ export type EmailSendInput = {
   to: string;
   subject: string;
   body: string;
+  html?: string;
   attachments?: EmailAttachment[];
 };
 
@@ -70,6 +71,7 @@ export class EmailService {
       to: input.to,
       subject: input.subject,
       text: input.body,
+      html: input.html?.trim() || undefined,
       attachments: (input.attachments ?? []).map((att) => ({
         filename: att.filename,
         content: att.content,

@@ -11,7 +11,10 @@ import { CustomerEntity } from "../database/entities/customer.entity";
 import { InvoiceEntity } from "../database/entities/invoice.entity";
 import { JobEntity } from "../database/entities/job.entity";
 import { PortalAccessEventEntity } from "../database/entities/portal-access-event.entity";
-import { PortalMagicLinkEntity } from "../database/entities/portal-magic-link.entity";
+import {
+  PortalMagicLinkEntity,
+  type PortalMagicLinkDeliveryMethod,
+} from "../database/entities/portal-magic-link.entity";
 import { PortalSessionEntity } from "../database/entities/portal-session.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
@@ -204,13 +207,50 @@ export class CustomerPortalService {
       });
     }
 
+    const redirectPath = organizationId
+      ? await this.resolveMagicLinkRedirectPath({
+        organizationId,
+        customerId: link.customer_id,
+        targetJobId: link.target_job_id,
+      })
+      : "/portal";
+
     return {
       ok: true as const,
       customer_id: link.customer_id,
       organization_id: organizationId,
       session_token: rawSessionToken,
       session_expires_at: portalSession.expires_at.toISOString(),
+      redirect_path: redirectPath,
     };
+  }
+
+  async resolveMagicLinkRedirectPath(input: {
+    organizationId: string;
+    customerId: string;
+    targetJobId: string | null;
+  }): Promise<string> {
+    const targetJobId = input.targetJobId?.trim();
+    if (!targetJobId) {
+      return "/portal";
+    }
+
+    const invoice = await this.invoicesRepository.findOne({
+      where: {
+        job_id: targetJobId,
+        organization_id: input.organizationId,
+      },
+      relations: {
+        job: true,
+      },
+    });
+
+    const job = invoice?.job;
+    if (!invoice || !job || job.customer_id !== input.customerId) {
+      return "/portal";
+    }
+
+    return `/portal/invoices/${invoice.id}`;
   }
 
   async resolvePortalSessionFromOpaqueToken(rawToken: string) {
@@ -278,6 +318,8 @@ export class CustomerPortalService {
     customerId: string;
     actorProfileId: string | null;
     request: Request;
+    targetJobId?: string | null;
+    deliveryMethod?: PortalMagicLinkDeliveryMethod;
   }): Promise<StaffPortalMagicLinkResult> {
     const organizationId = input.organizationId.trim();
     const customerId = input.customerId.trim();
@@ -298,8 +340,31 @@ export class CustomerPortalService {
       });
     }
 
+    const deliveryMethod = input.deliveryMethod ?? "copy";
+    const targetJobId = input.targetJobId?.trim() || null;
+
+    if (targetJobId) {
+      const job = await this.jobsRepository.findOne({
+        where: {
+          id: targetJobId,
+          organization_id: organizationId,
+          customer_id: customerId,
+        },
+        select: { id: true },
+      });
+      if (!job) {
+        throw new BadRequestException({
+          error: {
+            code: "portal_magic_link_invalid_target",
+            message: "The invoice job target could not be verified for this customer.",
+          },
+        });
+      }
+    }
+
     const rawToken = randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + STAFF_PORTAL_MAGIC_LINK_TTL_MS);
+    const sentAt = new Date();
 
     const saved = await this.linksRepository.save(
       this.linksRepository.create({
@@ -307,10 +372,11 @@ export class CustomerPortalService {
         customer_id: customerId,
         token_hash: this.hashToken(rawToken),
         status: "sent",
-        delivery_method: "copy",
+        delivery_method: deliveryMethod,
         sender_user_id: input.actorProfileId?.trim() || null,
         expires_at: expiresAt,
-        sent_at: null,
+        sent_at: sentAt,
+        target_job_id: targetJobId,
       }),
     );
 
@@ -321,9 +387,10 @@ export class CustomerPortalService {
       portalSessionId: null,
       eventType: "link_generated",
       actorUserId: input.actorProfileId?.trim() || null,
-      deliveryMethod: "copy",
+      deliveryMethod,
       metadata: {
-        delivery_method: "copy",
+        delivery_method: deliveryMethod,
+        target_job_id: targetJobId,
       },
       request: input.request,
     });

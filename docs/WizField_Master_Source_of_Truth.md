@@ -225,6 +225,8 @@ Verified classification (September 2026 closeout):
 ### 10.2 Customer portal
 
 - Portal sessions and magic links are organization- and customer-scoped.
+- Invoice **Send to Customer** delivers a Phoenix-branded HTML email with a secure magic link (`/access/{token}`). The link redeems into a portal session and, when minted from an invoice send, deep-links to that job’s customer web invoice (`/portal/invoices/{invoiceId}`) without exposing bare invoice UUID access.
+- Primary customer invoice delivery is the **web invoice** (frozen customer-facing snapshot + live balance). PDF remains a secondary download/artifact path—not an email attachment on native send.
 - Portal PDF / invoice visibility is tenant-isolated.
 - Historical Workiz invoice PDFs are visible to the owning customer only.
 
@@ -249,6 +251,8 @@ Verified classification (September 2026 closeout):
 ### 12.1 Invoice documents (current)
 
 - Invoice document durability is verified (staged file + DB transaction + compensation).
+- First customer send (email or SMS) freezes the customer-facing snapshot; failed outbound delivery leaves the invoice unfrozen for retry.
+- Native customer email send stores a branded HTML message with portal magic link; native PDF artifacts are still generated and persisted for staff/history and portal **Download PDF**, but are not attached to the customer email.
 - Provenance is tenant-scoped.
 - Workiz historical invoice PDFs are attached and isolated.
 - **RZISD4** is an accepted historical provenance-backlink anomaly: document/file valid; portal unaffected.

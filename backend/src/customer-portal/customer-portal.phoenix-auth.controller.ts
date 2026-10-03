@@ -42,6 +42,7 @@ export class CustomerPortalPhoenixAuthController {
       customer_id: redeemed.customer_id,
       organization_id: redeemed.organization_id,
       session_expires_at: redeemed.session_expires_at,
+      redirect_path: redeemed.redirect_path,
     });
   }
 }

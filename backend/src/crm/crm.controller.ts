@@ -117,6 +117,11 @@ import {
   persistQuoteHeaderAndLineItems,
 } from "./crm-document-persistence";
 import { EmailService } from "../email/email.service";
+import {
+  buildInvoiceCustomerHtmlEmail,
+  buildInvoiceCustomerPlainTextEmail,
+  splitCustomerFirstName,
+} from "../email/invoice-customer-email.template";
 import { InvoicePaymentEntity } from "../database/entities/invoice-payment.entity";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
 import { InvoicePaymentRecordingService } from "./invoice-payment-recording.service";
@@ -1609,6 +1614,7 @@ export class CrmController {
         overpayment_cents: listItem.overpayment_cents,
         lifecycle_status: listItem.lifecycle_status,
         snapshot_frozen: listItem.snapshot_frozen,
+        email_sent_at: this.toIsoString(invoice.email_sent_at),
         status: listItem.status,
         issued_at: listItem.issued_at,
         due_at: this.toIsoString(invoice.due_at),
@@ -1855,35 +1861,70 @@ export class CrmController {
       customer,
       orgSettings,
       frozenVia: "email",
-      deliver: async ({ pdfBuffer, documentNumber }) => {
+      deliver: async ({ documentNumber }) => {
         const dueDateLabel = this.formatDueDate(invoice.due_at, invoice.issued_at, dueDays);
+        const customerFirstName = splitCustomerFirstName(customer.full_name);
         const vars = {
           business_name: businessName ?? "",
           invoice_number: documentNumber,
           customer_name: customer.full_name ?? "Customer",
+          customer_first_name: customerFirstName,
           total: `$${((invoice.total_cents || ledgerSummary.totalCents) / 100).toFixed(2)}`,
           due_date: dueDateLabel,
-          invoice_link: "",
           business_phone: this.normalizeOptionalString(orgSettings?.phone) ?? "",
           business_email: this.normalizeOptionalString(orgSettings?.company_email) ?? "",
         };
+        const defaultEmailBody = [
+          "Hi {customer_first_name},",
+          "",
+          "Thank you for choosing {business_name}.",
+          "",
+          "Your invoice {invoice_number} is ready to review.",
+          "",
+          "Please use the button below to securely view your invoice, service details, total amount, and current balance.",
+          "",
+          "If you have any questions regarding your service or invoice, simply reply to this email and our team will be happy to assist.",
+          "",
+          "Thank you again for your business.",
+          "",
+          "{business_name}",
+        ].join("\n");
         const subject = this.resolveTemplate(
-          payload.subject || orgSettings?.invoice_email_subject || "Invoice {invoice_number} from {business_name}",
+          payload.subject || orgSettings?.invoice_email_subject || "Your Invoice from {business_name}",
           vars,
         );
-        const emailBody = this.resolveTemplate(
-          payload.body || orgSettings?.invoice_email_body || "Hi {customer_name},\n\nYour invoice {invoice_number} for {total} is ready.\n\nThank you for your business.",
+        const messagePlain = this.resolveTemplate(
+          payload.body || orgSettings?.invoice_email_body || defaultEmailBody,
           vars,
         );
+        const portalLink = await this.customerPortalService.createMagicLinkForStaff({
+          organizationId,
+          customerId: customer.id,
+          actorProfileId: actor.profile.id,
+          request: request as unknown as Request,
+          targetJobId: job.id,
+          deliveryMethod: "email",
+        });
+        const publicBaseUrl =
+          this.configService.get<string>("PUBLIC_BASE_URL")?.trim().replace(/\/+$/, "")
+          || "http://localhost:3000";
+        const magicLinkUrl = `${publicBaseUrl}/access/${portalLink.raw_token}`;
+        const branding = this.documentBrandingSnapshotService.fromOrganizationSettings(orgSettings);
         const emailResult = await this.emailService.send({
           to: toEmail,
           subject,
-          body: emailBody,
-          attachments: [{
-            filename: `invoice-${documentNumber}.pdf`,
-            content: pdfBuffer,
-            contentType: "application/pdf",
-          }],
+          body: buildInvoiceCustomerPlainTextEmail({
+            branding,
+            invoiceNumber: documentNumber,
+            messagePlain,
+            magicLinkUrl,
+          }),
+          html: buildInvoiceCustomerHtmlEmail({
+            branding,
+            invoiceNumber: documentNumber,
+            messagePlain,
+            magicLinkUrl,
+          }),
         });
         emailMessageId = emailResult.messageId;
       },
@@ -1977,6 +2018,8 @@ export class CrmController {
           customerId: job.customer_id,
           actorProfileId: actor.profile.id,
           request: request as unknown as Request,
+          targetJobId: job.id,
+          deliveryMethod: "sms",
         });
         const baseUrl = this.configService.get<string>("PUBLIC_BASE_URL") ?? "http://localhost:3000";
         invoiceLink = `${baseUrl}/access/${portalLink.raw_token}`;

@@ -38,6 +38,7 @@ export class CustomerPortalAuthController {
     return apiSuccess({
       customer_id: redeemed.customer_id,
       session_expires_at: redeemed.session_expires_at,
+      redirect_path: redeemed.redirect_path,
     });
   }
 

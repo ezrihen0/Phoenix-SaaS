@@ -101,6 +101,8 @@ type InvoiceDetailRecord = {
     business_name: string | null;
     company_email: string | null;
   } | null;
+  snapshot_frozen?: boolean;
+  email_sent_at?: string | null;
   document_view?: PhoenixInvoiceDocumentViewModel;
 };
 
@@ -324,6 +326,8 @@ export default async function InvoiceDetailPage({
       issued_at: invoice.issued_at,
       due_at: invoice.due_at ?? null,
       signature_requested: invoice.signature_requested,
+      snapshot_frozen: invoice.snapshot_frozen,
+      email_sent_at: invoice.email_sent_at ?? null,
       customer: invoice.customer
         ? { full_name: invoice.customer.full_name, email: invoice.customer.email }
         : null,

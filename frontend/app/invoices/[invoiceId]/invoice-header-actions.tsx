@@ -24,6 +24,8 @@ type InvoiceSnapshot = {
   issued_at: string;
   due_at?: string | null;
   signature_requested?: boolean;
+  snapshot_frozen?: boolean;
+  email_sent_at?: string | null;
   customer: {
     full_name: string;
     email: string | null;
@@ -64,18 +66,55 @@ function formatDueDateLabel(issuedAt: string, dueAt?: string | null) {
   }).format(dueDate);
 }
 
-function buildDefaultSubject(invoice: InvoiceSnapshot, businessName?: string | null) {
-  const from = businessName?.trim() || "your service provider";
-  return `Invoice #${invoice.invoice_id || invoice.document_number} from ${from}`;
+function splitCustomerFirstName(fullName: string | null | undefined) {
+  const trimmed = fullName?.trim();
+  if (!trimmed) {
+    return "there";
+  }
+  return trimmed.split(/\s+/)[0] || "there";
+}
+
+function resolveInvoiceReference(invoice: InvoiceSnapshot) {
+  return invoice.document_number?.trim() || invoice.invoice_id?.trim() || invoice.id;
+}
+
+function buildDefaultSubject(_invoice: InvoiceSnapshot, businessName?: string | null) {
+  const company = businessName?.trim() || "your service provider";
+  return `Your Invoice from ${company}`;
 }
 
 function buildDefaultBody(invoice: InvoiceSnapshot, businessName?: string | null) {
-  const customerName = invoice.customer?.full_name?.trim() || "there";
-  const totalLabel = formatCurrency(invoice.total_cents);
-  const dueDateLabel = formatDueDateLabel(invoice.issued_at, invoice.due_at);
-  const from = businessName?.trim() || "us";
+  const customerFirstName = splitCustomerFirstName(invoice.customer?.full_name);
+  const company = businessName?.trim() || "your service provider";
+  const invoiceNumber = resolveInvoiceReference(invoice);
 
-  return `Hi ${customerName},\n\nThanks again for choosing ${from}! Your invoice total is ${totalLabel}, and is due by ${dueDateLabel}.`;
+  return [
+    `Hi ${customerFirstName},`,
+    "",
+    `Thank you for choosing ${company}.`,
+    "",
+    `Your invoice ${invoiceNumber} is ready to review.`,
+    "",
+    "Please use the button below to securely view your invoice, service details, total amount, and current balance.",
+    "",
+    "If you have any questions regarding your service or invoice, simply reply to this email and our team will be happy to assist.",
+    "",
+    "Thank you again for your business.",
+    "",
+    company,
+  ].join("\n");
+}
+
+function hasValidRecipientEmail(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  return trimmed
+    .split(",")
+    .map((part) => part.trim())
+    .every((part) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(part));
 }
 
 function getThemeCanvasColors() {
@@ -235,6 +274,15 @@ export default function InvoiceHeaderActions({
 
     return normalized || "";
   }, [fromField, organizationEmail]);
+
+  const invoiceWasSentToCustomer = useMemo(
+    () => Boolean(invoiceSnapshot.email_sent_at?.trim() || invoiceSnapshot.snapshot_frozen),
+    [invoiceSnapshot.email_sent_at, invoiceSnapshot.snapshot_frozen],
+  );
+
+  const invoiceReference = useMemo(() => resolveInvoiceReference(invoiceSnapshot), [invoiceSnapshot]);
+
+  const customerEmailMissing = !hasValidRecipientEmail(toField);
 
   useLayoutEffect(() => {
     if (!isActionsOpen) {
@@ -533,7 +581,13 @@ export default function InvoiceHeaderActions({
       <div className="flex flex-wrap items-center gap-2">
         <ExecutiveToolbarButton
           icon={Mail}
-          label={isRefreshingInvoice ? t("loading") : t("sendEmail")}
+          label={
+            isRefreshingInvoice
+              ? t("loading")
+              : invoiceWasSentToCustomer
+                ? t("resendToCustomer")
+                : t("sendToCustomer")
+          }
           primary
           disabled={isRefreshingInvoice}
           onClick={() => {
@@ -635,10 +689,13 @@ export default function InvoiceHeaderActions({
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 id="send-invoice-modal-title" className="text-2xl font-semibold text-[color:var(--sem-text-primary)]">
-                Send Invoice
+                {invoiceWasSentToCustomer ? t("resendToCustomerTitle") : t("sendToCustomerTitle")}
               </h2>
               <p className="mt-2 text-sm text-[color:var(--sem-text-secondary)]">
-                Review email recipients and message before sending. Pay Now and e-signature links are not included in this email yet.
+                {t("sendToCustomerBody")}
+              </p>
+              <p className="mt-2 text-xs font-medium uppercase tracking-[0.12em] text-[color:var(--sem-text-muted)]">
+                {t("invoiceReference", { invoiceNumber: invoiceReference })}
               </p>
             </div>
             <button
@@ -683,9 +740,13 @@ export default function InvoiceHeaderActions({
                 disabled={isRefreshingInvoice}
                 className="theme-input-control w-full rounded-[14px] px-4 py-2.5 text-sm placeholder:text-[color:var(--sem-text-muted)] disabled:opacity-60"
               />
-              <span className="text-xs text-[color:var(--sem-text-muted)]">
-                Multiple recipients are supported with comma-separated email addresses.
-              </span>
+              {customerEmailMissing ? (
+                <span className="text-xs text-red-300">{t("missingCustomerEmail")}</span>
+              ) : (
+                <span className="text-xs text-[color:var(--sem-text-muted)]">
+                  {t("secureLinkHelper")}
+                </span>
+              )}
             </label>
 
             <label className="grid gap-2 text-sm text-[color:var(--sem-text-secondary)]">
@@ -725,11 +786,15 @@ export default function InvoiceHeaderActions({
               onClick={() => {
                 void handleSendInvoice();
               }}
-              disabled={isSendingInvoice || isRefreshingInvoice || !toField.trim()}
+              disabled={isSendingInvoice || isRefreshingInvoice || customerEmailMissing}
               className="theme-btn-primary inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSendingInvoice ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-              {isSendingInvoice ? "Sending..." : "Send Invoice"}
+              {isSendingInvoice
+                ? t("sendingToCustomer")
+                : invoiceWasSentToCustomer
+                  ? t("resendToCustomerAction")
+                  : t("sendToCustomerAction")}
             </button>
           </div>
         </InvoiceActionModal>

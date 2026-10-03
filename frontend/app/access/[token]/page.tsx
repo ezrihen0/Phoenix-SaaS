@@ -15,12 +15,19 @@ export default function PortalAccessPage({ params }: { params: Promise<{ token: 
 
     async function redeem() {
       try {
-        await portalApiFetch("/api/portal/magic-links/redeem", {
-          method: "POST",
-          body: JSON.stringify({ token: resolvedParams.token }),
-        });
+        const redeemed = await portalApiFetch<{ redirect_path?: string | null }>(
+          "/api/portal/magic-links/redeem",
+          {
+            method: "POST",
+            body: JSON.stringify({ token: resolvedParams.token }),
+          },
+        );
         if (isMounted) {
-          router.replace("/portal");
+          const redirectPath =
+            typeof redeemed.redirect_path === "string" && redeemed.redirect_path.startsWith("/")
+              ? redeemed.redirect_path
+              : "/portal";
+          router.replace(redirectPath);
         }
       } catch (nextError) {
         if (isMounted) {

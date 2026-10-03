@@ -485,7 +485,38 @@ async function runCases(summary: SmokeSummary, dataSource: DataSource, seed: See
     if (!result.ok) {
       throw new Error(`redeem failed: ${result.code}`);
     }
+    if (result.redirect_path !== "/portal") {
+      throw new Error(`Expected /portal redirect, got ${result.redirect_path}`);
+    }
     return { customer_id: result.customer_id };
+  });
+
+  await expectPass(summary, "P2b — target_job_id magic link redirects to portal invoice", async () => {
+    const invoiceA = await dataSource.getRepository(InvoiceEntity).findOne({
+      where: { id: seed.invoiceAId },
+    });
+    if (!invoiceA) {
+      throw new Error("missing invoice A seed");
+    }
+
+    const link = await portal.createMagicLinkForStaff({
+      organizationId: seed.orgAId,
+      customerId: seed.customerAId,
+      actorProfileId: randomUUID(),
+      request,
+      targetJobId: invoiceA.job_id,
+      deliveryMethod: "email",
+    });
+
+    const redeemed = await portal.redeemMagicLinkToken(link.raw_token, request, mockResponse());
+    if (!redeemed.ok) {
+      throw new Error(`redeem failed: ${redeemed.code}`);
+    }
+    const expectedPath = `/portal/invoices/${seed.invoiceAId}`;
+    if (redeemed.redirect_path !== expectedPath) {
+      throw new Error(`Expected ${expectedPath}, got ${redeemed.redirect_path}`);
+    }
+    return { redirect_path: redeemed.redirect_path };
   });
 
   await expectPass(summary, "P3 — portal home scoped to customer A / org A", async () => {
