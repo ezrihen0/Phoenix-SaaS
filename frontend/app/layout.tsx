@@ -14,9 +14,9 @@ const fontVariables = {
 } as CSSProperties;
 
 export const metadata: Metadata = {
-  title: "WizField",
+  title: "Phoenix CRM",
   description:
-    "Field-service operating system for owners who are tired of losing calls, jobs, estimates, invoices, and customer history.",
+    "Phoenix Fireplace field operations — customers, jobs, dispatch, estimates, invoices, and customer history in one workspace.",
   formatDetection: {
     telephone: false,
   },

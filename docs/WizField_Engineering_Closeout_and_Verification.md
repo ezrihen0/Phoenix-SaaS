@@ -130,6 +130,13 @@ That future rerun is not a restart of SaaS architecture work. It is a mandatory 
 
 Use the canonical reverification runbook for that replay.
 
+## 8A. Phoenix CRM production domain cutover addendum (2026-10-03)
+
+- Live backend production `DB_NAME` verified at runtime (**`wizfield`**) before any env change; no schema migration executed.
+- Pre-cutover logical backup captured (`wizfield-pre-phoenix-cutover-20261003.sql.gz`, owner-local harness; not committed).
+- Staff production surface: `https://app.phoenixfireplace.ca`; customer portal links: `https://portal.phoenixfireplace.ca`; rollback staff URL retained: `https://app.wizfield.com`.
+- Backend/frontend builds and portal URL/config unit checks passed on the cutover commit workspace.
+
 ## 9. Language Store V1 addendum
 
 This addendum records the bounded P1-P6 Language Store verification pass only. It does not reopen the underlying Gate 11-14 foundation statuses above.

@@ -114,7 +114,7 @@ npm.cmd run build --workspace backend
 npm.cmd run build --workspace frontend
 ```
 
-Real SMTP + magic-link URL closeout (controlled recipient; requires `SMTP_*`, `CUSTOMER_PORTAL_BASE_URL=https://portal.phoenixfireplace.ca`, staff app may remain `PUBLIC_BASE_URL=https://app.wizfield.com`):
+Real SMTP + magic-link URL closeout (controlled recipient; requires `SMTP_*`, `CUSTOMER_PORTAL_BASE_URL=https://portal.phoenixfireplace.ca`, staff app `PUBLIC_BASE_URL=https://app.phoenixfireplace.ca`; keep `https://app.wizfield.com` in `CORS_ORIGIN` only while rollback is required):
 
 ```text
 npm.cmd run invoice-customer-delivery:closeout --workspace backend
@@ -122,8 +122,8 @@ npm.cmd run invoice-customer-delivery:closeout --workspace backend
 
 Production-like minimum replay (no customer PII send required for negative checks):
 
-- `GET https://app.wizfield.com/login` returns 200
-- `POST https://app.wizfield.com/api/portal/magic-links/redeem` with invalid token returns 401 `invalid_link` without invoice payload
+- `GET https://app.phoenixfireplace.ca/login` returns 200
+- `POST https://app.phoenixfireplace.ca/api/portal/magic-links/redeem` with invalid token returns 401 `invalid_link` without invoice payload
 
 Manual gates still required before **CLOSED / GO**: staff Send/Resend composer on deployed build, mobile email + portal UX, Michael-role session send, resend + money parity spot check, and confirmation that production hosts run commit `7006de7` or later.
 

@@ -247,7 +247,7 @@ function CenteredLoginForm() {
               Secure workspace access
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              Sign in to WizField
+              Sign in to Phoenix CRM
             </h1>
             <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-slate-500">
               Enter your credentials to access your command center.
@@ -454,7 +454,7 @@ function LegacyLoginForm() {
       <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-12 px-6 py-10 lg:grid-cols-[minmax(0,1.1fr)_480px] lg:px-10">
         <section className="max-w-2xl">
           <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
-            WizField
+            Phoenix CRM
           </p>
           <h1 className="mt-5 max-w-xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] md:text-7xl">
             Dispatch the workday before the first truck rolls.

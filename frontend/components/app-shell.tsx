@@ -140,7 +140,7 @@ export function AppShell({ children }: AppShellProps) {
   const [collapsedPreferenceReady, setCollapsedPreferenceReady] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
-  const [userLabel, setUserLabel] = useState("WizField User");
+  const [userLabel, setUserLabel] = useState("Phoenix CRM User");
   const [shellNavRole, setShellNavRole] = useState<ShellNavRole | null>(null);
   const [shellNavPermissions, setShellNavPermissions] = useState<string[]>([]);
   const [shellNavRoleResolved, setShellNavRoleResolved] = useState(false);
@@ -201,7 +201,7 @@ export function AppShell({ children }: AppShellProps) {
       const nextLabel = session?.profile?.full_name?.trim()
         || session?.technician?.display_name?.trim()
         || session?.user?.email?.trim()
-        || "WizField User";
+        || "Phoenix CRM User";
       const canSearch = canUseGlobalSearch(session?.profile?.role);
 
       setUserLabel(nextLabel);
@@ -319,7 +319,7 @@ export function AppShell({ children }: AppShellProps) {
           {!sidebarCollapsed ? (
             <div>
               <p className="text-[11px] uppercase tracking-[0.35em] text-[color:var(--sem-text-muted)]">{t("shell.quickNavigation")}</p>
-              <p className="mt-1 font-[family:var(--font-flat-display)] text-2xl text-[color:var(--sem-text-primary)]">WizField</p>
+              <p className="mt-1 font-[family:var(--font-flat-display)] text-2xl text-[color:var(--sem-text-primary)]">Phoenix CRM</p>
             </div>
           ) : <div className="h-12" />}
           <button
@@ -406,7 +406,7 @@ export function AppShell({ children }: AppShellProps) {
                 </button>
                 <Link href="/home" className="inline-flex min-w-0 shrink-0 items-center gap-1">
                   <span className="truncate font-[family:var(--font-flat-display)] text-lg text-[color:var(--sem-text-primary)]">
-                    WizField
+                    Phoenix CRM
                   </span>
                   <span className="text-[color:var(--sem-accent-primary)]">.</span>
                 </Link>
@@ -434,7 +434,7 @@ export function AppShell({ children }: AppShellProps) {
                 <div className="inline-flex h-[4.25rem] w-[min(42vw,12rem)] shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)] p-1 shadow-[0_0_24px_color-mix(in_srgb,var(--sem-accent-primary)_14%,transparent),0_18px_45px_color-mix(in_srgb,var(--bg-canvas)_72%,transparent)] ring-1 ring-[color:var(--sem-board-border)] backdrop-blur-xl sm:h-[4.75rem] sm:w-[17.8125rem] lg:w-[17.8125rem]">
                   <img
                     src="/wizfield-logo.svg"
-                    alt="WizField logo"
+                    alt="Phoenix CRM logo"
                     className="block h-full w-full object-fill drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
                   />
                 </div>

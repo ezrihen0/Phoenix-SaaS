@@ -32,9 +32,19 @@ This document does not copy audit evidence. It states current truth and points t
 
 ## Current production operating verdict
 
-**CONDITIONAL GO / YES WITH CONDITIONS**
+**Phoenix CRM — domain cutover executed (2026-10-03); full production E2E remains blocked until production SMTP is configured on Railway backend**
 
-Phoenix Fireplace may begin using WizField as its primary daily operating system for real customers and real money after the owner closes the remaining activation items. No engineering NO-GO blocker remains from the September 2026 closeout.
+Phoenix Fireplace operates on the **existing production `wizfield` database** with **no schema migration** and **no database copy/rename** during the Phoenix CRM production surface cutover.
+
+| Surface | Production URL |
+|---|---|
+| Staff CRM (Phoenix CRM) | `https://app.phoenixfireplace.ca` |
+| Customer portal (invoice / access links) | `https://portal.phoenixfireplace.ca` |
+| Rollback staff surface (kept during verification) | `https://app.wizfield.com` |
+
+WizField SaaS commercialization remains **paused** (not deleted). Multi-tenant architecture, tenant isolation, and finance/portal behavior are unchanged; only required production identity and domain configuration were updated.
+
+Prior **CONDITIONAL GO** items below still apply where not explicitly closed by owner action (legal drafts, optional uploaded-file backup evidence beyond the 2026-10-03 logical DB backup).
 
 Remaining owner activation items:
 
@@ -56,7 +66,7 @@ Paid acquisition remains owner-gated. See [WizField_Owner_Launch_Activation_Chec
 | Phoenix Fireplace organization | `8d5bc762-eb13-43e5-85a1-723477adb47c` / slug `phoenix-fireplace` |
 | Production owner login | `service@phoenixfireplace.ca` (owner role; session + `/home` verified) |
 | Controlled legacy CRM migration into `wizfield` | **CLOSED / PASS** (operational rows org-scoped; no legacy auth/session import) |
-| Phoenix WizField activation on `wizfield` | **CLOSED / PASS** (`phoenix:activate:verify` against `https://app.wizfield.com`) |
+| Phoenix CRM activation on `wizfield` | **CLOSED / PASS** (verified on `https://app.phoenixfireplace.ca`; rollback `https://app.wizfield.com` retained) |
 | Telephony row ownership on `wizfield` | Phoenix org stamped on owned number + call-flow config (Telnyx send number matches owned record) |
 
 **Open data restoration (does not block production operation):**
