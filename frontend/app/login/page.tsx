@@ -1,71 +1,55 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import {
-  getClientDestination,
-  getClientSession,
-} from "@/lib/auth/client-auth";
+import { usePhoenixBoot } from "@/components/phoenix/phoenix-boot-provider";
+import { PhoenixStartupScreen } from "@/components/phoenix/phoenix-startup-screen";
+import { getClientDestination } from "@/lib/auth/client-auth";
 import { resolvePostLoginPath } from "@/lib/auth/post-login-redirect";
 
-import LoginForm, { LoginAmbientShell, LoginSessionLoading } from "./login-form";
+import LoginForm, { LoginSessionLoading } from "./login-form";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const { status, session } = usePhoenixBoot();
 
   useEffect(() => {
+    if (status !== "ready" || !session) {
+      return;
+    }
+
     let isMounted = true;
 
-    async function guardSession() {
-      const session = await getClientSession().catch(() => null);
+    async function redirectSignedInUser() {
+      const payload = await getClientDestination().catch(() => ({ destination: "/home" as const }));
+      const nextPath = new URLSearchParams(window.location.search).get("next");
 
       if (!isMounted) {
         return;
       }
-
-      if (!session) {
-        setIsCheckingSession(false);
-        return;
-      }
-
-      const payload = await getClientDestination().catch(() => ({ destination: "/home" as const }));
-      const nextPath = new URLSearchParams(window.location.search).get("next");
 
       router.replace(resolvePostLoginPath(nextPath, payload.destination ?? null));
       router.refresh();
     }
 
-    void guardSession().catch(() => {
-      if (!isMounted) {
-        return;
-      }
-
-      setIsCheckingSession(false);
-    });
+    void redirectSignedInUser();
 
     return () => {
       isMounted = false;
     };
-  }, [router]);
+  }, [router, session, status]);
 
-  if (isCheckingSession) {
-    return (
-      <LoginAmbientShell>
-        <LoginSessionLoading />
-      </LoginAmbientShell>
-    );
+  if (status !== "ready") {
+    return null;
+  }
+
+  if (session) {
+    return <PhoenixStartupScreen />;
   }
 
   return (
-    <Suspense
-      fallback={(
-        <LoginAmbientShell>
-          <LoginSessionLoading />
-        </LoginAmbientShell>
-      )}
-    >
+    <Suspense fallback={<LoginSessionLoading />}>
       <LoginForm />
     </Suspense>
   );

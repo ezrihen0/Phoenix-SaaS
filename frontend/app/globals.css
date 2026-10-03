@@ -714,6 +714,101 @@ body {
   overflow-x: clip;
 }
 
+html {
+  background-color: #05070c;
+  color-scheme: dark;
+}
+
+.phoenix-static-boot {
+  align-items: center;
+  background-color: #05070c;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  min-height: 100dvh;
+  pointer-events: none;
+  position: fixed;
+  z-index: 9998;
+}
+
+.phoenix-static-boot-hidden {
+  display: none !important;
+}
+
+.phoenix-static-boot-inner {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.phoenix-static-boot-inner img {
+  height: auto;
+  max-width: min(72vw, 240px);
+  object-fit: contain;
+  width: auto;
+}
+
+.phoenix-static-boot-label {
+  color: rgb(255 255 255 / 0.45);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.38em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+@keyframes phoenix-startup-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.98);
+  }
+
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes phoenix-startup-logo-breathe {
+  0%,
+  100% {
+    opacity: 0.92;
+    transform: translateY(0);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes phoenix-startup-progress-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+.phoenix-startup-glow {
+  animation: phoenix-startup-glow-pulse 2.6s ease-in-out infinite;
+  background: radial-gradient(circle at center, rgb(0 245 160 / 0.22), transparent 68%);
+}
+
+.phoenix-startup-logo {
+  animation: phoenix-startup-logo-breathe 2.6s ease-in-out infinite;
+}
+
+.phoenix-startup-progress-bar {
+  animation: phoenix-startup-progress-slide 1.35s ease-in-out infinite;
+}
+
 body {
   background:
     radial-gradient(circle at 12% -4%, color-mix(in srgb, var(--sem-accent-primary) 16%, transparent), transparent 32%),

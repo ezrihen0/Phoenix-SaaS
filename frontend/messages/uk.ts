@@ -20,6 +20,12 @@ const messages = {
       showing: "Показано {start}-{end} з {totalCount}",
     },
   },
+  startup: {
+    loading: "Запуск Phoenix CRM…",
+    errorTitle: "Не вдалося запустити Phoenix CRM",
+    errorBody: "Не вдалося підключитися до сервісу Phoenix CRM. Перевірте мережу та спробуйте ще раз.",
+    retry: "Повторити",
+  },
   shell: {
     quickNavigation: "Швидка навігація",
     signedIn: "Ви увійшли",

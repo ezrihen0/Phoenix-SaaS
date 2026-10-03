@@ -20,6 +20,12 @@ const messages = {
       showing: "Showing {start}-{end} of {totalCount}",
     },
   },
+  startup: {
+    loading: "Starting Phoenix CRM…",
+    errorTitle: "Unable to start Phoenix CRM",
+    errorBody: "We could not connect to the Phoenix CRM service. Check your network and try again.",
+    retry: "Retry",
+  },
   shell: {
     quickNavigation: "Quick Navigation",
     signedIn: "Signed in",
