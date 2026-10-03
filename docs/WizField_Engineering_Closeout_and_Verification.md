@@ -222,6 +222,26 @@ The bounded correction pass closes:
 
 This pass does not reopen Gate 11-14, Growth Center V1, Language Store V1, Portal V1, or AI Phase 0-4.
 
+## Invoice Customer Delivery engineering verification (2026-10-03)
+
+Implementation baseline: commit `7006de7`.
+
+Recorded automated evidence (local `wizfield` DB, `FINANCE_SMOKE_USE_CONFIGURED_DATABASE=true`):
+
+- `schema:verify` PASS
+- `document-snapshot:isolation:smoke` PASS
+- `portal:isolation:smoke` PASS (includes P2b invoice deep-link redirect)
+- `finance-send-snapshot:contract-check` PASS
+- `finance-send-snapshot:smoke` PASS
+- backend / frontend build PASS
+
+Recorded runtime evidence:
+
+- Real SMTP closeout send PASS (`invoice-customer-delivery:closeout`, Cloudflare SMTP, HTML + plain text, zero attachments, magic link host `https://app.wizfield.com`)
+- Production invalid portal token negative PASS (`401 invalid_link`)
+
+Operational **CLOSED / GO** for Phoenix field use still requires owner replay of manual gates in [WizField_Reverification_Runbook.md](WizField_Reverification_Runbook.md) §6B (deployed build, mobile UX, Michael-role send, resend, money parity).
+
 ## Closeout statement
 
 WizField completed the internal engineering foundation through Gate 14 with:

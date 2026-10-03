@@ -19,8 +19,10 @@ import { PricebookBundleEntity } from "./entities/pricebook-bundle.entity";
 import { PricebookItemEntity } from "./entities/pricebook-item.entity";
 import { InvoiceLineItemEntity } from "./entities/invoice-line-item.entity";
 import { QuoteLineItemEntity } from "./entities/quote-line-item.entity";
+import { resolveSmokeDatabasePlan } from "./db-smoke-database-plan";
 import { buildDataSourceOptions } from "./typeorm.config";
 import { verifyDatabaseSchema } from "./verify-schema";
+import { In } from "typeorm";
 
 type SmokeStatus = "PASS" | "FAIL" | "SKIP";
 
@@ -515,42 +517,64 @@ async function runSnapshotChecks(summary: SmokeSummary, service: DocumentSnapsho
   );
 }
 
+async function cleanupDocumentSnapshotSeed(dataSource: DataSource, catalog: SeededCatalog) {
+  const orgIds = [catalog.orgA.id, catalog.orgB.id];
+  const bundleIds = [
+    catalog.bundleGoodA.id,
+    catalog.bundleTaintedA.id,
+    catalog.bundleUnavailableA.id,
+    catalog.bundleB.id,
+  ];
+  const itemIds = [catalog.itemA.id, catalog.itemB.id, catalog.itemAInactive.id];
+
+  await dataSource.getRepository(PricebookBundleItemEntity).delete({ organization_id: In(orgIds) });
+  await dataSource.getRepository(PricebookBundleEntity).delete({ id: In(bundleIds) });
+  await dataSource.getRepository(PricebookItemEntity).delete({ id: In(itemIds) });
+  await dataSource.getRepository(OrganizationEntity).delete({ id: In(orgIds) });
+}
+
 async function main() {
   const options = requireMySqlOptions();
-  const databaseName = process.env.DB_SMOKE_DATABASE?.trim() || `wizfield_doc_snap_verify_${Date.now()}`;
-  const shouldDrop = normalizeBooleanFlag(process.env.DB_SMOKE_DROP, false);
-  const summary = createSummary(databaseName);
+  const plan = resolveSmokeDatabasePlan(options, "wizfield_doc_snap_verify");
+  const summary = createSummary(plan.databaseName);
 
-  const adminConnection = await mysql.createConnection({
-    host: options.host,
-    port: options.port,
-    user: options.username,
-    password: options.password,
-    multipleStatements: true,
-  });
-
+  let adminConnection: mysql.Connection | null = null;
   let dataSource: DataSource | null = null;
+  let seededCatalog: SeededCatalog | null = null;
 
   try {
-    if (shouldDrop) {
-      await adminConnection.query(`DROP DATABASE IF EXISTS \`${databaseName}\``);
+    if (plan.mode === "ephemeral") {
+      adminConnection = await mysql.createConnection({
+        host: options.host,
+        port: options.port,
+        user: options.username,
+        password: options.password,
+        multipleStatements: true,
+      });
+
+      if (plan.shouldDrop) {
+        await adminConnection.query(`DROP DATABASE IF EXISTS \`${plan.databaseName}\``);
+      }
+
+      await adminConnection.query(
+        `CREATE DATABASE \`${plan.databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+      );
     }
 
-    await adminConnection.query(
-      `CREATE DATABASE \`${databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
-    );
     summary.phases.databaseCreate = "PASS";
 
     dataSource = new DataSource({
       ...options,
-      database: databaseName,
+      database: plan.databaseName,
       synchronize: false,
       migrationsRun: false,
       logging: false,
     });
 
     await dataSource.initialize();
-    await dataSource.runMigrations();
+    if (plan.mode === "ephemeral") {
+      await dataSource.runMigrations();
+    }
     summary.phases.migrations = "PASS";
 
     await verifyDatabaseSchema(dataSource);
@@ -571,26 +595,31 @@ async function main() {
     );
 
     const token = randomUUID().slice(0, 8);
-    const catalog = await seedCatalog(dataSource, token);
-    await runSnapshotChecks(summary, service, catalog);
+    seededCatalog = await seedCatalog(dataSource, token);
+    summary.phases.seeding = "PASS";
+    await runSnapshotChecks(summary, service, seededCatalog);
   } catch (error) {
     summary.errors.push(extractErrorCode(error));
   } finally {
     try {
       if (dataSource?.isInitialized) {
+        if (plan.mode === "configured" && seededCatalog) {
+          await cleanupDocumentSnapshotSeed(dataSource, seededCatalog);
+        }
         await dataSource.destroy();
       }
 
-      if (shouldDrop) {
-        await adminConnection.query(`DROP DATABASE IF EXISTS \`${databaseName}\``);
-        summary.cleanup.droppedDatabase = true;
+      if (plan.mode === "ephemeral" && adminConnection) {
+        if (plan.shouldDrop) {
+          await adminConnection.query(`DROP DATABASE IF EXISTS \`${plan.databaseName}\``);
+          summary.cleanup.droppedDatabase = true;
+        }
+        await adminConnection.end();
       }
 
       summary.phases.cleanup = "PASS";
     } catch (error) {
       summary.errors.push(`cleanup: ${extractErrorCode(error)}`);
-    } finally {
-      await adminConnection.end();
     }
   }
 

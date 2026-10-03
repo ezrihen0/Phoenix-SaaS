@@ -36,6 +36,7 @@
     "invoice-document:durability:smoke": "node -r ts-node/register src/database/invoice-document-durability-smoke.ts",
     "portal:scope-check": "node -r ts-node/register src/customer-portal/portal-scope-unit-check.ts",
     "portal:isolation:smoke": "node -r ts-node/register src/database/portal-isolation-smoke.ts",
+    "invoice-customer-delivery:closeout": "node -r ts-node/register src/database/invoice-customer-delivery-closeout.ts",
     "txt-messaging:isolation:smoke": "node -r ts-node/register src/database/txt-messaging-isolation-smoke.ts",
     "general-ai-chat:contract-check": "node -r ts-node/register src/ai/general-ai-chat-contract-check.ts",
     "general-ai-chat:unit-check": "node -r ts-node/register src/ai/general-ai-chat-unit-check.ts",

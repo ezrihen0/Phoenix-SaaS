@@ -96,6 +96,37 @@ Expected result:
 - each smoke returns `ok: true`
 - backend and frontend builds pass
 
+## 6B. Invoice Customer Delivery closeout addendum (2026-10-03)
+
+Baseline implementation commit: `7006de7`.
+
+When the MySQL app user cannot `CREATE DATABASE`, set `FINANCE_SMOKE_USE_CONFIGURED_DATABASE=true` for isolation smokes that support configured-database mode (`document-snapshot:isolation:smoke`, `portal:isolation:smoke`). This runs against the configured application database and cleans up seeded rows; it does not broaden production DB privileges.
+
+```text
+npm.cmd run migration:run --workspace backend
+npm.cmd run schema:verify --workspace backend
+set FINANCE_SMOKE_USE_CONFIGURED_DATABASE=true
+npm.cmd run document-snapshot:isolation:smoke --workspace backend
+npm.cmd run portal:isolation:smoke --workspace backend
+npm.cmd run finance-send-snapshot:contract-check --workspace backend
+npm.cmd run finance-send-snapshot:smoke --workspace backend
+npm.cmd run build --workspace backend
+npm.cmd run build --workspace frontend
+```
+
+Real SMTP + magic-link URL closeout (controlled recipient; requires `SMTP_*`, `PUBLIC_BASE_URL=https://app.wizfield.com`, no localhost):
+
+```text
+npm.cmd run invoice-customer-delivery:closeout --workspace backend
+```
+
+Production-like minimum replay (no customer PII send required for negative checks):
+
+- `GET https://app.wizfield.com/login` returns 200
+- `POST https://app.wizfield.com/api/portal/magic-links/redeem` with invalid token returns 401 `invalid_link` without invoice payload
+
+Manual gates still required before **CLOSED / GO**: staff Send/Resend composer on deployed build, mobile email + portal UX, Michael-role session send, resend + money parity spot check, and confirmation that production hosts run commit `7006de7` or later.
+
 ## 6A. Language Store V1 reverification addendum
 
 Use this addendum when the completed Language Store V1 package must be replayed as a bounded verification pass without reopening the underlying Gate 11-14 foundation decisions.
