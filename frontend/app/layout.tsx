@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import Script from "next/script";
 import { AppShell } from "@/components/app-shell";
+import { CRM_FAVICON_SRC } from "@/lib/branding/crm-brand";
 import { getWorkerUiDirection, resolveSupportedWorkerUiLocale } from "@/lib/i18n/locales";
 import "./globals.css";
 
@@ -17,6 +18,10 @@ export const metadata: Metadata = {
   title: "Phoenix CRM",
   description:
     "Phoenix Fireplace field operations — customers, jobs, dispatch, estimates, invoices, and customer history in one workspace.",
+  icons: {
+    icon: [{ url: CRM_FAVICON_SRC, type: "image/png" }],
+    apple: CRM_FAVICON_SRC,
+  },
   formatDetection: {
     telephone: false,
   },
