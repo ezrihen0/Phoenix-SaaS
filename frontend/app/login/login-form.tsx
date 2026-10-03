@@ -4,6 +4,7 @@ import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   AlertCircle,
   ArrowRight,
@@ -15,6 +16,7 @@ import {
   Sun,
 } from "lucide-react";
 
+import { PhoenixStartupScreen } from "@/components/phoenix/phoenix-startup-screen";
 import {
   getClientDestination,
   loginWithPassword,
@@ -129,24 +131,8 @@ export function LoginAmbientShell({ children }: { children: ReactNode }) {
 }
 
 export function LoginSessionLoading() {
-  return (
-    <section className="mx-auto w-full max-w-[460px]">
-      <div className="sem-auth-card rounded-[32px] p-8 backdrop-blur-2xl">
-        <div className="flex flex-col items-center py-6 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-slate-950 text-white shadow-[0_24px_60px_rgba(15,23,42,0.28)]">
-            <Flame className="h-8 w-8" />
-          </div>
-          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.32em] text-slate-400">
-            Secure workspace access
-          </p>
-          <div className="mt-6 flex items-center gap-3 text-sm font-medium text-slate-600">
-            <LoadingSpinner />
-            <span>Checking session...</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
+  const t = useTranslations("startup");
+  return <PhoenixStartupScreen embedded message={t("loading")} />;
 }
 
 function getStatusMessage(nextPath: string | null) {

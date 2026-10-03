@@ -1,12 +1,22 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { CSSProperties } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import Script from "next/script";
 import { AppShell } from "@/components/app-shell";
-import { CRM_FAVICON_SRC } from "@/lib/branding/crm-brand";
+import { PhoenixBootProvider } from "@/components/phoenix/phoenix-boot-provider";
+import { PhoenixStaticBoot } from "@/components/phoenix/phoenix-static-boot";
+import {
+  CRM_BRAND_NAME,
+  CRM_FAVICON_SRC,
+  CRM_PWA_DESCRIPTION,
+  CRM_SPLASH_BACKGROUND,
+} from "@/lib/branding/crm-brand";
+import { IOS_STARTUP_IMAGES } from "@/lib/branding/ios-startup-images";
 import { getWorkerUiDirection, resolveSupportedWorkerUiLocale } from "@/lib/i18n/locales";
 import "./globals.css";
+
+const PHOENIX_BOOT_INLINE_SCRIPT = `(function(){try{var storageKey="wizfield.appearance.theme";var stored=localStorage.getItem(storageKey);if(stored){document.documentElement.dataset.theme=stored;}}catch(e){}document.documentElement.style.backgroundColor="${CRM_SPLASH_BACKGROUND}";document.documentElement.style.colorScheme="dark";})();`;
 
 const fontVariables = {
   "--font-geist-sans": 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -14,13 +24,28 @@ const fontVariables = {
   "--font-flat-display": 'Georgia, "Times New Roman", serif',
 } as CSSProperties;
 
+export const viewport: Viewport = {
+  themeColor: CRM_SPLASH_BACKGROUND,
+  colorScheme: "dark",
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
-  title: "Phoenix CRM",
-  description:
-    "Phoenix Fireplace field operations — customers, jobs, dispatch, estimates, invoices, and customer history in one workspace.",
+  title: CRM_BRAND_NAME,
+  description: CRM_PWA_DESCRIPTION,
+  applicationName: CRM_BRAND_NAME,
   icons: {
     icon: [{ url: CRM_FAVICON_SRC, type: "image/png" }],
     apple: CRM_FAVICON_SRC,
+  },
+  appleWebApp: {
+    capable: true,
+    title: CRM_BRAND_NAME,
+    statusBarStyle: "black-translucent",
+    startupImage: IOS_STARTUP_IMAGES,
+  },
+  other: {
+    "apple-mobile-web-app-capable": "yes",
   },
   formatDetection: {
     telephone: false,
@@ -42,11 +67,17 @@ export default async function RootLayout({
       data-theme="brown-cream"
       suppressHydrationWarning
       className="h-full antialiased"
-      style={fontVariables}
+      style={{ ...fontVariables, backgroundColor: CRM_SPLASH_BACKGROUND }}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col bg-[color:var(--cmp-surface-canvas,#05070C)]">
+        <Script id="phoenix-boot-inline" strategy="beforeInteractive">
+          {PHOENIX_BOOT_INLINE_SCRIPT}
+        </Script>
         <NextIntlClientProvider>
-          <AppShell>{children}</AppShell>
+          <PhoenixBootProvider>
+            <PhoenixStaticBoot />
+            <AppShell>{children}</AppShell>
+          </PhoenixBootProvider>
         </NextIntlClientProvider>
         {process.env.NEXT_PUBLIC_ANALYTICS_SCRIPT_URL ? (
           <Script

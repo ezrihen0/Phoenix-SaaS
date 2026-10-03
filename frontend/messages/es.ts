@@ -20,6 +20,12 @@ const messages = {
       showing: "Mostrando {start}-{end} de {totalCount}",
     },
   },
+  startup: {
+    loading: "Iniciando Phoenix CRM…",
+    errorTitle: "No se pudo iniciar Phoenix CRM",
+    errorBody: "No pudimos conectar con el servicio de Phoenix CRM. Comprueba tu red e inténtalo de nuevo.",
+    retry: "Reintentar",
+  },
   shell: {
     quickNavigation: "Navegacion rapida",
     signedIn: "Sesion iniciada",

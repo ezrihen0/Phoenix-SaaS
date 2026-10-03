@@ -118,6 +118,42 @@ export async function getClientSession() {
   return authFetch<ClientSession>("/api/auth/session");
 }
 
+export type ClientSessionProbeStatus = "authenticated" | "unauthenticated" | "unavailable";
+
+export type ClientSessionProbe = {
+  session: ClientSession | null;
+  status: ClientSessionProbeStatus;
+};
+
+/** Soft session probe for startup — treats 401/403 as signed-out, not a fatal boot error. */
+export async function probeClientSession(): Promise<ClientSessionProbe> {
+  try {
+    const response = await fetch("/api/auth/session", {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      return { session: null, status: "unauthenticated" };
+    }
+
+    const payload = await response.json().catch(() => null) as ApiEnvelope<ClientSession> | null;
+
+    if (!response.ok) {
+      return { session: null, status: "unavailable" };
+    }
+
+    if (!payload?.data) {
+      return { session: null, status: "unauthenticated" };
+    }
+
+    return { session: payload.data, status: "authenticated" };
+  } catch {
+    return { session: null, status: "unavailable" };
+  }
+}
+
 export async function listClientOrganizations() {
   return authFetch<ClientSession["memberships"]>("/api/auth/organizations");
 }

@@ -20,6 +20,12 @@ const messages = {
       showing: "מציג {start}-{end} מתוך {totalCount}",
     },
   },
+  startup: {
+    loading: "מפעיל את Phoenix CRM…",
+    errorTitle: "לא ניתן להפעיל את Phoenix CRM",
+    errorBody: "לא הצלחנו להתחבר לשירות Phoenix CRM. בדוק את החיבור ונסה שוב.",
+    retry: "נסה שוב",
+  },
   shell: {
     quickNavigation: "ניווט מהיר",
     signedIn: "מחובר",
