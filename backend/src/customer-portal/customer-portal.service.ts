@@ -33,6 +33,7 @@ import {
   type InvoiceCustomerFacingSnapshotAny,
 } from "../crm/invoice-customer-facing-snapshot.types";
 import { snapshotPortalLineItems } from "../crm/historical-snapshot-read.helper";
+import { buildCustomerPortalAccessUrl } from "./customer-portal-url";
 
 /** Default magic-link lifetime when minting from staff (no new env var). */
 const STAFF_PORTAL_MAGIC_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -69,6 +70,11 @@ export class CustomerPortalService {
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
     private readonly settingsService: SettingsService,
   ) {}
+
+  /** Customer-facing /access/{token} URL (not the staff WizField app origin). */
+  buildCustomerPortalAccessUrl(rawToken: string) {
+    return buildCustomerPortalAccessUrl(this.configService, rawToken);
+  }
 
   private summarizePortalInvoiceLedger(invoice: InvoiceEntity) {
     return this.invoicePaymentLedgerService.summarizeInvoice({

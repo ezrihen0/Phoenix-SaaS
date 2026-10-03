@@ -114,7 +114,7 @@ npm.cmd run build --workspace backend
 npm.cmd run build --workspace frontend
 ```
 
-Real SMTP + magic-link URL closeout (controlled recipient; requires `SMTP_*`, `PUBLIC_BASE_URL=https://app.wizfield.com`, no localhost):
+Real SMTP + magic-link URL closeout (controlled recipient; requires `SMTP_*`, `CUSTOMER_PORTAL_BASE_URL=https://portal.phoenixfireplace.ca`, staff app may remain `PUBLIC_BASE_URL=https://app.wizfield.com`):
 
 ```text
 npm.cmd run invoice-customer-delivery:closeout --workspace backend

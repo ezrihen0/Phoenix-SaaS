@@ -1905,10 +1905,7 @@ export class CrmController {
           targetJobId: job.id,
           deliveryMethod: "email",
         });
-        const publicBaseUrl =
-          this.configService.get<string>("PUBLIC_BASE_URL")?.trim().replace(/\/+$/, "")
-          || "http://localhost:3000";
-        const magicLinkUrl = `${publicBaseUrl}/access/${portalLink.raw_token}`;
+        const magicLinkUrl = this.customerPortalService.buildCustomerPortalAccessUrl(portalLink.raw_token);
         const branding = this.documentBrandingSnapshotService.fromOrganizationSettings(orgSettings);
         const emailResult = await this.emailService.send({
           to: toEmail,
@@ -2021,8 +2018,7 @@ export class CrmController {
           targetJobId: job.id,
           deliveryMethod: "sms",
         });
-        const baseUrl = this.configService.get<string>("PUBLIC_BASE_URL") ?? "http://localhost:3000";
-        invoiceLink = `${baseUrl}/access/${portalLink.raw_token}`;
+        invoiceLink = this.customerPortalService.buildCustomerPortalAccessUrl(portalLink.raw_token);
         const smsVars = {
           business_name: businessName ?? "your service provider",
           invoice_number: documentNumber,

@@ -28,6 +28,7 @@ import { PortalSessionEntity } from "./entities/portal-session.entity";
 import { QuoteEntity } from "./entities/quote.entity";
 import { TechnicianEntity } from "./entities/technician.entity";
 import { WarrantyCertificateEntity } from "./entities/warranty-certificate.entity";
+import { buildCustomerPortalAccessUrl, resolveCustomerPortalBaseUrl } from "../customer-portal/customer-portal-url";
 import { buildDataSourceOptions } from "./typeorm.config";
 
 const PHOENIX_ORG_ID = "8d5bc762-eb13-43e5-85a1-723477adb47c";
@@ -67,9 +68,9 @@ async function main() {
     throw new Error("Email service is not configured.");
   }
 
-  const publicBaseUrl = configService.get<string>("PUBLIC_BASE_URL")?.trim().replace(/\/+$/, "") || "";
-  if (!publicBaseUrl || /localhost|127\.0\.0\.1/i.test(publicBaseUrl)) {
-    throw new Error("PUBLIC_BASE_URL must be set to production-like HTTPS host for closeout.");
+  const customerPortalBaseUrl = resolveCustomerPortalBaseUrl(configService);
+  if (/localhost|127\.0\.0\.1/i.test(customerPortalBaseUrl)) {
+    throw new Error("CUSTOMER_PORTAL_BASE_URL (or PHOENIX_PORTAL_PUBLIC_BASE_URL) must be production HTTPS for closeout.");
   }
 
   const dataSource = new DataSource(buildDataSourceOptions());
@@ -128,7 +129,7 @@ async function main() {
       deliveryMethod: "email",
     });
 
-    const magicLinkUrl = `${publicBaseUrl}/access/${portalLink.raw_token}`;
+    const magicLinkUrl = buildCustomerPortalAccessUrl(configService, portalLink.raw_token);
     const branding = new DocumentBrandingSnapshotService().fromOrganizationSettings(orgSettings);
     const invoiceNumber = fixture.document_number?.trim() || "CLOSEOUT-VERIFY";
     const messagePlain = [
@@ -178,7 +179,7 @@ async function main() {
             attachmentCount: 0,
           },
           magicLink: {
-            publicBaseUrl,
+            customerPortalBaseUrl,
             redirectPathVerified: redirectPath,
           },
         },

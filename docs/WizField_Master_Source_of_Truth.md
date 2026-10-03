@@ -225,7 +225,7 @@ Verified classification (September 2026 closeout):
 ### 10.2 Customer portal
 
 - Portal sessions and magic links are organization- and customer-scoped.
-- Invoice **Send to Customer** delivers a Phoenix-branded HTML email with a secure magic link (`/access/{token}`). The link redeems into a portal session and, when minted from an invoice send, deep-links to that job’s customer web invoice (`/portal/invoices/{invoiceId}`) without exposing bare invoice UUID access.
+- Invoice **Send to Customer** delivers a Phoenix-branded HTML email with a secure magic link on the **customer portal origin** (`CUSTOMER_PORTAL_BASE_URL`, e.g. `https://portal.phoenixfireplace.ca/access/{token}`), not the staff WizField app URL (`PUBLIC_BASE_URL`). The link redeems into a portal session and, when minted from an invoice send, deep-links to that job’s customer web invoice (`/portal/invoices/{invoiceId}`) without exposing bare invoice UUID access.
 - Primary customer invoice delivery is the **web invoice** (frozen customer-facing snapshot + live balance). PDF remains a secondary download/artifact path—not an email attachment on native send.
 - Portal PDF / invoice visibility is tenant-isolated.
 - Historical Workiz invoice PDFs are visible to the owning customer only.
