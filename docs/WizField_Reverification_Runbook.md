@@ -114,7 +114,13 @@ npm.cmd run build --workspace backend
 npm.cmd run build --workspace frontend
 ```
 
-Real SMTP + magic-link URL closeout (controlled recipient; requires `SMTP_*`, `CUSTOMER_PORTAL_BASE_URL=https://portal.phoenixfireplace.ca`, staff app `PUBLIC_BASE_URL=https://app.phoenixfireplace.ca`; keep `https://app.wizfield.com` in `CORS_ORIGIN` only while rollback is required):
+Invoice delivery closeout (controlled recipient; production Railway uses **`EMAIL_TRANSPORT=cloudflare_api`** + `CLOUDFLARE_ACCOUNT_ID` + existing Cloudflare Email Sending token via `SMTP_PASS` / `CF_API_TOKEN`; local/dev may use **`EMAIL_TRANSPORT=smtp`** with `SMTP_*`. Requires `CUSTOMER_PORTAL_BASE_URL=https://portal.phoenixfireplace.ca`, staff `PUBLIC_BASE_URL=https://app.phoenixfireplace.ca`; keep `https://app.wizfield.com` in `CORS_ORIGIN` while rollback is required):
+
+```text
+node backend/scripts/run-invoice-closeout-against-production-db.mjs
+```
+
+Or local configured DB only:
 
 ```text
 npm.cmd run invoice-customer-delivery:closeout --workspace backend
@@ -125,7 +131,9 @@ Production-like minimum replay (no customer PII send required for negative check
 - `GET https://app.phoenixfireplace.ca/login` returns 200
 - `POST https://app.phoenixfireplace.ca/api/portal/magic-links/redeem` with invalid token returns 401 `invalid_link` without invoice payload
 
-Manual gates still required before **CLOSED / GO**: staff Send/Resend composer on deployed build, mobile email + portal UX, Michael-role session send, resend + money parity spot check, and confirmation that production hosts run commit `7006de7` or later.
+Phoenix production engineering closeout **CLOSED / GO (2026-10-03)** recorded in Master SoT and Engineering Closeout (HTTPS email transport, production E2E, configured-DB isolation smokes, readonly counts).
+
+Optional manual UX gates (not engineering blockers): mobile email + portal UX, Michael-role session send, composer spot checks on deployed build.
 
 ## 6A. Language Store V1 reverification addendum
 

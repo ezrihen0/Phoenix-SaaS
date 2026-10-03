@@ -32,7 +32,7 @@ This document does not copy audit evidence. It states current truth and points t
 
 ## Current production operating verdict
 
-**Phoenix CRM — domain cutover executed (2026-10-03); full production E2E remains blocked until production SMTP is configured on Railway backend**
+**Phoenix CRM — production domain cutover CLOSED / GO (2026-10-03): staff + portal on Phoenix domains, production DB unchanged, outbound invoice email via Cloudflare Email Sending HTTPS API (`EMAIL_TRANSPORT=cloudflare_api` on Railway; SMTP retained for local/dev).**
 
 Phoenix Fireplace operates on the **existing production `wizfield` database** with **no schema migration** and **no database copy/rename** during the Phoenix CRM production surface cutover.
 

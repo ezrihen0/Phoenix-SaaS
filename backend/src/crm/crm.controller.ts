@@ -1838,7 +1838,7 @@ export class CrmController {
     }
 
     if (!this.emailService.isConfigured()) {
-      apiError(500, "email_not_configured", "Email service is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM.");
+      apiError(500, "email_not_configured", "Email service is not configured. Set EMAIL_TRANSPORT and the required SMTP or Cloudflare Email Sending variables.");
     }
 
     if (!job || !customer) {

@@ -242,12 +242,28 @@ Recorded automated evidence (local `wizfield` DB, `FINANCE_SMOKE_USE_CONFIGURED_
 - `finance-send-snapshot:smoke` PASS
 - backend / frontend build PASS
 
-Recorded runtime evidence:
+Recorded runtime evidence (local `wizfield` DB harness):
 
 - Real SMTP closeout send PASS (`invoice-customer-delivery:closeout`, Cloudflare SMTP, HTML + plain text, zero attachments, magic link host `https://app.wizfield.com`)
 - Production invalid portal token negative PASS (`401 invalid_link`)
 
-Operational **CLOSED / GO** for Phoenix field use still requires owner replay of manual gates in [WizField_Reverification_Runbook.md](WizField_Reverification_Runbook.md) §6B (deployed build, mobile UX, Michael-role send, resend, money parity).
+### Phoenix production cutover verification (2026-10-03)
+
+Production database **`wizfield`** (no migration/copy/rename). Logical pre-cutover backup captured 2026-10-03.
+
+Railway `phoenix-crm-backend` outbound email: **`EMAIL_TRANSPORT=cloudflare_api`** (existing Cloudflare Email Sending Bearer token; 25s HTTP timeout; SMTP path unchanged for local/dev).
+
+Recorded production-path evidence:
+
+- `invoice-customer-delivery:closeout` PASS against production DB (magic link host `https://portal.phoenixfireplace.ca`)
+- Staff `POST /api/invoices/:id/send-email` PASS via `https://app.phoenixfireplace.ca` (~2s; `@phoenixfireplace.ca` message IDs)
+- Controlled production invoice E2E PASS (staff send → portal mint/redeem → invoice PDF → resend; totals unchanged)
+- Configured-DB `document-snapshot:isolation:smoke` and `portal:isolation:smoke` PASS on production `wizfield`
+- Read-only preservation counts: core tenant tables unchanged vs pre-cutover baseline; expected growth in `invoice_documents` / `portal_magic_links` from verification sends only
+
+**Engineering verdict:** **CLOSED / GO** for Phoenix CRM production operation on `app.phoenixfireplace.ca` / `portal.phoenixfireplace.ca` with rollback `app.wizfield.com` retained.
+
+Optional owner UX gates (mobile composer, non-owner role send) remain in [WizField_Reverification_Runbook.md](WizField_Reverification_Runbook.md) §6B and do not block the engineering closeout above.
 
 ## Closeout statement
 
