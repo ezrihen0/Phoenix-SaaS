@@ -2,6 +2,11 @@ import type { EntityManager } from "typeorm";
 
 import { TechnicianEntity } from "../database/entities/technician.entity";
 
+export type EnsureTechnicianOptions = {
+  allowCreate?: boolean;
+  allowReactivate?: boolean;
+};
+
 export async function ensureTechnicianForOrganizationMembership(
   manager: EntityManager,
   input: {
@@ -10,7 +15,10 @@ export async function ensureTechnicianForOrganizationMembership(
     displayName: string;
     phone: string | null;
   },
+  options: EnsureTechnicianOptions = {},
 ) {
+  const allowCreate = options.allowCreate === true;
+  const allowReactivate = options.allowReactivate === true;
   const techniciansRepository = manager.getRepository(TechnicianEntity);
   const existing = await techniciansRepository.findOne({
     where: {
@@ -22,12 +30,32 @@ export async function ensureTechnicianForOrganizationMembership(
   const displayName = input.displayName.trim() || "Technician";
 
   if (existing) {
-    existing.is_active = true;
-    existing.display_name = displayName;
-    if (input.phone !== undefined) {
-      existing.phone = input.phone;
+    let shouldSave = false;
+
+    if (existing.display_name !== displayName) {
+      existing.display_name = displayName;
+      shouldSave = true;
     }
-    return techniciansRepository.save(existing);
+
+    if ((existing.phone ?? null) !== input.phone) {
+      existing.phone = input.phone;
+      shouldSave = true;
+    }
+
+    if (allowReactivate && !existing.is_active) {
+      existing.is_active = true;
+      shouldSave = true;
+    }
+
+    if (shouldSave) {
+      return techniciansRepository.save(existing);
+    }
+
+    return existing;
+  }
+
+  if (!allowCreate) {
+    return null;
   }
 
   return techniciansRepository.save(

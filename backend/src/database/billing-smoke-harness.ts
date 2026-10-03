@@ -18,6 +18,10 @@ import { OrganizationLanguageEntitlementEntity } from "./entities/organization-l
 import { ProfileEntity } from "./entities/profile.entity";
 import { TechnicianEntity } from "./entities/technician.entity";
 import { UserEntity } from "./entities/user.entity";
+import { OrganizationCustomRoleEntity } from "./entities/organization-custom-role.entity";
+import { OrganizationTeamEntitlementEntity } from "./entities/organization-team-entitlement.entity";
+import { TeamRbacAuditEventEntity } from "./entities/team-rbac-audit-event.entity";
+import { TeamService } from "../team/team.service";
 
 export class SmokeConfigService {
   get(key: string): string | undefined {
@@ -55,6 +59,15 @@ export function buildBillingSmokeHarness(dataSource: DataSource): BillingSmokeHa
     billingProviderRegistryService,
     languageStoreEntitlementService,
   );
+  const teamService = new TeamService(
+    dataSource.getRepository(MembershipEntity),
+    dataSource.getRepository(ProfileEntity),
+    dataSource.getRepository(UserEntity),
+    dataSource.getRepository(OrganizationCustomRoleEntity),
+    dataSource.getRepository(OrganizationTeamEntitlementEntity),
+    dataSource.getRepository(TeamRbacAuditEventEntity),
+    dataSource,
+  );
   const authService = new AuthService(
     dataSource.getRepository(UserEntity),
     dataSource.getRepository(ProfileEntity),
@@ -67,6 +80,7 @@ export function buildBillingSmokeHarness(dataSource: DataSource): BillingSmokeHa
     organizationBillingService,
     configService,
     dataSource,
+    teamService,
   );
 
   return {

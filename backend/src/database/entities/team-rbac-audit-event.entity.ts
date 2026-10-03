@@ -16,6 +16,8 @@ export const teamRbacAuditActions = [
   "member_invited",
   "member_created",
   "member_access_updated",
+  "member_updated",
+  "member_password_reset",
   "member_removed",
   "custom_role_created",
   "custom_role_updated",

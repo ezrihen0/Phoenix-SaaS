@@ -3,6 +3,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { BillingModule } from "../billing/billing.module";
+import { TeamModule } from "../team/team.module";
 import { AuthSessionEntity } from "../database/entities/auth-session.entity";
 import { ControlledAccessGrantEntity } from "../database/entities/controlled-access-grant.entity";
 import { PlatformOperatorGrantEntity } from "../database/entities/platform-operator-grant.entity";
@@ -20,6 +21,7 @@ import { SessionGuard } from "./session.guard";
 @Module({
   imports: [
     forwardRef(() => BillingModule),
+    forwardRef(() => TeamModule),
     TypeOrmModule.forFeature([
       UserEntity,
       ProfileEntity,

@@ -49,6 +49,9 @@ export class MembershipEntity {
   @Column({ type: "json", nullable: true })
   custom_permission_keys!: RoleModePermission[] | null;
 
+  @Column({ type: "boolean", nullable: true })
+  assignable_to_jobs!: boolean | null;
+
   @CreateDateColumn({ type: "datetime", precision: 6 })
   created_at!: Date;
 
