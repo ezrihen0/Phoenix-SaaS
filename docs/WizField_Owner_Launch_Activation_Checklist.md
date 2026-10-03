@@ -4,7 +4,7 @@
 
 This is the single owner-facing launch activation document for everything still pending outside internal engineering closeout.
 
-Current production verdict: **CONDITIONAL GO / YES WITH CONDITIONS**. Evidence: [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md). Product truth: [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md).
+Current production verdict: **CONDITIONAL GO / YES WITH CONDITIONS**. Evidence: [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md). Published product truth: [docs.wizfield.com](https://docs.wizfield.com/docs). Engineering SoT: [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md) ([map](WIZFIELD_PUBLISHED_DOCS_MAP.md)).
 
 Closed P0/P1/P2 engineering findings are **not** current launch blockers.
 

@@ -1,6 +1,6 @@
 # WIZFIELD PRODUCTION CLOSEOUT
 
-**Document role:** Verification evidence for the September 2026 production closeout. This file does **not** replace domain Sources of Truth. Current product/architecture truth: [WizField_Master_Source_of_Truth.md](../../WizField_Master_Source_of_Truth.md). Current AI truth: [WizField_AI_Master_Source_of_Truth.md](../../WizField_AI_Master_Source_of_Truth.md).
+**Document role:** Verification evidence for the September 2026 production closeout. This file does **not** replace domain Sources of Truth. **Published product truth:** [docs.wizfield.com](https://docs.wizfield.com/docs). **Engineering SoT:** [WizField_Master_Source_of_Truth.md](../../WizField_Master_Source_of_Truth.md), [WizField_AI_Master_Source_of_Truth.md](../../WizField_AI_Master_Source_of_Truth.md) ([map](../../WIZFIELD_PUBLISHED_DOCS_MAP.md)).
 
 **Program:** Final Production Closeout (Phases A–G)  
 **Generated:** 2026-09-03 (America/Denver)  

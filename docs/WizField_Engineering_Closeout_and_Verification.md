@@ -7,7 +7,7 @@ This is the consolidated engineering closeout record for the completed WizField 
 It is **historical foundation evidence**. It does not replace current production operating truth.
 
 **Current production verification and verdict:** [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md) — **CONDITIONAL GO**.  
-**Current product truth:** [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md).
+**Current product truth (public):** [docs.wizfield.com](https://docs.wizfield.com/docs). **Engineering SoT:** [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md) ([map](WIZFIELD_PUBLISHED_DOCS_MAP.md)).
 
 Findings recorded below remain as originally closed for Gate 11–14. Later P0/P1/P2 production-audit findings were closed in the September 2026 closeout; do not treat this file as the current blocker list.
 

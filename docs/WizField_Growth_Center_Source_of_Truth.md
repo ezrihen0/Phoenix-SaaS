@@ -1,5 +1,7 @@
 # WizField Growth Center — Source of Truth (Canonical Current State)
 
+**Published product truth:** [What Is WizField Growth Center?](https://docs.wizfield.com/docs/what-is-wizfield-growth-center) · [How Explicit Publishing Works](https://docs.wizfield.com/docs/how-explicit-publishing-works) · [Published docs map](WIZFIELD_PUBLISHED_DOCS_MAP.md)
+
 **Document status:** Canonical implementation truth (code-aligned)  
 **Module shell:** authenticated `/marketing` route family (`frontend/app/marketing/[[...slug]]`)  
 **Backend module:** [`backend/src/marketing`](../backend/src/marketing/)  

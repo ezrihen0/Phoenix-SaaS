@@ -3,7 +3,7 @@
 > **HISTORICAL AUDIT EVIDENCE (2026-08-27).**  
 > Original findings below are retained for traceability. They are **not** the current production verdict.  
 > **Current closeout:** [docs/audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md](docs/audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md) — **CONDITIONAL GO**.  
-> **Current product truth:** [docs/WizField_Master_Source_of_Truth.md](docs/WizField_Master_Source_of_Truth.md).  
+> **Current product truth (public):** [docs.wizfield.com](https://docs.wizfield.com/docs). **Engineering SoT:** [docs/WizField_Master_Source_of_Truth.md](docs/WizField_Master_Source_of_Truth.md) ([map](docs/WIZFIELD_PUBLISHED_DOCS_MAP.md)).  
 > Closed later: TXT tenant isolation, operational-access APP_GUARD, disabled-user sessions, booking durability, payment integrity, and related P0/P1/P2 items. Do not rewrite the original finding text.
 
 Audit date: 2026-08-27  

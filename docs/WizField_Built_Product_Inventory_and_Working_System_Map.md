@@ -1,7 +1,7 @@
 # WizField Built Product Inventory + Working-System Map
 
 > **HISTORICAL inventory snapshot (2026-05-29).**  
-> This is **not** a Source of Truth. Current architecture and production verdict live in [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md) and [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md).  
+> This is **not** a Source of Truth. **Published product truth:** [docs.wizfield.com](https://docs.wizfield.com/docs). Engineering architecture and production verdict: [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md), [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md) ([map](WIZFIELD_PUBLISHED_DOCS_MAP.md)).  
 > Treat rows below as dated working-system evidence. In particular: Home AI is now shipped (not untracked WIP); Stripe runtime is removed (not a pending live-activation step); public-booking durability and payment integrity were closed in the September 2026 closeout.
 
 ## Execution addendum (2026-05-29)

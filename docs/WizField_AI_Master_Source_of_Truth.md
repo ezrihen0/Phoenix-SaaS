@@ -1,8 +1,10 @@
 # WizField AI — Master Source of Truth
 
+**Published product truth:** [What WizField AI Does Today](https://docs.wizfield.com/docs/what-wizfield-ai-does-today) · [Published docs map](WIZFIELD_PUBLISHED_DOCS_MAP.md)
+
 ## Purpose
 
-This is the **canonical product and architecture truth** for WizField AI. Read this before any AI discussion, enablement, or future phase planning.
+This is the **canonical engineering product and architecture truth** for WizField AI in this repository. Read this before any AI implementation, enablement, or future phase planning.
 
 It covers:
 
