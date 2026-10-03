@@ -6,7 +6,7 @@ import {
   type RoleModePermission,
 } from "../auth/permissions";
 
-type MembershipPermissionSource = Pick<
+export type MembershipPermissionSource = Pick<
   MembershipEntity,
   "role" | "custom_permission_keys" | "custom_role_id"
 > & {

@@ -21,6 +21,7 @@ import {
 } from "../auth/permissions";
 import { SessionGuard } from "../auth/session.guard";
 import { BranchScopeService } from "../crm/branch-scope.service";
+import { TeamMemberEditService } from "./team-member-edit.service";
 import { TeamService } from "./team.service";
 
 type CreateMemberPayload = {
@@ -32,23 +33,55 @@ type CreateMemberPayload = {
   customRoleId?: unknown;
   customPermissionKeys?: unknown;
   organizationIds?: unknown;
+  assignableToJobs?: unknown;
 };
 
-type UpdateMemberPayload = CreateMemberPayload;
+type UpdateMemberPayload = {
+  fullName?: unknown;
+  phone?: unknown;
+  systemRole?: unknown;
+  customRoleId?: unknown;
+  customPermissionKeys?: unknown;
+  assignableToJobs?: unknown;
+  reactivateRoster?: unknown;
+};
+
+type ResetPasswordPayload = {
+  password?: unknown;
+};
 
 type CustomRolePayload = {
   name?: unknown;
   permissionKeys?: unknown;
 };
 
-function parseAccessPayload(payload: CreateMemberPayload) {
+function parseBoolean(value: unknown): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === true || value === "true" || value === 1 || value === "1") {
+    return true;
+  }
+
+  if (value === false || value === "false" || value === 0 || value === "0") {
+    return false;
+  }
+
+  apiError(400, "invalid_boolean_field", "Expected a boolean value.");
+  return undefined as never;
+}
+
+function parseAccessPayload(payload: CreateMemberPayload | UpdateMemberPayload) {
   const systemRole = payload.systemRole === undefined
     ? undefined
     : normalizeRole(payload.systemRole) ?? undefined;
 
-  const customRoleId = typeof payload.customRoleId === "string" && payload.customRoleId.trim()
-    ? payload.customRoleId.trim()
-    : null;
+  const customRoleId = payload.customRoleId === undefined
+    ? undefined
+    : typeof payload.customRoleId === "string" && payload.customRoleId.trim()
+      ? payload.customRoleId.trim()
+      : null;
 
   const customPermissionKeys = payload.customPermissionKeys === undefined
     ? undefined
@@ -107,7 +140,34 @@ function parseCreateMemberPayload(payload: CreateMemberPayload) {
     phone,
     access: parseAccessPayload(payload),
     organizationIds,
+    assignableToJobs: parseBoolean(payload.assignableToJobs),
   };
+}
+
+function parseMemberEditPayload(payload: UpdateMemberPayload) {
+  const access = parseAccessPayload(payload);
+
+  return {
+    fullName: typeof payload.fullName === "string" ? payload.fullName.trim() : undefined,
+    phone: payload.phone === undefined
+      ? undefined
+      : typeof payload.phone === "string" && payload.phone.trim()
+        ? payload.phone.trim()
+        : null,
+    systemRole: access.systemRole,
+    customRoleId: access.customRoleId,
+    customPermissionKeys: access.customPermissionKeys,
+    assignableToJobs: parseBoolean(payload.assignableToJobs),
+    reactivateRoster: parseBoolean(payload.reactivateRoster),
+  };
+}
+
+function parseResetPasswordPayload(payload: ResetPasswordPayload) {
+  if (typeof payload.password !== "string" || payload.password.length < 8) {
+    apiError(400, "invalid_password", "Use at least 8 characters for the new password.");
+  }
+
+  return { password: payload.password };
 }
 
 function parseCustomRolePayload(payload: CustomRolePayload) {
@@ -122,6 +182,7 @@ function parseCustomRolePayload(payload: CustomRolePayload) {
 export class TeamController {
   constructor(
     private readonly teamService: TeamService,
+    private readonly teamMemberEditService: TeamMemberEditService,
     private readonly branchScopeService: BranchScopeService,
   ) {}
 
@@ -135,6 +196,12 @@ export class TeamController {
   async members(@Req() request: RequestWithActor) {
     requirePermission(request.actor, "team.view", "team_view_forbidden", "You cannot view team members.");
     return apiSuccess(await this.teamService.listMembers(request.actor!));
+  }
+
+  @Get("members/:profileId")
+  async getMember(@Param("profileId") profileId: string, @Req() request: RequestWithActor) {
+    requirePermission(request.actor, "team.view", "team_view_forbidden", "You cannot view team members.");
+    return apiSuccess(await this.teamMemberEditService.getMember(profileId, request.actor!));
   }
 
   @Get("organizations")
@@ -158,7 +225,20 @@ export class TeamController {
   ) {
     requirePermission(request.actor, "team.manage", "team_manage_forbidden", "You cannot manage team access.");
     return apiSuccess(
-      await this.teamService.updateMemberAccess(profileId, parseAccessPayload(payload), request.actor!),
+      await this.teamMemberEditService.updateMember(profileId, parseMemberEditPayload(payload), request.actor!),
+    );
+  }
+
+  @Post("members/:profileId/reset-password")
+  async resetMemberPassword(
+    @Param("profileId") profileId: string,
+    @Body() payload: ResetPasswordPayload,
+    @Req() request: RequestWithActor,
+  ) {
+    requirePermission(request.actor, "team.manage", "team_manage_forbidden", "You cannot manage team access.");
+    const parsed = parseResetPasswordPayload(payload);
+    return apiSuccess(
+      await this.teamMemberEditService.resetMemberPassword(profileId, parsed.password, request.actor!),
     );
   }
 

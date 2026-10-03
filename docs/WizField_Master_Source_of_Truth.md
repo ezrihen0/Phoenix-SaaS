@@ -152,7 +152,8 @@ Platform
 - Add User (Settings → Team & Permissions) supports single-organization or multi-organization access selection; the same system role applies across all selected organizations in V1.
 - Existing global Users may be attached to additional managed organizations without creating duplicate User/Profile rows; global profile-role compatibility remains enforced for V1.
 - `customRoleId` is organization-scoped and cannot be assigned across multiple organizations in one create operation.
-- Technician membership requires a separate tenant-scoped `TechnicianEntity` per organization.
+- Technician membership uses a separate tenant-scoped `TechnicianEntity` per organization (job FK target). Roster rows are not auto-created on read.
+- Per-membership **job assignment eligibility** is stored on `memberships.assignable_to_jobs`. Explicit `false` is always server-enforced for new assignments; rollout uses `TEAM_ASSIGNMENT_ELIGIBILITY_MODE` (`off` | `shadow` | `enforce`) plus owner-approved backfill before `enforce`. Edit member UI and admin password reset are gated by `TEAM_MEMBER_EDIT_UI_ENABLED` until production activation.
 - Seat limits (`max_users`) are enforced per organization; multi-organization member creation is transactional (all-or-nothing, no partial writes on failure).
 - Canonical permission registry: `backend/src/auth/permissions.ts`.
 - Implementation detail: [TEAM_PERMISSIONS_V1_IMPLEMENTATION.md](TEAM_PERMISSIONS_V1_IMPLEMENTATION.md).

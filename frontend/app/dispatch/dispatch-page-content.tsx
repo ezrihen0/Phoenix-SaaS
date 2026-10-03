@@ -16,7 +16,7 @@ export default async function DispatchPageContent() {
   try {
     const [jobsResponse, techniciansResponse] = await Promise.all([
       serverApiFetch<DispatchJobRecord[]>("/api/jobs"),
-      serverApiFetch<DispatchTechnicianRecord[]>("/api/technicians"),
+      serverApiFetch<DispatchTechnicianRecord[]>("/api/technicians?purpose=roster"),
     ]);
 
     initialJobs = jobsResponse;

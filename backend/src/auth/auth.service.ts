@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { forwardRef, Inject, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
@@ -31,6 +31,9 @@ import {
 import { listPermissionsForRole } from "./permissions";
 import { listPermissionsForMembership } from "../team/membership-permissions";
 import { assertOrganizationSeatAvailable } from "../team/team-seat-enforcement";
+import { defaultAssignableForSystemRole } from "../team/assignment-eligibility.mode";
+import { TeamService } from "../team/team.service";
+import { ensureTechnicianForOrganizationMembership } from "../crm/technician-membership-link";
 import { AuthSessionEntity } from "../database/entities/auth-session.entity";
 import { ControlledAccessGrantEntity } from "../database/entities/controlled-access-grant.entity";
 import { MembershipEntity } from "../database/entities/membership.entity";
@@ -70,6 +73,8 @@ export class AuthService {
     private readonly organizationBillingService: OrganizationBillingService,
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => TeamService))
+    private readonly teamService: TeamService,
   ) {}
 
   async ensureBootstrapAdmin() {
@@ -557,14 +562,29 @@ export class AuthService {
         }),
       );
 
+      const assignableToJobs = defaultAssignableForSystemRole(input.role);
       await membershipRepository.save(
         membershipRepository.create({
           user_id: user.id,
           organization_id: organizationId,
           role: input.role,
           status: "active",
+          assignable_to_jobs: assignableToJobs,
         }),
       );
+
+      if (assignableToJobs) {
+        await ensureTechnicianForOrganizationMembership(
+          manager,
+          {
+            organizationId,
+            userId: user.id,
+            displayName: input.fullName,
+            phone: input.phone,
+          },
+          { allowCreate: true, allowReactivate: false },
+        );
+      }
 
       return createdProfile;
     });
@@ -586,62 +606,17 @@ export class AuthService {
   }
 
   async updateStaffRole(profileId: string, role: ProfileRole, actor: ActorContext) {
-    if (!actor.organization_id) {
-      apiError(400, "organization_context_missing", "An active organization is required to update staff roles.");
-    }
-
+    const member = await this.teamService.updateMemberAccess(profileId, { systemRole: role }, actor);
     const profile = await this.profilesRepository.findOne({
-      where: {
-        id: profileId,
-      },
-      relations: {
-        user: true,
-      },
+      where: { id: profileId },
+      relations: { user: true },
     });
 
     if (!profile) {
       apiError(404, "staff_profile_not_found", "The staff profile could not be found.");
     }
 
-    const membership = await this.membershipsRepository.findOne({
-      where: {
-        user_id: profile.auth_user_id,
-        organization_id: actor.organization_id,
-        status: "active",
-      },
-    });
-
-    if (!membership) {
-      apiError(404, "staff_membership_not_found", "The staff member is not part of the active organization.");
-    }
-
-    if (membership.role === "owner" && role !== "owner") {
-      const ownerCount = await this.membershipsRepository.count({
-        where: {
-          organization_id: actor.organization_id,
-          role: "owner",
-          status: "active",
-        },
-      });
-
-      if (ownerCount <= 1) {
-        apiError(403, "final_owner_protected", "The final owner cannot be removed or demoted.");
-      }
-    }
-
-    if (role === "owner") {
-      apiError(403, "owner_role_protected", "Ownership cannot be granted through this flow.");
-    }
-
-    membership.role = role;
-    membership.custom_role_id = null;
-    membership.custom_permission_keys = null;
-    await this.membershipsRepository.save(membership);
-
-    profile.role = role;
-    await this.profilesRepository.save(profile);
-
-    return this.buildStaffProfileResponse(profile, role);
+    return this.buildStaffProfileResponse(profile, member.role);
   }
 
   async resolveActorFromRequest(request: Request): Promise<ActorContext | null> {

@@ -52,6 +52,8 @@ import { PhoenixInvoiceDocumentPresentationService } from "./phoenix-invoice-doc
 import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
 import { FinanceAuditService } from "./finance-audit.service";
 import { FinanceAuditEventEntity } from "../database/entities/finance-audit-event.entity";
+import { UserEntity } from "../database/entities/user.entity";
+import { TechnicianAssignmentService } from "./technician-assignment.service";
 
 @Module({
   imports: [
@@ -87,6 +89,7 @@ import { FinanceAuditEventEntity } from "../database/entities/finance-audit-even
       BranchInvoiceSequenceEntity,
       MembershipBranchAccessEntity,
       FinanceAuditEventEntity,
+      UserEntity,
     ]),
   ],
   controllers: [CrmController, BranchesController],
@@ -110,6 +113,7 @@ import { FinanceAuditEventEntity } from "../database/entities/finance-audit-even
     InvoicePdfService,
     BranchScopeService,
     JobsService,
+    TechnicianAssignmentService,
   ],
   exports: [
     CrmOfficeDashboardService,
@@ -119,6 +123,7 @@ import { FinanceAuditEventEntity } from "../database/entities/finance-audit-even
     InvoicePaymentLedgerService,
     FinanceAuditService,
     BranchScopeService,
+    TechnicianAssignmentService,
     PhoenixInvoiceDocumentPresentationService,
     InvoicePdfViewModelService,
     InvoicePdfService,

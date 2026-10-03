@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Copy,
   LockKeyhole,
+  Pencil,
   ShieldCheck,
   Trash2,
   UserPlus,
@@ -13,11 +14,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { SessionRole } from "@/lib/auth/server-session";
 
+import TeamMemberEditModal from "./team-member-edit-modal";
+
 type TeamSummary = {
   activeCount: number;
   maxUsers: number;
   canAddUser: boolean;
   limitMessage: string | null;
+  assignmentEligibilityMode?: "off" | "shadow" | "enforce";
+  teamMemberEditEnabled?: boolean;
 };
 
 type PermissionPreviewRow = {
@@ -280,6 +285,11 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
   const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<string[]>([]);
   const [singleOrganizationId, setSingleOrganizationId] = useState<string>("");
   const [branchOptions, setBranchOptions] = useState<BranchOption[]>([]);
+  const [assignableToJobsOverride, setAssignableToJobsOverride] = useState<boolean | null>(null);
+  const [editMemberId, setEditMemberId] = useState<string | null>(null);
+
+  const defaultAssignableForRole = selectedSystemRole === "technician";
+  const assignableToJobsForCreate = assignableToJobsOverride ?? defaultAssignableForRole;
 
   const loadTeam = useCallback(async () => {
     setLoading(true);
@@ -363,6 +373,7 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
     setOrganizationAccessMode("single");
     setSelectedOrganizationIds([]);
     setSingleOrganizationId("");
+    setAssignableToJobsOverride(null);
   }
 
   function beginAddUserFlow() {
@@ -437,6 +448,8 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
       if (selectedOrganizationIds.length > 0) {
         body.organizationIds = selectedOrganizationIds;
       }
+
+      body.assignableToJobs = assignableToJobsForCreate;
 
       const result = await teamFetch<CreateMemberResult>("/api/team/members", {
         method: "POST",
@@ -806,6 +819,30 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
                       Saved custom roles are unavailable when assigning multiple organizations.
                     </p>
                   ) : null}
+                  <fieldset className="mt-4 space-y-2 text-sm">
+                    <legend className="font-medium text-[color:var(--sem-text-primary)]">Can be assigned to jobs?</legend>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={assignableToJobsForCreate}
+                        onChange={() => setAssignableToJobsOverride(true)}
+                      />
+                      Yes — show in job assignment selectors
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={!assignableToJobsForCreate}
+                        onChange={() => setAssignableToJobsOverride(false)}
+                      />
+                      No — team member without job assignment
+                    </label>
+                    {assignableToJobsOverride === null ? (
+                      <p className="text-xs text-[color:var(--sem-text-muted)]">
+                        Default for {selectedSystemRole === "technician" ? "Technician" : "this role"}: {defaultAssignableForRole ? "Yes" : "No"}.
+                      </p>
+                    ) : null}
+                  </fieldset>
                 </div>
                 <div className="rounded-[20px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] p-4">
                   <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">
@@ -915,19 +952,32 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
               <p className="text-[color:var(--sem-text-secondary)]">{member.user?.email ?? "—"}</p>
               <p className="text-[color:var(--sem-text-secondary)]">{member.access_label}</p>
               <p className="capitalize text-[color:var(--sem-text-secondary)]">{member.status}</p>
-              <div className="md:text-right">
+              <div className="flex flex-wrap justify-end gap-2 md:text-right">
                 {member.id === currentProfileId ? (
                   <span className="text-xs text-[color:var(--sem-text-muted)]">—</span>
                 ) : (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void handleRemoveMember(member)}
-                    className="theme-control-surface inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium text-red-300"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Remove
-                  </button>
+                  <>
+                    {summary?.teamMemberEditEnabled ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => setEditMemberId(member.id)}
+                        className="theme-control-surface inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void handleRemoveMember(member)}
+                      className="theme-control-surface inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium text-red-300"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -997,6 +1047,15 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
         {message ? <p className="mx-6 mb-4 text-sm text-[color:var(--sem-accent-primary)]">{message}</p> : null}
         {errorMessage ? <p className="mx-6 mb-4 text-sm text-red-400">{errorMessage}</p> : null}
       </section>
+
+      {editMemberId ? (
+        <TeamMemberEditModal
+          profileId={editMemberId}
+          customRoles={customRoles}
+          onClose={() => setEditMemberId(null)}
+          onSaved={() => void loadTeam()}
+        />
+      ) : null}
 
       <aside className="rounded-[30px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] p-5">
         <LockKeyhole className="h-8 w-8 text-[color:var(--sem-accent-primary)]" />

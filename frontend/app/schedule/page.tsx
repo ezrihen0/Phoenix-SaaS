@@ -26,7 +26,7 @@ export default async function SchedulePage({
   let techniciansLoadWarning: string | null = null;
 
   try {
-    technicians = await serverApiFetch<TechnicianRecord[]>("/api/technicians");
+    technicians = await serverApiFetch<TechnicianRecord[]>("/api/technicians?purpose=roster");
   } catch (error) {
     techniciansLoadWarning = error instanceof Error
       ? error.message

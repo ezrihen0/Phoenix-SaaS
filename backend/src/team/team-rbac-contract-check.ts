@@ -8,6 +8,10 @@ import {
 import { listPermissionsForMembership } from "./membership-permissions";
 import { recommendRoleFromResponsibilities } from "./role-recommendation.engine";
 import { DEFAULT_MAX_USERS, resolveMaxUsers } from "./team-entitlements";
+import {
+  defaultAssignableForSystemRole,
+  isExplicitAssignmentDenial,
+} from "./assignment-eligibility.mode";
 
 function expect(name: string, run: () => void) {
   try {
@@ -92,6 +96,13 @@ expect("permission registry contains team permissions", () => {
   assert.equal(roleModePermissions.includes("team.view"), true);
   assert.equal(roleModePermissions.includes("team.invite"), true);
   assert.equal(roleModePermissions.includes("team.manage"), true);
+});
+
+expect("assignment eligibility defaults and explicit denial", () => {
+  assert.equal(defaultAssignableForSystemRole("technician"), true);
+  assert.equal(defaultAssignableForSystemRole("dispatcher"), false);
+  assert.equal(isExplicitAssignmentDenial(false), true);
+  assert.equal(isExplicitAssignmentDenial(null), false);
 });
 
 if (process.exitCode) {

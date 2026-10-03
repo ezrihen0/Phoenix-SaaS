@@ -20,6 +20,7 @@ import { classifyFinanceInvoiceOrigin } from "./finance-invoice-origin";
 import { isCollectibleOpenInvoice } from "./finance-metrics.core";
 import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
+import { TechnicianAssignmentService } from "./technician-assignment.service";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -34,13 +35,6 @@ type DashboardControlItem = {
   scheduledFor: Date | null;
   occurredAt: Date | null;
   statusLabel: string;
-};
-
-const TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES = ["owner", "admin", "office_admin"] as const;
-const TECHNICIAN_FALLBACK_ROLE_PRIORITY: Record<(typeof TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES)[number], number> = {
-  owner: 0,
-  admin: 1,
-  office_admin: 2,
 };
 
 /**
@@ -88,6 +82,7 @@ export class CrmOfficeDashboardService {
     private readonly servicesRepository: Repository<ServiceEntity>,
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
     private readonly financeInvoicePresentationService: FinanceInvoicePresentationService,
+    private readonly technicianAssignmentService: TechnicianAssignmentService,
   ) {}
 
   private summarizeInvoiceLedger(invoice: InvoiceEntity) {
@@ -249,132 +244,10 @@ export class CrmOfficeDashboardService {
     return invoices.filter((invoice) => this.isOpenInvoice(invoice)).slice(0, take);
   }
 
-  private async provisionFallbackTechniciansIfNeeded(organizationId: string) {
-    const activeTechnicianCount = await this.techniciansRepository.countBy({
-      organization_id: organizationId,
-      is_active: true,
-    });
-
-    if (activeTechnicianCount > 0) {
-      return;
-    }
-
-    const memberships = await this.membershipsRepository.find({
-      where: {
-        organization_id: organizationId,
-        status: "active",
-        role: In([...TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES]),
-      },
-      relations: {
-        user: true,
-      },
-      order: {
-        created_at: "ASC",
-      },
-    });
-
-    if (memberships.length === 0) {
-      return;
-    }
-
-    const activeMemberships = memberships.filter((membership) => membership.user?.is_active === true);
-    if (activeMemberships.length === 0) {
-      return;
-    }
-
-    const sortedMemberships = [...activeMemberships].sort((left, right) => {
-      const leftPriority = TECHNICIAN_FALLBACK_ROLE_PRIORITY[left.role as keyof typeof TECHNICIAN_FALLBACK_ROLE_PRIORITY] ?? 99;
-      const rightPriority = TECHNICIAN_FALLBACK_ROLE_PRIORITY[right.role as keyof typeof TECHNICIAN_FALLBACK_ROLE_PRIORITY] ?? 99;
-
-      if (leftPriority !== rightPriority) {
-        return leftPriority - rightPriority;
-      }
-
-      return left.created_at.getTime() - right.created_at.getTime();
-    });
-
-    const userIds = Array.from(new Set(sortedMemberships.map((membership) => membership.user_id)));
-    if (userIds.length === 0) {
-      return;
-    }
-
-    const [profiles, organizationTechnicians] = await Promise.all([
-      this.profilesRepository.find({
-        where: {
-          auth_user_id: In(userIds),
-        },
-      }),
-      this.techniciansRepository.find({
-        where: {
-          organization_id: organizationId,
-          auth_user_id: In(userIds),
-        },
-      }),
-    ]);
-
-    const profileByUserId = new Map(profiles.map((profile) => [profile.auth_user_id, profile] as const));
-    const organizationTechnicianByUserId = new Map<string, TechnicianEntity>();
-    for (const technician of organizationTechnicians) {
-      if (technician.auth_user_id) {
-        organizationTechnicianByUserId.set(technician.auth_user_id, technician);
-      }
-    }
-
-    for (const membership of sortedMemberships) {
-      const existingInOrganization = organizationTechnicianByUserId.get(membership.user_id);
-      const profile = profileByUserId.get(membership.user_id);
-      const displayName = profile?.full_name?.trim() || membership.user?.email?.trim() || "Staff Member";
-      const phone = profile?.phone ?? null;
-
-      if (existingInOrganization) {
-        let shouldSave = false;
-
-        if (!existingInOrganization.is_active) {
-          existingInOrganization.is_active = true;
-          shouldSave = true;
-        }
-
-        if (existingInOrganization.display_name !== displayName) {
-          existingInOrganization.display_name = displayName;
-          shouldSave = true;
-        }
-
-        if ((existingInOrganization.phone ?? null) !== phone) {
-          existingInOrganization.phone = phone;
-          shouldSave = true;
-        }
-
-        if (shouldSave) {
-          await this.techniciansRepository.save(existingInOrganization);
-        }
-
-        continue;
-      }
-
-      const created = await this.techniciansRepository.save(
-        this.techniciansRepository.create({
-          organization_id: organizationId,
-          auth_user_id: membership.user_id,
-          display_name: displayName,
-          phone,
-          specialties: [],
-          is_active: true,
-        }),
-      );
-      organizationTechnicianByUserId.set(membership.user_id, created);
-    }
-  }
-
   private async listTechniciansWithV1FallbackForDashboard(organizationId: string) {
-    await this.provisionFallbackTechniciansIfNeeded(organizationId);
-
-    return this.techniciansRepository.find({
-      where: {
-        organization_id: organizationId,
-      },
-      order: {
-        display_name: "ASC",
-      },
+    return this.technicianAssignmentService.listTechniciansForOrganization(organizationId, {
+      activeOnly: false,
+      purpose: "roster",
     });
   }
 

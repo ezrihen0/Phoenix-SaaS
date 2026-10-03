@@ -105,6 +105,7 @@ import { ServiceEntity } from "../database/entities/service.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
 import { startOfLocalDashboardDay } from "./crm-dashboard-time-window";
 import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
+import { TechnicianAssignmentService } from "./technician-assignment.service";
 import { CustomerPortalService } from "../customer-portal/customer-portal.service";
 import { DocumentBrandingSnapshotService } from "../documents/pdf/document-branding-snapshot.service";
 import { setPdfDownloadResponseHeaders } from "../documents/pdf/pdf-download-response";
@@ -204,12 +205,6 @@ type LeadIdentityInput = {
   description: string | null;
 };
 
-const TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES = ["owner", "admin", "office_admin"] as const;
-const TECHNICIAN_FALLBACK_ROLE_PRIORITY: Record<(typeof TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES)[number], number> = {
-  owner: 0,
-  admin: 1,
-  office_admin: 2,
-};
 const ORGANIZATION_SETTINGS_KEY = "default";
 
 @UseGuards(SessionGuard, OperationalAccessGuard)
@@ -265,6 +260,7 @@ export class CrmController {
     private readonly financeInvoicePresentationService: FinanceInvoicePresentationService,
     private readonly financeAuditService: FinanceAuditService,
     private readonly branchScopeService: BranchScopeService,
+    private readonly technicianAssignmentService: TechnicianAssignmentService,
     private readonly configService: ConfigService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -305,20 +301,10 @@ export class CrmController {
     technicianId: string | null | undefined,
     organizationId: string,
   ) {
-    if (technicianId == null) {
-      return;
-    }
-
-    const technician = await this.techniciansRepository.findOne({
-      where: {
-        id: technicianId,
-        organization_id: organizationId,
-      },
-    });
-
-    if (!technician) {
-      apiError(404, "technician_not_found", "The technician could not be found.");
-    }
+    await this.technicianAssignmentService.assertTechnicianAssignableForNewAssignment(
+      technicianId,
+      organizationId,
+    );
   }
 
   private async requireServiceInOrganization(
@@ -828,132 +814,14 @@ export class CrmController {
     }
   }
 
-  private async provisionFallbackTechniciansIfNeeded(organizationId: string) {
-    const activeTechnicianCount = await this.techniciansRepository.countBy({
-      organization_id: organizationId,
-      is_active: true,
-    });
-
-    if (activeTechnicianCount > 0) {
-      return;
-    }
-
-    const memberships = await this.membershipsRepository.find({
-      where: {
-        organization_id: organizationId,
-        status: "active",
-        role: In([...TECHNICIAN_FALLBACK_MEMBERSHIP_ROLES]),
-      },
-      relations: {
-        user: true,
-      },
-      order: {
-        created_at: "ASC",
-      },
-    });
-
-    if (memberships.length === 0) {
-      return;
-    }
-
-    const activeMemberships = memberships.filter((membership) => membership.user?.is_active === true);
-    if (activeMemberships.length === 0) {
-      return;
-    }
-
-    const sortedMemberships = [...activeMemberships].sort((left, right) => {
-      const leftPriority = TECHNICIAN_FALLBACK_ROLE_PRIORITY[left.role as keyof typeof TECHNICIAN_FALLBACK_ROLE_PRIORITY] ?? 99;
-      const rightPriority = TECHNICIAN_FALLBACK_ROLE_PRIORITY[right.role as keyof typeof TECHNICIAN_FALLBACK_ROLE_PRIORITY] ?? 99;
-
-      if (leftPriority !== rightPriority) {
-        return leftPriority - rightPriority;
-      }
-
-      return left.created_at.getTime() - right.created_at.getTime();
-    });
-
-    const userIds = Array.from(new Set(sortedMemberships.map((membership) => membership.user_id)));
-    if (userIds.length === 0) {
-      return;
-    }
-
-    const [profiles, organizationTechnicians] = await Promise.all([
-      this.profilesRepository.find({
-        where: {
-          auth_user_id: In(userIds),
-        },
-      }),
-      this.techniciansRepository.find({
-        where: {
-          organization_id: organizationId,
-          auth_user_id: In(userIds),
-        },
-      }),
-    ]);
-
-    const profileByUserId = new Map(profiles.map((profile) => [profile.auth_user_id, profile] as const));
-    const organizationTechnicianByUserId = new Map<string, TechnicianEntity>();
-    for (const technician of organizationTechnicians) {
-      if (technician.auth_user_id) {
-        organizationTechnicianByUserId.set(technician.auth_user_id, technician);
-      }
-    }
-
-    for (const membership of sortedMemberships) {
-      const existingInOrganization = organizationTechnicianByUserId.get(membership.user_id);
-      const profile = profileByUserId.get(membership.user_id);
-      const displayName = profile?.full_name?.trim() || membership.user?.email?.trim() || "Staff Member";
-      const phone = profile?.phone ?? null;
-
-      if (existingInOrganization) {
-        let shouldSave = false;
-
-        if (!existingInOrganization.is_active) {
-          existingInOrganization.is_active = true;
-          shouldSave = true;
-        }
-
-        if (existingInOrganization.display_name !== displayName) {
-          existingInOrganization.display_name = displayName;
-          shouldSave = true;
-        }
-
-        if ((existingInOrganization.phone ?? null) !== phone) {
-          existingInOrganization.phone = phone;
-          shouldSave = true;
-        }
-
-        if (shouldSave) {
-          await this.techniciansRepository.save(existingInOrganization);
-        }
-
-        continue;
-      }
-
-      const created = await this.techniciansRepository.save(
-        this.techniciansRepository.create({
-          organization_id: organizationId,
-          auth_user_id: membership.user_id,
-          display_name: displayName,
-          phone,
-          specialties: [],
-          is_active: true,
-        }),
-      );
-      organizationTechnicianByUserId.set(membership.user_id, created);
-    }
-  }
-
-  private async listTechniciansWithV1Fallback(organizationId: string, activeOnly: boolean) {
-    await this.provisionFallbackTechniciansIfNeeded(organizationId);
-
-    return this.techniciansRepository.find({
-      where: activeOnly
-        ? { organization_id: organizationId, is_active: true }
-        : { organization_id: organizationId },
-      order: {
-        display_name: "ASC",
-      },
+  private async listTechniciansForOrganization(
+    organizationId: string,
+    activeOnly: boolean,
+    purpose: "assignment" | "roster",
+  ) {
+    return this.technicianAssignmentService.listTechniciansForOrganization(organizationId, {
+      activeOnly,
+      purpose,
     });
   }
 
@@ -1020,8 +888,26 @@ export class CrmController {
       }
 
       if (payload.assignedTechnicianId !== undefined) {
-        await this.requireTechnicianInOrganization(payload.assignedTechnicianId, organizationId);
+        if (
+          payload.assignedTechnicianId !== null
+          && payload.assignedTechnicianId !== job.assigned_technician_id
+        ) {
+          await this.requireTechnicianInOrganization(payload.assignedTechnicianId, organizationId);
+        }
         updates.assigned_technician_id = payload.assignedTechnicianId;
+      }
+
+      const nextScheduledFor = payload.scheduledFor !== undefined
+        ? (payload.scheduledFor ? new Date(payload.scheduledFor) : null)
+        : job.scheduled_for;
+      const nextAssignee = payload.assignedTechnicianId !== undefined
+        ? payload.assignedTechnicianId
+        : job.assigned_technician_id;
+      if (nextScheduledFor && !nextAssignee) {
+        apiError(400, "scheduled_job_requires_technician", "Scheduled jobs require an assigned technician.");
+      }
+      if (!nextScheduledFor && nextAssignee && payload.assignedTechnicianId !== undefined) {
+        apiError(400, "unscheduled_job_cannot_assign_technician", "Unscheduled jobs cannot assign a technician.");
       }
 
       if (payload.serviceId !== undefined) {
@@ -3370,6 +3256,7 @@ export class CrmController {
   async listTechnicians(
     @Req() request: RequestWithActor,
     @Query("active") active?: string,
+    @Query("purpose") purpose?: string,
   ) {
     const actor = this.requireActor(request);
     requireTechnicianRosterViewPermission(
@@ -3381,8 +3268,13 @@ export class CrmController {
 
     try {
       const activeOnly = active === undefined ? true : active === "true";
+      const listPurpose = purpose?.trim().toLowerCase() === "roster" ? "roster" : "assignment";
 
-      const technicians = await this.listTechniciansWithV1Fallback(organizationId, activeOnly);
+      const technicians = await this.listTechniciansForOrganization(
+        organizationId,
+        activeOnly,
+        listPurpose,
+      );
 
       return apiSuccess(technicians);
     } catch (error) {

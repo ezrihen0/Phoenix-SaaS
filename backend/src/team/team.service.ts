@@ -13,6 +13,10 @@ import {
 } from "../auth/permissions";
 import { profileRoles, type ProfileRole } from "../crm/constants";
 import { ensureTechnicianForOrganizationMembership } from "../crm/technician-membership-link";
+import {
+  defaultAssignableForSystemRole,
+  readAssignmentEligibilityMode,
+} from "./assignment-eligibility.mode";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
 import { OrganizationCustomRoleEntity } from "../database/entities/organization-custom-role.entity";
@@ -39,6 +43,16 @@ type MemberAccessInput = {
   systemRole?: ProfileRole;
   customRoleId?: string | null;
   customPermissionKeys?: RoleModePermission[] | null;
+  assignableToJobs?: boolean;
+};
+
+type CreateMemberTransactionInput = {
+  email: string;
+  password: string;
+  fullName: string;
+  phone: string | null;
+  access: MemberAccessInput;
+  assignableToJobs?: boolean;
 };
 
 @Injectable()
@@ -71,7 +85,17 @@ export class TeamService {
       limitMessage: activeCount >= resolveMaxUsers(entitlement)
         ? `Your organization has reached its ${resolveMaxUsers(entitlement)}-user limit.`
         : null,
+      assignmentEligibilityMode: readAssignmentEligibilityMode(),
+      teamMemberEditEnabled: (process.env.TEAM_MEMBER_EDIT_UI_ENABLED ?? "").trim().toLowerCase() === "true",
     };
+  }
+
+  getAssignmentEligibilityModePublic() {
+    return readAssignmentEligibilityMode();
+  }
+
+  buildMemberResponsePublic(profile: ProfileEntity, membership: MembershipEntity) {
+    return this.buildMemberResponse(profile, membership);
   }
 
   async listManageableOrganizations(actor: ActorContext) {
@@ -150,14 +174,7 @@ export class TeamService {
   }
 
   async createMember(
-    input: {
-      email: string;
-      password: string;
-      fullName: string;
-      phone: string | null;
-      access: MemberAccessInput;
-      organizationIds?: string[];
-    },
+    input: CreateMemberTransactionInput & { organizationIds?: string[] },
     actor: ActorContext,
   ) {
     const targetOrganizationIds = this.resolveTargetOrganizationIds(actor, input.organizationIds);
@@ -198,8 +215,6 @@ export class TeamService {
     actor: ActorContext,
   ) {
     const organizationId = this.requireOrganizationId(actor);
-    this.assertAccessInput(access);
-
     const profile = await this.profilesRepository.findOne({
       where: { id: profileId },
       relations: { user: true },
@@ -215,9 +230,7 @@ export class TeamService {
         organization_id: organizationId,
         status: In([...seatOccupyingStatuses, "suspended"]),
       },
-      relations: {
-        custom_role: true,
-      },
+      relations: { custom_role: true },
     });
 
     if (!membership) {
@@ -231,8 +244,35 @@ export class TeamService {
     const previousPermissions = listPermissionsForMembership(membership);
     const previousRole = membership.role;
 
-    this.assertOwnerMutationAllowed(previousRole, access);
+    await this.dataSource.transaction(async (manager) => {
+      await this.applyMembershipAccessUpdate(manager, actor, profile, membership, access);
+      await this.recordAudit(manager, {
+        organizationId,
+        actorUserId: actor.user.id,
+        targetUserId: profile.auth_user_id,
+        action: "member_access_updated",
+        previousRole,
+        newRole: membership.role,
+        previousPermissions,
+        newPermissions: listPermissionsForMembership(membership),
+        metadata: { custom_role_id: membership.custom_role_id },
+      });
+    });
 
+    return this.buildMemberResponse(profile, membership);
+  }
+
+  async applyMembershipAccessUpdate(
+    manager: EntityManager,
+    actor: ActorContext,
+    profile: ProfileEntity,
+    membership: MembershipEntity,
+    access: MemberAccessInput,
+  ) {
+    this.assertAccessInput(access);
+    const organizationId = membership.organization_id;
+    const previousRole = membership.role;
+    this.assertOwnerMutationAllowed(previousRole, access);
     const resolvedAccess = await this.resolveAccessForOrganization(organizationId, access);
 
     if (isProtectedOwnerRole(previousRole) && !isProtectedOwnerRole(resolvedAccess.systemRole)) {
@@ -242,27 +282,8 @@ export class TeamService {
     membership.role = resolvedAccess.systemRole;
     membership.custom_role_id = resolvedAccess.customRoleId;
     membership.custom_permission_keys = resolvedAccess.customPermissionKeys;
-    await this.membershipsRepository.save(membership);
-
-    profile.role = resolvedAccess.systemRole;
-    await this.profilesRepository.save(profile);
-
-    await this.recordAudit(this.dataSource.manager, {
-      organizationId,
-      actorUserId: actor.user.id,
-      targetUserId: profile.auth_user_id,
-      action: "member_access_updated",
-      previousRole,
-      newRole: resolvedAccess.systemRole,
-      previousPermissions,
-      newPermissions: resolvedAccess.effectivePermissions,
-      metadata: {
-        custom_role_id: resolvedAccess.customRoleId,
-      },
-    });
-
+    await manager.getRepository(MembershipEntity).save(membership);
     membership.custom_role = resolvedAccess.customRole;
-    return this.buildMemberResponse(profile, membership);
   }
 
   async removeMember(profileId: string, actor: ActorContext) {
@@ -548,12 +569,7 @@ export class TeamService {
   }
 
   private async createNewUserAcrossOrganizations(
-    input: {
-      email: string;
-      password: string;
-      fullName: string;
-      phone: string | null;
-    },
+    input: CreateMemberTransactionInput,
     actor: ActorContext,
     targetOrganizationIds: string[],
     resolvedAccess: Awaited<ReturnType<TeamService["resolveAccessForOrganization"]>>,
@@ -586,11 +602,15 @@ export class TeamService {
       const memberships: MembershipEntity[] = [];
 
       for (const organizationId of sortedOrganizationIds) {
+        const assignableToJobs = input.assignableToJobs
+          ?? input.access.assignableToJobs
+          ?? defaultAssignableForSystemRole(resolvedAccess.systemRole);
         const membership = await this.createMembershipWithSideEffects(manager, {
           organizationId,
           userId: user.id,
           profile,
           resolvedAccess,
+          assignableToJobs,
           actorUserId: actor.user.id,
           auditMetadata: {
             user_created: true,
@@ -615,12 +635,7 @@ export class TeamService {
   }
 
   private async attachExistingUserToOrganizations(
-    input: {
-      email: string;
-      password: string;
-      fullName: string;
-      phone: string | null;
-    },
+    input: CreateMemberTransactionInput,
     actor: ActorContext,
     targetOrganizationIds: string[],
     resolvedAccess: Awaited<ReturnType<TeamService["resolveAccessForOrganization"]>>,
@@ -635,7 +650,32 @@ export class TeamService {
       apiError(409, "team_email_exists", "A user already exists for this email.");
     }
 
-    if (profile.role !== resolvedAccess.systemRole) {
+    const existingMemberships = await this.membershipsRepository.find({
+      where: { user_id: existingUser.id },
+    });
+
+    const existingInTargetOrg = existingMemberships.find(
+      (membership) => targetOrganizationIds.includes(membership.organization_id),
+    );
+    if (
+      existingInTargetOrg
+      && existingInTargetOrg.role !== resolvedAccess.systemRole
+    ) {
+      apiError(
+        409,
+        "existing_user_role_conflict",
+        "A user already exists for this email.",
+      );
+    }
+
+    const otherOrgMemberships = existingMemberships.filter(
+      (membership) => !targetOrganizationIds.includes(membership.organization_id),
+    );
+    if (
+      otherOrgMemberships.length > 0
+      && profile.role !== resolvedAccess.systemRole
+      && !existingInTargetOrg
+    ) {
       apiError(
         409,
         "existing_user_role_conflict",
@@ -644,9 +684,6 @@ export class TeamService {
     }
 
     const actorManageableOrganizationIds = new Set(this.listManageableOrganizationIds(actor));
-    const existingMemberships = await this.membershipsRepository.find({
-      where: { user_id: existingUser.id },
-    });
 
     const sharesManagedOrganization = existingMemberships.some((membership) =>
       actorManageableOrganizationIds.has(membership.organization_id),
@@ -696,11 +733,15 @@ export class TeamService {
       const createdMemberships: MembershipEntity[] = [];
 
       for (const organizationId of sortedOrganizationsToCreate) {
+        const assignableToJobs = input.assignableToJobs
+          ?? input.access.assignableToJobs
+          ?? defaultAssignableForSystemRole(resolvedAccess.systemRole);
         const membership = await this.createMembershipWithSideEffects(manager, {
           organizationId,
           userId: existingUser.id,
           profile,
           resolvedAccess,
+          assignableToJobs,
           actorUserId: actor.user.id,
           auditMetadata: {
             user_created: false,
@@ -746,6 +787,7 @@ export class TeamService {
       userId: string;
       profile: ProfileEntity;
       resolvedAccess: Awaited<ReturnType<TeamService["resolveAccessForOrganization"]>>;
+      assignableToJobs: boolean;
       actorUserId: string;
       auditMetadata: Record<string, unknown>;
     },
@@ -758,6 +800,7 @@ export class TeamService {
         status: "active",
         custom_role_id: input.resolvedAccess.customRoleId,
         custom_permission_keys: input.resolvedAccess.customPermissionKeys,
+        assignable_to_jobs: input.assignableToJobs,
       }),
     );
 
@@ -776,13 +819,17 @@ export class TeamService {
       },
     });
 
-    if (input.resolvedAccess.systemRole === "technician") {
-      await ensureTechnicianForOrganizationMembership(manager, {
-        organizationId: input.organizationId,
-        userId: input.userId,
-        displayName: input.profile.full_name,
-        phone: input.profile.phone,
-      });
+    if (input.assignableToJobs) {
+      await ensureTechnicianForOrganizationMembership(
+        manager,
+        {
+          organizationId: input.organizationId,
+          userId: input.userId,
+          displayName: input.profile.full_name,
+          phone: input.profile.phone,
+        },
+        { allowCreate: true, allowReactivate: false },
+      );
     }
 
     membership.custom_role = input.resolvedAccess.customRole;
@@ -1029,6 +1076,7 @@ export class TeamService {
       role: membership.role,
       access_label: accessLabel,
       status: membership.status,
+      assignable_to_jobs: membership.assignable_to_jobs,
       custom_role_id: membership.custom_role_id,
       custom_permission_keys: membership.custom_permission_keys,
       permissions: effectivePermissions,
