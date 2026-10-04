@@ -18,8 +18,8 @@ const importSource = readFileSync(join(root, "phoenix-field-report-import.servic
 const controllerSource = readFileSync(join(root, "phoenix-field-report.controller.ts"), "utf8");
 const accessSource = readFileSync(join(root, "phoenix-field-report-access.service.ts"), "utf8");
 
-expectIncludes(accessSource, "MICHAEL_HISTORICAL_REPORT_USER_EMAIL", "Access service must read Michael allowlist env.");
 expectIncludes(accessSource, "PHOENIX_FIELD_REPORT_ORG_SLUG", "Access service must enforce Phoenix org slug.");
+expectExcludes(accessSource, "MICHAEL_HISTORICAL_REPORT_USER_EMAIL", "Access must not use email allowlist env.");
 expectIncludes(controllerSource, "PhoenixFieldReportAccessGuard", "Controller must use access guard.");
 expectIncludes(controllerSource, "SessionGuard", "Controller must use session guard.");
 expectExcludes(importSource, "InvoiceSendPipelineService", "Import must not call invoice send pipeline.");

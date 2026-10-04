@@ -26,17 +26,6 @@ export class PhoenixFieldReportAccessService {
     return raw !== "false" && raw !== "0";
   }
 
-  readAllowlistedEmails() {
-    const owner = PHOENIX_OWNER_EMAIL.trim().toLowerCase();
-    const michael = this.configService.get<string>("MICHAEL_HISTORICAL_REPORT_USER_EMAIL")?.trim().toLowerCase();
-    const emails = new Set<string>([owner]);
-    if (michael) {
-      emails.add(michael);
-    }
-
-    return emails;
-  }
-
   assertFeatureAvailable() {
     if (!this.isFeatureEnabled()) {
       apiError(404, "michael_report_disabled", "This report entry page is not available.");
@@ -75,9 +64,8 @@ export class PhoenixFieldReportAccessService {
   assertActorMayAccess(actor: ActorContext) {
     this.assertFeatureAvailable();
 
-    const email = actor.user.email?.trim().toLowerCase();
-    if (!email || !this.readAllowlistedEmails().has(email)) {
-      apiError(403, "michael_report_forbidden", "This account cannot access the historical work report.");
+    if (!actor.user.email?.trim()) {
+      apiError(403, "michael_report_forbidden", "Sign in to use the historical work report.");
     }
 
     const orgSlug = actor.organization?.slug?.trim().toLowerCase();

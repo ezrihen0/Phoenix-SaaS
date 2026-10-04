@@ -1,6 +1,6 @@
 # Michael Field Historical Report — Production Verification
 
-This checklist is **post-deploy** verification on `https://app.phoenixfireplace.ca`. It is separate from local harness runs (`npm run phoenix-field-report:smoke --workspace backend`).
+This checklist is **post-deploy** verification on `https://app.phoenixfireplace.ca` only. Do **not** use `app.wizfield.com` for Michael report rollout (rollback surface). Deploy with `npm run deploy:phoenix-app --workspace backend` or Vercel project **`pheonix-crm-frontend-6bxw`**. Separate from local harness runs (`npm run phoenix-field-report:smoke --workspace backend`).
 
 ## Preconditions
 
@@ -10,7 +10,7 @@ This checklist is **post-deploy** verification on `https://app.phoenixfireplace.
 
 ## Verification steps
 
-1. **Access:** Michael and owner can open `/michaelreport`; other staff accounts are redirected; wrong organization session returns forbidden from API.
+1. **Access:** Any signed-in Phoenix org staff user can open `/michaelreport`; wrong organization session is redirected; owner-only actions remain closeout / inbox verification.
 2. **Draft persistence:** Enter complete and incomplete jobs (empty customer names, partial parts costs, multiple product lines). Confirm header shows **Saving…** then **Saved**. Hard-refresh immediately after typing, close/reopen the tab, and briefly go offline — every field (including warranty toggles and extra job rows) restores without duplicate CRM rows. Report recipient email is only required at review/submit.
 3. **Submit:** Enter report delivery email on the review step (independent of login). Submit one paid and one unpaid job — CRM shows completed jobs, native invoice numbers, ledger payments match amounts received.
 4. **PDF:** Download link returns a PDF with customer, work date, sold items, warranty, parts (description, qty, cost incl. tax), review status, payment details, and overall totals (sale before tax, tax, sale incl. tax, parts incl. tax, remaining after parts).

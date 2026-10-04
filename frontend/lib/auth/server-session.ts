@@ -192,17 +192,6 @@ export async function requireServerPermission(nextPath: string, permission: stri
   return session;
 }
 
-function readMichaelReportAllowlistedEmails() {
-  const owner = (process.env.PHOENIX_OWNER_EMAIL ?? "service@phoenixfireplace.ca").trim().toLowerCase();
-  const michael = process.env.MICHAEL_HISTORICAL_REPORT_USER_EMAIL?.trim().toLowerCase();
-  const emails = new Set<string>([owner]);
-  if (michael) {
-    emails.add(michael);
-  }
-
-  return emails;
-}
-
 export async function requireMichaelReportRoute(nextPath: string) {
   const enabledRaw = process.env.MICHAEL_HISTORICAL_REPORT_ENABLED?.trim().toLowerCase();
   if (enabledRaw === "false" || enabledRaw === "0") {
@@ -210,12 +199,10 @@ export async function requireMichaelReportRoute(nextPath: string) {
   }
 
   const session = await requireServerSession(nextPath);
-  const email = session.user.email.trim().toLowerCase();
   const orgSlug = session.active_organization?.slug?.trim().toLowerCase();
 
-  if (!readMichaelReportAllowlistedEmails().has(email) || orgSlug !== "phoenix-fireplace") {
-    const destination = await getServerDestination();
-    redirect(destination ?? "/home");
+  if (orgSlug !== "phoenix-fireplace") {
+    redirect("/home");
   }
 
   return session;
