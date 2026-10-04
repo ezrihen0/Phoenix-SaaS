@@ -93,3 +93,59 @@ export function assertClientTotalMatchesEngine(
     );
   }
 }
+
+/**
+ * Split a tax-inclusive total into subtotal + tax using the branch rate (bps).
+ * Ensures subtotalCents + taxCents === totalCents after penny adjustment.
+ */
+export function computeTaxInclusiveDocumentTotals(
+  totalCents: number,
+  taxRateBps: number,
+): DocumentTotals {
+  if (!Number.isInteger(totalCents) || totalCents < 0) {
+    throw new Error("Tax-inclusive total must be a non-negative integer number of cents.");
+  }
+
+  if (!Number.isInteger(taxRateBps) || taxRateBps < 0) {
+    throw new Error("Tax rate must be a non-negative integer number of basis points.");
+  }
+
+  if (totalCents === 0) {
+    return {
+      subtotalCents: 0,
+      taxRateBpsSnapshot: taxRateBps,
+      taxCents: 0,
+      totalCents: 0,
+    };
+  }
+
+  if (taxRateBps === 0) {
+    return {
+      subtotalCents: totalCents,
+      taxRateBpsSnapshot: 0,
+      taxCents: 0,
+      totalCents,
+    };
+  }
+
+  const denominator = 10_000 + taxRateBps;
+  let subtotalCents = Math.round((totalCents * 10_000) / denominator);
+  let taxCents = totalCents - subtotalCents;
+
+  const recomputedTax = Math.round((subtotalCents * taxRateBps) / 10_000);
+  if (recomputedTax !== taxCents) {
+    subtotalCents = totalCents - recomputedTax;
+    taxCents = recomputedTax;
+  }
+
+  if (subtotalCents + taxCents !== totalCents) {
+    throw new Error("Tax-inclusive split could not reconcile to the declared total.");
+  }
+
+  return {
+    subtotalCents,
+    taxRateBpsSnapshot: taxRateBps,
+    taxCents,
+    totalCents,
+  };
+}

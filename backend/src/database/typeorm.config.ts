@@ -73,6 +73,9 @@ import { PricebookCategoryEntity } from "./entities/pricebook-category.entity";
 import { PricebookItemEntity } from "./entities/pricebook-item.entity";
 import { PricebookSystemEntity } from "./entities/pricebook-system.entity";
 import { ProfileEntity } from "./entities/profile.entity";
+import { PhoenixFieldHistoricalReportBatchEntity } from "./entities/phoenix-field-historical-report-batch.entity";
+import { PhoenixFieldHistoricalReportEntryEntity } from "./entities/phoenix-field-historical-report-entry.entity";
+import { PhoenixFieldHistoricalReportOrgLockEntity } from "./entities/phoenix-field-historical-report-org-lock.entity";
 import { PublicBookingSubmissionEntity } from "./entities/public-booking-submission.entity";
 import { QuoteEntity } from "./entities/quote.entity";
 import { QuoteLineItemEntity } from "./entities/quote-line-item.entity";
@@ -110,6 +113,9 @@ export const typeOrmEntities = [
   CustomerEntity,
   LeadEntity,
   PublicBookingSubmissionEntity,
+  PhoenixFieldHistoricalReportBatchEntity,
+  PhoenixFieldHistoricalReportEntryEntity,
+  PhoenixFieldHistoricalReportOrgLockEntity,
   MarketingProfileEntity,
   MarketingConnectedChannelEntity,
   MarketingCampaignEntity,

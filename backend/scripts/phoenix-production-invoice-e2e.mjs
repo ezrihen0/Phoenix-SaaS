@@ -8,6 +8,10 @@ config({ path: resolve(process.cwd(), "backend/.env") });
 config({ path: resolve(process.cwd(), ".env") });
 
 const BASE = process.env.PHOENIX_VERIFY_BASE_URL?.trim() || "https://app.phoenixfireplace.ca";
+const PORTAL =
+  process.env.PHOENIX_PORTAL_VERIFY_BASE_URL?.trim()
+  || process.env.CUSTOMER_PORTAL_BASE_URL?.trim()
+  || "https://portal.phoenixfireplace.ca";
 const EMAIL = process.env.PHOENIX_OWNER_EMAIL?.trim();
 const PASSWORD = process.env.PHOENIX_OWNER_PASSWORD?.trim();
 const INVOICE_ID = process.env.E2E_INVOICE_ID?.trim() || "cc8e393a-b29f-41d2-a6b3-9188251ed596";
@@ -97,7 +101,14 @@ async function main() {
     has_raw_token: Boolean(rawToken),
   });
 
-  const redeemResponse = await fetch(`${BASE}/api/portal/magic-links/redeem`, {
+  const portalAccessPage = await fetch(`${PORTAL}/access/${encodeURIComponent(rawToken)}`);
+  const portalAccessHtml = await portalAccessPage.text().catch(() => "");
+  record("portal_host_access_page", portalAccessPage.status === 200 && portalAccessHtml.includes("Opening your customer portal"), {
+    status: portalAccessPage.status,
+    portal_host: PORTAL,
+  });
+
+  const redeemResponse = await fetch(`${PORTAL}/api/portal/magic-links/redeem`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ token: rawToken }),
@@ -107,9 +118,18 @@ async function main() {
   record("portal_redeem_magic_link", redeemResponse.status === 200 || redeemResponse.status === 201, {
     status: redeemResponse.status,
     redirect: redeemBody?.data?.redirect_path ?? null,
+    portal_host: PORTAL,
   });
 
-  const pdfResponse = await fetch(`${BASE}/api/portal/invoices/${INVOICE_ID}/pdf`, {
+  const invoicePage = await fetch(`${PORTAL}/portal/invoices/${INVOICE_ID}`, {
+    headers: portalCookie ? { cookie: portalCookie } : {},
+  });
+  record("portal_host_invoice_page_refresh", invoicePage.status === 200, {
+    status: invoicePage.status,
+    portal_host: PORTAL,
+  });
+
+  const pdfResponse = await fetch(`${PORTAL}/api/portal/invoices/${INVOICE_ID}/pdf`, {
     headers: portalCookie ? { cookie: portalCookie } : {},
   });
   const pdfBytes = pdfResponse.ok ? (await pdfResponse.arrayBuffer()).byteLength : 0;

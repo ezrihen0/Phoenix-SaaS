@@ -42,6 +42,8 @@ Phoenix Fireplace operates on the **existing production `wizfield` database** wi
 | Customer portal (invoice / access links) | `https://portal.phoenixfireplace.ca` |
 | Rollback staff surface (kept during verification) | `https://app.wizfield.com` |
 
+**Portal host routing:** Customer invoice links must resolve on `portal.phoenixfireplace.ca` to the Phoenix CRM Next.js app (`/access/[token]`, `/portal/invoices/[invoiceId]`). Production uses the same Vercel deployment as `app.phoenixfireplace.ca` (Cloudflare Worker `phoenix-portal-host-proxy` on `portal.phoenixfireplace.ca/*` until `portal.phoenixfireplace.ca` is attached directly on Vercel project `pheonix-crm-frontend-6bxw`). Verify with `npm run phoenix-portal-host-routing:verify --workspace backend`.
+
 WizField SaaS commercialization remains **paused** (not deleted). Multi-tenant architecture, tenant isolation, and finance/portal behavior are unchanged; only required production identity and domain configuration were updated.
 
 Prior **CONDITIONAL GO** items below still apply where not explicitly closed by owner action (legal drafts, optional uploaded-file backup evidence beyond the 2026-10-03 logical DB backup).

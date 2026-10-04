@@ -22,6 +22,7 @@ import {
   loginWithPassword,
 } from "@/lib/auth/client-auth";
 import { resolvePostLoginPath } from "@/lib/auth/post-login-redirect";
+import { CRM_BRAND_NAME, CRM_LOGO_ALT, CRM_LOGO_SRC } from "@/lib/branding/crm-brand";
 
 export const SHOW_LEGACY_LOGIN = false;
 
@@ -439,8 +440,13 @@ function LegacyLoginForm() {
 
       <div className="relative mx-auto grid min-h-screen max-w-7xl items-center gap-12 px-6 py-10 lg:grid-cols-[minmax(0,1.1fr)_480px] lg:px-10">
         <section className="max-w-2xl">
-          <p className="text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
-            Phoenix CRM
+          <img
+            src={CRM_LOGO_SRC}
+            alt={CRM_LOGO_ALT}
+            className="h-14 w-auto max-w-[min(100%,16rem)] object-contain object-left"
+          />
+          <p className="mt-5 text-[11px] uppercase tracking-[0.42em] text-[color:var(--flat-gold)]">
+            {CRM_BRAND_NAME}
           </p>
           <h1 className="mt-5 max-w-xl font-[family:var(--font-flat-display)] text-5xl leading-none tracking-tight text-[#f5ecd2] md:text-7xl">
             Dispatch the workday before the first truck rolls.

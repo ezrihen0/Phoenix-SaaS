@@ -36,6 +36,7 @@ import { GlobalSearchShell } from "@/features/global-search/global-search-shell"
 import { getClientDestination, getClientSession } from "@/lib/auth/client-auth";
 import { handleLogout } from "@/lib/auth/logout";
 import { isShellNavHrefVisible, type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
+import { CRM_BRAND_NAME, CRM_LOGO_ALT, CRM_LOGO_SRC } from "@/lib/branding/crm-brand";
 import { resolveMobilePrimaryNav } from "@/lib/navigation/mobile-shell-nav";
 
 type AppShellProps = {
@@ -404,11 +405,13 @@ export function AppShell({ children }: AppShellProps) {
                 >
                   <Menu className="h-4 w-4" />
                 </button>
-                <Link href="/home" className="inline-flex min-w-0 shrink-0 items-center gap-1">
-                  <span className="truncate font-[family:var(--font-flat-display)] text-lg text-[color:var(--sem-text-primary)]">
-                    Phoenix CRM
-                  </span>
-                  <span className="text-[color:var(--sem-accent-primary)]">.</span>
+                <Link href="/home" className="inline-flex min-w-0 shrink-0 items-center gap-2">
+                  <img
+                    src={CRM_LOGO_SRC}
+                    alt={CRM_LOGO_ALT}
+                    className="h-9 w-auto max-w-[9rem] object-contain object-left"
+                  />
+                  <span className="sr-only">{CRM_BRAND_NAME}</span>
                 </Link>
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -433,9 +436,9 @@ export function AppShell({ children }: AppShellProps) {
               <div className="flex min-w-0 items-center gap-3">
                 <div className="inline-flex h-[4.25rem] w-[min(42vw,12rem)] shrink-0 items-center justify-center overflow-hidden rounded-[24px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-surface-panel)] p-1 shadow-[0_0_24px_color-mix(in_srgb,var(--sem-accent-primary)_14%,transparent),0_18px_45px_color-mix(in_srgb,var(--bg-canvas)_72%,transparent)] ring-1 ring-[color:var(--sem-board-border)] backdrop-blur-xl sm:h-[4.75rem] sm:w-[17.8125rem] lg:w-[17.8125rem]">
                   <img
-                    src="/wizfield-logo.svg"
-                    alt="Phoenix CRM logo"
-                    className="block h-full w-full object-fill drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
+                    src={CRM_LOGO_SRC}
+                    alt={CRM_LOGO_ALT}
+                    className="block h-full w-full object-contain object-center p-1 drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]"
                   />
                 </div>
               </div>

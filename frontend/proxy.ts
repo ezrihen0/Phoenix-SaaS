@@ -1,6 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const sessionCookieName = process.env.SESSION_COOKIE_NAME ?? "wizfield_session";
+const defaultPortalHostname = "portal.phoenixfireplace.ca";
+
+function resolvePortalHostnames() {
+  const configured = process.env.CUSTOMER_PORTAL_HOSTNAME?.trim().toLowerCase();
+  const hostnames = new Set([defaultPortalHostname]);
+  if (configured) {
+    hostnames.add(configured);
+  }
+  return hostnames;
+}
+
+function isCustomerPortalHost(hostname: string) {
+  return resolvePortalHostnames().has(hostname.trim().toLowerCase());
+}
 
 function isProtectedRoute(pathname: string) {
   return pathname === "/"
@@ -13,6 +27,21 @@ function isProtectedRoute(pathname: string) {
 }
 
 export async function proxy(request: NextRequest) {
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const hostname = forwardedHost || request.nextUrl.hostname;
+
+  if (isCustomerPortalHost(hostname) && request.nextUrl.pathname === "/") {
+    const portalHome = request.nextUrl.clone();
+    portalHome.pathname = "/portal";
+    return NextResponse.redirect(portalHome);
+  }
+
+  if (isCustomerPortalHost(hostname) && isProtectedRoute(request.nextUrl.pathname)) {
+    const portalHome = request.nextUrl.clone();
+    portalHome.pathname = "/portal";
+    return NextResponse.redirect(portalHome);
+  }
+
   if (!isProtectedRoute(request.nextUrl.pathname)) {
     return NextResponse.next({ request });
   }

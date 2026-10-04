@@ -82,3 +82,7 @@ No dedicated table in Phase 11. Recommended migration metadata:
 
 - **Display:** `invoices.document_number` (canonical WizField sequence)
 - **Never** use `workiz_invoice_code` as the normal customer-facing number after migration (allocate on import)
+
+## Michael field historical report (native operational)
+
+Separate from Workiz import. Marker in customer/job notes: `[phoenix_michael_field_report:v1]` ([`phoenix-field-report-provenance.ts`](../../backend/src/phoenix-field-report/phoenix-field-report-provenance.ts)). Batch audit tables: `phoenix_field_historical_report_batches` / `_entries`. Finance origin remains **native** (no `workiz_historical_import` on `import_source`).

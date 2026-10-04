@@ -5,6 +5,7 @@ import {
   computeDocumentMoney,
   computeDocumentTotals,
   computeLineSubtotalCents,
+  computeTaxInclusiveDocumentTotals,
   toDocumentMoneyResult,
   type DocumentMoneyResult,
   type DocumentTotals,
@@ -27,6 +28,10 @@ export class MoneyEngineService {
     taxRateBps: number,
   ): DocumentTotals {
     return computeDocumentTotals(lines, taxRateBps);
+  }
+
+  computeTaxInclusiveTotals(totalCents: number, taxRateBps: number): DocumentTotals {
+    return computeTaxInclusiveDocumentTotals(totalCents, taxRateBps);
   }
 
   computeDocumentMoney(

@@ -27,6 +27,7 @@ import { TelephonyModule } from "./telephony/telephony.module";
 import { InvoiceDocumentsModule } from "./documents/invoice-documents/invoice-documents.module";
 import { WarrantyModule } from "./warranty/warranty.module";
 import { TeamModule } from "./team/team.module";
+import { PhoenixFieldReportModule } from "./phoenix-field-report/phoenix-field-report.module";
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { TeamModule } from "./team/team.module";
     BillingModule,
     WarrantyModule,
     TeamModule,
+    PhoenixFieldReportModule,
   ],
 })
 export class AppModule implements OnModuleInit {

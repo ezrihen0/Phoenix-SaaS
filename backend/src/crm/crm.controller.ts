@@ -636,6 +636,7 @@ export class CrmController {
 
       return apiSuccess(jobs.map((job) => this.buildJobDetailResponse(job)));
     } catch (error) {
+      this.rethrowHttpException(error);
       apiError(500, "job_list_failed", "The job board could not be loaded.", error);
     }
   }
@@ -976,6 +977,7 @@ export class CrmController {
 
       return apiSuccess(this.buildJobDetailResponse(job));
     } catch (error) {
+      this.rethrowHttpException(error);
       apiError(400, "job_lookup_failed", "The job could not be loaded.", error);
     }
   }

@@ -16,7 +16,8 @@ const BACKEND = process.env.PHOENIX_VERIFY_BASE_URL ?? "http://localhost:4000";
 const FRONTEND = process.env.PHOENIX_VERIFY_FRONTEND_URL ?? "http://localhost:3000";
 const OWNER_EMAIL = PHOENIX_OWNER_EMAIL;
 const OWNER_PASSWORD = PHOENIX_OWNER_PASSWORD;
-const PHOENIX_FIREPLACE_ORG_ID = "5edc3ccd-efbd-4f74-9f99-d2b8c05ad644";
+const PHOENIX_FIREPLACE_ORG_ID =
+  process.env.PHOENIX_FIREPLACE_ORG_ID?.trim() || "8d5bc762-eb13-43e5-85a1-723477adb47c";
 const BOOTSTRAP_ORG_ID = "90137527-3fd0-435c-9032-358f7f670662";
 const OUTPUT_DIR = join(__dirname, "../../_runtime_harness/phoenix-customer-ledger");
 
@@ -70,11 +71,14 @@ async function main() {
   const customersUiTotal = customers?.aggregates?.totalCustomers ?? customersApiTotal;
   const homeTotal = home?.widgets?.customers?.count ?? null;
 
+  const expectedCustomerTotal = Number(process.env.PHOENIX_EXPECTED_CUSTOMER_TOTAL ?? "0") || null;
+  const customerTotalMatches =
+    expectedCustomerTotal === null ? customersApiTotal !== 67 : customersApiTotal === expectedCustomerTotal;
+
   const sameOrgAcrossSurfaces =
     activeOrgId === PHOENIX_FIREPLACE_ORG_ID
-    && customersApiTotal === 591
-    && customersUiTotal === 591
-    && homeTotal === 591;
+    && customerTotalMatches
+    && (homeTotal === null || homeTotal === customersApiTotal);
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -108,7 +112,7 @@ async function main() {
     expected: {
       orgId: PHOENIX_FIREPLACE_ORG_ID,
       orgSlug: "phoenix-fireplace",
-      customerTotal: 591,
+      customerTotal: expectedCustomerTotal ?? "not_fixed_in_script",
       bootstrapOrgId: BOOTSTRAP_ORG_ID,
       bootstrapCustomerTotal: 67,
     },

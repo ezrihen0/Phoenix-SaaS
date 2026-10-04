@@ -440,6 +440,9 @@ export default function InvoiceHeaderActions({
         body: JSON.stringify(payload),
       });
 
+      const latestInvoice = await crmApiFetch<InvoiceSnapshot>(`/api/invoices/${invoiceId}`);
+      setInvoiceSnapshot(latestInvoice);
+
       setSendSuccessMessage(`Invoice sent to ${response.to.join(", ")}.`);
       setIsSendModalOpen(false);
     } catch (error) {
