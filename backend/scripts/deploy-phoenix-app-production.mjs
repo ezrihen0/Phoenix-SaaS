@@ -57,7 +57,7 @@ function triggerVercelCli() {
       "--prod",
       "--yes",
       "--cwd",
-      resolve(repoRoot, "frontend"),
+      repoRoot,
       "--token",
       token,
     ],
