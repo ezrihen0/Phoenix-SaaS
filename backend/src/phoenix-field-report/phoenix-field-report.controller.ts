@@ -42,14 +42,14 @@ export class PhoenixFieldReportController {
 
   @Put("draft")
   async saveDraft(@Req() request: RequestWithActor, @Body() body: unknown) {
-    const payload = parseMichaelReportDraftBody(body);
+    const payload = parseMichaelReportDraftBody(body, { forDraftAutosave: true });
     const data = await this.reportService.saveDraft(request.actor!, payload);
     return apiSuccess(data);
   }
 
   @Post("preview")
   async preview(@Req() request: RequestWithActor, @Body() body: unknown) {
-    const payload = parseMichaelReportDraftBody(body, { requirePartsCostConfirmed: true });
+    const payload = parseMichaelReportDraftBody(body, { strictValidation: true, requirePartsCostConfirmed: true });
     const data = await this.previewService.preview(request.actor!, payload);
     return apiSuccess(data);
   }
@@ -61,6 +61,7 @@ export class PhoenixFieldReportController {
     @Headers("idempotency-key") idempotencyKey?: string,
   ) {
     const payload = parseMichaelReportDraftBody(body, {
+      strictValidation: true,
       requireReportEmail: true,
       requirePartsCostConfirmed: true,
     });

@@ -146,6 +146,8 @@ export class PhoenixFieldReportDraftService {
     return {
       batchId: batch.id,
       status: batch.status,
+      draftUpdatedAt: batch.updated_at?.toISOString() ?? null,
+      submissionIdempotencyKey: batch.submission_idempotency_key,
       reportRecipientEmail: batch.report_recipient_email,
       importStatus,
       emailProviderStatus,
@@ -154,6 +156,8 @@ export class PhoenixFieldReportDraftService {
       emailStatus,
       emailLastError: batch.email_last_error,
       orgFeatureClosed,
+      totals: (batch.totals_json as Record<string, unknown> | null) ?? null,
+      pdfAvailable: Boolean(batch.pdf_storage_key),
       entries: entries.map((entry) => ({
         id: entry.id,
         clientRowKey: entry.client_row_key,

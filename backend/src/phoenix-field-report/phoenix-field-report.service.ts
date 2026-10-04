@@ -50,6 +50,25 @@ export class PhoenixFieldReportService {
       return this.draftService.loadBatchResponse(submitted.id);
     }
 
+    const userId = actor.user.id;
+    const openDraft = await this.batchRepository.findOne({
+      where: {
+        organization_id: organizationId,
+        created_by_auth_user_id: userId,
+        status: "draft",
+      },
+      order: { updated_at: "DESC" },
+    });
+
+    if (openDraft) {
+      return this.draftService.loadBatchResponse(openDraft.id);
+    }
+
+    const submitted = await this.draftService.findLatestSubmittedBatch(actor);
+    if (submitted) {
+      return this.draftService.loadBatchResponse(submitted.id);
+    }
+
     const batch = await this.draftService.getOrCreateDraftBatch(actor);
     return this.draftService.loadBatchResponse(batch.id);
   }
@@ -88,8 +107,25 @@ export class PhoenixFieldReportService {
       return this.buildSubmitResult(existing.id);
     }
 
+    const userId = actor.user.id;
+    const openDraft = await this.batchRepository.findOne({
+      where: {
+        organization_id: organizationId,
+        created_by_auth_user_id: userId,
+        status: "draft",
+      },
+    });
+
+    if (!openDraft) {
+      const alreadySubmitted = await this.draftService.findLatestSubmittedBatch(actor);
+      if (alreadySubmitted) {
+        return this.buildSubmitResult(alreadySubmitted.id);
+      }
+    }
+
     await this.draftService.saveDraft(actor, body, { persistReportEmail: true });
-    const draftBatch = await this.draftService.getOrCreateDraftBatch(actor);
+    const draftBatch =
+      openDraft ?? (await this.draftService.getOrCreateDraftBatch(actor));
     draftBatch.report_recipient_email = body.reportRecipientEmail.trim();
     await this.batchRepository.save(draftBatch);
     const entries = await this.entryRepository.find({

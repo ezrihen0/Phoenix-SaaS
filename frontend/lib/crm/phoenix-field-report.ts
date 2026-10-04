@@ -50,6 +50,8 @@ export type MichaelReportDraftBody = {
 export type MichaelReportBatchResponse = {
   batchId: string;
   status: string;
+  draftUpdatedAt: string | null;
+  submissionIdempotencyKey: string | null;
   reportRecipientEmail: string | null;
   importStatus: "draft" | "imported" | "import_partial" | "import_pending";
   emailProviderStatus: "not_sent" | "pending" | "accepted" | "failed";
@@ -58,6 +60,8 @@ export type MichaelReportBatchResponse = {
   emailStatus: "not_sent" | "sent" | "failed";
   emailLastError: string | null;
   orgFeatureClosed: boolean;
+  totals: Record<string, unknown> | null;
+  pdfAvailable: boolean;
   entries: Array<{
     id: string;
     clientRowKey: string;

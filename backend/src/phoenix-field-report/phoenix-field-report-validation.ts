@@ -37,6 +37,19 @@ function requireString(value: unknown, label: string, maxLength: number) {
   return trimmed;
 }
 
+function draftString(value: unknown, maxLength: number, fallback = "") {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length > maxLength) {
+    return trimmed.slice(0, maxLength);
+  }
+
+  return trimmed;
+}
+
 function optionalString(value: unknown, label: string, maxLength: number) {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -150,6 +163,140 @@ export function parseOptionalPaymentDate(value: unknown, label: string) {
   return raw;
 }
 
+function parseDraftProductLine(value: unknown): MichaelReportProductLine {
+  const row = isRecord(value) ? value : {};
+  const warrantyEnabled = row.warrantyEnabled === true;
+  let warrantyMonths: number | null = null;
+
+  if (warrantyEnabled) {
+    const months = row.warrantyMonths;
+    if (typeof months === "number" && Number.isInteger(months) && months > 0) {
+      warrantyMonths = months;
+    }
+  }
+
+  return {
+    description: draftString(row.description, 2000),
+    warrantyEnabled,
+    warrantyMonths,
+  };
+}
+
+function parseDraftCompanyParts(value: unknown): MichaelReportCompanyParts {
+  const row = isRecord(value) ? value : {};
+  const rawCost = row.costIncludingTaxCents;
+  let costIncludingTaxCents =
+    rawCost === undefined || rawCost === null
+      ? 0
+      : typeof rawCost === "number"
+        ? rawCost
+        : Number(rawCost);
+
+  if (!Number.isFinite(costIncludingTaxCents) || costIncludingTaxCents < 0) {
+    costIncludingTaxCents = 0;
+  }
+
+  costIncludingTaxCents = Math.round(costIncludingTaxCents);
+
+  return {
+    description: draftString(row.description, 2000, "None"),
+    quantity: draftString(row.quantity, 64, "0"),
+    costIncludingTaxCents,
+    partsCostConfirmed: row.partsCostConfirmed === true,
+  };
+}
+
+function parseDraftWorkCompletedDate(value: unknown) {
+  const raw = draftString(value, 10, PHOENIX_FIELD_REPORT_WORK_DATE_MIN);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return PHOENIX_FIELD_REPORT_WORK_DATE_MIN;
+  }
+
+  return raw;
+}
+
+function parseDraftOptionalPaymentDate(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const raw = draftString(value, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return null;
+  }
+
+  return raw;
+}
+
+function parseDraftClientRowKey(value: unknown, index: number) {
+  const raw = draftString(value, 36);
+  if (/^[0-9a-f-]{36}$/i.test(raw)) {
+    return raw;
+  }
+
+  throw new Error(`entries[${index}].clientRowKey must be a UUID for draft autosave.`);
+}
+
+export function parseMichaelReportJobPayloadLenient(value: unknown, index: number): MichaelReportJobPayload {
+  const row = isRecord(value) ? value : {};
+
+  const paymentMethodRaw = draftString(row.paymentMethod, 32, "not_paid");
+  const paymentMethod = paymentMethods.includes(paymentMethodRaw as MichaelReportPaymentMethodUi)
+    ? (paymentMethodRaw as MichaelReportPaymentMethodUi)
+    : "not_paid";
+
+  const amountReceivedRaw =
+    typeof row.amountReceivedCents === "number" ? row.amountReceivedCents : Number(row.amountReceivedCents);
+  const amountReceivedCents =
+    Number.isFinite(amountReceivedRaw) && amountReceivedRaw >= 0 ? Math.round(amountReceivedRaw) : 0;
+
+  const totalChargedRaw =
+    typeof row.totalChargedCents === "number" ? row.totalChargedCents : Number(row.totalChargedCents);
+  const totalChargedCents =
+    Number.isFinite(totalChargedRaw) && totalChargedRaw >= 0 ? Math.round(totalChargedRaw) : 0;
+
+  const productLinesRaw = row.productLines;
+  const productLines = Array.isArray(productLinesRaw)
+    ? productLinesRaw.map((line) => parseDraftProductLine(line))
+    : [{ description: "", warrantyEnabled: false, warrantyMonths: null }];
+
+  if (productLines.length === 0) {
+    productLines.push({ description: "", warrantyEnabled: false, warrantyMonths: null });
+  }
+
+  let customerId: string | null = null;
+  if (typeof row.customerId === "string" && /^[0-9a-f-]{36}$/i.test(row.customerId.trim())) {
+    customerId = row.customerId.trim();
+  }
+
+  return {
+    clientRowKey: parseDraftClientRowKey(row.clientRowKey, index),
+    workCompletedDate: parseDraftWorkCompletedDate(row.workCompletedDate),
+    customerName: draftString(row.customerName, 255),
+    serviceAddressLine1: draftString(row.serviceAddressLine1, 255),
+    serviceAddressLine2: (() => {
+      const line2 = draftString(row.serviceAddressLine2, 255);
+      return line2 ? line2 : null;
+    })(),
+    serviceCity: draftString(row.serviceCity, 120),
+    serviceStateOrRegion: draftString(row.serviceStateOrRegion, 120, "AB"),
+    servicePostalCode: draftString(row.servicePostalCode, 20),
+    customerEmail: (() => {
+      const email = draftString(row.customerEmail, 320);
+      return email ? email : null;
+    })(),
+    productLines,
+    totalChargedCents,
+    companyParts: parseDraftCompanyParts(row.companyParts),
+    customerLeftReview: row.customerLeftReview === true,
+    paymentMethod,
+    amountReceivedCents,
+    paymentDate: parseDraftOptionalPaymentDate(row.paymentDate),
+    customerId,
+    createNewCustomer: row.createNewCustomer === true,
+  };
+}
+
 export function parseMichaelReportJobPayload(value: unknown, index: number): MichaelReportJobPayload {
   const row = isRecord(value) ? value : {};
 
@@ -215,7 +362,12 @@ export function parseMichaelReportJobPayload(value: unknown, index: number): Mic
 
 export function parseMichaelReportDraftBody(
   body: unknown,
-  options?: { requireReportEmail?: boolean; requirePartsCostConfirmed?: boolean },
+  options?: {
+    requireReportEmail?: boolean;
+    requirePartsCostConfirmed?: boolean;
+    forDraftAutosave?: boolean;
+    strictValidation?: boolean;
+  },
 ) {
   if (!isRecord(body)) {
     apiError(400, "invalid_payload", "Request body must be a JSON object.");
@@ -230,7 +382,9 @@ export function parseMichaelReportDraftBody(
       throw new Error("entries must be an array.");
     }
 
-    const entries = entriesRaw.map((entry, index) => parseMichaelReportJobPayload(entry, index));
+    const useLenient = options?.strictValidation !== true;
+    const parseEntry = useLenient ? parseMichaelReportJobPayloadLenient : parseMichaelReportJobPayload;
+    const entries = entriesRaw.map((entry, index) => parseEntry(entry, index));
     if (options?.requirePartsCostConfirmed) {
       assertAllPartsCostsConfirmed(entries);
     }

@@ -21,6 +21,15 @@ import {
   type MichaelReportJobPayload,
   type MichaelReportPreviewRow,
 } from "@/lib/crm/phoenix-field-report";
+import {
+  clearLocalMichaelReportDraft,
+  getOrCreateSubmitIdempotencyKey,
+  normalizeMichaelReportJob,
+  parseServerDraftTimestamp,
+  readLocalMichaelReportDraft,
+  rememberSubmitIdempotencyKey,
+  writeLocalMichaelReportDraft,
+} from "@/lib/crm/michael-report-draft-local";
 
 const DATE_MIN = "2026-09-11";
 const DATE_MAX = "2026-10-04";
@@ -104,6 +113,21 @@ function importStatusLabel(status: MichaelReportBatchResponse["importStatus"]) {
   }
 }
 
+type DraftSaveStatus = "idle" | "saving" | "saved" | "retrying";
+
+function draftSaveStatusLabel(status: DraftSaveStatus) {
+  switch (status) {
+    case "saving":
+      return "Saving…";
+    case "saved":
+      return "Saved";
+    case "retrying":
+      return "Not saved — retrying";
+    default:
+      return "";
+  }
+}
+
 function emailProviderLabel(status: MichaelReportBatchResponse["emailProviderStatus"]) {
   switch (status) {
     case "not_sent":
@@ -133,9 +157,19 @@ export default function MichaelReportWorkspace({ isOwner }: { isOwner: boolean }
   const [emailError, setEmailError] = useState<string | null>(null);
   const [submitResult, setSubmitResult] = useState<Awaited<ReturnType<typeof submitMichaelReport>> | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [draftSaveStatus, setDraftSaveStatus] = useState<DraftSaveStatus>("idle");
   const [isPending, startTransition] = useTransition();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
+  const saveRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hydratingRef = useRef(true);
+  const saveGenerationRef = useRef(0);
+  const pendingDraftBodyRef = useRef<MichaelReportDraftBody | null>(null);
+  const serverDraftUpdatedAtRef = useRef<string | null>(null);
+  const stepRef = useRef(step);
+
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
 
   const editDraftBody: MichaelReportDraftBody = useMemo(
     () => ({ reportRecipientEmail: "", entries }),
@@ -159,69 +193,208 @@ export default function MichaelReportWorkspace({ isOwner }: { isOwner: boolean }
     }
   }, []);
 
-  const loadDraft = useCallback(async () => {
-    try {
-      const draft = await fetchMichaelReportDraft();
-      applyBatchToState(draft);
+  const persistLocalDraft = useCallback(
+    (body: MichaelReportDraftBody, stepValue: "edit" | "review") => {
+      writeLocalMichaelReportDraft({
+        batchId,
+        serverDraftUpdatedAt: serverDraftUpdatedAtRef.current,
+        reportRecipientEmail: body.reportRecipientEmail,
+        entries: body.entries,
+        step: stepValue,
+      });
+    },
+    [batchId],
+  );
 
-      if (draft.entries.length > 0) {
-        const editable = draft.entries
-          .filter((entry) => entry.status === "draft")
-          .map((entry) => ({
-            ...entry.payload,
-            companyParts: {
-              ...entry.payload.companyParts,
-              costIncludingTaxCents: entry.payload.companyParts.costIncludingTaxCents ?? 0,
-              partsCostConfirmed: entry.payload.companyParts.partsCostConfirmed === true,
-            },
-          }));
+  const flushDraftSave = useCallback(async (body: MichaelReportDraftBody, generation: number) => {
+    setDraftSaveStatus("saving");
+    const maxAttempts = 6;
 
-        if (editable.length > 0) {
-          setEntries(editable);
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      if (generation !== saveGenerationRef.current) {
+        return;
+      }
+
+      try {
+        const saved = await saveMichaelReportDraft(body);
+        if (generation !== saveGenerationRef.current) {
+          return;
         }
-      }
 
-      if (draft.status !== "draft") {
-        setStep("done");
-      } else if (draft.orgFeatureClosed) {
-        setStep("done");
+        serverDraftUpdatedAtRef.current = saved.draftUpdatedAt;
+        applyBatchToState(saved);
+        writeLocalMichaelReportDraft({
+          batchId: saved.batchId,
+          serverDraftUpdatedAt: saved.draftUpdatedAt,
+          reportRecipientEmail: body.reportRecipientEmail,
+          entries: body.entries,
+          step: stepRef.current === "review" ? "review" : "edit",
+        });
+        setDraftSaveStatus("saved");
+        return;
+      } catch {
+        if (generation !== saveGenerationRef.current) {
+          return;
+        }
+
+        setDraftSaveStatus("retrying");
+        await new Promise((resolve) => {
+          saveRetryTimer.current = setTimeout(resolve, Math.min(8000, 800 * (attempt + 1)));
+        });
       }
-    } catch {
-      // First visit — empty form is fine.
     }
-  }, [applyBatchToState]);
 
-  useEffect(() => {
-    void loadDraft();
-  }, [loadDraft]);
+    if (generation === saveGenerationRef.current) {
+      setDraftSaveStatus("retrying");
+    }
+  }, [applyBatchToState, step]);
 
-  const scheduleSave = useCallback(
+  const queueDraftSave = useCallback(
     (body: MichaelReportDraftBody) => {
+      pendingDraftBodyRef.current = body;
+      saveGenerationRef.current += 1;
+      const generation = saveGenerationRef.current;
+
       if (saveTimer.current) {
         clearTimeout(saveTimer.current);
       }
 
       saveTimer.current = setTimeout(() => {
-        startTransition(async () => {
-          try {
-            await saveMichaelReportDraft(body);
-            setMessage("Draft saved.");
-          } catch (error) {
-            setMessage(error instanceof Error ? error.message : "Draft could not be saved.");
-          }
-        });
-      }, 800);
+        void flushDraftSave(body, generation);
+      }, 600);
     },
-    [startTransition],
+    [flushDraftSave],
   );
 
+  const loadDraft = useCallback(async () => {
+    hydratingRef.current = true;
+    const local = readLocalMichaelReportDraft();
+
+    try {
+      const draft = await fetchMichaelReportDraft();
+      applyBatchToState(draft);
+      serverDraftUpdatedAtRef.current = draft.draftUpdatedAt;
+
+      if (draft.submissionIdempotencyKey && draft.batchId) {
+        rememberSubmitIdempotencyKey(draft.batchId, draft.submissionIdempotencyKey);
+      }
+
+      if (draft.status !== "draft") {
+        clearLocalMichaelReportDraft();
+        setSubmitResult({
+          ...draft,
+          totals: draft.totals ?? {},
+          pdfAvailable: draft.pdfAvailable,
+        });
+        setStep("done");
+        hydratingRef.current = false;
+        return;
+      }
+
+      const serverEntries = draft.entries
+        .filter((entry) => entry.status === "draft")
+        .map((entry) => normalizeMichaelReportJob(entry.payload));
+
+      const serverTime = parseServerDraftTimestamp(draft.draftUpdatedAt);
+      const localTime = local?.localEditedAt ?? 0;
+      const localMatchesBatch = !local?.batchId || local.batchId === draft.batchId;
+
+      let restoredEntries = serverEntries.length > 0 ? serverEntries : [createEmptyJob()];
+      let restoredEmail = draft.reportRecipientEmail ?? "";
+      let restoredStep: "edit" | "review" = "edit";
+
+      if (local && localMatchesBatch && localTime > serverTime) {
+        restoredEntries = local.entries.length > 0 ? local.entries : restoredEntries;
+        restoredEmail = local.reportRecipientEmail;
+        restoredStep = local.step === "review" ? "review" : "edit";
+      } else if (local && localMatchesBatch) {
+        writeLocalMichaelReportDraft({
+          batchId: draft.batchId,
+          serverDraftUpdatedAt: draft.draftUpdatedAt,
+          reportRecipientEmail: restoredEmail,
+          entries: restoredEntries,
+          step: "edit",
+        });
+      }
+
+      setEntries(restoredEntries);
+      setReportRecipientEmail(restoredEmail);
+      setStep(restoredStep);
+      setDraftSaveStatus("saved");
+
+      if (local && localMatchesBatch && localTime > serverTime) {
+        queueDraftSave({ reportRecipientEmail: restoredEmail, entries: restoredEntries });
+      }
+
+      if (draft.orgFeatureClosed) {
+        setStep("done");
+      }
+    } catch {
+      if (local?.entries?.length) {
+        setEntries(local.entries);
+        setReportRecipientEmail(local.reportRecipientEmail);
+        setStep(local.step === "review" ? "review" : "edit");
+        setDraftSaveStatus("retrying");
+        queueDraftSave({ reportRecipientEmail: local.reportRecipientEmail, entries: local.entries });
+      }
+    } finally {
+      hydratingRef.current = false;
+    }
+  }, [applyBatchToState, queueDraftSave]);
+
   useEffect(() => {
-    if (step !== "edit") {
+    void loadDraft();
+  }, [loadDraft]);
+
+  useEffect(() => {
+    if (hydratingRef.current || step !== "review" || previewRows) {
       return;
     }
 
-    scheduleSave(editDraftBody);
-  }, [editDraftBody, scheduleSave, step]);
+    startTransition(async () => {
+      try {
+        const preview = await previewMichaelReport(reviewDraftBody);
+        setPreviewRows(preview.rows);
+      } catch {
+        setStep("edit");
+        setMessage("Some jobs still need corrections before review. Continue editing — your draft is saved.");
+      }
+    });
+  }, [previewRows, reviewDraftBody, step, startTransition]);
+
+  useEffect(() => {
+    if (hydratingRef.current || step === "done") {
+      return;
+    }
+
+    const body = step === "review" ? reviewDraftBody : editDraftBody;
+    persistLocalDraft(body, step === "review" ? "review" : "edit");
+    queueDraftSave(body);
+  }, [editDraftBody, reviewDraftBody, persistLocalDraft, queueDraftSave, step]);
+
+  useEffect(() => {
+    const flushPending = () => {
+      const body = pendingDraftBodyRef.current;
+      if (!body || step === "done" || hydratingRef.current) {
+        return;
+      }
+
+      saveGenerationRef.current += 1;
+      const generation = saveGenerationRef.current;
+      void flushDraftSave(body, generation);
+    };
+
+    window.addEventListener("beforeunload", flushPending);
+    return () => {
+      window.removeEventListener("beforeunload", flushPending);
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+      }
+      if (saveRetryTimer.current) {
+        clearTimeout(saveRetryTimer.current);
+      }
+    };
+  }, [flushDraftSave, step]);
 
   const updateEntry = (index: number, patch: Partial<MichaelReportJobPayload>) => {
     setEntries((current) =>
@@ -258,10 +431,16 @@ export default function MichaelReportWorkspace({ isOwner }: { isOwner: boolean }
           return;
         }
 
-        const result = await submitMichaelReport(reviewDraftBody, idempotencyKeyRef.current);
+        const idempotencyKey = getOrCreateSubmitIdempotencyKey(batchId);
+        const result = await submitMichaelReport(reviewDraftBody, idempotencyKey);
+        clearLocalMichaelReportDraft();
         setSubmitResult(result);
         applyBatchToState(result);
+        if (result.submissionIdempotencyKey) {
+          rememberSubmitIdempotencyKey(result.batchId, result.submissionIdempotencyKey);
+        }
         setStep("done");
+        setDraftSaveStatus("saved");
         setMessage("CRM import and report delivery were submitted.");
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Submit failed.");
@@ -281,6 +460,16 @@ export default function MichaelReportWorkspace({ isOwner }: { isOwner: boolean }
         <Link href="/home" className="text-sm text-amber-800 underline">
           Back to home
         </Link>
+        {step !== "done" && draftSaveStatusLabel(draftSaveStatus) ? (
+          <p
+            className={`text-sm ${
+              draftSaveStatus === "retrying" ? "font-medium text-amber-900" : "text-slate-600"
+            }`}
+            aria-live="polite"
+          >
+            Draft: {draftSaveStatusLabel(draftSaveStatus)}
+          </p>
+        ) : null}
       </header>
 
       {message ? (

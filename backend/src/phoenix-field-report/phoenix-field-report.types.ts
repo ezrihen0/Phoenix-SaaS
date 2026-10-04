@@ -92,6 +92,10 @@ export type MichaelReportEmailProviderStatus = "not_sent" | "pending" | "accepte
 export type MichaelReportBatchResponse = {
   batchId: string;
   status: PhoenixFieldReportBatchStatus;
+  /** Server draft revision time (ISO). Used to avoid restoring stale data over newer edits. */
+  draftUpdatedAt: string | null;
+  /** Present after submit — reuse for idempotent resubmit on refresh. */
+  submissionIdempotencyKey: string | null;
   reportRecipientEmail: string | null;
   importStatus: MichaelReportImportStatus;
   emailProviderStatus: MichaelReportEmailProviderStatus;
@@ -101,6 +105,8 @@ export type MichaelReportBatchResponse = {
   emailStatus: "not_sent" | "sent" | "failed";
   emailLastError: string | null;
   orgFeatureClosed: boolean;
+  totals: Record<string, unknown> | null;
+  pdfAvailable: boolean;
   entries: Array<{
     id: string;
     clientRowKey: string;

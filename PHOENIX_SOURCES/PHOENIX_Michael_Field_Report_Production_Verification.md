@@ -11,7 +11,7 @@ This checklist is **post-deploy** verification on `https://app.phoenixfireplace.
 ## Verification steps
 
 1. **Access:** Michael and owner can open `/michaelreport`; other staff accounts are redirected; wrong organization session returns forbidden from API.
-2. **Draft:** Add two jobs with confirmed **Parts cost including tax (CAD)** (0 allowed), refresh — draft persists. Report recipient email is **not** required until the review step.
+2. **Draft persistence:** Enter complete and incomplete jobs (empty customer names, partial parts costs, multiple product lines). Confirm header shows **Saving…** then **Saved**. Hard-refresh immediately after typing, close/reopen the tab, and briefly go offline — every field (including warranty toggles and extra job rows) restores without duplicate CRM rows. Report recipient email is only required at review/submit.
 3. **Submit:** Enter report delivery email on the review step (independent of login). Submit one paid and one unpaid job — CRM shows completed jobs, native invoice numbers, ledger payments match amounts received.
 4. **PDF:** Download link returns a PDF with customer, work date, sold items, warranty, parts (description, qty, cost incl. tax), review status, payment details, and overall totals (sale before tax, tax, sale incl. tax, parts incl. tax, remaining after parts).
 5. **Email (provider vs inbox):** Status shows CRM import separately from email provider acceptance. Provider acceptance does **not** mark inbox delivery verified. **Retry email only** re-sends without duplicating CRM rows if send fails.

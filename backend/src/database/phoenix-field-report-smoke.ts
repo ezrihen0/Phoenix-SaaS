@@ -2,7 +2,11 @@ import "dotenv/config";
 
 import { computeTaxInclusiveDocumentTotals } from "../crm/money-engine.core";
 import { buildEntryFinancials, computeRemainingAfterPartsCents } from "../phoenix-field-report/phoenix-field-report-financials";
-import { assertWorkCompletedDateInWindow, parseMichaelReportJobPayload } from "../phoenix-field-report/phoenix-field-report-validation";
+import {
+  assertWorkCompletedDateInWindow,
+  parseMichaelReportJobPayload,
+  parseMichaelReportJobPayloadLenient,
+} from "../phoenix-field-report/phoenix-field-report-validation";
 
 type SmokeResult = { name: string; ok: boolean; detail?: string };
 
@@ -66,6 +70,33 @@ if (
   pass("remaining_after_parts_includes_tax_in_parts_cost");
 } else {
   fail("remaining_after_parts_includes_tax_in_parts_cost", JSON.stringify(partsFinancials));
+}
+
+try {
+  const lenientPartial = parseMichaelReportJobPayloadLenient(
+    {
+      clientRowKey: "44444444-4444-4444-8444-444444444444",
+      workCompletedDate: "2026-09-12",
+      customerName: "",
+      serviceAddressLine1: "",
+      serviceCity: "",
+      serviceStateOrRegion: "AB",
+      servicePostalCode: "",
+      productLines: [{ description: "", warrantyEnabled: true, warrantyMonths: null }],
+      totalChargedCents: 0,
+      companyParts: { description: "", quantity: "", costIncludingTaxCents: 0, partsCostConfirmed: false },
+      paymentMethod: "not_paid",
+      amountReceivedCents: 0,
+    },
+    0,
+  );
+  if (lenientPartial.customerName === "" && lenientPartial.companyParts.partsCostConfirmed === false) {
+    pass("lenient_draft_autosave_payload");
+  } else {
+    fail("lenient_draft_autosave_payload", JSON.stringify(lenientPartial));
+  }
+} catch (error) {
+  fail("lenient_draft_autosave_payload", error instanceof Error ? error.message : String(error));
 }
 
 try {
