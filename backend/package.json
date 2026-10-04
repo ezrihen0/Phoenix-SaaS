@@ -76,6 +76,7 @@
     "money-engine:tax-inclusive:unit-check": "node -r ts-node/register src/crm/money-engine-tax-inclusive-unit-check.ts",
     "phoenix-field-report:contract-check": "node -r ts-node/register src/phoenix-field-report/phoenix-field-report-contract-check.ts",
     "phoenix-field-report:smoke": "node -r ts-node/register src/database/phoenix-field-report-smoke.ts",
+    "deploy:phoenix-app": "node scripts/deploy-phoenix-app-production.mjs",
     "money-engine:parity-check": "node -r ts-node/register src/crm/money-engine-parity-check.ts",
     "money-engine:persistence-contract-check": "node -r ts-node/register src/crm/money-engine-persistence-contract-check.ts",
     "money-engine:phase5-db-verification": "node -r ts-node/register src/database/money-engine-phase5-db-verification.ts",
