@@ -62,6 +62,11 @@ const messages = {
         admin: "Admin",
       },
       moreEmpty: "No additional modules are available for your role.",
+      appearance: "Appearance",
+      brightMode: "Bright",
+      darkMode: "Dark",
+      useBrightMode: "Switch to bright mode",
+      useDarkMode: "Switch to dark mode",
     },
     nav: {
       home: "Home",

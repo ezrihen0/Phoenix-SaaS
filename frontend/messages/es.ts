@@ -48,6 +48,11 @@ const messages = {
         admin: "Administracion",
       },
       moreEmpty: "No hay modulos adicionales disponibles para tu rol.",
+      appearance: "Apariencia",
+      brightMode: "Claro",
+      darkMode: "Oscuro",
+      useBrightMode: "Cambiar a modo claro",
+      useDarkMode: "Cambiar a modo oscuro",
     },
     nav: {
       home: "Inicio",

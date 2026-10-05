@@ -3,7 +3,10 @@
 import { useLayoutEffect } from "react";
 
 export const THEME_STORAGE_KEY = "wizfield.appearance.theme";
+export const THEME_CHANGE_EVENT = "wizfield-theme-change";
+const PREVIOUS_NON_BRIGHT_THEME_KEY = "wizfield.appearance.previous-non-bright-theme";
 export const DEFAULT_THEME = "brown-cream";
+export const BRIGHT_THEME_ID = "fire-ember" as const;
 
 export const THEME_OPTIONS = [
   {
@@ -61,12 +64,72 @@ export function readStoredTheme(): ThemeId {
   return isThemeId(stored) ? stored : DEFAULT_THEME;
 }
 
+function readPreviousNonBrightTheme(): ThemeId {
+  if (typeof window === "undefined") {
+    return DEFAULT_THEME;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(PREVIOUS_NON_BRIGHT_THEME_KEY);
+    return isThemeId(stored) && stored !== BRIGHT_THEME_ID ? stored : DEFAULT_THEME;
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
+
+function rememberNonBrightTheme(theme: ThemeId) {
+  if (typeof window === "undefined" || theme === BRIGHT_THEME_ID) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(PREVIOUS_NON_BRIGHT_THEME_KEY, theme);
+  } catch {
+    // Ignore storage failures. Bright mode can still fall back to the default theme.
+  }
+}
+
+function syncDocumentColorScheme(theme: ThemeId) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const bright = theme === BRIGHT_THEME_ID;
+  document.documentElement.style.colorScheme = bright ? "light" : "dark";
+  document.documentElement.style.backgroundColor = bright ? "#f8fafc" : "#05070c";
+
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  if (themeColor) {
+    themeColor.setAttribute("content", bright ? "#f8fafc" : "#05070c");
+  }
+}
+
 export function applyTheme(theme: ThemeId) {
+  if (theme !== BRIGHT_THEME_ID) {
+    rememberNonBrightTheme(theme);
+  }
+
   if (typeof document !== "undefined") {
     document.documentElement.dataset.theme = theme;
+    syncDocumentColorScheme(theme);
   }
 
   writeThemeStorage(theme);
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: theme }));
+  }
+}
+
+export function toggleBrightMode(): ThemeId {
+  const current = readStoredTheme();
+  if (current !== BRIGHT_THEME_ID) {
+    rememberNonBrightTheme(current);
+  }
+
+  const next = current === BRIGHT_THEME_ID ? readPreviousNonBrightTheme() : BRIGHT_THEME_ID;
+  applyTheme(next);
+  return next;
 }
 
 export function ThemeRuntime() {

@@ -30,6 +30,7 @@ import { PhoenixServiceWorkerRegister } from "@/components/pwa/phoenix-service-w
 import { TechnicianPushSetupBanner } from "@/components/push/technician-push-setup-banner";
 import { QuickCreateTrigger } from "@/components/quick-create-trigger";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { MobileBrightModeToggle } from "@/components/mobile-bright-mode-toggle";
 import { MobileShellNav } from "@/components/mobile-shell-nav";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
 import { WorkspaceContextBanner } from "@/components/workspace-context-banner";
@@ -429,12 +430,13 @@ export function AppShell({ children }: AppShellProps) {
                   <img
                     src={CRM_LOGO_SRC}
                     alt={CRM_LOGO_ALT}
-                    className="h-9 w-auto max-w-[9rem] object-contain object-left"
+                    className="mobile-brand-logo h-9 w-auto max-w-[6.25rem] object-contain object-left min-[400px]:max-w-[7.5rem]"
                   />
                   <span className="sr-only">{CRM_BRAND_NAME}</span>
                 </Link>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <MobileBrightModeToggle variant="header" />
                 <LanguageSwitcher variant="compact" />
                 {searchEnabled ? (
                   <button

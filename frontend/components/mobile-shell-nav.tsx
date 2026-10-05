@@ -9,6 +9,7 @@ import {
   type LucideProps,
 } from "lucide-react";
 
+import { MobileBrightModeToggle } from "@/components/mobile-bright-mode-toggle";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
 import { QuickCreateTrigger } from "@/components/quick-create-trigger";
 import { handleLogout } from "@/lib/auth/logout";
@@ -344,7 +345,8 @@ export function MobileShellNav({
               ) : null}
             </div>
 
-            <div className="border-t border-[color:var(--cmp-border-subtle)] px-5 pt-4">
+            <div className="space-y-3 border-t border-[color:var(--cmp-border-subtle)] px-5 pt-4">
+              <MobileBrightModeToggle variant="menu" />
               <button
                 type="button"
                 onClick={async () => {

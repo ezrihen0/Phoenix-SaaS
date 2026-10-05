@@ -17,7 +17,7 @@ import { IOS_STARTUP_IMAGES } from "@/lib/branding/ios-startup-images";
 import { getWorkerUiDirection, resolveSupportedWorkerUiLocale } from "@/lib/i18n/locales";
 import "./globals.css";
 
-const PHOENIX_BOOT_INLINE_SCRIPT = `(function(){try{var storageKey="wizfield.appearance.theme";var stored=localStorage.getItem(storageKey);if(stored){document.documentElement.dataset.theme=stored;}}catch(e){}document.documentElement.style.backgroundColor="${CRM_SPLASH_BACKGROUND}";document.documentElement.style.colorScheme="dark";})();`;
+const PHOENIX_BOOT_INLINE_SCRIPT = `(function(){var bright=false;try{var storageKey="wizfield.appearance.theme";var stored=localStorage.getItem(storageKey);if(stored){document.documentElement.dataset.theme=stored;bright=stored==="fire-ember";}}catch(e){}document.documentElement.style.backgroundColor=bright?"#f8fafc":"${CRM_SPLASH_BACKGROUND}";document.documentElement.style.colorScheme=bright?"light":"dark";var themeColor=document.querySelector('meta[name="theme-color"]');if(themeColor){themeColor.setAttribute("content",bright?"#f8fafc":"${CRM_SPLASH_BACKGROUND}");}})();`;
 
 const fontVariables = {
   "--font-geist-sans": 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',

@@ -48,6 +48,11 @@ const messages = {
         admin: "Адмін",
       },
       moreEmpty: "Додаткові модулі для вашої ролі недоступні.",
+      appearance: "Вигляд",
+      brightMode: "Світлий",
+      darkMode: "Темний",
+      useBrightMode: "Перемкнути на світлий режим",
+      useDarkMode: "Перемкнути на темний режим",
     },
     nav: {
       home: "Головна",

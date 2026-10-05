@@ -48,6 +48,11 @@ const messages = {
         admin: "Admin",
       },
       moreEmpty: "Brak dodatkowych modulow dla Twojej roli.",
+      appearance: "Wyglad",
+      brightMode: "Jasny",
+      darkMode: "Ciemny",
+      useBrightMode: "Przelacz na jasny tryb",
+      useDarkMode: "Przelacz na ciemny tryb",
     },
     nav: {
       home: "Start",

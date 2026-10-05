@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import {
   DEFAULT_THEME,
+  THEME_CHANGE_EVENT,
   THEME_OPTIONS,
   applyTheme,
   readStoredTheme,
@@ -35,9 +36,11 @@ export function ThemeAppearanceSelector() {
   const [selectedTheme, setSelectedTheme] = useState<ThemeId>(DEFAULT_THEME);
 
   useEffect(() => {
-    const theme = readStoredTheme();
-    setSelectedTheme(theme);
-    applyTheme(theme);
+    const sync = () => setSelectedTheme(readStoredTheme());
+    sync();
+    applyTheme(readStoredTheme());
+    window.addEventListener(THEME_CHANGE_EVENT, sync);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, sync);
   }, []);
 
   function handleThemeChange(theme: ThemeId) {

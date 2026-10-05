@@ -48,6 +48,11 @@ const messages = {
         admin: "ניהול",
       },
       moreEmpty: "אין מודולים נוספים זמינים לתפקיד שלך.",
+      appearance: "מראה",
+      brightMode: "בהיר",
+      darkMode: "כהה",
+      useBrightMode: "עבור למצב בהיר",
+      useDarkMode: "עבור למצב כהה",
     },
     nav: {
       home: "בית",
