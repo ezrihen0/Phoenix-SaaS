@@ -122,6 +122,7 @@ import {
   persistQuoteHeaderAndLineItems,
 } from "./crm-document-persistence";
 import { EmailService } from "../email/email.service";
+import { TechnicianJobPushService } from "../push/technician-job-push.service";
 import {
   buildInvoiceCustomerHtmlEmail,
   buildInvoiceCustomerPlainTextEmail,
@@ -271,9 +272,16 @@ export class CrmController {
     private readonly financeAuditService: FinanceAuditService,
     private readonly branchScopeService: BranchScopeService,
     private readonly configService: ConfigService,
+    private readonly technicianJobPushService: TechnicianJobPushService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
+
+  private enqueueTechnicianJobPush(task: Promise<void>) {
+    void task.catch((error) => {
+      console.error("[technician_job_push]", error);
+    });
+  }
 
   private requireActor(request: RequestWithActor) {
     return requireActorProfile(request.actor);
@@ -822,6 +830,10 @@ export class CrmController {
 
       const detail = await this.loadJobDetail(job.id, organizationId);
 
+      this.enqueueTechnicianJobPush(
+        this.technicianJobPushService.notifyJobCreated(organizationId, job, actor.user.id),
+      );
+
       return apiSuccess({ job: detail ? this.buildJobDetailResponse(detail) : job });
     } catch (error) {
       if (error instanceof HttpException) {
@@ -1079,6 +1091,17 @@ export class CrmController {
 
       const detail = await this.loadJobDetail(jobId, organizationId);
 
+      if (detail) {
+        this.enqueueTechnicianJobPush(
+          this.technicianJobPushService.notifyJobUpdated(
+            organizationId,
+            job,
+            detail,
+            actor.user.id,
+          ),
+        );
+      }
+
       return apiSuccess(detail ? this.buildJobDetailResponse(detail) : null);
     } catch (error) {
       apiError(400, "invalid_job_update_payload", "The job update payload is invalid.", error);
@@ -1146,6 +1169,17 @@ export class CrmController {
       );
 
       const detail = await this.loadJobDetail(jobId, organizationId);
+
+      if (detail) {
+        this.enqueueTechnicianJobPush(
+          this.technicianJobPushService.notifyJobStatusUpdated(
+            organizationId,
+            job,
+            detail,
+            actor.user.id,
+          ),
+        );
+      }
 
       return apiSuccess(detail ? this.buildJobDetailResponse(detail) : null);
     } catch (error) {
@@ -2935,6 +2969,16 @@ export class CrmController {
       );
       result.author_profile = actor.profile ?? null;
 
+      this.enqueueTechnicianJobPush(
+        this.technicianJobPushService.notifyJobNoteCreated({
+          organizationId,
+          job,
+          actorAuthUserId: actor.user.id,
+          findings: payload.findings,
+          recommendations: payload.recommendations,
+        }),
+      );
+
       return apiSuccess(this.buildJobNoteResponse(result));
     } catch (error) {
       apiError(400, "invalid_job_note_payload", "The job note payload is invalid.", error);
@@ -3291,6 +3335,10 @@ export class CrmController {
       );
 
       const detail = await this.loadJobDetail(job.id, organizationId);
+
+      this.enqueueTechnicianJobPush(
+        this.technicianJobPushService.notifyJobCreated(organizationId, job, actor.user.id),
+      );
 
       return apiSuccess({
         lead: updatedLead,

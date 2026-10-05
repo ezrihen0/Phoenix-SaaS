@@ -52,6 +52,7 @@ import { PhoenixInvoiceDocumentPresentationService } from "./phoenix-invoice-doc
 import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
 import { FinanceAuditService } from "./finance-audit.service";
 import { FinanceAuditEventEntity } from "../database/entities/finance-audit-event.entity";
+import { PushModule } from "../push/push.module";
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { FinanceAuditEventEntity } from "../database/entities/finance-audit-even
     CustomerPortalModule,
     DocumentsPdfModule,
     InvoiceDocumentsModule,
+    PushModule,
     TypeOrmModule.forFeature([
       ProfileEntity,
       TechnicianEntity,

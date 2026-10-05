@@ -28,6 +28,7 @@ import { InvoiceDocumentsModule } from "./documents/invoice-documents/invoice-do
 import { WarrantyModule } from "./warranty/warranty.module";
 import { TeamModule } from "./team/team.module";
 import { PhoenixFieldReportModule } from "./phoenix-field-report/phoenix-field-report.module";
+import { PushModule } from "./push/push.module";
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { PhoenixFieldReportModule } from "./phoenix-field-report/phoenix-field-r
     WarrantyModule,
     TeamModule,
     PhoenixFieldReportModule,
+    PushModule,
   ],
 })
 export class AppModule implements OnModuleInit {

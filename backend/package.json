@@ -73,6 +73,7 @@
     "home:ai:service-intelligence:validate": "node -r ts-node/register src/database/home-ai-service-intelligence-validate.ts",
     "jobs:access:check": "node -r ts-node/register src/crm/jobs-access-contract-check.ts",
     "jobs:status-model:unit-check": "node -r ts-node/register src/crm/job-status-model.unit-check.ts",
+    "jobs:technician-push:unit-check": "node -r ts-node/register src/push/job-technician-push.unit-check.ts",
     "money-engine:unit-check": "node -r ts-node/register src/crm/money-engine-unit-check.ts",
     "money-engine:tax-inclusive:unit-check": "node -r ts-node/register src/crm/money-engine-tax-inclusive-unit-check.ts",
     "phoenix-field-report:contract-check": "node -r ts-node/register src/phoenix-field-report/phoenix-field-report-contract-check.ts",
@@ -222,7 +223,8 @@
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.25"
+    "typeorm": "^0.3.25",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -230,6 +232,7 @@
     "@types/express": "^5.0.1",
     "@types/node": "^20.17.50",
     "@types/nodemailer": "^6.4.17",
+    "@types/web-push": "^3.6.4",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.7.2"

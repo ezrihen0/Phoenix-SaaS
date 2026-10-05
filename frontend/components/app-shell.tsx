@@ -26,6 +26,7 @@ import {
   Workflow,
 } from "lucide-react";
 
+import { TechnicianPushSetupBanner } from "@/components/push/technician-push-setup-banner";
 import { QuickCreateTrigger } from "@/components/quick-create-trigger";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { MobileShellNav } from "@/components/mobile-shell-nav";
@@ -38,6 +39,10 @@ import { handleLogout } from "@/lib/auth/logout";
 import { isShellNavHrefVisible, type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
 import { CRM_BRAND_NAME, CRM_LOGO_ALT, CRM_LOGO_SRC } from "@/lib/branding/crm-brand";
 import { resolveMobilePrimaryNav } from "@/lib/navigation/mobile-shell-nav";
+import {
+  getTechnicianNotificationPermission,
+  registerTechnicianWebPush,
+} from "@/lib/push/technician-web-push";
 
 type AppShellProps = {
   children: ReactNode;
@@ -225,6 +230,18 @@ export function AppShell({ children }: AppShellProps) {
       cancelled = true;
     };
   }, [pathname]);
+
+  useEffect(() => {
+    if (!enabled || shellNavRole !== "technician") {
+      return;
+    }
+
+    if (getTechnicianNotificationPermission() !== "granted") {
+      return;
+    }
+
+    void registerTechnicianWebPush().catch(() => undefined);
+  }, [enabled, shellNavRole, pathname]);
 
   useEffect(() => {
     setMoreMenuOpen(false);
@@ -506,6 +523,8 @@ export function AppShell({ children }: AppShellProps) {
           </header>
 
           <WorkspaceContextBanner />
+
+          <TechnicianPushSetupBanner enabled={enabled && shellNavRole === "technician"} />
 
           <div className={[
             "min-w-0 flex-1",

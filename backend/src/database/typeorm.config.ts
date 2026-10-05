@@ -97,6 +97,7 @@ import { InvoiceServiceIntelligenceEntity } from "./entities/invoice-service-int
 import { InvoiceServiceIntelligenceComponentEntity } from "./entities/invoice-service-intelligence-component.entity";
 import { InvoiceServiceIntelligenceWarrantyEntity } from "./entities/invoice-service-intelligence-warranty.entity";
 import { WarrantyCertificateEntity } from "./entities/warranty-certificate.entity";
+import { WebPushSubscriptionEntity } from "./entities/web-push-subscription.entity";
 
 type ConfigLookup = Pick<ConfigService, "get">;
 
@@ -192,6 +193,7 @@ export const typeOrmEntities = [
   InvoiceServiceIntelligenceEntity,
   InvoiceServiceIntelligenceComponentEntity,
   InvoiceServiceIntelligenceWarrantyEntity,
+  WebPushSubscriptionEntity,
 ];
 
 function readBooleanFlag(value: string | undefined, fallback: boolean) {
