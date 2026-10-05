@@ -1023,13 +1023,13 @@ export default function JobsNewWorkspace({
                 onChange={(event) => handleScheduleDateChange(event.target.value)}
               />
 
-              <FieldLabel label="Assign technician">
+              <FieldLabel label="Assign to">
                 <select
                   className={inputClass}
                   value={assignedTechnicianId}
                   onChange={(event) => handleTechnicianChange(event.target.value)}
                 >
-                  <option value="">Select technician...</option>
+                  <option value="">Select team member...</option>
                   {activeTechnicians.map((technician) => (
                     <option key={technician.id} value={technician.id}>
                       {technician.display_name}
@@ -1040,7 +1040,7 @@ export default function JobsNewWorkspace({
 
               {!assignedTechnicianId ? (
                 <p className="mt-6 text-sm text-[color:var(--sem-text-secondary)]">
-                  Select a technician to view availability.
+                  Select a team member to view availability.
                 </p>
               ) : null}
 

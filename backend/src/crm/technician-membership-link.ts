@@ -21,7 +21,7 @@ export async function ensureTechnicianForOrganizationMembership(
     },
   });
 
-  const displayName = input.displayName.trim() || "Technician";
+  const displayName = input.displayName.trim() || "Team member";
 
   if (existing) {
     existing.is_active = true;
@@ -110,7 +110,54 @@ export async function ensureTechnicianRosterForSystemRoleMemberships(
   for (const membership of activeMemberships) {
     const profile = profileByUserId.get(membership.user_id);
     const displayName =
-      profile?.full_name?.trim() || membership.user?.email?.trim() || "Technician";
+      profile?.full_name?.trim() || membership.user?.email?.trim() || "Team member";
+
+    await ensureTechnicianForOrganizationMembership(manager, {
+      organizationId: input.organizationId,
+      userId: membership.user_id,
+      displayName,
+      phone: profile?.phone ?? null,
+    });
+  }
+}
+
+/** Ensures roster rows exist for every active org member (any role) so jobs can assign any user. */
+export async function ensureTechnicianRosterForActiveOrganizationMemberships(
+  manager: EntityManager,
+  input: {
+    organizationId: string;
+  },
+) {
+  const membershipsRepository = manager.getRepository(MembershipEntity);
+  const profilesRepository = manager.getRepository(ProfileEntity);
+
+  const memberships = await membershipsRepository.find({
+    where: {
+      organization_id: input.organizationId,
+      status: "active",
+    },
+    relations: {
+      user: true,
+    },
+  });
+
+  const activeMemberships = memberships.filter((membership) => membership.user?.is_active === true);
+  if (activeMemberships.length === 0) {
+    return;
+  }
+
+  const userIds = Array.from(new Set(activeMemberships.map((membership) => membership.user_id)));
+  const profiles = await profilesRepository.find({
+    where: {
+      auth_user_id: In(userIds),
+    },
+  });
+  const profileByUserId = new Map(profiles.map((profile) => [profile.auth_user_id, profile] as const));
+
+  for (const membership of activeMemberships) {
+    const profile = profileByUserId.get(membership.user_id);
+    const displayName =
+      profile?.full_name?.trim() || membership.user?.email?.trim() || "Team member";
 
     await ensureTechnicianForOrganizationMembership(manager, {
       organizationId: input.organizationId,

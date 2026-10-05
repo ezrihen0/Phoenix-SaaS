@@ -121,7 +121,8 @@ export function actorCanFilterByTechnicianId(actor: ActorContext): boolean {
 
 export function actorCanViewTechnicianRoster(actor: ActorContext): boolean {
   return actorHasPermission(actor, "jobs.view")
-    || actorHasPermission(actor, "jobs.update");
+    || actorHasPermission(actor, "jobs.update")
+    || actorHasPermission(actor, "jobs.create");
 }
 
 export function requireTechnicianRosterViewPermission(

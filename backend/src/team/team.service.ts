@@ -13,8 +13,8 @@ import {
 } from "../auth/permissions";
 import { profileRoles, type ProfileRole } from "../crm/constants";
 import {
-  deactivateTechnicianForOrganizationMembership,
   ensureTechnicianForOrganizationMembership,
+  ensureTechnicianRosterForActiveOrganizationMemberships,
 } from "../crm/technician-membership-link";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
@@ -95,6 +95,9 @@ export class TeamService {
 
   async listMembers(actor: ActorContext) {
     const organizationId = this.requireOrganizationId(actor);
+    await ensureTechnicianRosterForActiveOrganizationMemberships(this.dataSource.manager, {
+      organizationId,
+    });
     const memberships = await this.membershipsRepository.find({
       where: {
         organization_id: organizationId,
@@ -265,19 +268,12 @@ export class TeamService {
     });
 
     const manager = this.dataSource.manager;
-    if (resolvedAccess.systemRole === "technician") {
-      await ensureTechnicianForOrganizationMembership(manager, {
-        organizationId,
-        userId: profile.auth_user_id,
-        displayName: profile.full_name,
-        phone: profile.phone,
-      });
-    } else if (previousRole === "technician") {
-      await deactivateTechnicianForOrganizationMembership(manager, {
-        organizationId,
-        userId: profile.auth_user_id,
-      });
-    }
+    await ensureTechnicianForOrganizationMembership(manager, {
+      organizationId,
+      userId: profile.auth_user_id,
+      displayName: profile.full_name,
+      phone: profile.phone,
+    });
 
     membership.custom_role = resolvedAccess.customRole;
     return this.buildMemberResponse(profile, membership);
@@ -794,14 +790,12 @@ export class TeamService {
       },
     });
 
-    if (input.resolvedAccess.systemRole === "technician") {
-      await ensureTechnicianForOrganizationMembership(manager, {
-        organizationId: input.organizationId,
-        userId: input.userId,
-        displayName: input.profile.full_name,
-        phone: input.profile.phone,
-      });
-    }
+    await ensureTechnicianForOrganizationMembership(manager, {
+      organizationId: input.organizationId,
+      userId: input.userId,
+      displayName: input.profile.full_name,
+      phone: input.profile.phone,
+    });
 
     membership.custom_role = input.resolvedAccess.customRole;
     return membership;

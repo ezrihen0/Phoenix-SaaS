@@ -38,7 +38,7 @@ export default function JobTechnicianAssignmentPanel({
         <span>Technician Assignment</span>
       </div>
       <p className="mt-3 text-sm leading-6 text-white/54">
-        Assign or change the field technician for this job.
+        Assign or change who is responsible for this job (any team member).
       </p>
 
       <label className="mt-4 block space-y-2 text-sm text-white/66">
@@ -63,7 +63,7 @@ export default function JobTechnicianAssignmentPanel({
           ? `${currentSelection.phone ?? "No phone on file"}${currentSelection.is_active ? "" : " • Inactive technician"}`
           : technicians.length
             ? "This job is currently unassigned."
-            : "No technicians are available for assignment yet."}
+            : "No team members are available for assignment yet."}
       </p>
 
       {errorMessage ? (

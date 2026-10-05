@@ -57,7 +57,7 @@ import {
   requireTechnicianRosterViewPermission,
 } from "./jobs-access";
 import { JobsService } from "./jobs.service";
-import { ensureTechnicianRosterForSystemRoleMemberships } from "./technician-membership-link";
+import { ensureTechnicianRosterForActiveOrganizationMemberships } from "./technician-membership-link";
 import {
   customerImportSourceOptions,
   type CustomerImportDuplicateMatch,
@@ -960,9 +960,8 @@ export class CrmController {
   }
 
   private async listTechniciansWithV1Fallback(organizationId: string, activeOnly: boolean) {
-    await ensureTechnicianRosterForSystemRoleMemberships(this.dataSource.manager, {
+    await ensureTechnicianRosterForActiveOrganizationMemberships(this.dataSource.manager, {
       organizationId,
-      systemRoles: ["technician"],
     });
     await this.provisionFallbackTechniciansIfNeeded(organizationId);
 

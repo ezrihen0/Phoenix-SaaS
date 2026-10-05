@@ -106,9 +106,10 @@ expect("actorCanViewOtherTechnicianCalendars requires jobs.view", () => {
   assert.equal(actorCanViewOtherTechnicianCalendars(tech), false);
 });
 
-expect("actorCanViewTechnicianRoster allows jobs.view or jobs.update", () => {
+expect("actorCanViewTechnicianRoster allows jobs.view, jobs.update, or jobs.create", () => {
   const viewer = buildActor({ role: "viewer", permissions: ["jobs.view"] });
   const dispatcher = buildActor({ role: "dispatcher", permissions: ["jobs.view"] });
+  const csr = buildActor({ role: "csr", permissions: ["jobs.create"] });
   const techOnlyAssigned = buildActor({
     role: "technician",
     permissions: ["jobs.assigned.view"],
@@ -117,6 +118,7 @@ expect("actorCanViewTechnicianRoster allows jobs.view or jobs.update", () => {
 
   assert.equal(actorCanViewTechnicianRoster(viewer), true);
   assert.equal(actorCanViewTechnicianRoster(dispatcher), true);
+  assert.equal(actorCanViewTechnicianRoster(csr), true);
   assert.equal(actorCanViewTechnicianRoster(techOnlyAssigned), false);
 });
 
