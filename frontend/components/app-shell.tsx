@@ -233,7 +233,7 @@ export function AppShell({ children }: AppShellProps) {
   }, [pathname]);
 
   useEffect(() => {
-    if (!enabled || shellNavRole !== "technician") {
+    if (!enabled || !shellNavRoleResolved) {
       return;
     }
 
@@ -242,7 +242,7 @@ export function AppShell({ children }: AppShellProps) {
     }
 
     void registerTechnicianWebPush().catch(() => undefined);
-  }, [enabled, shellNavRole, pathname]);
+  }, [enabled, shellNavRoleResolved, pathname]);
 
   useEffect(() => {
     setMoreMenuOpen(false);
@@ -527,7 +527,7 @@ export function AppShell({ children }: AppShellProps) {
 
           <WorkspaceContextBanner />
 
-          <TechnicianPushSetupBanner enabled={enabled && shellNavRole === "technician"} />
+          <TechnicianPushSetupBanner enabled={enabled && shellNavRoleResolved} />
 
           <div className={[
             "min-w-0 flex-1",

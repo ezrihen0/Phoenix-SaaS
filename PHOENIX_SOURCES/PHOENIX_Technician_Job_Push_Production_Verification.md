@@ -19,7 +19,7 @@
 | Frontend production alias | `app.phoenixfireplace.ca` (Vercel `pheonix-crm-frontend-6bxw`, root directory `frontend`) |
 | `GET /api/push/vapid-public-key` | Returns `{ enabled: true, publicKey: "…" }` |
 | `GET /push-sw.js` | Served from Phoenix app origin (service worker for OS notifications) |
-| Technician UI | “Enable job alerts” banner for `technician` role; auto re-subscribe when permission already granted |
+| Job alerts UI | “Enable job alerts” banner for **any signed-in org member**; auto re-subscribe when permission already granted |
 
 **Ops scripts (read-only / idempotent):**
 
@@ -63,6 +63,6 @@ When all rows are checked, status = **PRODUCTION CLOSED / PASS (device acceptanc
 
 ## Behavior reference
 
-- Push fires only when the **assigned technician’s** linked auth user is **not** the actor making the change.
+- Push fires when the **assignee’s** linked auth user (roster row for that team member) is **not** the actor making the change—works for any role, not only `technician`.
 - Delivery uses **Web Push** subscriptions in `web_push_subscriptions` (not SMS/email).
 - Automations `notify_technician` registry remains separate; this is a deterministic CRM hook on job create/update/status/note.

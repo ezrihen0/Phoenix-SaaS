@@ -41,7 +41,7 @@ export function TechnicianPushSetupBanner({ enabled }: TechnicianPushSetupBanner
           <div className="min-w-0">
             <p className="text-sm font-medium text-[color:var(--sem-text-primary)]">Enable job alerts</p>
             <p className="mt-1 text-xs leading-relaxed text-[color:var(--sem-text-muted)]">
-              Get mobile notifications when your assigned jobs are created, rescheduled, or updated by the office.
+              Get mobile notifications when someone assigns you a job or updates a job assigned to you (any role).
               {isTechnicianWebPushSupported() ? " Add Phoenix to your home screen for the most reliable alerts on iPhone." : ""}
             </p>
             {message ? <p className="mt-2 text-xs text-[color:var(--sem-text-muted)]">{message}</p> : null}
