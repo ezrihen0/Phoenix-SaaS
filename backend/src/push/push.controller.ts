@@ -57,7 +57,6 @@ function requireActiveOrganizationId(actor: ReturnType<typeof requireActorProfil
   return actor.organization_id;
 }
 
-@UseGuards(SessionGuard, OperationalAccessGuard)
 @Controller("api/push")
 export class PushController {
   constructor(
@@ -77,6 +76,7 @@ export class PushController {
     });
   }
 
+  @UseGuards(SessionGuard, OperationalAccessGuard)
   @Put("subscriptions")
   async upsertSubscription(@Req() request: RequestWithActor, @Body() body: unknown) {
     const actor = requireActorProfile(request.actor);
@@ -106,6 +106,7 @@ export class PushController {
     });
   }
 
+  @UseGuards(SessionGuard, OperationalAccessGuard)
   @Delete("subscriptions")
   async deleteSubscription(@Req() request: RequestWithActor, @Body() body: unknown) {
     const actor = requireActorProfile(request.actor);
