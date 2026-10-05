@@ -1,7 +1,7 @@
 import type { ConfigService } from "@nestjs/config";
 
 /**
- * Public hostname customers use for /access/{token} and portal pages.
+ * Public hostname customers use for portal magic-link entry and portal pages.
  * Distinct from PUBLIC_BASE_URL (staff WizField application).
  *
  * Precedence: CUSTOMER_PORTAL_BASE_URL → PHOENIX_PORTAL_PUBLIC_BASE_URL → PUBLIC_BASE_URL → local dev default.
@@ -25,7 +25,21 @@ export function resolveCustomerPortalBaseUrl(configService: ConfigService): stri
   return "http://localhost:3000";
 }
 
-export function buildCustomerPortalAccessUrl(configService: ConfigService, rawToken: string): string {
+export type CustomerPortalAccessUrlOptions = {
+  /** Invoice delivery links auto-redeem via POST after the magic page loads. */
+  entry?: "invoice";
+};
+
+export function buildCustomerPortalAccessUrl(
+  configService: ConfigService,
+  rawToken: string,
+  options?: CustomerPortalAccessUrlOptions,
+): string {
   const token = rawToken.trim();
-  return `${resolveCustomerPortalBaseUrl(configService)}/access/${token}`;
+  const base = resolveCustomerPortalBaseUrl(configService);
+  const params = new URLSearchParams({ token });
+  if (options?.entry === "invoice") {
+    params.set("entry", "invoice");
+  }
+  return `${base}/portal/auth/magic?${params.toString()}`;
 }

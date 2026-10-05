@@ -1,9 +1,11 @@
 /**
- * BLOCKER gate: portal.phoenixfireplace.ca must serve the same Next routes as app (access + portal invoice).
+ * BLOCKER gate: portal.phoenixfireplace.ca must serve website portal routes (magic confirm + invoice deep-link).
  */
 const PORTAL =
   process.env.PHOENIX_PORTAL_VERIFY_BASE_URL?.trim() || "https://portal.phoenixfireplace.ca";
 const APP = process.env.PHOENIX_VERIFY_BASE_URL?.trim() || "https://app.phoenixfireplace.ca";
+
+const LEGACY_TOKEN = "0000000000000000000000000000000000000000000000000000000000000001";
 
 const checks = [];
 
@@ -18,25 +20,35 @@ async function fetchText(url, init) {
 }
 
 async function main() {
-  const accessProbe = await fetchText(`${PORTAL}/access/0000000000000000000000000000000000000000000000000000000000000001`);
-  record("portal_access_route_not_host_404", accessProbe.response.status !== 404, {
-    status: accessProbe.response.status,
-    content_type: accessProbe.response.headers.get("content-type"),
+  const magicProbe = await fetchText(`${PORTAL}/portal/auth/magic?token=${encodeURIComponent(LEGACY_TOKEN)}`);
+  record("portal_magic_confirm_route_not_host_404", magicProbe.response.status !== 404, {
+    status: magicProbe.response.status,
+    content_type: magicProbe.response.headers.get("content-type"),
   });
-  record("portal_access_opens_redeem_shell", accessProbe.text.includes("Opening your customer portal"), {
-    matched: accessProbe.text.includes("Opening your customer portal"),
-  });
-  record("portal_access_not_plaintext_download", !/^text\/plain\b/i.test(accessProbe.response.headers.get("content-type") ?? ""), {
-    content_type: accessProbe.response.headers.get("content-type"),
+  record("portal_magic_confirm_shell", magicProbe.text.includes("Confirm sign-in"), {
+    matched: magicProbe.text.includes("Confirm sign-in"),
   });
 
-  const invoiceProbe = await fetchText(`${PORTAL}/portal/invoices/00000000-0000-4000-8000-000000000001`);
+  const accessProbe = await fetchText(`${PORTAL}/access/${LEGACY_TOKEN}`, { redirect: "manual" });
+  const accessLocation = accessProbe.response.headers.get("location") ?? "";
+  record("portal_legacy_access_not_host_404", accessProbe.response.status !== 404, {
+    status: accessProbe.response.status,
+  });
+  record("portal_legacy_access_redirects_to_magic", accessLocation.includes("/portal/auth/magic?token="), {
+    status: accessProbe.response.status,
+    location: accessLocation,
+  });
+
+  const invoiceProbe = await fetchText(`${PORTAL}/portal/invoices/00000000-0000-4000-8000-000000000001`, {
+    redirect: "manual",
+  });
+  const invoiceLocation = invoiceProbe.response.headers.get("location") ?? "";
   record("portal_invoice_route_not_host_404", invoiceProbe.response.status !== 404, {
     status: invoiceProbe.response.status,
   });
-  record("portal_invoice_next_shell", invoiceProbe.response.status === 200, {
+  record("portal_invoice_requires_session", invoiceProbe.response.status === 307 && invoiceLocation.includes("/portal/login"), {
     status: invoiceProbe.response.status,
-    has_next: invoiceProbe.text.includes("__NEXT_DATA__") || invoiceProbe.text.includes("Loading invoice"),
+    location: invoiceLocation,
   });
 
   const rootProbe = await fetchText(`${PORTAL}/`, { redirect: "manual" });
@@ -46,8 +58,12 @@ async function main() {
     location,
   });
 
-  const appAccess = await fetchText(`${APP}/access/0000000000000000000000000000000000000000000000000000000000000001`);
-  record("app_access_baseline_ok", appAccess.response.status === 200, { status: appAccess.response.status });
+  const appAccess = await fetchText(`${APP}/access/${LEGACY_TOKEN}`, { redirect: "manual" });
+  const appLocation = appAccess.response.headers.get("location") ?? "";
+  record("app_legacy_access_redirects_to_portal_magic", appLocation.includes("/portal/auth/magic?token="), {
+    status: appAccess.response.status,
+    location: appLocation,
+  });
 
   const ok = checks.every((check) => check.ok);
   console.log(JSON.stringify({ ok, portal: PORTAL, app: APP, checks }, null, 2));

@@ -31,8 +31,13 @@ import { JobEntity } from "./entities/job.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
 import { OrganizationSettingEntity } from "./entities/organization-setting.entity";
 import { PortalAccessEventEntity } from "./entities/portal-access-event.entity";
+import { PortalEmailOtpChallengeEntity } from "./entities/portal-email-otp-challenge.entity";
+import { PortalIdentityEntity } from "./entities/portal-identity.entity";
 import { PortalMagicLinkEntity } from "./entities/portal-magic-link.entity";
 import { PortalSessionEntity } from "./entities/portal-session.entity";
+import { PortalEmailOtpService } from "../customer-portal/portal-email-otp.service";
+import { PortalIdentityService } from "../customer-portal/portal-identity.service";
+import type { EmailService } from "../email/email.service";
 import { QuoteEntity } from "./entities/quote.entity";
 import { TechnicianEntity } from "./entities/technician.entity";
 import { WarrantyCertificateEntity } from "./entities/warranty-certificate.entity";
@@ -75,6 +80,7 @@ type Seed = {
 };
 
 const SMOKE_PHOENIX_INTEGRATION_SECRET = "portal-phoenix-integration-smoke-secret";
+const SMOKE_PORTAL_OTP_PEPPER = "portal-isolation-otp-pepper";
 
 class SmokeConfigService {
   get(key: string): string | undefined {
@@ -89,6 +95,9 @@ class SmokeConfigService {
     }
     if (key === "PHOENIX_PORTAL_PUBLIC_BASE_URL") {
       return "https://portal.phoenixfireplace.ca";
+    }
+    if (key === "PORTAL_OTP_PEPPER") {
+      return SMOKE_PORTAL_OTP_PEPPER;
     }
     return process.env[key];
   }
@@ -199,6 +208,29 @@ function buildPortalNativeInvoicePdfService(dataSource: DataSource) {
     ),
     new InvoicePdfService(new PdfRenderService()),
   );
+}
+
+function buildPortalIdentityService(dataSource: DataSource) {
+  return new PortalIdentityService(
+    dataSource.getRepository(PortalIdentityEntity),
+    dataSource.getRepository(CustomerEntity),
+  );
+}
+
+function buildPortalOtpService(dataSource: DataSource) {
+  const config = new SmokeConfigService() as ConfigService;
+  const emailService = { send: async () => undefined } as unknown as EmailService;
+  return new PortalEmailOtpService(
+    config,
+    emailService,
+    buildPortalIdentityService(dataSource),
+    buildPortalService(dataSource),
+    dataSource.getRepository(PortalEmailOtpChallengeEntity),
+  );
+}
+
+function hashSmokeOtpCode(code: string) {
+  return createHash("sha256").update(`${SMOKE_PORTAL_OTP_PEPPER}:${code}`).digest("hex");
 }
 
 function buildPortalService(dataSource: DataSource) {
@@ -465,6 +497,15 @@ async function runCases(summary: SmokeSummary, dataSource: DataSource, seed: See
   const response = mockResponse();
 
   let rawToken = "";
+  const portalIdentity = buildPortalIdentityService(dataSource);
+
+  await expectPass(summary, "P0 — portal identity ready for customer A", async () => {
+    const identity = await portalIdentity.ensurePortalIdentityForCustomer(seed.customerAId);
+    if (identity.status !== "ready") {
+      throw new Error(`Expected ready identity, got ${identity.status}`);
+    }
+    return { portal_identity_id: identity.id };
+  });
 
   await expectPass(summary, "P1 — staff mints org-scoped magic link", async () => {
     const link = await portal.createMagicLinkForStaff({
@@ -488,7 +529,59 @@ async function runCases(summary: SmokeSummary, dataSource: DataSource, seed: See
     if (result.redirect_path !== "/portal") {
       throw new Error(`Expected /portal redirect, got ${result.redirect_path}`);
     }
-    return { customer_id: result.customer_id };
+    if (!result.portal_identity_id) {
+      throw new Error("Expected portal_identity_id on redeemed session");
+    }
+    return { customer_id: result.customer_id, portal_identity_id: result.portal_identity_id };
+  });
+
+  await expectPass(summary, "P2a — email OTP redeems into same portal identity session", async () => {
+    const identity = await portalIdentity.ensurePortalIdentityForCustomer(seed.customerAId);
+    const otpCode = "123456";
+    const challengesRepo = dataSource.getRepository(PortalEmailOtpChallengeEntity);
+    await challengesRepo.save(
+      challengesRepo.create({
+        organization_id: seed.orgAId,
+        portal_identity_id: identity.id,
+        email_normalized: "a@example.com",
+        code_hash: hashSmokeOtpCode(otpCode),
+        expires_at: new Date(Date.now() + 10 * 60 * 1000),
+        send_attempt_bucket: "smoke",
+        verify_attempt_count: 0,
+        consumed_at: null,
+        client_ip_hash: null,
+        purpose: "login",
+        context_redirect_path: null,
+        context_job_id: null,
+      }),
+    );
+
+    const otpService = buildPortalOtpService(dataSource);
+    const verified = await otpService.verifyOtp({
+      organizationId: seed.orgAId,
+      email: "a@example.com",
+      code: otpCode,
+      request,
+      response: mockResponse(),
+      setSessionCookie: false,
+    });
+
+    if (verified.customer_id !== seed.customerAId) {
+      throw new Error(`Expected customer ${seed.customerAId}, got ${verified.customer_id}`);
+    }
+    if (verified.portal_identity_id !== identity.id) {
+      throw new Error("OTP session missing expected portal_identity_id");
+    }
+
+    const session = await dataSource.getRepository(PortalSessionEntity).findOne({
+      where: { customer_id: seed.customerAId, portal_identity_id: identity.id },
+      order: { created_at: "DESC" },
+    });
+    if (!session) {
+      throw new Error("Expected portal session row with portal_identity_id after OTP verify");
+    }
+
+    return { portal_identity_id: verified.portal_identity_id, session_id: session.id };
   });
 
   await expectPass(summary, "P2b — target_job_id magic link redirects to portal invoice", async () => {
@@ -507,6 +600,11 @@ async function runCases(summary: SmokeSummary, dataSource: DataSource, seed: See
       targetJobId: invoiceA.job_id,
       deliveryMethod: "email",
     });
+
+    const staffEmailUrl = portal.buildCustomerPortalAccessUrl(link.raw_token);
+    if (!staffEmailUrl.includes("/portal/auth/magic?token=")) {
+      throw new Error(`Expected staff/email magic URL shape, got ${staffEmailUrl}`);
+    }
 
     const redeemed = await portal.redeemMagicLinkToken(link.raw_token, request, mockResponse());
     if (!redeemed.ok) {

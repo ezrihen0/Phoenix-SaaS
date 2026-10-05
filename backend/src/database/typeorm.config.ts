@@ -64,6 +64,8 @@ import { OrganizationTeamEntitlementEntity } from "./entities/organization-team-
 import { TeamRbacAuditEventEntity } from "./entities/team-rbac-audit-event.entity";
 import { OrganizationSettingEntity } from "./entities/organization-setting.entity";
 import { PortalAccessEventEntity } from "./entities/portal-access-event.entity";
+import { PortalEmailOtpChallengeEntity } from "./entities/portal-email-otp-challenge.entity";
+import { PortalIdentityEntity } from "./entities/portal-identity.entity";
 import { PortalMagicLinkEntity } from "./entities/portal-magic-link.entity";
 import { PortalSessionEntity } from "./entities/portal-session.entity";
 import { PricebookBundleEntity } from "./entities/pricebook-bundle.entity";
@@ -160,6 +162,8 @@ export const typeOrmEntities = [
   InspectionItemEntity,
   InspectionRequiredFieldEntity,
   PortalMagicLinkEntity,
+  PortalIdentityEntity,
+  PortalEmailOtpChallengeEntity,
   PortalSessionEntity,
   PortalAccessEventEntity,
   OrganizationSettingEntity,

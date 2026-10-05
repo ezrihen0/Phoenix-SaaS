@@ -8,8 +8,12 @@ import mysql from "mysql2/promise";
 import { DataSource } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
+import { PortalBookingConfirmationService } from "../customer-portal/portal-booking-confirmation.service";
+import { PortalIdentityService } from "../customer-portal/portal-identity.service";
 import { PublicBookingsService } from "../public/public-bookings.service";
+import { CustomerEntity } from "./entities/customer.entity";
 import { OrganizationEntity } from "./entities/organization.entity";
+import { PortalIdentityEntity } from "./entities/portal-identity.entity";
 import { buildDataSourceOptions } from "./typeorm.config";
 import { verifyDatabaseSchema } from "./verify-schema";
 
@@ -144,7 +148,14 @@ async function main() {
       is_active: true,
     }));
 
-    const service = new PublicBookingsService(dataSource);
+    const portalIdentityService = new PortalIdentityService(
+      dataSource.getRepository(PortalIdentityEntity),
+      dataSource.getRepository(CustomerEntity),
+    );
+    const portalBookingConfirmationService = {
+      sendBookingConfirmationWithPortalAccess: async () => ({ status: "skipped_not_ready", expiresAt: null }),
+    } as unknown as PortalBookingConfirmationService;
+    const service = new PublicBookingsService(dataSource, portalIdentityService, portalBookingConfirmationService);
     const input = minimalBookingPayload();
     const idempotencyKey = randomUUID();
 

@@ -145,15 +145,19 @@ function buildService(dataSource: DataSource, organizationId: string) {
     dataSource,
   );
 
-  const portalStub = {
-    createMagicLinkForPhoenixIntegration: async () => ({ expires_at: null }),
+  const portalBookingStub = {
+    sendBookingConfirmationWithPortalAccess: async () => ({ status: "code_sent", expiresAt: null }),
+  };
+  const portalIdentityStub = {
+    ensurePortalIdentityForCustomer: async (customerId: string) => ({ id: "identity", customer_id: customerId }),
   };
 
   return new PhoenixRequestServiceIntegrationService(
     dataSource,
     branchScopeService,
     authStub,
-    portalStub as never,
+    portalIdentityStub as never,
+    portalBookingStub as never,
   );
 }
 

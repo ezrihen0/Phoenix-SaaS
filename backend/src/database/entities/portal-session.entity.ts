@@ -10,6 +10,7 @@ import {
 
 import { CustomerEntity } from "./customer.entity";
 import { OrganizationEntity } from "./organization.entity";
+import { PortalIdentityEntity } from "./portal-identity.entity";
 
 @Entity({ name: "portal_sessions" })
 export class PortalSessionEntity {
@@ -27,6 +28,9 @@ export class PortalSessionEntity {
 
   @Column({ type: "varchar", length: 36, nullable: true })
   portal_magic_link_id!: string | null;
+
+  @Column({ type: "varchar", length: 36, nullable: true })
+  portal_identity_id!: string | null;
 
   @Column({ type: "boolean", default: false })
   is_preview!: boolean;
@@ -54,6 +58,13 @@ export class PortalSessionEntity {
   })
   @JoinColumn({ name: "customer_id", referencedColumnName: "id" })
   customer?: CustomerEntity;
+
+  @ManyToOne(() => PortalIdentityEntity, {
+    nullable: true,
+    onDelete: "SET NULL",
+  })
+  @JoinColumn({ name: "portal_identity_id", referencedColumnName: "id" })
+  portal_identity?: PortalIdentityEntity | null;
 
   @ManyToOne(() => OrganizationEntity, {
     nullable: true,

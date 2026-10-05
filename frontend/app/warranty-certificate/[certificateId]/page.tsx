@@ -5,35 +5,13 @@ import { ArrowLeft } from "lucide-react";
 import WarrantyCertificatePreview from "@/components/warranty-certificate-preview";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerRoles } from "@/lib/auth/server-session";
+import type { WarrantyDocumentViewModel } from "@/lib/crm/warranty-document.types";
 
 type WarrantyCertificateRecord = {
   id: string;
   related_invoice_id: string | null;
-  related_job_id: string | null;
-  certificate_number: string;
-  warranty_type: string;
-  warranty_start_date: string;
-  warranty_end_date: string;
   pdf_url: string;
-  snapshot: {
-    companyName: string;
-    customerName: string;
-    customerCompany: string | null;
-    customerEmail: string | null;
-    customerPhone: string | null;
-    customerAddressLines: string[];
-    companyPhone: string | null;
-    companyEmail: string | null;
-    companyWebsite: string | null;
-    companyAddress: string | null;
-    invoiceNumber: string | null;
-    completionDateLabel: string;
-    lineItems: Array<{
-      name: string;
-      quantity: string;
-      warrantyMonths: number | null;
-    }>;
-  } | null;
+  document: WarrantyDocumentViewModel | null;
 };
 
 export default async function WarrantyCertificateDetailPage({
@@ -61,7 +39,7 @@ export default async function WarrantyCertificateDetailPage({
     throw error;
   }
 
-  if (!certificate || !certificate.snapshot) {
+  if (!certificate?.document) {
     notFound();
   }
 
@@ -88,39 +66,7 @@ export default async function WarrantyCertificateDetailPage({
           </div>
 
           <div className="mt-6">
-            <WarrantyCertificatePreview
-              certificateNumber={certificate.certificate_number}
-              invoiceNumber={certificate.snapshot.invoiceNumber ?? "-"}
-              issuedAt={certificate.warranty_start_date}
-              paidAt={certificate.warranty_start_date}
-              warrantyEndDate={certificate.warranty_end_date}
-              customerName={certificate.snapshot.customerName}
-              customerCompanyName={certificate.snapshot.customerCompany}
-              customerEmail={certificate.snapshot.customerEmail}
-              customerPhone={certificate.snapshot.customerPhone}
-              customerAddressLines={certificate.snapshot.customerAddressLines}
-              jobTitle={null}
-              companySettings={{
-                businessName: certificate.snapshot.companyName,
-                displayInitials: null,
-                companyDescription: null,
-                address: certificate.snapshot.companyAddress,
-                city: null,
-                zip: null,
-                website: certificate.snapshot.companyWebsite,
-                companyEmail: certificate.snapshot.companyEmail,
-                phone: certificate.snapshot.companyPhone,
-              }}
-              lineItems={certificate.snapshot.lineItems.map((lineItem, index) => ({
-                id: `${certificate.id}-${index}`,
-                sku_snapshot: "",
-                name_snapshot: lineItem.name,
-                description_snapshot: null,
-                quantity: lineItem.quantity,
-                warranty_months_snapshot: lineItem.warrantyMonths,
-                sort_order: index,
-              }))}
-            />
+            <WarrantyCertificatePreview document={certificate.document} />
           </div>
         </section>
       </div>

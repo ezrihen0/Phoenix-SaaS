@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
-import { mintStaffPortalMagicLink } from "@/lib/portal/staff-magic-link-api";
+import { customerPortalMagicLinkUrl, mintStaffPortalMagicLink } from "@/lib/portal/staff-magic-link-api";
 
 type WarrantyCertificateSummary = {
   id: string;
@@ -21,6 +22,7 @@ export default function WarrantyCertificateActions({
   customerId: string | null;
   disabled: boolean;
 }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [copying, setCopying] = useState(false);
@@ -67,6 +69,7 @@ export default function WarrantyCertificateActions({
       });
       setCertificate(next);
       setMessage("Warranty certificate generated and frozen.");
+      router.refresh();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Warranty certificate could not be generated.");
     } finally {
@@ -85,7 +88,7 @@ export default function WarrantyCertificateActions({
     setMessage(null);
     try {
       const minted = await mintStaffPortalMagicLink(customerId);
-      const link = `${window.location.origin}/access/${minted.raw_token}`;
+      const link = customerPortalMagicLinkUrl(minted.raw_token);
       await navigator.clipboard.writeText(link);
       setMessage("Customer portal link copied. Customer can open and download the warranty certificate.");
     } catch (error) {

@@ -1,53 +1,20 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { use, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { customerPortalMagicLinkUrl } from "@/lib/portal/staff-magic-link-api";
 
-import { portalApiFetch } from "@/lib/portal/browser-api";
+type LegacyPortalAccessPageProps = {
+  params: Promise<{ token: string }>;
+};
 
-export default function PortalAccessPage({ params }: { params: Promise<{ token: string }> }) {
-  const resolvedParams = use(params);
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+/** Legacy links on the staff app origin redirect to the live portal magic confirm step. */
+export default async function LegacyPortalAccessPage({ params }: LegacyPortalAccessPageProps) {
+  const { token } = await params;
+  const trimmed = token.trim();
+  if (!trimmed) {
+    redirect(
+      `${process.env.NEXT_PUBLIC_CUSTOMER_PORTAL_BASE_URL?.replace(/\/$/, "") || "https://portal.phoenixfireplace.ca"}/portal/login`,
+    );
+  }
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function redeem() {
-      try {
-        const redeemed = await portalApiFetch<{ redirect_path?: string | null }>(
-          "/api/portal/magic-links/redeem",
-          {
-            method: "POST",
-            body: JSON.stringify({ token: resolvedParams.token }),
-          },
-        );
-        if (isMounted) {
-          const redirectPath =
-            typeof redeemed.redirect_path === "string" && redeemed.redirect_path.startsWith("/")
-              ? redeemed.redirect_path
-              : "/portal";
-          router.replace(redirectPath);
-        }
-      } catch (nextError) {
-        if (isMounted) {
-          setError(nextError instanceof Error ? nextError.message : "Portal link could not be opened.");
-        }
-      }
-    }
-
-    void redeem();
-    return () => {
-      isMounted = false;
-    };
-  }, [resolvedParams.token, router]);
-
-  return (
-    <main className="min-h-screen bg-[color:var(--flat-canvas)] px-6 py-16 text-[color:var(--text-primary)]">
-      <div className="mx-auto max-w-xl rounded-[24px] border border-[color:rgba(212,175,55,0.2)] bg-[linear-gradient(170deg,rgba(8,8,8,0.96),rgba(19,19,19,0.9))] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.35)]">
-        <h1 className="text-2xl font-semibold">Opening your customer portal...</h1>
-        {error ? <p className="mt-4 rounded-[12px] border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p> : <p className="mt-4 text-sm text-[color:var(--text-secondary)]">Please wait while we verify your secure access link.</p>}
-      </div>
-    </main>
-  );
+  redirect(`${customerPortalMagicLinkUrl(trimmed)}&entry=invoice`);
 }

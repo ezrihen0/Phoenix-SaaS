@@ -4,6 +4,9 @@ import { createHash } from "crypto";
 import { DataSource, EntityManager, QueryFailedError, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
+import { PortalBookingConfirmationService } from "../customer-portal/portal-booking-confirmation.service";
+import { PortalIdentityService } from "../customer-portal/portal-identity.service";
+import type { Request } from "express";
 import { CustomerEntity } from "../database/entities/customer.entity";
 import { LeadEntity } from "../database/entities/lead.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
@@ -32,6 +35,7 @@ export type PublicBookingCreateInput = {
   input: PublicBookingInput;
   idempotencyKeyHeader?: string | null;
   clientIpHash?: string | null;
+  request?: Request;
   testHooks?: PublicBookingTestHooks;
 };
 
@@ -62,6 +66,8 @@ export class PublicBookingsService {
   constructor(
     @InjectDataSource()
     private readonly dataSource: DataSource,
+    private readonly portalIdentityService: PortalIdentityService,
+    private readonly portalBookingConfirmationService: PortalBookingConfirmationService,
   ) {}
 
   /**
@@ -212,12 +218,19 @@ export class PublicBookingsService {
 
         await queryRunner.commitTransaction();
 
-        return {
+        const result = {
           ok: true as const,
           leadId: lead.id,
           duplicate: false,
           message: "Booking request received.",
         };
+        await this.sendPortalBookingConfirmationIfEligible({
+          organizationId: options.organizationId,
+          customerId: customer.id,
+          input: options.input,
+          request: options.request,
+        });
+        return result;
       } catch (error) {
         await queryRunner.rollbackTransaction();
 
@@ -331,6 +344,31 @@ export class PublicBookingsService {
     }
   }
 
+  private async sendPortalBookingConfirmationIfEligible(input: {
+    organizationId: string;
+    customerId: string;
+    input: PublicBookingInput;
+    request?: Request;
+  }) {
+    if (!input.request || !input.input.email?.trim()) {
+      return;
+    }
+
+    await this.portalBookingConfirmationService.sendBookingConfirmationWithPortalAccess({
+      organizationId: input.organizationId,
+      customerId: input.customerId,
+      customerName: input.input.fullName,
+      email: input.input.email,
+      serviceSummary: input.input.serviceType,
+      addressLine: [input.input.serviceAddressLine1, input.input.serviceCity, input.input.servicePostalCode]
+        .filter(Boolean)
+        .join(", "),
+      scheduledSummary: null,
+      jobId: null,
+      request: input.request,
+    }).catch(() => undefined);
+  }
+
   private async findOrCreateCustomerForBooking(
     manager: EntityManager,
     organizationId: string,
@@ -361,6 +399,7 @@ export class PublicBookingsService {
     }) ?? null;
 
     if (existing) {
+      await this.portalIdentityService.ensurePortalIdentityForCustomer(existing.id);
       return existing;
     }
 
@@ -382,6 +421,7 @@ export class PublicBookingsService {
     }));
 
     await testHooks?.afterCustomerInsert?.(manager);
+    await this.portalIdentityService.ensurePortalIdentityForCustomer(created.id);
     return created;
   }
 

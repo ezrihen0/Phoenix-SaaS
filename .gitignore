@@ -98,6 +98,7 @@ backups/
 # -----------------------------
 # OS / editor junk
 # -----------------------------
+.cursor/
 .DS_Store
 Thumbs.db
 *.swp
@@ -113,6 +114,8 @@ Thumbs.db
 # -----------------------------
 # Local scratch outputs
 # -----------------------------
+data/jobber-export/
+backend/reports/jobber-import/
 .tmp-automations-cookies.txt
 search_results*.txt
 tsc_output.txt
@@ -122,3 +125,5 @@ Phoenix-CRM_recovered/docs/
 Phoenix-CRM_recovered/
 .pnpm-store/
 node_modules/
+.vercel
+.env*

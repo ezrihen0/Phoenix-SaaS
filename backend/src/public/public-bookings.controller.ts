@@ -55,6 +55,7 @@ export class PublicBookingsController {
       input: payload,
       idempotencyKeyHeader,
       clientIpHash: hashClientIp(resolveClientIp(request)),
+      request,
     }));
   }
 

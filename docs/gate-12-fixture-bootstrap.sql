@@ -10,7 +10,7 @@
 -- Includes: orgs, users, memberships, customers, leads, jobs, quotes, invoices, portal_magic_links.
 -- Re-run safety: DELETE fixture rows in reverse FK order if emails already exist.
 --
--- Raw portal tokens (for /access/<token> manual tests):
+-- Raw portal tokens (for /portal/auth/magic?token= manual tests; legacy /access/<token> redirects):
 --   Valid:   gate12-portal-test-token
 --   Expired: gate12-portal-expired-token
 -- =============================================================================

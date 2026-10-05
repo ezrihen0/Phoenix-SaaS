@@ -129,7 +129,10 @@ async function main() {
       deliveryMethod: "email",
     });
 
-    const magicLinkUrl = buildCustomerPortalAccessUrl(configService, portalLink.raw_token);
+    const magicLinkUrl = buildCustomerPortalAccessUrl(configService, portalLink.raw_token, { entry: "invoice" });
+    if (!magicLinkUrl.includes("/portal/auth/magic?") || !magicLinkUrl.includes("entry=invoice")) {
+      throw new Error(`Unexpected invoice magic link URL shape: ${magicLinkUrl}`);
+    }
     const branding = new DocumentBrandingSnapshotService().fromOrganizationSettings(orgSettings);
     const invoiceNumber = fixture.document_number?.trim() || "CLOSEOUT-VERIFY";
     const messagePlain = [

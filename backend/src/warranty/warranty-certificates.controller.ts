@@ -68,6 +68,22 @@ export class WarrantyCertificatesController {
     return apiSuccess(this.warrantyCertificatesService.buildResponse(certificate));
   }
 
+  @Get("by-invoice/:invoiceId/document")
+  async getDocumentByInvoice(@Req() request: RequestWithActor, @Param("invoiceId") invoiceId: string) {
+    const actor = requirePermission(
+      request.actor,
+      "invoices.view",
+      "warranty_view_forbidden",
+      "This account cannot view warranty certificates.",
+    );
+    const organizationId = actor.organization_id?.trim();
+    if (!organizationId) {
+      apiError(400, "organization_context_missing", "An active organization is required.");
+    }
+    const document = await this.warrantyCertificatesService.resolveDocumentForInvoice(organizationId, invoiceId);
+    return apiSuccess({ document });
+  }
+
   @Get("by-invoice/:invoiceId")
   async getByInvoice(@Req() request: RequestWithActor, @Param("invoiceId") invoiceId: string) {
     const actor = requirePermission(
@@ -119,10 +135,9 @@ export class WarrantyCertificatesController {
     }
     const certificate = await this.warrantyCertificatesService.getByIdForOrganization(certificateId, organizationId);
     const pdfBuffer = await this.warrantyCertificatesService.readPdfBuffer(certificate);
-    const certificateNumber = `WAR-${certificate.id.slice(0, 8).toUpperCase()}`;
     setPdfDownloadResponseHeaders(response, {
       download,
-      filename: `warranty-${certificateNumber}.pdf`,
+      filename: this.warrantyCertificatesService.pdfFilename(certificate),
     });
     return new StreamableFile(pdfBuffer);
   }

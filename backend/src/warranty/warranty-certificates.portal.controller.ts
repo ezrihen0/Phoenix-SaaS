@@ -49,10 +49,9 @@ export class WarrantyCertificatesPortalController {
     }
     const certificate = await this.warrantyCertificatesService.getByIdForPortal(certificateId, organizationId, customerId);
     const pdfBuffer = await this.warrantyCertificatesService.readPdfBuffer(certificate);
-    const certificateNumber = `WAR-${certificate.id.slice(0, 8).toUpperCase()}`;
     setPdfDownloadResponseHeaders(response, {
       download,
-      filename: `warranty-${certificateNumber}.pdf`,
+      filename: this.warrantyCertificatesService.pdfFilename(certificate),
     });
     return new StreamableFile(pdfBuffer);
   }

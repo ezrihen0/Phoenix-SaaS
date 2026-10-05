@@ -13,11 +13,19 @@ import { OrganizationSettingEntity } from "../database/entities/organization-set
 import { WarrantyCertificateEntity } from "../database/entities/warranty-certificate.entity";
 import { resolveInvoiceDisplayNumber } from "../crm/invoice-display-number";
 import { DocumentBrandingSnapshotService } from "../documents/pdf/document-branding-snapshot.service";
+import {
+  buildViewModelFromSnapshot,
+  planWarrantyIssue,
+  resolveWarrantyCoverageStart,
+  warrantyPdfFilename,
+  warrantyPdfRendererForSnapshot,
+  type WarrantyDocumentViewModel,
+  type WarrantyIssueInput,
+  type WarrantyStoredSnapshot,
+} from "./warranty-document-view-model";
 import { WarrantyCertificatePdfSnapshot, WarrantyPdfService } from "./warranty-pdf.service";
 
 const ORGANIZATION_SETTINGS_KEY = "default";
-const DEFAULT_EXCLUSIONS_TEXT =
-  "Excludes misuse, neglect, lack of maintenance, unauthorized modifications, force majeure, and damage caused by third parties or external events.";
 const uploadsRoot = join(process.cwd(), "uploads", "warranty-certificates");
 
 type CreateWarrantyCertificateInput = {
@@ -29,38 +37,7 @@ type CreateWarrantyCertificateInput = {
   exclusionsText?: string | null;
 };
 
-type WarrantySnapshotPayload = {
-  certificateNumber: string;
-  companyName: string;
-  companyLogoUrl: string | null;
-  companyPhone: string | null;
-  companyEmail: string | null;
-  companyWebsite: string | null;
-  companyAddress: string | null;
-  companyLicense: string | null;
-  companyTaxNumber: string | null;
-  accentColor: string | null;
-  customerId: string;
-  customerName: string;
-  customerCompany: string | null;
-  customerEmail: string | null;
-  customerPhone: string | null;
-  customerAddressLines: string[];
-  invoiceId: string | null;
-  invoiceNumber: string | null;
-  jobId: string | null;
-  completionDateLabel: string;
-  warrantyStartDateLabel: string;
-  warrantyEndDateLabel: string;
-  warrantyType: string;
-  coverageText: string;
-  exclusionsText: string;
-  lineItems: Array<{
-    name: string;
-    quantity: string;
-    warrantyMonths: number | null;
-  }>;
-};
+type WarrantySnapshotPayload = WarrantyStoredSnapshot;
 
 @Injectable()
 export class WarrantyCertificatesService {
@@ -122,55 +99,110 @@ export class WarrantyCertificatesService {
       return existing;
     }
 
-    const orgSettings = await this.findOrganizationSettings(organizationId);
-    const brandingSnapshot = this.documentBrandingSnapshotService.fromOrganizationSettings(orgSettings);
-    const createdAt = new Date();
-    const startDate = ledger.paidAt ?? invoice.paid_at ?? invoice.issued_at ?? createdAt;
-    const maxWarrantyMonths = Math.max(
-      1,
-      ...((invoice.line_items ?? []).map((line) => line.warranty_months_snapshot ?? 0)),
-    );
-    const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + maxWarrantyMonths);
+    const now = new Date();
+    const plan = planWarrantyIssue(this.buildIssueInput({
+      invoice,
+      customer,
+      jobTitle: job.title,
+      branding: this.documentBrandingSnapshotService.fromOrganizationSettings(
+        await this.findOrganizationSettings(organizationId),
+      ),
+      warrantyType: input.warrantyType,
+      coverageText: input.coverageText,
+      exclusionsText: input.exclusionsText,
+      now,
+      frozen: true,
+      balanceCents: ledger.balanceCents,
+    }));
+    const snapshot: WarrantySnapshotPayload = {
+      ...plan.snapshot,
+      customerId: customer.id,
+      invoiceId: invoice.id,
+      jobId: job.id,
+    };
 
     const certificate = this.warrantyCertificatesRepository.create({
       organization_id: organizationId,
       customer_id: customer.id,
       related_invoice_id: invoice.id,
       related_job_id: job.id,
-      warranty_type: this.normalizeString(input.warrantyType) ?? "installation",
-      warranty_start_date: startDate,
-      warranty_end_date: endDate,
-      coverage_text:
-        this.normalizeString(input.coverageText)
-        ?? brandingSnapshot.warrantyMessage
-        ?? "Workmanship and installed components are covered under normal residential use for the stated term.",
-      exclusions_text: this.normalizeString(input.exclusionsText) ?? DEFAULT_EXCLUSIONS_TEXT,
+      warranty_type: plan.viewModel.warrantyType,
+      warranty_start_date: plan.startDate,
+      warranty_end_date: plan.columnEndDate,
+      coverage_text: plan.viewModel.coverageText,
+      exclusions_text: plan.viewModel.exclusionsText,
       issued_by_user_id: input.issuedByUserId,
-      snapshot_company_name: brandingSnapshot.businessName ?? "Service Company",
-      snapshot_company_logo_url: brandingSnapshot.logoUrl,
-      snapshot_company_phone: brandingSnapshot.phone,
-      snapshot_company_email: brandingSnapshot.email,
-      snapshot_company_website: brandingSnapshot.website,
-      snapshot_company_address: brandingSnapshot.companyAddress,
-      snapshot_company_license: brandingSnapshot.businessLicense,
-      snapshot_company_tax_number: brandingSnapshot.gstNumber,
-      snapshot_accent_color: brandingSnapshot.accentColor,
-      snapshot_payload_json: "{}",
-      generated_html_snapshot: null,
+      snapshot_company_name: plan.viewModel.companyName,
+      snapshot_company_logo_url: plan.viewModel.companyLogoUrl,
+      snapshot_company_phone: plan.viewModel.companyPhone,
+      snapshot_company_email: plan.viewModel.companyEmail,
+      snapshot_company_website: plan.viewModel.companyWebsite,
+      snapshot_company_address: plan.viewModel.companyAddress,
+      snapshot_company_license: plan.viewModel.companyLicense,
+      snapshot_company_tax_number: plan.viewModel.companyTaxNumber,
+      snapshot_accent_color: plan.viewModel.accentColor,
+      snapshot_payload_json: JSON.stringify(snapshot),
+      generated_html_snapshot: this.renderHtmlSnapshot(plan.viewModel),
       generated_pdf_path: null,
     });
 
     const saved = await this.warrantyCertificatesRepository.save(certificate);
-    const snapshot = this.buildSnapshotPayload(saved, invoice, customer, maxWarrantyMonths);
-    const pdfBuffer = this.warrantyPdfService.render(this.toPdfSnapshot(snapshot));
-    const pdfPath = await this.writePdfBuffer(saved.id, pdfBuffer);
-    const htmlSnapshot = this.renderHtmlSnapshot(snapshot);
-
-    saved.snapshot_payload_json = JSON.stringify(snapshot);
-    saved.generated_html_snapshot = htmlSnapshot;
-    saved.generated_pdf_path = pdfPath;
+    const pdfBuffer = this.warrantyPdfService.renderDocument(plan.viewModel);
+    saved.generated_pdf_path = await this.writePdfBuffer(saved.id, pdfBuffer);
     return this.warrantyCertificatesRepository.save(saved);
+  }
+
+  async resolveDocumentForInvoice(organizationId: string, invoiceId: string) {
+    const existing = await this.getByInvoiceForOrganization(invoiceId, organizationId);
+    if (existing) {
+      return this.documentFromCertificate(existing);
+    }
+
+    const invoice = await this.invoicesRepository.findOne({
+      where: { id: invoiceId, organization_id: organizationId },
+      relations: { line_items: true, payments: true },
+    });
+    if (!invoice) {
+      apiError(404, "invoice_not_found", "The invoice could not be found.");
+    }
+    const job = await this.jobsRepository.findOne({
+      where: { id: invoice.job_id, organization_id: organizationId },
+    });
+    if (!job) {
+      apiError(400, "invoice_job_missing", "The invoice job context is missing.");
+    }
+    const customer = await this.customersRepository.findOne({
+      where: { id: job.customer_id, organization_id: organizationId },
+    });
+    if (!customer) {
+      apiError(400, "invoice_customer_missing", "The invoice customer context is missing.");
+    }
+    const ledger = this.summarizeInvoiceLedger(invoice);
+    if (!(ledger.paidAt || ledger.balanceCents <= 0)) {
+      apiError(400, "warranty_invoice_not_paid", "Warranty certificates can be generated only after invoice payment.");
+    }
+
+    return planWarrantyIssue(this.buildIssueInput({
+      invoice,
+      customer,
+      jobTitle: job.title,
+      branding: this.documentBrandingSnapshotService.fromOrganizationSettings(
+        await this.findOrganizationSettings(organizationId),
+      ),
+      warrantyType: null,
+      coverageText: null,
+      exclusionsText: null,
+      now: new Date(),
+      frozen: false,
+      balanceCents: ledger.balanceCents,
+    })).viewModel;
+  }
+
+  pdfFilename(certificate: WarrantyCertificateEntity) {
+    const snapshot = this.parseSnapshotPayload(certificate.snapshot_payload_json);
+    const certificateNumber = snapshot?.certificateNumber
+      ?? `WAR-${certificate.id.slice(0, 8).toUpperCase()}`;
+    return warrantyPdfFilename(certificateNumber);
   }
 
   async getByIdForOrganization(certificateId: string, organizationId: string) {
@@ -230,7 +262,9 @@ export class WarrantyCertificatesService {
       apiError(500, "warranty_snapshot_missing", "Warranty snapshot is missing and PDF cannot be rendered.");
     }
 
-    const pdfBuffer = this.warrantyPdfService.render(this.toPdfSnapshot(snapshot));
+    const pdfBuffer = warrantyPdfRendererForSnapshot(snapshot) === "document-v2"
+      ? this.warrantyPdfService.renderDocument(this.documentFromCertificate(certificate))
+      : this.warrantyPdfService.renderLegacy(this.toPdfSnapshot(snapshot));
     const pdfPath = await this.writePdfBuffer(certificate.id, pdfBuffer);
     certificate.generated_pdf_path = pdfPath;
     await this.warrantyCertificatesRepository.save(certificate);
@@ -263,6 +297,7 @@ export class WarrantyCertificatesService {
       pdf_url: `/api/warranty-certificates/${certificate.id}/pdf`,
       portal_pdf_url: `/api/portal/warranty-certificates/${certificate.id}/pdf`,
       snapshot,
+      document: this.tryDocument(certificate),
     };
   }
 
@@ -294,7 +329,7 @@ export class WarrantyCertificatesService {
       invoiceNumber: snapshot.invoiceNumber,
       completionDateLabel: snapshot.completionDateLabel,
       warrantyStartDateLabel: snapshot.warrantyStartDateLabel,
-      warrantyEndDateLabel: snapshot.warrantyEndDateLabel,
+      warrantyEndDateLabel: snapshot.warrantyEndDateLabel ?? "-",
       warrantyType: snapshot.warrantyType,
       coverageText: snapshot.coverageText,
       exclusionsText: snapshot.exclusionsText,
@@ -302,71 +337,104 @@ export class WarrantyCertificatesService {
     };
   }
 
-  private buildSnapshotPayload(
-    certificate: WarrantyCertificateEntity,
-    invoice: InvoiceEntity,
-    customer: CustomerEntity,
-    maxWarrantyMonths: number,
-  ): WarrantySnapshotPayload {
-    const startLabel = this.formatDate(certificate.warranty_start_date);
-    const endLabel = this.formatDate(certificate.warranty_end_date);
-    const completionLabel = this.formatDate(invoice.paid_at ?? invoice.issued_at ?? certificate.created_at);
+  private tryDocument(certificate: WarrantyCertificateEntity) {
+    const snapshot = this.parseSnapshotPayload(certificate.snapshot_payload_json);
+    if (!snapshot) {
+      return null;
+    }
+    return buildViewModelFromSnapshot(snapshot, {
+      now: new Date(),
+      warrantyEnd: certificate.warranty_end_date,
+    });
+  }
+
+  private documentFromCertificate(certificate: WarrantyCertificateEntity): WarrantyDocumentViewModel {
+    const document = this.tryDocument(certificate);
+    if (!document) {
+      apiError(500, "warranty_snapshot_missing", "Warranty snapshot is missing and PDF cannot be rendered.");
+    }
+    return document;
+  }
+
+  private buildIssueInput(input: {
+    invoice: InvoiceEntity;
+    customer: CustomerEntity;
+    jobTitle: string | null;
+    branding: ReturnType<DocumentBrandingSnapshotService["fromOrganizationSettings"]>;
+    warrantyType?: string | null;
+    coverageText?: string | null;
+    exclusionsText?: string | null;
+    now: Date;
+    frozen: boolean;
+    balanceCents: number;
+  }): WarrantyIssueInput {
+    const startDate = resolveWarrantyCoverageStart({
+      paidAt: input.invoice.paid_at,
+      balanceCents: input.balanceCents,
+      now: input.now,
+    });
+    const completionDate = input.invoice.paid_at ?? input.invoice.issued_at ?? startDate;
     const customerAddressLines = [
-      this.normalizeString(customer.service_address_line_1),
-      this.normalizeString(customer.service_address_line_2),
-      [customer.service_city, customer.service_state_or_region].filter(Boolean).join(", "),
-      this.normalizeString(customer.service_postal_code),
+      this.normalizeString(input.customer.service_address_line_1),
+      this.normalizeString(input.customer.service_address_line_2),
+      [input.customer.service_city, input.customer.service_state_or_region].filter(Boolean).join(", "),
+      this.normalizeString(input.customer.service_postal_code),
     ].filter((entry): entry is string => Boolean(entry && entry.trim()));
 
     return {
-      certificateNumber: `WAR-${certificate.id.slice(0, 8).toUpperCase()}`,
-      companyName: certificate.snapshot_company_name ?? "Service Company",
-      companyLogoUrl: certificate.snapshot_company_logo_url,
-      companyPhone: certificate.snapshot_company_phone,
-      companyEmail: certificate.snapshot_company_email,
-      companyWebsite: certificate.snapshot_company_website,
-      companyAddress: certificate.snapshot_company_address,
-      companyLicense: certificate.snapshot_company_license,
-      companyTaxNumber: certificate.snapshot_company_tax_number,
-      accentColor: certificate.snapshot_accent_color,
-      customerId: customer.id,
-      customerName: customer.full_name,
-      customerCompany: this.normalizeString(customer.company_name),
-      customerEmail: this.normalizeString(customer.email),
-      customerPhone: this.normalizeString(customer.phone),
+      invoiceId: input.invoice.id,
+      invoiceNumber: resolveInvoiceDisplayNumber(input.invoice),
+      jobTitle: input.jobTitle,
+      warrantyType: input.warrantyType,
+      coverageText: input.coverageText,
+      exclusionsText: input.exclusionsText,
+      startDate,
+      completionDate,
+      customerName: input.customer.full_name,
+      customerCompany: input.customer.company_name,
+      customerEmail: input.customer.email,
+      customerPhone: input.customer.phone,
       customerAddressLines,
-      invoiceId: invoice.id,
-      invoiceNumber: resolveInvoiceDisplayNumber(invoice),
-      jobId: invoice.job_id,
-      completionDateLabel: completionLabel,
-      warrantyStartDateLabel: startLabel,
-      warrantyEndDateLabel: endLabel,
-      warrantyType: certificate.warranty_type,
-      coverageText: certificate.coverage_text,
-      exclusionsText: certificate.exclusions_text,
-      lineItems: (invoice.line_items ?? []).map((lineItem) => ({
-        name: lineItem.name_snapshot,
-        quantity: String(lineItem.quantity),
-        warrantyMonths: lineItem.warranty_months_snapshot ?? maxWarrantyMonths,
-      })),
+      companyName: input.branding.businessName,
+      companyLogoUrl: input.branding.logoUrl,
+      companyPhone: input.branding.phone,
+      companyEmail: input.branding.email,
+      companyWebsite: input.branding.website,
+      companyAddress: input.branding.companyAddress,
+      companyLicense: input.branding.businessLicense,
+      companyTaxNumber: input.branding.gstNumber,
+      accentColor: input.branding.accentColor,
+      warrantyMessage: input.branding.warrantyMessage,
+      now: input.now,
+      frozen: input.frozen,
+      lineItems: [...(input.invoice.line_items ?? [])]
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .map((lineItem) => ({
+          name: lineItem.name_snapshot,
+          description: lineItem.description_snapshot,
+          quantity: String(lineItem.quantity),
+          warrantyMonths: lineItem.warranty_months_snapshot,
+          sortOrder: lineItem.sort_order,
+        })),
     };
   }
 
-  private renderHtmlSnapshot(snapshot: WarrantySnapshotPayload) {
-    const listMarkup = snapshot.lineItems
-      .map((line) => `<li>${this.escapeHtml(line.name)} - Qty ${this.escapeHtml(line.quantity)} - ${this.escapeHtml(typeof line.warrantyMonths === "number" ? `${line.warrantyMonths} months` : "Per policy")}</li>`)
+  private renderHtmlSnapshot(model: WarrantyDocumentViewModel) {
+    const listMarkup = model.lineItems
+      .map((line) => `<li>${this.escapeHtml(line.name)} - Qty ${this.escapeHtml(line.quantity)} - ${this.escapeHtml(line.termLabel ?? model.emptyTermLabel)}${line.expiryLabel ? ` - ${this.escapeHtml(line.expiryLabel)}` : ""}</li>`)
       .join("");
     return `<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"/><title>${this.escapeHtml(snapshot.certificateNumber)}</title></head>
+  <head><meta charset="utf-8"/><title>${this.escapeHtml(model.certificateNumber)}</title></head>
   <body>
-    <h1>${this.escapeHtml(snapshot.companyName)}</h1>
-    <h2>Warranty Certificate ${this.escapeHtml(snapshot.certificateNumber)}</h2>
-    <p>Customer: ${this.escapeHtml(snapshot.customerName)}</p>
-    <p>Invoice: ${this.escapeHtml(snapshot.invoiceNumber ?? "-")}</p>
-    <p>Start: ${this.escapeHtml(snapshot.warrantyStartDateLabel)} End: ${this.escapeHtml(snapshot.warrantyEndDateLabel)}</p>
-    <p>${this.escapeHtml(snapshot.coverageText)}</p>
-    <p>${this.escapeHtml(snapshot.exclusionsText)}</p>
+    <h1>${this.escapeHtml(model.companyName)}</h1>
+    <h2>Warranty Certificate ${this.escapeHtml(model.certificateNumber)}</h2>
+    <p>Customer: ${this.escapeHtml(model.customerName)}</p>
+    <p>Property: ${this.escapeHtml(model.propertyLabel)}</p>
+    <p>Invoice: ${this.escapeHtml(model.invoiceNumber ?? "-")}</p>
+    <p>Start: ${this.escapeHtml(model.effectiveDateLabel)} End: ${this.escapeHtml(model.expirationDateLabel ?? model.emptyTermLabel)}</p>
+    <p>${this.escapeHtml(model.coverageText)}</p>
+    <p>${this.escapeHtml(model.exclusionsText)}</p>
     <ul>${listMarkup}</ul>
   </body>
 </html>`;

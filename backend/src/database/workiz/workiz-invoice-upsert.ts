@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 
-import { DataSource } from "typeorm";
+import { DataSource, EntityManager } from "typeorm";
 
 import { inferServiceType } from "./workiz-invoice-parser";
 import {
@@ -107,16 +107,18 @@ export async function loadExistingWorkizImportIndex(
 
 export async function upsertHistoricalWorkizInvoice(input: {
   dataSource: DataSource;
+  manager?: EntityManager;
   organizationId: string;
   historical: WorkizHistoricalInvoiceInput;
   customerId: string;
   existing?: { invoiceId: string; jobId: string };
-}): Promise<{ jobId: string; invoiceId: string; created: boolean }> {
-  const jobRepo = input.dataSource.getRepository(JobEntity);
-  const invoiceRepo = input.dataSource.getRepository(InvoiceEntity);
-  const lineItemRepo = input.dataSource.getRepository(InvoiceLineItemEntity);
+}): Promise<{ jobId: string; invoiceId: string; created: boolean; lineItemsCreated: number }> {
+  const manager = input.manager ?? input.dataSource.manager;
+  const jobRepo = manager.getRepository(JobEntity);
+  const invoiceRepo = manager.getRepository(InvoiceEntity);
+  const lineItemRepo = manager.getRepository(InvoiceLineItemEntity);
 
-  const customer = await input.dataSource.getRepository(CustomerEntity).findOneOrFail({
+  const customer = await manager.getRepository(CustomerEntity).findOneOrFail({
     where: { id: input.customerId, organization_id: input.organizationId },
   });
 
@@ -181,7 +183,9 @@ export async function upsertHistoricalWorkizInvoice(input: {
   }
 
   const existingLineItems = await lineItemRepo.find({ where: { invoice_id: invoiceId } });
+  let lineItemsCreated = 0;
   if (existingLineItems.length === 0) {
+    lineItemsCreated = input.historical.lineItems.length;
     await lineItemRepo.save(
       input.historical.lineItems.map((lineItem, index) => lineItemRepo.create({
         id: randomUUID(),
@@ -210,7 +214,7 @@ export async function upsertHistoricalWorkizInvoice(input: {
   if (!hasAuthoritativePdfEnrichment(snapshot)) {
     for (const payment of input.historical.payments) {
       await upsertCsvSyntheticSettlementPayment({
-        manager: input.dataSource.manager,
+        manager,
         organizationId: input.organizationId,
         invoice: invoiceRecord,
         invoiceCode: input.historical.invoiceCode,
@@ -228,5 +232,6 @@ export async function upsertHistoricalWorkizInvoice(input: {
     jobId: jobId!,
     invoiceId: invoiceId!,
     created: !input.existing,
+    lineItemsCreated,
   };
 }

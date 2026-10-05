@@ -5,11 +5,12 @@ import { CustomerEntity } from "../database/entities/customer.entity";
 import { LeadEntity } from "../database/entities/lead.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
 import { PublicBookingSubmissionEntity } from "../database/entities/public-booking-submission.entity";
+import { CustomerPortalModule } from "../customer-portal/customer-portal.module";
 import { PublicBookingsController } from "./public-bookings.controller";
 import { PublicBookingsService } from "./public-bookings.service";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([
+  imports: [CustomerPortalModule, TypeOrmModule.forFeature([
     CustomerEntity,
     LeadEntity,
     OrganizationEntity,

@@ -85,6 +85,9 @@ npm.cmd run inspections:isolation:smoke --workspace backend
 npm.cmd run document-snapshot:isolation:smoke --workspace backend
 npm.cmd run telephony-messaging:isolation:smoke --workspace backend
 npm.cmd run public-booking:isolation:smoke --workspace backend
+npm.cmd run portal:identity:unit-check --workspace backend
+npm.cmd run portal:identity:smoke --workspace backend
+npm.cmd run portal:isolation:smoke --workspace backend
 npm.cmd run build --workspace backend
 npm.cmd run build --workspace frontend
 git status --short
@@ -108,6 +111,8 @@ npm.cmd run schema:verify --workspace backend
 set FINANCE_SMOKE_USE_CONFIGURED_DATABASE=true
 npm.cmd run document-snapshot:isolation:smoke --workspace backend
 npm.cmd run portal:isolation:smoke --workspace backend
+npm.cmd run portal:identity:unit-check --workspace backend
+npm.cmd run portal:identity:smoke --workspace backend
 npm.cmd run finance-send-snapshot:contract-check --workspace backend
 npm.cmd run finance-send-snapshot:smoke --workspace backend
 npm.cmd run build --workspace backend
@@ -133,7 +138,7 @@ Production-like minimum replay (no customer PII send required for negative check
 
 **BLOCKER — customer portal host routing (invoice VIEW INVOICE links):**
 
-Invoice emails use `https://portal.phoenixfireplace.ca/access/{token}`. That hostname must serve the **same Next.js frontend** as `app.phoenixfireplace.ca` (routes `/access/[token]` and `/portal/invoices/[invoiceId]`). Until this passes, verdict is **BLOCKED — CUSTOMER PORTAL ROUTING**.
+Invoice emails use `https://portal.phoenixfireplace.ca/portal/auth/magic?token={token}&entry=invoice` (auto POST redeem after load; no confirm button). That hostname must serve the **website portal** (`apps/website` on `portal.phoenixfireplace.ca`): BFF `POST /api/portal/auth/redeem`, legacy `/access/{token}` → invoice magic redirect, and session-gated `/portal/invoices/[invoiceId]`. Until this passes, verdict is **BLOCKED — CUSTOMER PORTAL ROUTING**.
 
 ```text
 npm.cmd run phoenix-portal-host-routing:verify --workspace backend
@@ -145,6 +150,33 @@ Operational routing (2026-10-03): Cloudflare Worker `phoenix-portal-host-proxy` 
 Phoenix production engineering closeout **CLOSED / GO (2026-10-03)** recorded in Master SoT and Engineering Closeout (HTTPS email transport, production E2E, configured-DB isolation smokes, readonly counts).
 
 Mandatory before invoice portal **CLOSED / GO**: `phoenix-portal-host-routing:verify` PASS and production E2E portal-host steps PASS. Optional manual UX gate: real mobile email → VIEW INVOICE → refresh + PDF.
+
+### Portal identity + email OTP (2026-10)
+
+After migration `1796000000000-portal-identities` is applied:
+
+```text
+npm.cmd run portal:identity:unit-check --workspace backend
+npm.cmd run portal:identity:smoke --workspace backend
+npm.cmd run portal:isolation:smoke --workspace backend
+```
+
+Production backfill (idempotent, **no outbound email**):
+
+```text
+npm.cmd run portal:identity:backfill --workspace backend
+```
+
+Railway/backend env for OTP login: set `PORTAL_OTP_PEPPER` (production secret; do not reuse dev default). Optional `PORTAL_BOOKING_OTP_TTL_MINUTES` (10–15). Apply migration `1796100000000-portal-otp-booking-context` after portal identities. Website BFF: `POST /api/portal/auth/otp/send|verify` with `PORTAL_ADAPTER_ENABLED=true`. Manual gate: portal login → Email code → `/portal` session.
+
+Booking welcome OTP + rebooking manual gates:
+
+1. Complete online booking (Phoenix request-service or `/book/{slug}`) → single confirmation email with 6-digit code → `/portal/login?email=...` → verify → land on new job tab when scheduled.
+2. Signed-in portal → **Book Service Again** → `/portal/request-service` wizard → submit without re-entering identity → same `customer_id`, new lead/job.
+
+```text
+npm.cmd run portal:customer-addresses:unit-check --workspace backend
+```
 
 ## 6A. Language Store V1 reverification addendum
 

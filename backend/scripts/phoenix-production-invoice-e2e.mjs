@@ -1,5 +1,5 @@
 /**
- * Controlled production E2E: staff send → portal redeem → PDF → resend.
+ * Controlled production E2E: staff send → portal magic confirm → BFF redeem → invoice deep-link → PDF → resend.
  */
 import { config } from "dotenv";
 import { resolve } from "node:path";
@@ -29,12 +29,28 @@ function parseSessionCookie(setCookieHeader) {
     ?.split(";")[0];
 }
 
-function parsePortalCookie(setCookieHeader) {
+function parsePortalHostCookie(setCookieHeader) {
   return (setCookieHeader ?? "")
     .split(",")
     .map((part) => part.trim())
-    .find((part) => part.startsWith("wizfield_portal_session="))
+    .find((part) => part.startsWith("phoenix_portal_session="))
     ?.split(";")[0];
+}
+
+function portalSessionTokenFromCookie(cookiePair) {
+  if (!cookiePair) {
+    return null;
+  }
+  const value = cookiePair.split("=")[1]?.trim();
+  if (!value) {
+    return null;
+  }
+  try {
+    const payload = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    return typeof payload.token === "string" ? payload.token : null;
+  } catch {
+    return null;
+  }
 }
 
 async function main() {
@@ -101,36 +117,48 @@ async function main() {
     has_raw_token: Boolean(rawToken),
   });
 
-  const portalAccessPage = await fetch(`${PORTAL}/access/${encodeURIComponent(rawToken)}`);
-  const portalAccessHtml = await portalAccessPage.text().catch(() => "");
-  record("portal_host_access_page", portalAccessPage.status === 200 && portalAccessHtml.includes("Opening your customer portal"), {
-    status: portalAccessPage.status,
+  const magicUrl = `${PORTAL}/portal/auth/magic?token=${encodeURIComponent(rawToken)}`;
+  const portalMagicPage = await fetch(magicUrl);
+  const portalMagicHtml = await portalMagicPage.text().catch(() => "");
+  record("portal_host_magic_confirm_page", portalMagicPage.status === 200 && portalMagicHtml.includes("Confirm sign-in"), {
+    status: portalMagicPage.status,
     portal_host: PORTAL,
   });
 
-  const redeemResponse = await fetch(`${PORTAL}/api/portal/magic-links/redeem`, {
+  const legacyAccess = await fetch(`${PORTAL}/access/${encodeURIComponent(rawToken)}`, { redirect: "manual" });
+  const legacyLocation = legacyAccess.headers.get("location") ?? "";
+  record("portal_legacy_access_redirects_to_magic", legacyLocation.includes("/portal/auth/magic?token="), {
+    status: legacyAccess.status,
+    location: legacyLocation,
+  });
+
+  const redeemResponse = await fetch(`${PORTAL}/api/portal/auth/redeem`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ token: rawToken }),
   });
-  const portalCookie = parsePortalCookie(redeemResponse.headers.get("set-cookie"));
+  const portalCookiePair = parsePortalHostCookie(redeemResponse.headers.get("set-cookie"));
   const redeemBody = await redeemResponse.json().catch(() => null);
-  record("portal_redeem_magic_link", redeemResponse.status === 200 || redeemResponse.status === 201, {
+  const portalSessionToken = portalSessionTokenFromCookie(portalCookiePair);
+  record("portal_redeem_magic_link", redeemResponse.status === 200 && redeemBody?.ok === true, {
     status: redeemResponse.status,
-    redirect: redeemBody?.data?.redirect_path ?? null,
+    redirect_path: redeemBody?.redirect_path ?? null,
     portal_host: PORTAL,
   });
 
   const invoicePage = await fetch(`${PORTAL}/portal/invoices/${INVOICE_ID}`, {
-    headers: portalCookie ? { cookie: portalCookie } : {},
+    headers: portalCookiePair ? { cookie: portalCookiePair } : {},
+    redirect: "manual",
   });
-  record("portal_host_invoice_page_refresh", invoicePage.status === 200, {
+  const invoiceLocation = invoicePage.headers.get("location") ?? "";
+  record("portal_host_invoice_deep_link", invoicePage.status === 307 && invoiceLocation.includes("tab=finance"), {
     status: invoicePage.status,
+    location: invoiceLocation,
     portal_host: PORTAL,
   });
 
-  const pdfResponse = await fetch(`${PORTAL}/api/portal/invoices/${INVOICE_ID}/pdf`, {
-    headers: portalCookie ? { cookie: portalCookie } : {},
+  const pdfResponse = await fetch(`${BASE}/api/portal/invoices/${INVOICE_ID}/pdf`, {
+    headers: portalSessionToken ? { "X-Portal-Session": portalSessionToken } : {},
   });
   const pdfBytes = pdfResponse.ok ? (await pdfResponse.arrayBuffer()).byteLength : 0;
   record("portal_invoice_pdf_download", pdfResponse.status === 200 && pdfBytes > 500, {

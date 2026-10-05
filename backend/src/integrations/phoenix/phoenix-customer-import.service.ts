@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
 
+import { PortalIdentityService } from "../../customer-portal/portal-identity.service";
 import { CustomerEntity } from "../../database/entities/customer.entity";
 import { JobEntity } from "../../database/entities/job.entity";
 import { parseWorkizCsvAddress } from "../../database/workiz/workiz-customer-csv-parser";
@@ -88,6 +89,7 @@ export class PhoenixCustomerImportService {
     private readonly customersRepository: Repository<CustomerEntity>,
     @InjectRepository(JobEntity)
     private readonly jobsRepository: Repository<JobEntity>,
+    private readonly portalIdentityService: PortalIdentityService,
   ) {}
 
   async exportOrganizationCustomers(organizationId: string) {
@@ -313,6 +315,7 @@ export class PhoenixCustomerImportService {
       );
 
       input.organizationCustomers.push(saved);
+      await this.portalIdentityService.ensurePortalIdentityForCustomer(saved.id);
 
       return {
         sourceCustomerId,

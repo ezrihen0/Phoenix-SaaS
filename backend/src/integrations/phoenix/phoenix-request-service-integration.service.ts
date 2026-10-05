@@ -12,7 +12,9 @@ import { CustomerEntity } from "../../database/entities/customer.entity";
 import { JobEntity } from "../../database/entities/job.entity";
 import { LeadEntity } from "../../database/entities/lead.entity";
 import { PublicBookingSubmissionEntity } from "../../database/entities/public-booking-submission.entity";
-import { CustomerPortalService } from "../../customer-portal/customer-portal.service";
+import { PortalBookingConfirmationService } from "../../customer-portal/portal-booking-confirmation.service";
+import { buildPortalJobRedirectPath } from "../../customer-portal/portal-redirect-path";
+import { PortalIdentityService } from "../../customer-portal/portal-identity.service";
 import { PhoenixIntegrationAuthService } from "./phoenix-integration-auth.service";
 import {
   findPhoenixTimeWindow,
@@ -77,6 +79,7 @@ export type PhoenixRequestServicePayload = {
 };
 
 const PHOENIX_RS_IDEMPOTENCY_PREFIX = "phoenix-rs:";
+const PHOENIX_PORTAL_RS_IDEMPOTENCY_PREFIX = "phoenix-portal-rs:";
 
 function isDuplicateEntryError(error: unknown) {
   if (!(error instanceof QueryFailedError)) {
@@ -134,7 +137,8 @@ export class PhoenixRequestServiceIntegrationService {
     private readonly dataSource: DataSource,
     private readonly branchScopeService: BranchScopeService,
     private readonly phoenixIntegrationAuthService: PhoenixIntegrationAuthService,
-    private readonly customerPortalService: CustomerPortalService,
+    private readonly portalIdentityService: PortalIdentityService,
+    private readonly portalBookingConfirmationService: PortalBookingConfirmationService,
   ) {}
 
   private requireOrganizationId() {
@@ -283,12 +287,57 @@ export class PhoenixRequestServiceIntegrationService {
 
   async submitRequest(payload: PhoenixRequestServicePayload, request: import("express").Request) {
     const organizationId = this.requireOrganizationId();
+    return this.submitRequestInternal({
+      organizationId,
+      payload,
+      request,
+      idempotencyPrefix: PHOENIX_RS_IDEMPOTENCY_PREFIX,
+      resolveCustomer: (manager) => this.findOrCreateCustomer(manager, organizationId, payload),
+      sendPortalAccessEmail: true,
+    });
+  }
+
+  async submitRequestForPortalCustomer(
+    organizationId: string,
+    customerId: string,
+    payload: PhoenixRequestServicePayload,
+    request: import("express").Request,
+  ) {
+    return this.submitRequestInternal({
+      organizationId,
+      payload,
+      request,
+      idempotencyPrefix: PHOENIX_PORTAL_RS_IDEMPOTENCY_PREFIX,
+      resolveCustomer: async (manager) => {
+        const customer = await manager.getRepository(CustomerEntity).findOne({
+          where: { id: customerId, organization_id: organizationId },
+        });
+        if (!customer) {
+          apiError(404, "customer_not_found", "Customer not found.");
+        }
+        return customer;
+      },
+      sendPortalAccessEmail: false,
+    });
+  }
+
+  private async submitRequestInternal(input: {
+    organizationId: string;
+    payload: PhoenixRequestServicePayload;
+    request: import("express").Request;
+    idempotencyPrefix: string;
+    resolveCustomer: (manager: import("typeorm").EntityManager) => Promise<CustomerEntity>;
+    sendPortalAccessEmail: boolean;
+  }) {
+    const organizationId = input.organizationId;
+    const payload = input.payload;
+    const request = input.request;
     const requestId = payload.requestId.trim().toLowerCase();
     if (!requestId) {
       apiError(400, "invalid_phoenix_request_service_payload", "requestId is required.");
     }
 
-    const idempotencyKey = `${PHOENIX_RS_IDEMPOTENCY_PREFIX}${requestId}`;
+    const idempotencyKey = `${input.idempotencyPrefix}${requestId}`;
     const lockName = createHash("sha256").update(`${organizationId}:${idempotencyKey}`).digest("hex");
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -327,6 +376,8 @@ export class PhoenixRequestServiceIntegrationService {
           request,
           organizationId,
           email: payload.customer.email,
+          payload,
+          skipPortalAccessEmail: true,
         });
       }
 
@@ -398,7 +449,8 @@ export class PhoenixRequestServiceIntegrationService {
         );
       }
 
-      const customer = await this.findOrCreateCustomer(manager, organizationId, payload);
+      const customer = await input.resolveCustomer(manager);
+      await this.portalIdentityService.ensurePortalIdentityForCustomer(customer.id);
       const lead = await manager.getRepository(LeadEntity).save(
         manager.getRepository(LeadEntity).create({
           organization_id: organizationId,
@@ -477,6 +529,8 @@ export class PhoenixRequestServiceIntegrationService {
         request,
         organizationId,
         email: payload.customer.email,
+        payload,
+        skipPortalAccessEmail: !input.sendPortalAccessEmail,
       });
     } catch (error) {
       await queryRunner.rollbackTransaction().catch(() => undefined);
@@ -499,6 +553,8 @@ export class PhoenixRequestServiceIntegrationService {
             request,
             organizationId,
             email: payload.customer.email,
+            payload,
+            skipPortalAccessEmail: true,
           });
         }
       }
@@ -541,24 +597,35 @@ export class PhoenixRequestServiceIntegrationService {
     request: import("express").Request;
     organizationId: string;
     email: string | null;
+    payload: PhoenixRequestServicePayload;
+    skipPortalAccessEmail: boolean;
   }) {
     let portalAccess: { status: string; expiresAt: string | null } | undefined;
+    const redirectPath = buildPortalJobRedirectPath(params.jobId);
 
-    if (params.email) {
-      try {
-        const minted = await this.customerPortalService.createMagicLinkForPhoenixIntegration({
-          organizationId: params.organizationId,
-          customerId: params.customerId || null,
-          email: params.email,
-          request: params.request,
-        });
-        portalAccess = {
-          status: "sent",
-          expiresAt: minted.expires_at ?? null,
-        };
-      } catch {
-        portalAccess = { status: "email_failed", expiresAt: null };
-      }
+    if (!params.skipPortalAccessEmail && params.email) {
+      portalAccess = await this.portalBookingConfirmationService.sendBookingConfirmationWithPortalAccess({
+        organizationId: params.organizationId,
+        customerId: params.customerId,
+        customerName: params.payload.customer.fullName,
+        email: params.email,
+        serviceSummary: params.payload.service.originalService || params.payload.service.type,
+        addressLine: [
+          params.payload.serviceAddress.line1,
+          params.payload.serviceAddress.city,
+          params.payload.serviceAddress.postalCode,
+        ]
+          .filter(Boolean)
+          .join(", "),
+        scheduledSummary: params.payload.scheduling
+          ? `${params.payload.scheduling.preferredDate} ${params.payload.scheduling.timeWindow.start}–${params.payload.scheduling.timeWindow.end}`
+          : null,
+        jobId: params.jobId ?? null,
+        request: params.request,
+      }).then((result) => ({
+        status: result.status,
+        expiresAt: result.expiresAt,
+      })).catch(() => ({ status: "email_failed", expiresAt: null }));
     }
 
     return {
@@ -566,6 +633,7 @@ export class PhoenixRequestServiceIntegrationService {
       customerId: params.customerId,
       leadId: params.leadId,
       jobId: params.jobId,
+      redirect_path: redirectPath,
       portalAccess,
     };
   }

@@ -111,6 +111,7 @@ import { TechnicianEntity } from "../database/entities/technician.entity";
 import { startOfLocalDashboardDay } from "./crm-dashboard-time-window";
 import { CrmOfficeDashboardService } from "./crm-office-dashboard.service";
 import { CustomerPortalService } from "../customer-portal/customer-portal.service";
+import { PortalIdentityService } from "../customer-portal/portal-identity.service";
 import { DocumentBrandingSnapshotService } from "../documents/pdf/document-branding-snapshot.service";
 import { setPdfDownloadResponseHeaders } from "../documents/pdf/pdf-download-response";
 import { MoneyEngineService } from "./money-engine.service";
@@ -260,6 +261,7 @@ export class CrmController {
     private readonly emailService: EmailService,
     private readonly txtService: TxtService,
     private readonly customerPortalService: CustomerPortalService,
+    private readonly portalIdentityService: PortalIdentityService,
     private readonly documentBrandingSnapshotService: DocumentBrandingSnapshotService,
     private readonly invoicePdfService: InvoicePdfService,
     private readonly invoicePdfViewModelService: InvoicePdfViewModelService,
@@ -1913,7 +1915,9 @@ export class CrmController {
           targetJobId: job.id,
           deliveryMethod: "email",
         });
-        const magicLinkUrl = this.customerPortalService.buildCustomerPortalAccessUrl(portalLink.raw_token);
+        const magicLinkUrl = this.customerPortalService.buildCustomerPortalAccessUrl(portalLink.raw_token, {
+          entry: "invoice",
+        });
         const branding = this.documentBrandingSnapshotService.fromOrganizationSettings(orgSettings);
         const emailResult = await this.emailService.send({
           to: toEmail,
@@ -2026,7 +2030,9 @@ export class CrmController {
           targetJobId: job.id,
           deliveryMethod: "sms",
         });
-        invoiceLink = this.customerPortalService.buildCustomerPortalAccessUrl(portalLink.raw_token);
+        invoiceLink = this.customerPortalService.buildCustomerPortalAccessUrl(portalLink.raw_token, {
+          entry: "invoice",
+        });
         const smsVars = {
           business_name: businessName ?? "your service provider",
           invoice_number: documentNumber,
@@ -3445,6 +3451,8 @@ export class CrmController {
           tags: [],
         }),
       );
+
+      await this.portalIdentityService.ensurePortalIdentityForCustomer(customer.id);
 
       return apiSuccess({ id: customer.id });
     } catch (error) {

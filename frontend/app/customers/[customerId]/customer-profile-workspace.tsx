@@ -39,7 +39,7 @@ import { openJobStatuses } from "@/lib/crm/data";
 import { formatAddress, formatDate, formatDateTime } from "@/lib/crm/display";
 import { formatLocalizedCurrency } from "@/lib/i18n/formatters";
 import { getJobStatusLabel, getServiceTypeLabel } from "@/lib/crm/statuses";
-import { mintStaffPortalMagicLink } from "@/lib/portal/staff-magic-link-api";
+import { customerPortalMagicLinkUrl, mintStaffPortalMagicLink } from "@/lib/portal/staff-magic-link-api";
 import type { Database } from "@/lib/types/database";
 import type { InspectionListRow } from "@/lib/inspections/browser-api";
 
@@ -440,7 +440,7 @@ function CustomerPortalMintSection({ customerId, className = "" }: { customerId:
       return;
     }
 
-    const url = `${window.location.origin}/access/${minted.raw_token}`;
+    const url = customerPortalMagicLinkUrl(minted.raw_token);
     await navigator.clipboard.writeText(url);
   }
 

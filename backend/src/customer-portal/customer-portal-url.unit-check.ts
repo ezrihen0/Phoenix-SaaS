@@ -30,7 +30,16 @@ assert.equal(
     mockConfig({ CUSTOMER_PORTAL_BASE_URL: "https://portal.phoenixfireplace.ca" }),
     "abc123",
   ),
-  "https://portal.phoenixfireplace.ca/access/abc123",
+  "https://portal.phoenixfireplace.ca/portal/auth/magic?token=abc123",
+);
+
+assert.equal(
+  buildCustomerPortalAccessUrl(
+    mockConfig({ CUSTOMER_PORTAL_BASE_URL: "https://portal.phoenixfireplace.ca" }),
+    "abc123",
+    { entry: "invoice" },
+  ),
+  "https://portal.phoenixfireplace.ca/portal/auth/magic?token=abc123&entry=invoice",
 );
 
 assert.equal(

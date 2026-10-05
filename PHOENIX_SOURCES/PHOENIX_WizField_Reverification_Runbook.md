@@ -133,7 +133,7 @@ Production-like minimum replay (no customer PII send required for negative check
 
 **BLOCKER — customer portal host routing (invoice VIEW INVOICE links):**
 
-Invoice emails use `https://portal.phoenixfireplace.ca/access/{token}`. That hostname must serve the **same Next.js frontend** as `app.phoenixfireplace.ca` (routes `/access/[token]` and `/portal/invoices/[invoiceId]`). Until this passes, verdict is **BLOCKED — CUSTOMER PORTAL ROUTING**.
+Invoice emails use `https://portal.phoenixfireplace.ca/portal/auth/magic?token={token}`. That hostname must serve the **website portal** (`apps/website` on `portal.phoenixfireplace.ca`): magic confirm, BFF `POST /api/portal/auth/redeem`, legacy `/access/{token}` → magic redirect, and session-gated `/portal/invoices/[invoiceId]`. Until this passes, verdict is **BLOCKED — CUSTOMER PORTAL ROUTING**.
 
 ```text
 npm.cmd run phoenix-portal-host-routing:verify --workspace backend

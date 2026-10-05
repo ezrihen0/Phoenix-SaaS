@@ -630,14 +630,14 @@ async function runFrontendWalkthrough(bookingSlug) {
       const token = magic.json?.data?.raw_token;
       if (token) {
         try {
-          const accessPage = await fetch(`${FRONTEND}/access/${encodeURIComponent(token)}`);
-          const html = await accessPage.text();
+          const accessPage = await fetch(`${FRONTEND}/access/${encodeURIComponent(token)}`, { redirect: "manual" });
+          const accessLocation = accessPage.headers.get("location") ?? "";
           record(
             "P0-29",
             "portal-ui",
-            "GET /access/[token] page renders (HTTP 200 + HTML)",
-            accessPage.status === 200 && html.length > 500,
-            `HTTP ${accessPage.status} bytes=${html.length}`,
+            "GET /access/[token] redirects to portal magic confirm",
+            accessPage.status === 307 && accessLocation.includes("/portal/auth/magic?token="),
+            `HTTP ${accessPage.status} location=${accessLocation}`,
           );
 
           const portalRedeem = new CookieClient();

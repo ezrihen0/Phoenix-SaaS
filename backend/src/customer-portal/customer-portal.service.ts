@@ -15,6 +15,7 @@ import {
   PortalMagicLinkEntity,
   type PortalMagicLinkDeliveryMethod,
 } from "../database/entities/portal-magic-link.entity";
+import { PortalIdentityEntity } from "../database/entities/portal-identity.entity";
 import { PortalSessionEntity } from "../database/entities/portal-session.entity";
 import { QuoteEntity } from "../database/entities/quote.entity";
 import { TechnicianEntity } from "../database/entities/technician.entity";
@@ -34,7 +35,7 @@ import {
 } from "../crm/invoice-customer-facing-snapshot.types";
 import { snapshotPortalLineItems } from "../crm/historical-snapshot-read.helper";
 import { toPortalTechnicianIdentity } from "../crm/customer-facing-technician";
-import { buildCustomerPortalAccessUrl } from "./customer-portal-url";
+import { buildCustomerPortalAccessUrl, type CustomerPortalAccessUrlOptions } from "./customer-portal-url";
 
 /** Default magic-link lifetime when minting from staff (no new env var). */
 const STAFF_PORTAL_MAGIC_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -72,9 +73,9 @@ export class CustomerPortalService {
     private readonly settingsService: SettingsService,
   ) {}
 
-  /** Customer-facing /access/{token} URL (not the staff WizField app origin). */
-  buildCustomerPortalAccessUrl(rawToken: string) {
-    return buildCustomerPortalAccessUrl(this.configService, rawToken);
+  /** Customer-facing magic-link URL (not the staff WizField app origin). */
+  buildCustomerPortalAccessUrl(rawToken: string, options?: CustomerPortalAccessUrlOptions) {
+    return buildCustomerPortalAccessUrl(this.configService, rawToken, options);
   }
 
   private summarizePortalInvoiceLedger(invoice: InvoiceEntity) {
@@ -148,6 +149,10 @@ export class CustomerPortalService {
     const rawSessionToken = randomBytes(48).toString("hex");
 
     let portalSession!: PortalSessionEntity;
+    const portalIdentity = await this.linksRepository.manager.getRepository(PortalIdentityEntity).findOne({
+      where: { customer_id: link.customer_id },
+    });
+    const portalIdentityId = portalIdentity?.id ?? null;
 
     await this.linksRepository.manager.transaction(async (manager) => {
       const sessionsRepo = manager.getRepository(PortalSessionEntity);
@@ -167,6 +172,7 @@ export class CustomerPortalService {
           session_token_hash: this.hashToken(rawSessionToken),
           customer_id: lockedLink.customer_id,
           portal_magic_link_id: lockedLink.id,
+          portal_identity_id: portalIdentityId,
           is_preview: false,
           is_read_only: false,
           expires_at: this.getPortalSessionExpiryDate(),
@@ -226,6 +232,74 @@ export class CustomerPortalService {
       ok: true as const,
       customer_id: link.customer_id,
       organization_id: organizationId,
+      portal_identity_id: portalIdentityId,
+      session_token: rawSessionToken,
+      session_expires_at: portalSession.expires_at.toISOString(),
+      redirect_path: redirectPath,
+    };
+  }
+
+  async establishPortalSessionForCustomer(input: {
+    organizationId: string;
+    customerId: string;
+    portalIdentityId: string | null;
+    portalMagicLinkId: string | null;
+    request: Request;
+    response: Response;
+    setSessionCookie?: boolean;
+    redirectPath?: string;
+  }) {
+    const setSessionCookie = input.setSessionCookie !== false;
+    const organizationId = await this.resolvePortalOrganizationId(input.customerId, input.organizationId);
+    const rawSessionToken = randomBytes(48).toString("hex");
+
+    const portalSession = await this.sessionsRepository.save(
+      this.sessionsRepository.create({
+        organization_id: organizationId,
+        session_token_hash: this.hashToken(rawSessionToken),
+        customer_id: input.customerId,
+        portal_magic_link_id: input.portalMagicLinkId,
+        portal_identity_id: input.portalIdentityId,
+        is_preview: false,
+        is_read_only: false,
+        expires_at: this.getPortalSessionExpiryDate(),
+        ip_address: input.request.ip ?? null,
+        user_agent: input.request.get("user-agent") ?? null,
+      }),
+    );
+
+    await this.logEvent({
+      customerId: input.customerId,
+      organizationId,
+      portalMagicLinkId: input.portalMagicLinkId,
+      portalSessionId: portalSession.id,
+      eventType: "session_created",
+      actorUserId: null,
+      deliveryMethod: null,
+      metadata: {
+        portal_session_id: portalSession.id,
+        auth_method: input.portalMagicLinkId ? "magic_link" : "otp",
+      },
+      request: input.request,
+    });
+
+    if (setSessionCookie) {
+      input.response.cookie(this.getPortalSessionCookieName(), rawSessionToken, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: this.isPortalSessionCookieSecure(),
+        expires: portalSession.expires_at,
+        path: "/",
+      });
+    }
+
+    const redirectPath = input.redirectPath?.trim() || "/portal";
+
+    return {
+      ok: true as const,
+      customer_id: input.customerId,
+      organization_id: organizationId,
+      portal_identity_id: input.portalIdentityId,
       session_token: rawSessionToken,
       session_expires_at: portalSession.expires_at.toISOString(),
       redirect_path: redirectPath,

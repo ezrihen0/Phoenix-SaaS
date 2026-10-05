@@ -1,9 +1,15 @@
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
-export const PHOENIX_ORG_ID = "5edc3ccd-efbd-4f74-9f99-d2b8c05ad644";
+/** Legacy bootstrap id; production operating org uses SoT id below. */
+export const PHOENIX_ORG_ID_LEGACY = "5edc3ccd-efbd-4f74-9f99-d2b8c05ad644";
+/** Phoenix Fireplace operating org on production `wizfield` (SoT). */
+export const PHOENIX_ORG_ID = "8d5bc762-eb13-43e5-85a1-723477adb47c";
 export const PHOENIX_ORG_SLUG = "phoenix-fireplace";
 
+export const PHOENIX_OPERATING_ORG_IDS = [PHOENIX_ORG_ID, PHOENIX_ORG_ID_LEGACY] as const;
+
 export const WORKIZ_ALLOW_PRODUCTION_MUTATION_ENV = "WORKIZ_ALLOW_PRODUCTION_MUTATION";
+export const JOBBER_ALLOW_PRODUCTION_MUTATION_ENV = "JOBBER_ALLOW_PRODUCTION_MUTATION";
 
 export type WorkizMutationGuardContext = {
   databaseName?: string | null;
@@ -30,14 +36,21 @@ export function isEphemeralWorkizMutationDatabase(databaseName: string | null | 
 }
 
 export function isPhoenixProductionOrganization(context: Pick<WorkizMutationGuardContext, "organizationId" | "organizationSlug">) {
-  return context.organizationId === PHOENIX_ORG_ID
-    && context.organizationSlug === PHOENIX_ORG_SLUG;
+  if (context.organizationSlug !== PHOENIX_ORG_SLUG) {
+    return false;
+  }
+  return PHOENIX_OPERATING_ORG_IDS.includes(context.organizationId as (typeof PHOENIX_OPERATING_ORG_IDS)[number]);
 }
 
 export function isProductionMutationExplicitlyAllowed(allowProductionMutation?: boolean) {
   if (allowProductionMutation === true) return true;
-  const env = process.env[WORKIZ_ALLOW_PRODUCTION_MUTATION_ENV]?.trim().toLowerCase();
-  return env === "1" || env === "true" || env === "yes" || env === "on";
+  for (const envName of [WORKIZ_ALLOW_PRODUCTION_MUTATION_ENV, JOBBER_ALLOW_PRODUCTION_MUTATION_ENV]) {
+    const env = process.env[envName]?.trim().toLowerCase();
+    if (env === "1" || env === "true" || env === "yes" || env === "on") {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function assertWorkizProductionMutationAllowed(context: WorkizMutationGuardContext) {

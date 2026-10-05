@@ -5,10 +5,8 @@ import { ArrowLeft, ShieldCheck } from "lucide-react";
 import WarrantyCertificatePreview from "@/components/warranty-certificate-preview";
 import { serverApiFetch } from "@/lib/api/server-fetch";
 import { requireServerRoles } from "@/lib/auth/server-session";
-import {
-  type PersistedInvoiceLineItem,
-} from "@/lib/crm/invoice-line-model";
 import { canViewWarrantyCertificate } from "@/lib/crm/warranty-eligibility";
+import type { WarrantyDocumentViewModel } from "@/lib/crm/warranty-document.types";
 import type { JobStatus } from "@/lib/crm/statuses";
 import WarrantyCertificateActions from "./warranty-certificate-actions";
 
@@ -32,7 +30,6 @@ type InvoiceDetailRecord = {
   status: "unpaid" | "paid";
   issued_at: string;
   paid_at: string | null;
-  line_items?: PersistedInvoiceLineItem[];
   customer_name: string;
   job_title: string;
   job: {
@@ -54,30 +51,6 @@ type InvoiceDetailRecord = {
     service_postal_code: string;
     notes: string | null;
   } | null;
-};
-
-type InvoiceCompanySettings = {
-  businessName: string | null;
-  displayInitials: string | null;
-  companyDescription: string | null;
-  address: string | null;
-  city: string | null;
-  zip: string | null;
-  website: string | null;
-  companyEmail: string | null;
-  phone: string | null;
-};
-
-const defaultCompanySettings: InvoiceCompanySettings = {
-  businessName: null,
-  displayInitials: null,
-  companyDescription: null,
-  address: null,
-  city: null,
-  zip: null,
-  website: null,
-  companyEmail: null,
-  phone: null,
 };
 
 export default async function WarrantyCertificatePage({
@@ -113,15 +86,20 @@ export default async function WarrantyCertificatePage({
     notFound();
   }
 
-  let companySettings = defaultCompanySettings;
-
-  try {
-    companySettings = await serverApiFetch<InvoiceCompanySettings>("/api/settings/organization");
-  } catch {
-    companySettings = defaultCompanySettings;
-  }
-
   const certificateAvailable = canViewWarrantyCertificate(invoice);
+  let document: WarrantyDocumentViewModel | null = null;
+  let documentError: string | null = null;
+
+  if (certificateAvailable) {
+    try {
+      const payload = await serverApiFetch<{ document: WarrantyDocumentViewModel }>(
+        `/api/warranty-certificates/by-invoice/${invoice.id}/document`,
+      );
+      document = payload.document;
+    } catch (error) {
+      documentError = error instanceof Error ? error.message : "The warranty certificate could not be loaded.";
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(30,64,175,0.12),transparent_34%),linear-gradient(180deg,#f8fafc,#eef2f7)] text-slate-900 print:bg-white">
@@ -145,25 +123,13 @@ export default async function WarrantyCertificatePage({
                   customerId={invoice.customer?.id ?? null}
                   disabled={!certificateAvailable}
                 />
-                <WarrantyCertificatePreview
-                  certificateNumber={`WAR-${invoice.id.slice(0, 8).toUpperCase()}`}
-                  invoiceNumber={invoice.document_number}
-                  issuedAt={invoice.issued_at}
-                  paidAt={invoice.paid_at}
-                  customerName={invoice.customer?.full_name ?? invoice.customer_name}
-                  customerCompanyName={invoice.customer?.company_name ?? null}
-                  customerEmail={invoice.customer?.email ?? null}
-                  customerPhone={invoice.customer?.phone ?? null}
-                  customerAddressLines={[
-                    invoice.customer?.service_address_line_1 ?? "",
-                    invoice.customer?.service_address_line_2 ?? "",
-                    [invoice.customer?.service_city, invoice.customer?.service_state_or_region].filter(Boolean).join(", ")
-                      + (invoice.customer?.service_postal_code ? ` ${invoice.customer.service_postal_code}` : ""),
-                  ].map((line) => line.trim()).filter(Boolean)}
-                  jobTitle={invoice.job?.title ?? invoice.job_title}
-                  companySettings={companySettings}
-                  lineItems={invoice.line_items ?? []}
-                />
+                {document ? (
+                  <WarrantyCertificatePreview document={document} />
+                ) : (
+                  <p className="rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950">
+                    {documentError ?? "The warranty certificate could not be loaded."}
+                  </p>
+                )}
               </div>
             ) : (
               <section className="rounded-[32px] border border-amber-200 bg-amber-50 px-6 py-8 text-amber-950 shadow-[0_24px_80px_rgba(120,53,15,0.08)]">
