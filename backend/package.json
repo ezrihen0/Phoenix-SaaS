@@ -144,6 +144,7 @@
     "jobs:rbac:smoke": "node -r ts-node/register src/database/jobs-rbac-smoke.ts",
     "jobs:technician-rbac:smoke": "npm run jobs:rbac:smoke",
     "jobs:technician-rbac:unit-check": "node -r ts-node/register src/crm/jobs-technician-mutation-gate.unit-check.ts",
+    "technician:customer-facing:unit-check": "node -r ts-node/register src/crm/customer-facing-technician.unit-check.ts",
     "phoenix:owner-portal-qa:provision": "node -r ts-node/register src/database/owner-portal-qa-provision.ts",
     "phoenix:owner-portal-qa:verify": "node src/integrations/phoenix/owner-portal-qa-verify.mjs",
     "phoenix:activate": "node -r ts-node/register src/database/phoenix-activation.ts",

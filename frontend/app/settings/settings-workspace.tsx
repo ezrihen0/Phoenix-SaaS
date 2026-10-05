@@ -32,6 +32,10 @@ import { OrganizationProfilePanel, type OrganizationSettings } from "./organizat
 import { BranchSettingsPanel } from "./branch-settings-panel";
 import { TeamPermissionsPanel } from "./team-permissions-panel";
 import {
+  TechnicianPublicIdentityPanel,
+  type TechnicianPublicIdentity,
+} from "./technician-public-identity-panel";
+import {
   getVisibleSections,
   isSettingsTopic,
   resolveSectionLabels,
@@ -72,6 +76,7 @@ type SettingsWorkspaceProps = {
   profileFullName: string | null;
   profileEmail: string | null;
   activeOrganizationName: string | null;
+  technicianPublicIdentity: TechnicianPublicIdentity;
   initialTopic?: SettingsTopicId | null;
   platformCapabilities: string[];
   permissions: string[];
@@ -117,6 +122,7 @@ type SettingsPanelContext = {
   profileFullName: string | null;
   profileEmail: string | null;
   activeOrganizationName: string | null;
+  technicianPublicIdentity: TechnicianPublicIdentity;
   t: ReturnType<typeof useTranslations<"settings">>;
   platformCapabilities: string[];
   permissions: string[];
@@ -187,7 +193,16 @@ function SettingsExternalLinkPanel({
 }
 
 function SettingsProfilePanel({ ctx }: { ctx: SettingsPanelContext }) {
-  const { role, ownerMode, profileFullName, profileEmail, activeOrganizationName, organizationSettings, t } = ctx;
+  const {
+    role,
+    ownerMode,
+    profileFullName,
+    profileEmail,
+    activeOrganizationName,
+    organizationSettings,
+    technicianPublicIdentity,
+    t,
+  } = ctx;
   const initials = profileInitials(profileFullName, organizationSettings.displayInitials);
   const organizationLabel = organizationSettings.businessName?.trim()
     || activeOrganizationName?.trim()
@@ -227,6 +242,7 @@ function SettingsProfilePanel({ ctx }: { ctx: SettingsPanelContext }) {
           <p className="mt-5 text-sm leading-6 text-[color:var(--sem-text-secondary)]">{t("profile.helper")}</p>
         </div>
       </div>
+      <TechnicianPublicIdentityPanel initialIdentity={technicianPublicIdentity} />
     </section>
   );
 }
@@ -371,6 +387,7 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
     profileFullName,
     profileEmail,
     activeOrganizationName,
+    technicianPublicIdentity,
     initialTopic = null,
     platformCapabilities,
     permissions,
@@ -434,6 +451,7 @@ function BusinessControlCenterWorkspace(props: SettingsWorkspaceProps) {
     profileFullName,
     profileEmail,
     activeOrganizationName,
+    technicianPublicIdentity,
     t,
     platformCapabilities,
     permissions,

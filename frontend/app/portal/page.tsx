@@ -42,6 +42,8 @@ type PortalHomePayload = {
     office_phone: string | null;
     office_email: string | null;
     technician_name: string | null;
+    technician_title?: string | null;
+    technician_photo_url?: string | null;
     technician_phone: string | null;
   };
 };

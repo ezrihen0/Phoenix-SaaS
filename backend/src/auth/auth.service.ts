@@ -791,6 +791,9 @@ export class AuthService {
         ? {
           id: actor.technician.id,
           display_name: actor.technician.display_name,
+          customer_facing_name: actor.technician.customer_facing_name,
+          customer_facing_title: actor.technician.customer_facing_title,
+          customer_facing_photo_url: actor.technician.customer_facing_photo_url,
           phone: actor.technician.phone,
           specialties: actor.technician.specialties,
           is_active: actor.technician.is_active,

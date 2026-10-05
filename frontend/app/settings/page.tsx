@@ -11,6 +11,7 @@ import type { AiUsageSummaryPayload } from "./ai-usage-panel";
 import type { OrganizationSettings } from "./organization-profile-panel";
 import { isSettingsTopic } from "./settings-sections";
 import { SettingsWorkspace } from "./settings-workspace";
+import type { TechnicianPublicIdentity } from "./technician-public-identity-panel";
 
 type StaffProfile = {
   id: string;
@@ -25,6 +26,15 @@ type StaffProfile = {
     email: string;
     is_active: boolean;
   } | null;
+};
+
+const defaultTechnicianPublicIdentity: TechnicianPublicIdentity = {
+  technicianId: null,
+  internalDisplayName: null,
+  customerFacingName: null,
+  customerFacingTitle: null,
+  customerFacingPhotoUrl: null,
+  photoUploadSupported: false,
 };
 
 const defaultOrganizationSettings: OrganizationSettings = {
@@ -64,11 +74,23 @@ export default async function SettingsPage({
   let staffProfiles: StaffProfile[] = [];
   let staffLoadError: string | null = null;
   let organizationSettings = defaultOrganizationSettings;
+  let technicianPublicIdentity = defaultTechnicianPublicIdentity;
 
   try {
     organizationSettings = await serverApiFetch<OrganizationSettings>("/api/settings/organization");
   } catch {
     organizationSettings = defaultOrganizationSettings;
+  }
+
+  try {
+    technicianPublicIdentity = await serverApiFetch<TechnicianPublicIdentity>(
+      "/api/settings/technician-public-identity",
+    );
+  } catch {
+    technicianPublicIdentity = {
+      ...defaultTechnicianPublicIdentity,
+      internalDisplayName: session.profile?.full_name ?? null,
+    };
   }
 
   if (ownerMode) {
@@ -116,6 +138,7 @@ export default async function SettingsPage({
         profileFullName={session.profile?.full_name ?? null}
         profileEmail={session.user.email}
         activeOrganizationName={session.active_organization?.name ?? null}
+        technicianPublicIdentity={technicianPublicIdentity}
         initialTopic={isSettingsTopic(topicValue) ? topicValue : null}
         platformCapabilities={session.platform_capabilities ?? []}
         permissions={session.permissions ?? []}

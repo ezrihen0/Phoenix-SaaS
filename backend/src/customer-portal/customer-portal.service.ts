@@ -33,6 +33,7 @@ import {
   type InvoiceCustomerFacingSnapshotAny,
 } from "../crm/invoice-customer-facing-snapshot.types";
 import { snapshotPortalLineItems } from "../crm/historical-snapshot-read.helper";
+import { toPortalTechnicianIdentity } from "../crm/customer-facing-technician";
 import { buildCustomerPortalAccessUrl } from "./customer-portal-url";
 
 /** Default magic-link lifetime when minting from staff (no new env var). */
@@ -500,9 +501,6 @@ export class CustomerPortalService {
       })
       .orderBy("job.updated_at", "DESC")
       .getOne();
-    const technician = latestJob?.assigned_technician_id
-      ? await this.techniciansRepository.findOne({ where: { id: latestJob.assigned_technician_id, organization_id: organizationScope } })
-      : null;
 
     let activeQuote: QuoteEntity | null = null;
     let invoice: InvoiceEntity | null = null;
@@ -529,6 +527,25 @@ export class CustomerPortalService {
     });
     const jobById = new Map(customerJobs.map((job) => [job.id, job]));
     const jobIds = customerJobs.map((job) => job.id);
+    const assignedTechnicianIds = [
+      ...new Set(
+        [latestJob?.assigned_technician_id, ...customerJobs.map((job) => job.assigned_technician_id)]
+          .filter((technicianId): technicianId is string => Boolean(technicianId)),
+      ),
+    ];
+    const assignedTechnicians = assignedTechnicianIds.length === 0
+      ? []
+      : await this.techniciansRepository.find({
+          where: {
+            organization_id: organizationScope,
+            id: In(assignedTechnicianIds),
+          },
+        });
+    const technicianById = new Map(assignedTechnicians.map((technician) => [technician.id, technician]));
+    const latestTechnician = latestJob?.assigned_technician_id
+      ? technicianById.get(latestJob.assigned_technician_id) ?? null
+      : null;
+    const latestPublicTechnician = toPortalTechnicianIdentity(latestTechnician);
     const customerInvoices = jobIds.length === 0
       ? []
       : await this.invoicesRepository
@@ -631,6 +648,9 @@ export class CustomerPortalService {
         scheduled_for: job.scheduled_for ? job.scheduled_for.toISOString() : null,
         completed_at: job.completed_at ? job.completed_at.toISOString() : null,
         updated_at: job.updated_at.toISOString(),
+        assigned_technician: job.assigned_technician_id
+          ? toPortalTechnicianIdentity(technicianById.get(job.assigned_technician_id) ?? null)
+          : null,
       })),
       active_inspection: null,
       active_quote: activeQuote
@@ -709,8 +729,10 @@ export class CustomerPortalService {
       contact: {
         office_phone: this.normalizeMaybe(orgSettings.phone),
         office_email: this.normalizeMaybe(orgSettings.companyEmail),
-        technician_name: technician?.display_name ?? null,
-        technician_phone: technician?.phone ?? null,
+        technician_name: latestPublicTechnician.name,
+        technician_title: latestPublicTechnician.title,
+        technician_photo_url: latestPublicTechnician.photo_url,
+        technician_phone: latestTechnician?.phone ?? null,
       },
     };
   }

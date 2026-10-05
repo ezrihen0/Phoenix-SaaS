@@ -5,7 +5,14 @@ import { OperationalAccessGuard } from "../auth/operational-access.guard";
 import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { RequestWithActor } from "../common/request-types";
+import { normalizeCustomerFacingTechnicianLabel } from "../crm/customer-facing-technician";
 import { SettingsService } from "./settings.service";
+
+type TechnicianPublicIdentityPayload = {
+  customerFacingName?: unknown;
+  customerFacingTitle?: unknown;
+  customerFacingPhotoUrl?: unknown;
+};
 
 type OrganizationSettingsPayload = {
   businessName?: unknown;
@@ -85,6 +92,78 @@ function readOptionalNullableInteger(
   return value;
 }
 
+function readTechnicianPublicLabel(value: unknown, fieldName: string, maxLength: number) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    apiError(400, "technician_public_identity_invalid", `${fieldName} must be a string or null.`);
+  }
+
+  const normalized = normalizeCustomerFacingTechnicianLabel(value);
+  if (normalized && normalized.length > maxLength) {
+    apiError(400, "technician_public_identity_invalid", `${fieldName} is too long.`);
+  }
+
+  return normalized;
+}
+
+function readHttpsUrl(value: unknown, fieldName: string, maxLength: number) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    apiError(400, "technician_public_identity_invalid", `${fieldName} must be a string or null.`);
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length > maxLength) {
+    apiError(400, "technician_public_identity_invalid", `${fieldName} is too long.`);
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.protocol !== "https:") {
+      apiError(400, "technician_public_identity_invalid", `${fieldName} must be an https URL.`);
+    }
+    return parsed.toString();
+  } catch {
+    apiError(400, "technician_public_identity_invalid", `${fieldName} must be a valid URL.`);
+  }
+}
+
+function parseTechnicianPublicIdentityPayload(payload: TechnicianPublicIdentityPayload) {
+  const customerFacingName = readTechnicianPublicLabel(
+    payload.customerFacingName,
+    "Customer-facing technician name",
+    80,
+  );
+  const customerFacingTitle = readTechnicianPublicLabel(
+    payload.customerFacingTitle,
+    "Customer-facing title",
+    80,
+  );
+
+  if (payload.customerFacingPhotoUrl === undefined) {
+    return {
+      customerFacingName,
+      customerFacingTitle,
+    };
+  }
+
+  return {
+    customerFacingName,
+    customerFacingTitle,
+    customerFacingPhotoUrl: readHttpsUrl(payload.customerFacingPhotoUrl, "Customer-facing photo", 1024),
+  };
+}
+
 function parseOrganizationSettingsPayload(payload: OrganizationSettingsPayload) {
   return {
     businessName: readNullableString(payload.businessName, "Company name", 255),
@@ -151,6 +230,47 @@ export class SettingsController {
       await this.settingsService.updateOrganizationSettings(
         actor.organization_id,
         parseOrganizationSettingsPayload(payload ?? {}),
+      ),
+    );
+  }
+
+  @Get("technician-public-identity")
+  async getTechnicianPublicIdentity(@Req() request: RequestWithActor) {
+    const actor = request.actor;
+    if (!actor?.user?.id) {
+      apiError(401, "unauthenticated", "Sign in to manage your customer-facing technician name.");
+    }
+    if (!actor.organization_id) {
+      apiError(400, "organization_context_missing", "An active organization is required.");
+    }
+
+    return apiSuccess(
+      await this.settingsService.getTechnicianPublicIdentity(actor.organization_id, actor.user.id),
+    );
+  }
+
+  @Put("technician-public-identity")
+  async updateTechnicianPublicIdentity(
+    @Req() request: RequestWithActor,
+    @Body() payload: TechnicianPublicIdentityPayload | null | undefined,
+  ) {
+    const actor = request.actor;
+    if (!actor?.user?.id) {
+      apiError(401, "unauthenticated", "Sign in to manage your customer-facing technician name.");
+    }
+    if (!actor.organization_id) {
+      apiError(400, "organization_context_missing", "An active organization is required.");
+    }
+
+    return apiSuccess(
+      await this.settingsService.updateTechnicianPublicIdentity(
+        actor.organization_id,
+        actor.user.id,
+        parseTechnicianPublicIdentityPayload(payload ?? {}),
+        {
+          displayName: actor.profile?.full_name?.trim() || actor.user.email,
+          phone: actor.profile?.phone ?? null,
+        },
       ),
     );
   }

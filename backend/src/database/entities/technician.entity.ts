@@ -27,6 +27,15 @@ export class TechnicianEntity {
   @Column({ type: "varchar", length: 255 })
   display_name!: string;
 
+  @Column({ type: "varchar", length: 80, nullable: true })
+  customer_facing_name!: string | null;
+
+  @Column({ type: "varchar", length: 80, nullable: true })
+  customer_facing_title!: string | null;
+
+  @Column({ type: "varchar", length: 1024, nullable: true })
+  customer_facing_photo_url!: string | null;
+
   @Column({ type: "varchar", length: 64, nullable: true })
   phone!: string | null;
 

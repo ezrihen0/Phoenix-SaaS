@@ -363,7 +363,16 @@ export const requiredColumns = [
     ],
   },
   { table: "services", columns: ["organization_id", "service_type"] },
-  { table: "technicians", columns: ["organization_id", "display_name"] },
+  {
+    table: "technicians",
+    columns: [
+      "organization_id",
+      "display_name",
+      "customer_facing_name",
+      "customer_facing_title",
+      "customer_facing_photo_url",
+    ],
+  },
   {
     table: "translation_usage_ledger",
     columns: [

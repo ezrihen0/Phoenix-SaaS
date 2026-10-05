@@ -36,6 +36,9 @@ export type Database = {
           id: string;
           auth_user_id: string | null;
           display_name: string;
+          customer_facing_name: string | null;
+          customer_facing_title: string | null;
+          customer_facing_photo_url: string | null;
           phone: string | null;
           specialties: string[];
           is_active: boolean;
@@ -47,6 +50,9 @@ export type Database = {
           id?: string;
           auth_user_id?: string | null;
           display_name: string;
+          customer_facing_name?: string | null;
+          customer_facing_title?: string | null;
+          customer_facing_photo_url?: string | null;
           phone?: string | null;
           specialties?: string[];
           is_active?: boolean;

@@ -277,6 +277,8 @@ async function createHarness(dataSource: DataSource): Promise<Harness> {
     settingsService: new SettingsService(
       { get: (_key: string, fallback?: unknown) => fallback } as never,
       dataSource.getRepository(OrganizationSettingEntity),
+      dataSource.getRepository(TechnicianEntity),
+      dataSource,
     ),
     inventoryService: new InventoryService(
       dataSource.getRepository(InventoryItemEntity),

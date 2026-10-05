@@ -49,6 +49,9 @@ export type ClientSession = {
   technician: {
     id: string;
     display_name: string;
+    customer_facing_name?: string | null;
+    customer_facing_title?: string | null;
+    customer_facing_photo_url?: string | null;
     phone: string | null;
     specialties: string[];
     is_active: boolean;

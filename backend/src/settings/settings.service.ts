@@ -1,9 +1,15 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { DataSource, Repository } from "typeorm";
 
+import {
+  normalizeCustomerFacingTechnicianLabel,
+  resolveCustomerFacingTechnicianIdentity,
+} from "../crm/customer-facing-technician";
+import { ensureTechnicianForOrganizationMembership } from "../crm/technician-membership-link";
 import { OrganizationSettingEntity } from "../database/entities/organization-setting.entity";
+import { TechnicianEntity } from "../database/entities/technician.entity";
 
 export type OrganizationSettingsResponse = {
   businessName: string | null;
@@ -58,12 +64,30 @@ export type OrganizationSettingsUpdateInput = {
 
 const ORGANIZATION_SETTINGS_KEY = "default";
 
+export type TechnicianPublicIdentityResponse = {
+  technicianId: string | null;
+  internalDisplayName: string | null;
+  customerFacingName: string | null;
+  customerFacingTitle: string | null;
+  customerFacingPhotoUrl: string | null;
+  photoUploadSupported: false;
+};
+
+export type TechnicianPublicIdentityUpdateInput = {
+  customerFacingName: string | null;
+  customerFacingTitle: string | null;
+  customerFacingPhotoUrl?: string | null;
+};
+
 @Injectable()
 export class SettingsService {
   constructor(
     private readonly configService: ConfigService,
     @InjectRepository(OrganizationSettingEntity)
     private readonly organizationSettingsRepository: Repository<OrganizationSettingEntity>,
+    @InjectRepository(TechnicianEntity)
+    private readonly techniciansRepository: Repository<TechnicianEntity>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async getOrganizationSettings(organizationId: string): Promise<OrganizationSettingsResponse> {
@@ -183,6 +207,69 @@ export class SettingsService {
 
     const savedSettings = await this.organizationSettingsRepository.save(settings);
     return this.buildOrganizationSettingsResponse(savedSettings);
+  }
+
+  async getTechnicianPublicIdentity(
+    organizationId: string,
+    userId: string,
+  ): Promise<TechnicianPublicIdentityResponse> {
+    const technician = await this.techniciansRepository.findOne({
+      where: {
+        organization_id: organizationId,
+        auth_user_id: userId,
+      },
+    });
+
+    return this.buildTechnicianPublicIdentityResponse(technician);
+  }
+
+  async updateTechnicianPublicIdentity(
+    organizationId: string,
+    userId: string,
+    input: TechnicianPublicIdentityUpdateInput,
+    rosterFallback: {
+      displayName: string;
+      phone: string | null;
+    },
+  ): Promise<TechnicianPublicIdentityResponse> {
+    let technician = await this.techniciansRepository.findOne({
+      where: {
+        organization_id: organizationId,
+        auth_user_id: userId,
+      },
+    });
+
+    if (!technician) {
+      technician = await ensureTechnicianForOrganizationMembership(this.dataSource.manager, {
+        organizationId,
+        userId,
+        displayName: rosterFallback.displayName,
+        phone: rosterFallback.phone,
+      });
+    }
+
+    technician.customer_facing_name = input.customerFacingName;
+    technician.customer_facing_title = input.customerFacingTitle;
+    if (input.customerFacingPhotoUrl !== undefined) {
+      technician.customer_facing_photo_url = input.customerFacingPhotoUrl;
+    }
+
+    const saved = await this.techniciansRepository.save(technician);
+    return this.buildTechnicianPublicIdentityResponse(saved);
+  }
+
+  private buildTechnicianPublicIdentityResponse(
+    technician: TechnicianEntity | null,
+  ): TechnicianPublicIdentityResponse {
+    const identity = resolveCustomerFacingTechnicianIdentity(technician);
+    return {
+      technicianId: technician?.id ?? null,
+      internalDisplayName: normalizeCustomerFacingTechnicianLabel(technician?.display_name),
+      customerFacingName: identity.name,
+      customerFacingTitle: identity.title,
+      customerFacingPhotoUrl: identity.photoUrl,
+      photoUploadSupported: false,
+    };
   }
 
   private buildOrganizationSettingsResponse(settings: OrganizationSettingEntity): OrganizationSettingsResponse {
