@@ -89,25 +89,52 @@ function parseTimeLabelToInput(value: string) {
   return `${String(hours).padStart(2, "0")}:${minutePart}`;
 }
 
+function parseCanonicalScheduledWindowEnd(scheduledWindow: string | null) {
+  const canonical = scheduledWindow?.trim().match(/^(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+
+  if (canonical) {
+    return canonical[2];
+  }
+
+  return null;
+}
+
 export function deriveEndTimeInput(
   scheduledFor: string | null,
   scheduledWindow: string | null,
   durationMinutes = DEFAULT_DURATION_MINUTES,
 ) {
+  const fromCanonicalWindow = parseCanonicalScheduledWindowEnd(scheduledWindow);
+
+  if (fromCanonicalWindow) {
+    return fromCanonicalWindow;
+  }
+
   const fromWindow = scheduledWindow?.match(/-\s*([0-9]{1,2}:[0-9]{2}\s*[AP]M)/i)?.[1];
 
   if (fromWindow) {
     return parseTimeLabelToInput(fromWindow);
   }
 
-  const startDate = scheduledFor ? new Date(scheduledFor) : null;
+  const startTime = localDateTimeParts(scheduledFor).time;
 
-  if (!startDate || Number.isNaN(startDate.getTime())) {
+  if (!startTime) {
     return "";
   }
 
-  const endDate = new Date(startDate.getTime() + durationMinutes * 60_000);
-  return localDateTimeParts(endDate.toISOString()).time;
+  return addMinutesToTimeInput(startTime, durationMinutes);
+}
+
+/** Default appointment block length when the user picks a start time (does not move start when end is edited). */
+export function deriveEndTimeFromStartTime(
+  startTime: string,
+  durationMinutes = DEFAULT_DURATION_MINUTES,
+) {
+  if (!startTime) {
+    return "";
+  }
+
+  return addMinutesToTimeInput(startTime, durationMinutes);
 }
 
 export function formatTimeInputLabel(value: string) {
@@ -185,15 +212,20 @@ export function windowsOverlap(leftStart: Date, leftEnd: Date, rightStart: Date,
   return leftStart.getTime() < rightEnd.getTime() && leftEnd.getTime() > rightStart.getTime();
 }
 
-function addMinutesToTimeInput(time: string, minutes: number) {
-  const base = new Date(`2000-01-01T${time}`);
+export function addMinutesToTimeInput(time: string, minutes: number) {
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})$/);
 
-  if (Number.isNaN(base.getTime())) {
+  if (!match) {
     return "";
   }
 
-  const next = new Date(base.getTime() + minutes * 60_000);
-  return next.toTimeString().slice(0, 5);
+  const totalMinutes =
+    Number.parseInt(match[1], 10) * 60 + Number.parseInt(match[2], 10) + minutes;
+  const wrapped = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const hours = Math.floor(wrapped / 60);
+  const mins = wrapped % 60;
+
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
 export function filterJobsForDate(jobs: SchedulingJobRecord[], selectedDate: string) {

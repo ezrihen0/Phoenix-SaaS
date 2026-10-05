@@ -25,7 +25,14 @@ import {
 } from "lucide-react";
 
 import { crmApiFetch } from "@/lib/crm/browser-api";
-import { toCanonicalScheduledWindow } from "@/lib/crm/scheduling-utils";
+import {
+  combineDateTime,
+  DEFAULT_DURATION_MINUTES,
+  deriveEndTimeFromStartTime,
+  deriveEndTimeInput,
+  localDateTimeParts,
+  toCanonicalScheduledWindow,
+} from "@/lib/crm/scheduling-utils";
 import { formatAddress, formatDateTime } from "@/lib/crm/display";
 import { formatInvoiceLifecycleStatus } from "@/lib/crm/invoice-lifecycle";
 import {
@@ -136,7 +143,6 @@ type JobDetailWorkspaceProps = {
 };
 
 const ITEMS_PER_PAGE = 4;
-const DEFAULT_DURATION_MINUTES = 120;
 const EARLY_STAGE_STATUSES: JobStatus[] = ["new_lead", "contacted", "submitted"];
 
 function relationValue<T>(value: RelatedValue<T> | undefined) {
@@ -185,41 +191,6 @@ function usePagedItems<T>(items: T[], page: number) {
   };
 }
 
-function localDateTimeParts(value: string | null) {
-  if (!value) {
-    return {
-      date: "",
-      time: "",
-    };
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return {
-      date: "",
-      time: "",
-    };
-  }
-
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  const [nextDate, nextTime] = localDate.toISOString().slice(0, 16).split("T");
-
-  return {
-    date: nextDate ?? "",
-    time: nextTime ?? "",
-  };
-}
-
-function combineDateTime(date: string, time: string) {
-  if (!date || !time) {
-    return null;
-  }
-
-  const nextDate = new Date(`${date}T${time}`);
-  return Number.isNaN(nextDate.getTime()) ? null : nextDate;
-}
-
 function inferArrivalWindow(value: string | null): ArrivalWindowOption {
   if (!value) {
     return "1h";
@@ -234,45 +205,6 @@ function inferArrivalWindow(value: string | null): ArrivalWindowOption {
   }
 
   return "1h";
-}
-
-function parseTimeLabelToInput(value: string) {
-  const match = value.trim().match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i);
-
-  if (!match) {
-    return "";
-  }
-
-  const [, hourPart, minutePart, meridiemRaw] = match;
-  const meridiem = meridiemRaw.toUpperCase();
-  let hours = Number.parseInt(hourPart, 10);
-
-  if (meridiem === "PM" && hours < 12) {
-    hours += 12;
-  }
-
-  if (meridiem === "AM" && hours === 12) {
-    hours = 0;
-  }
-
-  return `${String(hours).padStart(2, "0")}:${minutePart}`;
-}
-
-function deriveEndTimeInput(scheduledFor: string | null, scheduledWindow: string | null) {
-  const fromWindow = scheduledWindow?.match(/-\s*([0-9]{1,2}:[0-9]{2}\s*[AP]M)/i)?.[1];
-
-  if (fromWindow) {
-    return parseTimeLabelToInput(fromWindow);
-  }
-
-  const startDate = scheduledFor ? new Date(scheduledFor) : null;
-
-  if (!startDate || Number.isNaN(startDate.getTime())) {
-    return "";
-  }
-
-  const endDate = new Date(startDate.getTime() + DEFAULT_DURATION_MINUTES * 60_000);
-  return localDateTimeParts(endDate.toISOString()).time;
 }
 
 function formatTimeLabel(value: string) {
@@ -1113,7 +1045,19 @@ export default function JobDetailWorkspace({
                 <div className="grid grid-cols-2 gap-2">
                   <label className="block space-y-1.5">
                     <span className="text-xs text-[color:var(--sem-text-muted)]">Start</span>
-                    <input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm(c => ({ ...c, startTime: e.target.value }))} className="theme-input-control h-10 w-full rounded-xl border px-3 text-sm" />
+                    <input
+                      type="time"
+                      value={scheduleForm.startTime}
+                      onChange={(e) => {
+                        const startTime = e.target.value;
+                        setScheduleForm((c) => ({
+                          ...c,
+                          startTime,
+                          endTime: deriveEndTimeFromStartTime(startTime),
+                        }));
+                      }}
+                      className="theme-input-control h-10 w-full rounded-xl border px-3 text-sm"
+                    />
                   </label>
                   <label className="block space-y-1.5">
                     <span className="text-xs text-[color:var(--sem-text-muted)]">End</span>
@@ -1392,7 +1336,14 @@ export default function JobDetailWorkspace({
                       <input
                         type="time"
                         value={scheduleForm.startTime}
-                        onChange={(event) => setScheduleForm((current) => ({ ...current, startTime: event.target.value }))}
+                        onChange={(event) => {
+                          const startTime = event.target.value;
+                          setScheduleForm((current) => ({
+                            ...current,
+                            startTime,
+                            endTime: deriveEndTimeFromStartTime(startTime),
+                          }));
+                        }}
                         className="w-full rounded-[18px] border border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)] px-4 py-3 text-sm text-[color:var(--sem-text-primary)] outline-none transition focus:border-[color:var(--sem-accent-primary)]"
                       />
                     </label>

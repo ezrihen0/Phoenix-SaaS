@@ -27,7 +27,12 @@ import {
   buildScheduleJobsApiPath,
   type ScheduleTechnicianFilter,
 } from "@/lib/crm/schedule-technician-query";
-import { buildScheduledWindow } from "@/lib/crm/scheduling-utils";
+import {
+  buildScheduledWindow,
+  deriveEndTimeFromStartTime,
+  deriveEndTimeInput,
+  localDateTimeParts,
+} from "@/lib/crm/scheduling-utils";
 import {
   canTransitionJobStatus,
   getJobStatusLabel,
@@ -543,20 +548,11 @@ function formatScheduleTimeRange(value: string | null, windowLabel: string | nul
 }
 
 function splitScheduledDateTime(value: string | null) {
-  if (!value) {
-    return {
-      scheduledDate: "",
-      scheduledTime: "",
-    };
-  }
-
-  const date = new Date(value);
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  const [scheduledDate, scheduledTime] = localDate.toISOString().slice(0, 16).split("T");
+  const parts = localDateTimeParts(value);
 
   return {
-    scheduledDate,
-    scheduledTime: scheduledTime ?? "",
+    scheduledDate: parts.date,
+    scheduledTime: parts.time,
   };
 }
 
@@ -585,7 +581,7 @@ function buildScheduleForm(job: JobRecord | null): ScheduleFormState {
     assignedTechnicianId: job.assigned_technician_id ?? "",
     scheduledDate,
     scheduledTime,
-    scheduledEndTime: deriveScheduledEndTime(job, scheduledTime),
+    scheduledEndTime: deriveEndTimeInput(job.scheduled_for, job.scheduled_window),
   };
 }
 
@@ -1519,52 +1515,5 @@ function formatTimeInputLabel(value: string) {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
-}
-
-function parseTimeLabelToInput(value: string) {
-  const match = value.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*([AP]M)$/i);
-
-  if (!match) {
-    return "";
-  }
-
-  const [, hourPart, minutePart = "00", meridiemRaw] = match;
-  const meridiem = meridiemRaw.toUpperCase();
-  let hours = Number.parseInt(hourPart, 10);
-
-  if (meridiem === "PM" && hours < 12) {
-    hours += 12;
-  }
-
-  if (meridiem === "AM" && hours === 12) {
-    hours = 0;
-  }
-
-  return `${String(hours).padStart(2, "0")}:${minutePart}`;
-}
-
-function deriveEndTimeFromStartTime(scheduledTime: string) {
-  if (!scheduledTime) {
-    return "";
-  }
-
-  const start = new Date(`2000-01-01T${scheduledTime}`);
-
-  if (Number.isNaN(start.getTime())) {
-    return "";
-  }
-
-  const end = new Date(start.getTime() + SCHEDULE_JOB_BLOCK_MINUTES * 60_000);
-  return end.toTimeString().slice(0, 5);
-}
-
-function deriveScheduledEndTime(job: JobRecord | null, scheduledTime: string) {
-  const windowEnd = job?.scheduled_window?.match(/-\s*([0-9]{1,2}(?::[0-9]{2})?\s*[AP]M)/i)?.[1];
-
-  if (windowEnd) {
-    return parseTimeLabelToInput(windowEnd);
-  }
-
-  return deriveEndTimeFromStartTime(scheduledTime);
 }
 
