@@ -385,9 +385,9 @@ export class WarrantyCertificatesService {
       invoiceId: input.invoice.id,
       invoiceNumber: resolveInvoiceDisplayNumber(input.invoice),
       jobTitle: input.jobTitle,
-      warrantyType: input.warrantyType,
-      coverageText: input.coverageText,
-      exclusionsText: input.exclusionsText,
+      warrantyType: input.warrantyType ?? null,
+      coverageText: input.coverageText ?? null,
+      exclusionsText: input.exclusionsText ?? null,
       startDate,
       completionDate,
       customerName: input.customer.full_name,
@@ -489,13 +489,6 @@ export class WarrantyCertificatesService {
         organization_id: organizationId,
       },
     });
-  }
-
-  private formatDate(value: Date | null | undefined) {
-    if (!value) {
-      return "-";
-    }
-    return value.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
 
   private normalizeString(value: string | null | undefined) {

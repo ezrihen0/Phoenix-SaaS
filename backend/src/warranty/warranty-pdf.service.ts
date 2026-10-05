@@ -389,7 +389,7 @@ class WarrantyPdfLayout {
   ) {
     const nameRows = wrapPdfText(line.description ? `${line.name} - ${line.description}` : line.name, 36);
     const termRows = wrapPdfText(line.termLabel ?? emptyTermLabel, 16);
-    const expiryRows = wrapPdfText(line.expiryLabel ?? "-", 14);
+    const expiryRows = wrapPdfText(line.expiryLabel ?? emptyTermLabel, 16);
     const qtyRows = wrapPdfText(line.quantity, 8);
     const rowCount = Math.max(nameRows.length, termRows.length, expiryRows.length, qtyRows.length, 1);
     for (let index = 0; index < rowCount; index += 1) {
