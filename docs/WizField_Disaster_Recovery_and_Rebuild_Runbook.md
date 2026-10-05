@@ -31,7 +31,8 @@ Use it when a local machine, operator workstation, or deployment environment is 
 
 This runbook does **not** replace:
 
-- `WizField_Master_Source_of_Truth.md` (product/architecture truth)
+- [docs.wizfield.com](https://docs.wizfield.com/docs) (published product truth for users and operators)
+- `WizField_Master_Source_of_Truth.md` (engineering product/architecture truth)
 - `WizField_Engineering_Closeout_and_Verification.md` (engineering closeout evidence)
 - `WizField_Reverification_Runbook.md` (production-like replay procedure)
 - `WizField_Owner_Launch_Activation_Checklist.md` (owner launch activation)
@@ -406,6 +407,8 @@ Recovery is accepted only when all applicable items below are true:
 
 ## References (canonical docs in this set)
 
+- [https://docs.wizfield.com/docs](https://docs.wizfield.com/docs) — published product truth
+- [WIZFIELD_PUBLISHED_DOCS_MAP.md](WIZFIELD_PUBLISHED_DOCS_MAP.md) — map to engineering SoT files
 - `WizField_Master_Source_of_Truth.md`
 - `WizField_Engineering_Closeout_and_Verification.md`
 - `WizField_Reverification_Runbook.md`

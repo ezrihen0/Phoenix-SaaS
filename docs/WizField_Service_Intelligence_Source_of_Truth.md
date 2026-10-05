@@ -1,5 +1,7 @@
 # WizField Service Intelligence — Source of Truth
 
+**Published product truth:** No dedicated docs.wizfield.com page yet — use [Glossary](https://docs.wizfield.com/docs/glossary) and [What Is WizField?](https://docs.wizfield.com/docs/what-is-wizfield). [Published docs map](WIZFIELD_PUBLISHED_DOCS_MAP.md)
+
 **Document status:** Canonical authority for Classification V1 taxonomy and persistence  
 **Taxonomy version:** `V1`  
 **Persistence:** `invoice_service_intelligence`, `invoice_service_intelligence_component`, `invoice_service_intelligence_warranty`  
@@ -282,5 +284,6 @@ Do not store this layer in `invoices.branding_snapshot_json`.
 
 Companion product docs:
 
+- [WizField Docs](https://docs.wizfield.com/docs) — published product truth
 - [WizField Master Source of Truth](./WizField_Master_Source_of_Truth.md)
 - [WizField Growth Center Source of Truth](./WizField_Growth_Center_Source_of_Truth.md)

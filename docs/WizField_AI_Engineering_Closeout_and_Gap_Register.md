@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Engineering closeout record for **AI Program Phases 0–4**. This file is **historical Phase 0–4 evidence**. Current AI product truth, including Home AI V1, lives in [`WizField_AI_Master_Source_of_Truth.md`](WizField_AI_Master_Source_of_Truth.md).
+Engineering closeout record for **AI Program Phases 0–4**. This file is **historical Phase 0–4 evidence**. Published AI product truth: [What WizField AI Does Today](https://docs.wizfield.com/docs/what-wizfield-ai-does-today). Engineering AI SoT, including Home AI V1: [`WizField_AI_Master_Source_of_Truth.md`](WizField_AI_Master_Source_of_Truth.md) ([map](WIZFIELD_PUBLISHED_DOCS_MAP.md)).
 
 Current Home AI verification: [WIZFIELD_PRODUCTION_CLOSEOUT.md](audit/production-2026-09/WIZFIELD_PRODUCTION_CLOSEOUT.md) (`home:ai:smoke`, `home:ai:contract-check`).
 

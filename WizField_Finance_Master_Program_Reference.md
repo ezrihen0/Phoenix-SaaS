@@ -1138,7 +1138,7 @@ Recommended next action:
 At the beginning of every Finance Part:
 
 1. Read this Master Program Reference.
-2. Read the current canonical WizField Source of Truth files.
+2. Read published product truth at [https://docs.wizfield.com/docs](https://docs.wizfield.com/docs) and the current engineering WizField Source of Truth files under `docs/` ([map](docs/WIZFIELD_PUBLISHED_DOCS_MAP.md)).
 3. Read the previous Finance Part closeout.
 4. Confirm the current Part number.
 5. State what is explicitly in scope.

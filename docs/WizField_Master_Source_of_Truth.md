@@ -1,8 +1,10 @@
 # WizField Master Source of Truth
 
+**Published product truth:** [https://docs.wizfield.com/docs](https://docs.wizfield.com/docs) ([map](WIZFIELD_PUBLISHED_DOCS_MAP.md))
+
 ## Purpose
 
-This is the single canonical product and architecture truth for the WizField project.
+This is the single canonical **engineering** product and architecture truth for the WizField application repository.
 
 It states **current system behavior** after the September 2026 production closeout. Historical Gate 0–14 roadmap docs, SaaS foundation fragments, and older planning files are not current authority.
 
@@ -14,13 +16,13 @@ This document does not copy audit evidence. It states current truth and points t
 
 ## Document authority
 
-| Layer | Owns | Canonical file |
-|---|---|---|
-| **Master SoT** | Product architecture, tenant model, major modules, operating model, production readiness summary | This file |
-| **AI Master SoT** | AI architecture, Home AI, Brain, Copilot, tools, permissions, read/write policy | [WizField_AI_Master_Source_of_Truth.md](WizField_AI_Master_Source_of_Truth.md) |
-| **Language Store SoT** | Localization architecture and language entitlement | [WizField_Language_Store_Source_of_Truth.md](WizField_Language_Store_Source_of_Truth.md) |
-| **Growth Center SoT** | Marketing / publishing model | [WizField_Growth_Center_Source_of_Truth.md](WizField_Growth_Center_Source_of_Truth.md) |
-| **Service Intelligence SoT** | Planned taxonomy + current classification persistence | [WizField_Service_Intelligence_Source_of_Truth.md](WizField_Service_Intelligence_Source_of_Truth.md) |
+| Layer | Owns | Published docs | Engineering SoT (this repo) |
+|---|---|---|---|
+| **Master SoT** | Product architecture, tenant model, major modules, operating model, production readiness summary | [What Is WizField?](https://docs.wizfield.com/docs/what-is-wizfield) | This file |
+| **AI Master SoT** | AI architecture, Home AI, Brain, Copilot, tools, permissions, read/write policy | [What WizField AI Does Today](https://docs.wizfield.com/docs/what-wizfield-ai-does-today) | [WizField_AI_Master_Source_of_Truth.md](WizField_AI_Master_Source_of_Truth.md) |
+| **Language Store SoT** | Localization architecture and language entitlement | [What Is WizField Language Store?](https://docs.wizfield.com/docs/what-is-wizfield-language-store) | [WizField_Language_Store_Source_of_Truth.md](WizField_Language_Store_Source_of_Truth.md) |
+| **Growth Center SoT** | Marketing / publishing model | [What Is WizField Growth Center?](https://docs.wizfield.com/docs/what-is-wizfield-growth-center) | [WizField_Growth_Center_Source_of_Truth.md](WizField_Growth_Center_Source_of_Truth.md) |
+| **Service Intelligence SoT** | Planned taxonomy + current classification persistence | [Glossary](https://docs.wizfield.com/docs/glossary) (no dedicated page yet) | [WizField_Service_Intelligence_Source_of_Truth.md](WizField_Service_Intelligence_Source_of_Truth.md) |
 | **DR / Rebuild Runbook** | Backup, restore, rebuild procedure | [WizField_Disaster_Recovery_and_Rebuild_Runbook.md](WizField_Disaster_Recovery_and_Rebuild_Runbook.md) |
 | **Owner launch checklist** | Owner activation items | [WizField_Owner_Launch_Activation_Checklist.md](WizField_Owner_Launch_Activation_Checklist.md) |
 | **Engineering closeout** | Historical Gate 11–14 foundation evidence | [WizField_Engineering_Closeout_and_Verification.md](WizField_Engineering_Closeout_and_Verification.md) |

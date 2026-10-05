@@ -1,6 +1,6 @@
 # WizField AI — Sales Enablement Risk Register
 
-**Purpose:** Keep demos, videos, website copy, and partner conversations **honest** against current product truth. Aligns with [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md), [WizField_AI_Master_Source_of_Truth.md](WizField_AI_Master_Source_of_Truth.md), and [WizField_Growth_Center_Source_of_Truth.md](WizField_Growth_Center_Source_of_Truth.md).
+**Purpose:** Keep demos, videos, website copy, and partner conversations **honest** against current product truth. Aligns with [docs.wizfield.com](https://docs.wizfield.com/docs) and engineering SoT: [WizField_Master_Source_of_Truth.md](WizField_Master_Source_of_Truth.md), [WizField_AI_Master_Source_of_Truth.md](WizField_AI_Master_Source_of_Truth.md), [WizField_Growth_Center_Source_of_Truth.md](WizField_Growth_Center_Source_of_Truth.md) ([map](WIZFIELD_PUBLISHED_DOCS_MAP.md)).
 
 Current Home AI may be described as a role-aware, org-scoped, **read-only** assistant. Forbidden: AI write actions, Stripe billing, live telephony as if activated, or Service Intelligence expansion as shipped.
 
@@ -13,7 +13,7 @@ Current Home AI may be described as a role-aware, org-scoped, **read-only** assi
 | # | Forbidden language / claim | Why it is wrong or dangerous |
 |---|-----------------------------|------------------------------|
 | F1 | “AI reads all your portal conversations / customer chat in the portal” | **No portal conversation analytics pipeline** is defined in repo truth; portal is token/magic-link/session scoped — add product + logging first |
-| F2 | “AI auto-posts to Google / Facebook / Meta for you” | **Violates Growth Center rule:** publishing is **explicit** via publish jobs — [Growth Center SoT §1](WizField_Growth_Center_Source_of_Truth.md) |
+| F2 | “AI auto-posts to Google / Facebook / Meta for you” | **Violates Growth Center rule:** publishing is **explicit** via publish jobs — [How Explicit Publishing Works](https://docs.wizfield.com/docs/how-explicit-publishing-works) |
 | F3 | “Autonomous scheduling / dispatch — AI moves your techs” | **Out of bounds** for early phases; dispatch is human-operated product; AI may **suggest**, not execute |
 | F4 | “Self-learning AI that gets smarter every day automatically” | Phase 4 adds **read-only** SMS reply observation in-thread — **not** autonomous learning, model retraining, or causal ROI claims — use A6 wording instead |
 | F5 | “Guaranteed ROI / guaranteed lead volume from AI” | Unsupported; field-service variance too high |
