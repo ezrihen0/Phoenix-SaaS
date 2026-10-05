@@ -30,7 +30,7 @@
 
 ## Michael device acceptance — owner execution
 
-Perform on **iPhone** with Phoenix added to **Home Screen** (required for reliable iOS Web Push).
+Perform on **iPhone** with Phoenix added to **Home Screen** (required for reliable iOS Web Push), or on **Android Chrome** via **Install app** (requires manifest `192`/`512` icons + registered service worker on `app.phoenixfireplace.ca`).
 
 1. Sign in as Michael (`kuflikmichael@gmail.com`).
 2. Tap **Enable alerts** and allow notifications.

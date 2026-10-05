@@ -3,8 +3,13 @@ export const CRM_BRAND_NAME = "Phoenix CRM";
 
 export const CRM_LOGO_SRC = "/phoenix-logo.png";
 
-/** Tab / PWA icon (square mark in `public/`). */
+/** Tab icon (legacy favicon PNG in `public/`). */
 export const CRM_FAVICON_SRC = "/phoenix-logo - favicon.png";
+
+/** Manifest / install icons (generated under `public/icons/`). */
+export const CRM_PWA_ICON_192 = "/icons/icon-192.png";
+export const CRM_PWA_ICON_512 = "/icons/icon-512.png";
+export const CRM_PWA_ICON_512_MASKABLE = "/icons/icon-512-maskable.png";
 
 export const CRM_LOGO_ALT = "Phoenix Chimney & Fireplace";
 

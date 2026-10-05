@@ -9,6 +9,7 @@ import { PhoenixStaticBoot } from "@/components/phoenix/phoenix-static-boot";
 import {
   CRM_BRAND_NAME,
   CRM_FAVICON_SRC,
+  CRM_PWA_ICON_192,
   CRM_PWA_DESCRIPTION,
   CRM_SPLASH_BACKGROUND,
 } from "@/lib/branding/crm-brand";
@@ -35,8 +36,11 @@ export const metadata: Metadata = {
   description: CRM_PWA_DESCRIPTION,
   applicationName: CRM_BRAND_NAME,
   icons: {
-    icon: [{ url: CRM_FAVICON_SRC, type: "image/png" }],
-    apple: CRM_FAVICON_SRC,
+    icon: [
+      { url: CRM_PWA_ICON_192, sizes: "192x192", type: "image/png" },
+      { url: CRM_FAVICON_SRC, type: "image/png" },
+    ],
+    apple: CRM_PWA_ICON_192,
   },
   appleWebApp: {
     capable: true,

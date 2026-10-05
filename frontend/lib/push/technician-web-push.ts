@@ -1,4 +1,5 @@
 import { crmApiFetch } from "@/lib/crm/browser-api";
+import { getPhoenixServiceWorkerRegistration } from "@/lib/pwa/register-phoenix-service-worker";
 
 type VapidKeyResponse = {
   enabled: boolean;
@@ -46,8 +47,10 @@ async function fetchVapidPublicKey() {
 }
 
 async function ensurePushServiceWorker() {
-  const registration = await navigator.serviceWorker.register("/push-sw.js", { scope: "/" });
-  await navigator.serviceWorker.ready;
+  const registration = await getPhoenixServiceWorkerRegistration();
+  if (!registration) {
+    throw new Error("Service worker registration is unavailable.");
+  }
   return registration;
 }
 

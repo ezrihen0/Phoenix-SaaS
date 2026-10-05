@@ -26,6 +26,7 @@ import {
   Workflow,
 } from "lucide-react";
 
+import { PhoenixServiceWorkerRegister } from "@/components/pwa/phoenix-service-worker-register";
 import { TechnicianPushSetupBanner } from "@/components/push/technician-push-setup-banner";
 import { QuickCreateTrigger } from "@/components/quick-create-trigger";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -290,6 +291,7 @@ export function AppShell({ children }: AppShellProps) {
   if (!enabled) {
     return (
       <>
+        <PhoenixServiceWorkerRegister />
         <ThemeRuntime />
         {children}
       </>
@@ -395,6 +397,7 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <>
+      <PhoenixServiceWorkerRegister />
       <ThemeRuntime />
       <div className="flex min-h-screen bg-[color:var(--cmp-surface-canvas)] text-[color:var(--sem-text-primary)]">
         <aside
