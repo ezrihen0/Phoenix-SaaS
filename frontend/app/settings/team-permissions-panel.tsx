@@ -4,10 +4,12 @@ import {
   ChevronRight,
   Copy,
   LockKeyhole,
+  Pencil,
   ShieldCheck,
   Trash2,
   UserPlus,
   UsersRound,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -210,6 +212,17 @@ type CreateMemberResult = {
   member: TeamMember | null;
 };
 
+const SYSTEM_ROLE_OPTIONS: Array<{ value: SessionRole; label: string }> = [
+  { value: "admin", label: "Admin" },
+  { value: "office_admin", label: "Office / CSR" },
+  { value: "dispatcher", label: "Dispatcher" },
+  { value: "csr", label: "CSR" },
+  { value: "technician", label: "Technician" },
+  { value: "viewer", label: "Viewer" },
+];
+
+type MemberAccessMode = "preset" | "customRole" | "customPermissions";
+
 const RESPONSIBILITIES: Array<{ id: string; label: string }> = [
   { id: "answer_calls_messages", label: "Answer calls & messages" },
   { id: "manage_customers_leads", label: "Manage customers & leads" },
@@ -280,6 +293,16 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
   const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<string[]>([]);
   const [singleOrganizationId, setSingleOrganizationId] = useState<string>("");
   const [branchOptions, setBranchOptions] = useState<BranchOption[]>([]);
+
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [editAccessMode, setEditAccessMode] = useState<MemberAccessMode>("preset");
+  const [editSystemRole, setEditSystemRole] = useState<SessionRole>("office_admin");
+  const [editCustomRoleId, setEditCustomRoleId] = useState<string | null>(null);
+  const [editPermissionKeys, setEditPermissionKeys] = useState<string[]>([]);
+
+  const [editingCustomRole, setEditingCustomRole] = useState<CustomRole | null>(null);
+  const [editCustomRoleName, setEditCustomRoleName] = useState("");
+  const [editCustomRolePermissionKeys, setEditCustomRolePermissionKeys] = useState<string[]>([]);
 
   const loadTeam = useCallback(async () => {
     setLoading(true);
@@ -562,6 +585,152 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
         ? current.filter((item) => item !== key)
         : [...current, key]
     ));
+  }
+
+  function toggleEditPermission(key: string) {
+    setEditPermissionKeys((current) => (
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]
+    ));
+  }
+
+  function toggleEditCustomRolePermission(key: string) {
+    setEditCustomRolePermissionKeys((current) => (
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]
+    ));
+  }
+
+  function openEditMember(member: TeamMember) {
+    setEditingMember(member);
+    setEditSystemRole(member.role === "owner" ? "owner" : member.role);
+    if (member.custom_role_id) {
+      setEditAccessMode("customRole");
+      setEditCustomRoleId(member.custom_role_id);
+      setEditPermissionKeys([]);
+    } else if (member.custom_permission_keys && member.custom_permission_keys.length > 0) {
+      setEditAccessMode("customPermissions");
+      setEditCustomRoleId(null);
+      setEditPermissionKeys([...member.custom_permission_keys]);
+    } else {
+      setEditAccessMode("preset");
+      setEditCustomRoleId(null);
+      setEditPermissionKeys([]);
+    }
+    setErrorMessage(null);
+    setMessage(null);
+  }
+
+  function closeEditMember() {
+    setEditingMember(null);
+  }
+
+  function openEditCustomRole(role: CustomRole) {
+    setEditingCustomRole(role);
+    setEditCustomRoleName(role.name);
+    setEditCustomRolePermissionKeys([...role.permission_keys]);
+    setErrorMessage(null);
+  }
+
+  function closeEditCustomRole() {
+    setEditingCustomRole(null);
+  }
+
+  async function handleSaveMemberAccess() {
+    if (!editingMember) {
+      return;
+    }
+
+    if (editAccessMode === "customRole" && !editCustomRoleId) {
+      setErrorMessage("Select a custom role or choose another permission source.");
+      return;
+    }
+
+    if (editAccessMode === "customPermissions" && editPermissionKeys.length === 0) {
+      setErrorMessage("Select at least one permission for a custom checklist.");
+      return;
+    }
+
+    setSaving(true);
+    setErrorMessage(null);
+
+    try {
+      const body: Record<string, unknown> = {
+        systemRole: editSystemRole,
+      };
+
+      if (editAccessMode === "customRole" && editCustomRoleId) {
+        body.customRoleId = editCustomRoleId;
+      } else if (editAccessMode === "customPermissions") {
+        body.customPermissionKeys = editPermissionKeys;
+      }
+
+      const updated = await teamFetch<TeamMember>(
+        `/api/team/members/${encodeURIComponent(editingMember.id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        },
+      );
+
+      setMembers((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setMessage(`${updated.full_name}'s role and permissions were updated.`);
+      closeEditMember();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not update team member access.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveCustomRoleEdit() {
+    if (!editingCustomRole) {
+      return;
+    }
+
+    if (!editCustomRoleName.trim() || editCustomRolePermissionKeys.length === 0) {
+      setErrorMessage("Provide a role name and at least one permission.");
+      return;
+    }
+
+    setSaving(true);
+    setErrorMessage(null);
+
+    try {
+      const updated = await teamFetch<CustomRole>(
+        `/api/team/custom-roles/${encodeURIComponent(editingCustomRole.id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            name: editCustomRoleName.trim(),
+            permissionKeys: editCustomRolePermissionKeys,
+          }),
+        },
+      );
+
+      setCustomRoles((current) => current.map((role) => (role.id === updated.id ? updated : role)));
+      setMessage(`Custom role "${updated.name}" was updated.`);
+      closeEditCustomRole();
+      await loadTeam();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not update the custom role.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function memberCanEditAccess(member: TeamMember) {
+    if (member.id === currentProfileId) {
+      return false;
+    }
+
+    if (member.status !== "active" && member.status !== "invited") {
+      return false;
+    }
+
+    return true;
   }
 
   function toggleResponsibility(id: string) {
@@ -915,10 +1084,21 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
               <p className="text-[color:var(--sem-text-secondary)]">{member.user?.email ?? "—"}</p>
               <p className="text-[color:var(--sem-text-secondary)]">{member.access_label}</p>
               <p className="capitalize text-[color:var(--sem-text-secondary)]">{member.status}</p>
-              <div className="md:text-right">
-                {member.id === currentProfileId ? (
+              <div className="flex flex-wrap justify-end gap-2 md:justify-end">
+                {memberCanEditAccess(member) ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => openEditMember(member)}
+                    className="theme-control-surface inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </button>
+                ) : member.id === currentProfileId ? (
                   <span className="text-xs text-[color:var(--sem-text-muted)]">—</span>
-                ) : (
+                ) : null}
+                {member.id !== currentProfileId ? (
                   <button
                     type="button"
                     disabled={saving}
@@ -928,11 +1108,192 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
                     <Trash2 className="h-3.5 w-3.5" />
                     Remove
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
           ))}
         </div>
+
+        {editingMember ? (
+          <div className="mx-6 mb-6 space-y-4 rounded-[26px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-accent-primary)]">Edit access</p>
+                <h3 className="text-lg font-semibold text-[color:var(--sem-text-primary)]">{editingMember.full_name}</h3>
+                <p className="mt-1 text-sm text-[color:var(--sem-text-secondary)]">{editingMember.user?.email}</p>
+              </div>
+              <button type="button" onClick={closeEditMember} className="rounded-full p-2 text-[color:var(--sem-text-muted)]" aria-label="Close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {editingMember.role === "owner" ? (
+              <p className="text-sm text-[color:var(--sem-text-secondary)]">
+                Owner access is protected. Demote this user to another system role below if you need to change permissions.
+              </p>
+            ) : null}
+
+            <label className="block space-y-2 text-sm">
+              <span className="text-[color:var(--sem-text-secondary)]">System role</span>
+              <select
+                value={editSystemRole}
+                onChange={(event) => setEditSystemRole(event.target.value as SessionRole)}
+                className="theme-control-surface w-full rounded-[14px] border px-3 py-2"
+              >
+                {editingMember.role === "owner" ? (
+                  <option value="owner">Owner</option>
+                ) : null}
+                {SYSTEM_ROLE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="space-y-2 text-sm">
+              <p className="font-medium text-[color:var(--sem-text-primary)]">Permission source</p>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="edit-access-mode"
+                  checked={editAccessMode === "preset"}
+                  onChange={() => {
+                    setEditAccessMode("preset");
+                    setEditCustomRoleId(null);
+                    setEditPermissionKeys([]);
+                  }}
+                />
+                Use system role preset only
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="edit-access-mode"
+                  checked={editAccessMode === "customRole"}
+                  onChange={() => setEditAccessMode("customRole")}
+                  disabled={editingMember.role === "owner"}
+                />
+                Apply saved custom role
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="edit-access-mode"
+                  checked={editAccessMode === "customPermissions"}
+                  onChange={() => setEditAccessMode("customPermissions")}
+                  disabled={editingMember.role === "owner"}
+                />
+                Custom permission checklist
+              </label>
+            </div>
+
+            {editAccessMode === "customRole" ? (
+              <label className="block space-y-2 text-sm">
+                <span className="text-[color:var(--sem-text-secondary)]">Custom role</span>
+                <select
+                  value={editCustomRoleId ?? ""}
+                  onChange={(event) => setEditCustomRoleId(event.target.value || null)}
+                  className="theme-control-surface w-full rounded-[14px] border px-3 py-2"
+                >
+                  <option value="">Select a custom role</option>
+                  {customRoles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            {editAccessMode === "customPermissions" ? (
+              <div className="max-h-[320px] space-y-3 overflow-y-auto pr-1">
+                {registryGroups.map((group) => (
+                  <div key={group.id} className="rounded-[16px] border border-[color:var(--cmp-border-subtle)] p-3">
+                    <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{group.label}</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {group.permissions.map((permission) => (
+                        <label key={permission.key} className="flex items-start gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={editPermissionKeys.includes(permission.key)}
+                            onChange={() => toggleEditPermission(permission.key)}
+                          />
+                          <span>{permission.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void handleSaveMemberAccess()}
+                className="theme-control-surface rounded-full border px-5 py-3 text-sm font-semibold"
+              >
+                {saving ? "Saving…" : "Save changes"}
+              </button>
+              <button type="button" onClick={closeEditMember} className="text-sm text-[color:var(--sem-text-muted)]">
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {editingCustomRole ? (
+          <div className="mx-6 mb-6 space-y-4 rounded-[26px] border border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--sem-accent-primary)]">Edit custom role</p>
+                <h3 className="text-lg font-semibold text-[color:var(--sem-text-primary)]">{editingCustomRole.name}</h3>
+              </div>
+              <button type="button" onClick={closeEditCustomRole} className="rounded-full p-2" aria-label="Close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <input
+              value={editCustomRoleName}
+              onChange={(event) => setEditCustomRoleName(event.target.value)}
+              className="theme-control-surface w-full rounded-[14px] border px-4 py-3 text-sm"
+            />
+            <div className="max-h-[320px] space-y-3 overflow-y-auto pr-1">
+              {registryGroups.map((group) => (
+                <div key={group.id} className="rounded-[16px] border border-[color:var(--cmp-border-subtle)] p-3">
+                  <p className="text-sm font-semibold text-[color:var(--sem-text-primary)]">{group.label}</p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {group.permissions.map((permission) => (
+                      <label key={permission.key} className="flex items-start gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={editCustomRolePermissionKeys.includes(permission.key)}
+                          onChange={() => toggleEditCustomRolePermission(permission.key)}
+                        />
+                        <span>{permission.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void handleSaveCustomRoleEdit()}
+                className="theme-control-surface rounded-full border px-5 py-3 text-sm font-semibold"
+              >
+                {saving ? "Saving…" : "Save custom role"}
+              </button>
+              <button type="button" onClick={closeEditCustomRole} className="text-sm text-[color:var(--sem-text-muted)]">
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <StaffBranchAccessSection
           members={sortedMembers}
@@ -957,6 +1318,15 @@ export function TeamPermissionsPanel({ currentProfileId }: TeamPermissionsPanelP
                   <p className="text-xs text-[color:var(--sem-text-muted)]">{role.permission_keys.length} permissions</p>
                 </div>
                 <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => openEditCustomRole(role)}
+                    className="theme-control-surface inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </button>
                   <button type="button" disabled={saving} onClick={() => void handleDuplicateRole(role.id)} className="theme-control-surface rounded-full border px-3 py-2 text-xs">
                     <Copy className="h-3.5 w-3.5" />
                   </button>

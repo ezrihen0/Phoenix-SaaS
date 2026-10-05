@@ -750,6 +750,10 @@ export default function ScheduleWorkspace({
     : weekStripDays;
 
   const filteredJobs = jobs.filter((job) => {
+    if (job.status === "completed" || job.status === "paid" || job.status === "cancelled") {
+      return false;
+    }
+
     if (technicianFilter === "all") {
       return true;
     }

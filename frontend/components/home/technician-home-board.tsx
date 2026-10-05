@@ -24,6 +24,7 @@ import {
   canTransitionJobStatus,
   getJobStatusLabel,
   getServiceTypeLabel,
+  mapJobStatusToOperationalBucket,
   technicianJobStatuses,
   type JobStatus,
 } from "@/lib/crm/statuses";
@@ -125,12 +126,11 @@ type TechnicianDashboardResponse = {
     fullName: string;
   };
   summary: {
-    openJobs: number;
-    inProgressJobs: number;
-    waitingForApprovalJobs: number;
+    activeJobs: number;
     completedToday: number;
   };
   jobs: JobRecord[];
+  completedJobs: JobRecord[];
 };
 
 type NoteFormState = {
@@ -242,8 +242,11 @@ export default function TechnicianHomeBoard() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [jobQueue, setJobQueue] = useState<"active" | "completed">("active");
 
-  const selectedJobCard = dashboard?.jobs.find((job) => job.id === selectedJobId) ?? null;
+  const queueJobs =
+    jobQueue === "completed" ? (dashboard?.completedJobs ?? []) : (dashboard?.jobs ?? []);
+  const selectedJobCard = queueJobs.find((job) => job.id === selectedJobId) ?? null;
   const displayedJob = jobDetail ?? selectedJobCard;
   const displayedCustomer = relationValue(displayedJob?.customer);
   const displayedService = relationValue(displayedJob?.service);
@@ -260,10 +263,11 @@ export default function TechnicianHomeBoard() {
     startTransition(() => {
       setDashboard(data);
 
+      const activeQueue = data.jobs;
       const nextJobId = preferredJobId
-        ?? (selectedJobId && data.jobs.some((job) => job.id === selectedJobId)
+        ?? (selectedJobId && activeQueue.some((job) => job.id === selectedJobId)
           ? selectedJobId
-          : data.jobs[0]?.id ?? null);
+          : activeQueue[0]?.id ?? null);
 
       setSelectedJobId(nextJobId);
 
@@ -405,10 +409,8 @@ export default function TechnicianHomeBoard() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard icon={Wrench} label={t("summary.openJobs")} value={dashboard?.summary.openJobs ?? 0} />
-          <MetricCard icon={Flame} label={t("summary.inProgress")} value={dashboard?.summary.inProgressJobs ?? 0} />
-          <MetricCard icon={ShieldCheck} label={t("summary.waitingApproval")} value={dashboard?.summary.waitingForApprovalJobs ?? 0} />
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <MetricCard icon={Wrench} label={t("summary.openJobs")} value={dashboard?.summary.activeJobs ?? 0} />
           <MetricCard icon={CheckCircle2} label={t("summary.completedToday")} value={dashboard?.summary.completedToday ?? 0} />
         </div>
       </header>
@@ -442,8 +444,32 @@ export default function TechnicianHomeBoard() {
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <SectionFrame title={t("assignedJobs")} subtitle={t("fieldQueue")}>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setJobQueue("active");
+                setSelectedJobId(null);
+                setJobDetail(null);
+              }}
+              className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${jobQueue === "active" ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] text-[color:var(--sem-text-primary)]" : "border-[color:var(--cmp-border-subtle)] text-[color:var(--sem-text-secondary)]"}`}
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setJobQueue("completed");
+                setSelectedJobId(null);
+                setJobDetail(null);
+              }}
+              className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${jobQueue === "completed" ? "border-[color:var(--cmp-border-accent)] bg-[color:var(--cmp-selected-surface)] text-[color:var(--sem-text-primary)]" : "border-[color:var(--cmp-border-subtle)] text-[color:var(--sem-text-secondary)]"}`}
+            >
+              Completed
+            </button>
+          </div>
           <div className="grid gap-4 lg:grid-cols-2">
-            {dashboard?.jobs.length ? dashboard.jobs.map((job) => {
+            {queueJobs.length ? queueJobs.map((job) => {
               const customer = relationValue(job.customer);
               const service = relationValue(job.service);
 
@@ -495,7 +521,7 @@ export default function TechnicianHomeBoard() {
               );
             }) : (
               <div className="rounded-[28px] border border-dashed border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-soft)] px-5 py-10 text-center text-sm text-[color:var(--sem-text-secondary)] lg:col-span-2">
-                {t("noAssignedJobs")}
+                {jobQueue === "completed" ? "No completed jobs yet." : t("noAssignedJobs")}
               </div>
             )}
           </div>
@@ -543,6 +569,7 @@ export default function TechnicianHomeBoard() {
                   </div>
                 </div>
 
+                {jobQueue === "active" ? (
                 <div className="space-y-3">
                   <p className="text-[11px] uppercase tracking-[0.34em] text-[color:var(--sem-text-muted)]">{t("statusActions")}</p>
                   <FieldLabel label={t("statusNote")}>
@@ -555,7 +582,8 @@ export default function TechnicianHomeBoard() {
                   </FieldLabel>
                   <div className="grid gap-2 sm:grid-cols-3">
                     {technicianJobStatuses.map((typedStatus) => {
-                      const isCurrentStatus = displayedJob.status === typedStatus;
+                      const isCurrentStatus =
+                        mapJobStatusToOperationalBucket(displayedJob.status) === typedStatus;
                       const canTransition = !isCurrentStatus && canTransitionJobStatus(displayedJob.status, typedStatus);
 
                       return (
@@ -568,12 +596,21 @@ export default function TechnicianHomeBoard() {
                               return;
                             }
 
+                            if (typedStatus === "cancelled" && !statusNote.trim()) {
+                              setErrorMessage("Add a cancellation reason before marking the job cancelled.");
+                              setStatusMessage(null);
+                              return;
+                            }
+
                             void runAction(
                               `status-${selectedJobId}-${typedStatus}`,
                               async () => {
                                 await crmApiFetch(`/api/jobs/${selectedJobId}/status`, {
                                   method: "POST",
-                                  body: JSON.stringify({ status: typedStatus, note: statusNote || null }),
+                                  body: JSON.stringify({
+                                    status: typedStatus,
+                                    note: statusNote.trim() || null,
+                                  }),
                                 });
                                 await Promise.all([
                                   refreshDashboard(selectedJobId),
@@ -591,6 +628,7 @@ export default function TechnicianHomeBoard() {
                     })}
                   </div>
                 </div>
+                ) : null}
 
                 <div className="space-y-3">
                   <p className="text-[11px] uppercase tracking-[0.34em] text-[color:var(--sem-text-muted)]">{t("fieldNotes")}</p>

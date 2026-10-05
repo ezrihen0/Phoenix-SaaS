@@ -33,6 +33,7 @@ export const leadStatuses = ["new_lead", "contacted", "converted"] as const;
 export const jobStatuses = [
   "new_lead",
   "contacted",
+  "submitted",
   "scheduled",
   "on_the_way",
   "in_progress",
@@ -68,42 +69,31 @@ export type InvoiceStatus = (typeof invoiceStatuses)[number];
 export type InvoicePaymentEntryType = (typeof invoicePaymentEntryTypes)[number];
 export type InvoicePaymentMethod = (typeof invoicePaymentMethods)[number];
 
-export const openJobStatuses: JobStatus[] = [
-  "new_lead",
-  "contacted",
+export {
+  activeJobStatusValues,
+  completedJobStatusValues,
+  canTransitionJobStatus,
+  getJobStatusLabel,
+  isActiveJobStatus,
+  isCancelledJobStatus,
+  isCompletedJobStatus,
+  isOperationalJobStatus,
+  isSystemOnlyJobStatus,
+  mapJobStatusToOperationalBucket,
+  openJobStatuses,
+  operationalJobStatuses,
+  type OperationalJobStatus,
+} from "./job-status-model";
+
+export const technicianJobStatuses: JobStatus[] = [
+  "submitted",
   "scheduled",
-  "on_the_way",
-  "in_progress",
-  "waiting_for_approval",
+  "completed",
+  "cancelled",
 ];
 
-export const technicianJobStatuses: JobStatus[] = ["on_the_way", "in_progress", "completed"];
-
-export const officeOnlyJobStatuses: JobStatus[] = ["new_lead", "contacted", "paid", "cancelled"];
-
-const jobTransitionMap: Record<JobStatus, JobStatus[]> = {
-  new_lead: ["contacted", "scheduled", "cancelled"],
-  contacted: ["new_lead", "scheduled", "cancelled"],
-  scheduled: ["contacted", "on_the_way", "in_progress", "waiting_for_approval", "completed", "cancelled"],
-  on_the_way: ["scheduled", "in_progress", "waiting_for_approval", "completed", "cancelled"],
-  in_progress: ["on_the_way", "waiting_for_approval", "completed", "cancelled"],
-  waiting_for_approval: ["scheduled", "on_the_way", "in_progress", "completed", "cancelled"],
-  completed: ["waiting_for_approval", "paid"],
-  paid: ["completed"],
-  cancelled: [],
-};
-
-const jobStatusLabels: Record<JobStatus, string> = {
-  new_lead: "New Lead",
-  contacted: "Contacted",
-  scheduled: "Scheduled",
-  on_the_way: "On The Way",
-  in_progress: "In Progress",
-  waiting_for_approval: "Waiting Approval",
-  completed: "Completed",
-  paid: "Paid",
-  cancelled: "Cancelled",
-};
+/** @deprecated Use isSystemOnlyJobStatus */
+export const officeOnlyJobStatuses: JobStatus[] = ["paid"];
 
 const serviceTypeLabels: Record<ServiceType, string> = {
   inspection: "Inspection",
@@ -112,20 +102,8 @@ const serviceTypeLabels: Record<ServiceType, string> = {
   rebuild: "Rebuild",
 };
 
-export function canTransitionJobStatus(currentStatus: JobStatus, nextStatus: JobStatus) {
-  if (currentStatus === nextStatus) {
-    return true;
-  }
-
-  return jobTransitionMap[currentStatus].includes(nextStatus);
-}
-
 export function isOfficeOnlyJobStatus(status: JobStatus) {
-  return officeOnlyJobStatuses.includes(status);
-}
-
-export function getJobStatusLabel(status: JobStatus) {
-  return jobStatusLabels[status];
+  return status === "paid";
 }
 
 export function getServiceTypeLabel(serviceType: ServiceType) {
@@ -139,6 +117,7 @@ export function getJobStatusTimestampUpdates(
   if (
     status === "new_lead"
     || status === "contacted"
+    || status === "submitted"
     || status === "scheduled"
   ) {
     return {

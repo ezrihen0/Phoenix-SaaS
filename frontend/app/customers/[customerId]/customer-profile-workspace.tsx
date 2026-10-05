@@ -1104,6 +1104,9 @@ export default function CustomerProfileWorkspace({
 
   const tags = useMemo(() => {
     const result: string[] = [];
+    for (const tag of customerRecord.tags ?? []) {
+      if (tag.trim()) result.push(tag.trim());
+    }
     const lifecycle = formatLifecycleStatus(customerRecord.lifecycle_status);
     if (lifecycle) result.push(lifecycle);
     if (metrics.openBalanceCents > 0) result.push(t("balanceDue"));
@@ -1112,7 +1115,7 @@ export default function CustomerProfileWorkspace({
       result.push(getServiceTypeLabel(customerRecord.preferred_service_type, locale));
     }
     return result;
-  }, [customerRecord.lifecycle_status, customerRecord.preferred_service_type, locale, metrics.activeJobs, metrics.openBalanceCents, t]);
+  }, [customerRecord.lifecycle_status, customerRecord.preferred_service_type, customerRecord.tags, locale, metrics.activeJobs, metrics.openBalanceCents, t]);
 
   const tabs = useMemo(() => [
     { id: "info" as const, label: t("overview"), count: 1, icon: UserRound },

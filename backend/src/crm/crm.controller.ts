@@ -21,7 +21,6 @@ import type { Request, Response } from "express";
 
 import {
   actorHasPermission,
-  canAccessAssignedJob,
   canAccessEstimateResource,
   canAccessInvoiceResource,
   canAccessJobResource,
@@ -35,16 +34,21 @@ import { SessionGuard } from "../auth/session.guard";
 import { apiError, apiSuccess } from "../common/api-response";
 import type { ActorContext, RequestWithActor } from "../common/request-types";
 import {
-  canTransitionJobStatus,
   customerLifecycleStatuses,
   getJobStatusTimestampUpdates,
   getServiceTypeLabel,
-  isOfficeOnlyJobStatus,
   mapServiceTypeToDefaultJobType,
-  openJobStatuses,
   type CustomerLifecycleStatus,
   type InvoiceStatus,
 } from "./constants";
+import {
+  activeJobStatusValues,
+  completedJobStatusValues,
+} from "./job-status-model";
+import {
+  assertMayPatchJob,
+  assertMayUpdateJobStatus,
+} from "./jobs-technician-mutation-gate";
 import {
   actorCanViewOtherTechnicianCalendars,
   assertCanAccessJob,
@@ -53,6 +57,7 @@ import {
   requireTechnicianRosterViewPermission,
 } from "./jobs-access";
 import { JobsService } from "./jobs.service";
+import { ensureTechnicianRosterForSystemRoleMemberships } from "./technician-membership-link";
 import {
   customerImportSourceOptions,
   type CustomerImportDuplicateMatch,
@@ -538,26 +543,12 @@ export class CrmController {
     try {
       const todayStart = startOfLocalDashboardDay();
 
-      const [openCount, inProgressCount, waitingApprovalCount, completedTodayCount, jobs] = await Promise.all([
+      const [activeCount, completedTodayCount, activeJobs, completedJobs] = await Promise.all([
         this.jobsRepository.count({
           where: {
             organization_id: organizationId,
             assigned_technician_id: actor.technician.id,
-            status: In(openJobStatuses),
-          },
-        }),
-        this.jobsRepository.count({
-          where: {
-            organization_id: organizationId,
-            assigned_technician_id: actor.technician.id,
-            status: "in_progress",
-          },
-        }),
-        this.jobsRepository.count({
-          where: {
-            organization_id: organizationId,
-            assigned_technician_id: actor.technician.id,
-            status: "waiting_for_approval",
+            status: In(activeJobStatusValues),
           },
         }),
         this.jobsRepository
@@ -566,11 +557,16 @@ export class CrmController {
           .andWhere("job.assigned_technician_id = :technicianId", {
             technicianId: actor.technician.id,
           })
-          .andWhere("job.status = :status", { status: "completed" })
+          .andWhere("job.status IN (:...completedStatuses)", {
+            completedStatuses: completedJobStatusValues,
+          })
           .andWhere("job.completed_at >= :todayStart", { todayStart })
           .getCount(),
         this.jobsService.listJobs(actor, organizationId, {
-          excludeCancelled: true,
+          queue: "active",
+        }),
+        this.jobsService.listJobs(actor, organizationId, {
+          queue: "completed",
         }),
       ]);
 
@@ -584,12 +580,11 @@ export class CrmController {
           fullName: actor.profile.full_name,
         },
         summary: {
-          openJobs: openCount,
-          inProgressJobs: inProgressCount,
-          waitingForApprovalJobs: waitingApprovalCount,
+          activeJobs: activeCount,
           completedToday: completedTodayCount,
         },
-        jobs: jobs.map((job) => this.buildJobDetailResponse(job)),
+        jobs: activeJobs.map((job) => this.buildJobDetailResponse(job)),
+        completedJobs: completedJobs.map((job) => this.buildJobDetailResponse(job)),
       });
     } catch (error) {
       apiError(
@@ -606,6 +601,7 @@ export class CrmController {
     @Req() request: RequestWithActor,
     @Query("status") status?: string,
     @Query("technicianId") technicianId?: string,
+    @Query("queue") queue?: string,
   ) {
     const actor = this.requireActor(request);
     const organizationId = this.requireActiveOrganizationId(actor);
@@ -629,9 +625,15 @@ export class CrmController {
         await this.requireTechnicianInOrganization(technicianId, organizationId);
       }
 
+      const normalizedQueue =
+        queue === "active" || queue === "completed" || queue === "cancelled" || queue === "all"
+          ? queue
+          : undefined;
+
       const jobs = await this.jobsService.listJobs(actor, organizationId, {
         status,
         technicianId,
+        queue: normalizedQueue,
       });
 
       return apiSuccess(jobs.map((job) => this.buildJobDetailResponse(job)));
@@ -761,7 +763,7 @@ export class CrmController {
           lead_source: leadSource,
           requested_service_type: payload.serviceType,
           job_type: payload.jobType,
-          status: "scheduled",
+          status: normalizedSchedule.scheduledFor ? "scheduled" : "submitted",
           service_address_line_1: payload.serviceAddressLine1,
           service_address_line_2: payload.serviceAddressLine2,
           service_city: payload.serviceCity,
@@ -813,7 +815,7 @@ export class CrmController {
           organization_id: organizationId,
           job_id: job.id,
           author_profile_id: actor.profile.id,
-          status: "scheduled",
+          status: job.status,
           note: statusEventNoteParts.join(" "),
         }),
       );
@@ -946,6 +948,10 @@ export class CrmController {
   }
 
   private async listTechniciansWithV1Fallback(organizationId: string, activeOnly: boolean) {
+    await ensureTechnicianRosterForSystemRoleMemberships(this.dataSource.manager, {
+      organizationId,
+      systemRoles: ["technician"],
+    });
     await this.provisionFallbackTechniciansIfNeeded(organizationId);
 
     return this.techniciansRepository.find({
@@ -988,26 +994,20 @@ export class CrmController {
     @Param("jobId") jobId: string,
     @Body() body: unknown,
   ) {
-    const actor = this.requireCrmPermissionActor(
-      request,
-      "jobs.update",
-      "job_update_forbidden",
-      "This account cannot update jobs.",
-    );
+    const actor = this.requireActor(request);
     const organizationId = this.requireActiveOrganizationId(actor);
 
     try {
       const payload = parseUpdateJobPayload(body);
-      const job = await this.jobsRepository.findOne({
-        where: {
-          id: jobId,
-          organization_id: organizationId,
-        },
-      });
+      const job = await findJobForActor(
+        this.jobsRepository,
+        jobId,
+        organizationId,
+        actor,
+        {},
+      );
 
-      if (!job) {
-        apiError(404, "job_not_found", "The job could not be found.");
-      }
+      assertMayPatchJob(actor, job, payload);
 
       const updates: Partial<JobEntity> = {
         updated_by_auth_user_id: actor.user.id,
@@ -1104,34 +1104,7 @@ export class CrmController {
         {},
       );
 
-      if (
-        !actorHasPermission(actor, "jobs.status.update")
-        && !(
-          actorHasPermission(actor, "jobs.assigned.status.update")
-          && canAccessAssignedJob(actor, job.assigned_technician_id)
-        )
-      ) {
-        apiError(403, "job_status_forbidden", "This account cannot update job status.");
-      }
-
-      if (
-        !actorHasPermission(actor, "jobs.update")
-        && isOfficeOnlyJobStatus(payload.status)
-      ) {
-        apiError(
-          403,
-          "office_only_job_status",
-          "Only office staff can set this CRM job status.",
-        );
-      }
-
-      if (!canTransitionJobStatus(job.status, payload.status)) {
-        apiError(
-          400,
-          "invalid_job_status_transition",
-          "This job cannot move to the requested status from its current state.",
-        );
-      }
+      assertMayUpdateJobStatus(actor, job, payload.status);
 
       const timestamp = new Date();
       const paidAtTimestamp = this.formatSqlTimestamp(timestamp);
@@ -3422,6 +3395,7 @@ export class CrmController {
           source: "website",
           notes: payload.notes,
           lifecycle_status: "prospect",
+          tags: [],
         }),
       );
 
@@ -3612,6 +3586,10 @@ export class CrmController {
 
       if (payload.preferredServiceType !== undefined) {
         customer.preferred_service_type = payload.preferredServiceType;
+      }
+
+      if (payload.tags !== undefined) {
+        customer.tags = payload.tags;
       }
 
       const result = await this.customersRepository.save(customer);

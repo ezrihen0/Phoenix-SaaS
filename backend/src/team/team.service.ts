@@ -12,7 +12,10 @@ import {
   type RoleModePermission,
 } from "../auth/permissions";
 import { profileRoles, type ProfileRole } from "../crm/constants";
-import { ensureTechnicianForOrganizationMembership } from "../crm/technician-membership-link";
+import {
+  deactivateTechnicianForOrganizationMembership,
+  ensureTechnicianForOrganizationMembership,
+} from "../crm/technician-membership-link";
 import { MembershipEntity } from "../database/entities/membership.entity";
 import { OrganizationEntity } from "../database/entities/organization.entity";
 import { OrganizationCustomRoleEntity } from "../database/entities/organization-custom-role.entity";
@@ -260,6 +263,21 @@ export class TeamService {
         custom_role_id: resolvedAccess.customRoleId,
       },
     });
+
+    const manager = this.dataSource.manager;
+    if (resolvedAccess.systemRole === "technician") {
+      await ensureTechnicianForOrganizationMembership(manager, {
+        organizationId,
+        userId: profile.auth_user_id,
+        displayName: profile.full_name,
+        phone: profile.phone,
+      });
+    } else if (previousRole === "technician") {
+      await deactivateTechnicianForOrganizationMembership(manager, {
+        organizationId,
+        userId: profile.auth_user_id,
+      });
+    }
 
     membership.custom_role = resolvedAccess.customRole;
     return this.buildMemberResponse(profile, membership);

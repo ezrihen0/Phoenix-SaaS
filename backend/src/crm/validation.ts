@@ -1,4 +1,5 @@
 import { jobStatuses, jobTypes, leadDispositions, leadDispositionReasons, leadStatuses } from "./constants";
+import { operationalJobStatuses } from "./job-status-model";
 import type {
   InvoicePaymentEntryType,
   InvoicePaymentMethod,
@@ -75,6 +76,7 @@ export type UpdateCustomerPayload = {
   servicePostalCode?: string;
   notes?: string | null;
   preferredServiceType?: ServiceType | null;
+  tags?: string[];
 };
 
 export type ConvertLeadPayload = {
@@ -630,6 +632,10 @@ export function parseUpdateCustomerPayload(jsonBody: unknown): UpdateCustomerPay
       payload.preferredServiceType === undefined
         ? undefined
         : optionalEnumValue(payload.preferredServiceType, "preferredServiceType", serviceTypes),
+    tags:
+      payload.tags === undefined
+        ? undefined
+        : optionalStringArray(payload.tags, "tags", 24).map((tag) => tag.slice(0, 32)),
   };
 }
 
@@ -749,7 +755,7 @@ export function parseJobStatusPayload(jsonBody: unknown): JobStatusPayload {
   const payload = requireRecord(jsonBody, "Job status");
 
   return {
-    status: requireEnumValue(payload.status, "status", jobStatuses),
+    status: requireEnumValue(payload.status, "status", operationalJobStatuses),
     note: optionalTrimmedString(payload.note, "note", 2000),
   };
 }

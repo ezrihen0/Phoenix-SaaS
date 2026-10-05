@@ -24,9 +24,11 @@ export class PhoenixFieldReportPreviewService {
     private readonly invoicesRepository: Repository<InvoiceEntity>,
   ) {}
 
-  async preview(actor: ActorContext, body: MichaelReportDraftBody) {
+  async preview(actor: ActorContext, body: MichaelReportDraftBody, options?: { allowClosedOrg?: boolean }) {
     const organizationId = this.accessService.requirePhoenixOrganizationId(actor);
-    await this.accessService.assertOrgFeatureOpen(organizationId);
+    if (!options?.allowClosedOrg) {
+      await this.accessService.assertOrgFeatureOpen(organizationId);
+    }
     const rows: MichaelReportPreviewRow[] = [];
 
     for (const payload of body.entries) {

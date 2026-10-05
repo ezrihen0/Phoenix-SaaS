@@ -29,7 +29,12 @@ import {
   type JobListRecord,
   type JobsQuickFilter,
 } from "@/lib/crm/jobs-list-utils";
-import { jobStatuses, type JobStatus } from "@/lib/crm/statuses";
+import {
+  operationalJobStatuses,
+  type JobStatus,
+} from "@/lib/crm/statuses";
+
+type JobsBoardQueue = "active" | "completed" | "cancelled";
 
 type JobsWorkspaceProps = {
   canViewAllJobs: boolean;
@@ -43,9 +48,13 @@ const QUICK_FILTERS: Array<{ key: JobsQuickFilter; label: string }> = [
   { key: "all", label: "All" },
   { key: "today", label: "Today" },
   { key: "unscheduled", label: "Unscheduled" },
-  { key: "in_progress", label: "In Progress" },
-  { key: "completed", label: "Completed" },
   { key: "unpaid", label: "Unpaid" },
+];
+
+const BOARD_QUEUES: Array<{ key: JobsBoardQueue; label: string }> = [
+  { key: "active", label: "Active" },
+  { key: "completed", label: "Completed Jobs" },
+  { key: "cancelled", label: "Cancelled" },
 ];
 
 const TABLE_COLUMNS = [
@@ -72,6 +81,7 @@ export default function JobsWorkspace({
   const [jobs, setJobs] = useState<JobListRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [boardQueue, setBoardQueue] = useState<JobsBoardQueue>("active");
   const [quickFilter, setQuickFilter] = useState<JobsQuickFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<JobStatus | "all">("all");
@@ -80,11 +90,11 @@ export default function JobsWorkspace({
   const [page, setPage] = useState(1);
   const [, startRefresh] = useTransition();
 
-  async function loadJobs() {
+  async function loadJobs(queue: JobsBoardQueue = boardQueue) {
     setIsLoading(true);
 
     try {
-      const data = await crmApiFetch<JobListRecord[]>("/api/jobs");
+      const data = await crmApiFetch<JobListRecord[]>(`/api/jobs?queue=${encodeURIComponent(queue)}`);
       setJobs(data);
       setLoadError(null);
     } catch (error) {
@@ -97,8 +107,8 @@ export default function JobsWorkspace({
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial client fetch after mount
-    void loadJobs();
-  }, []);
+    void loadJobs(boardQueue);
+  }, [boardQueue]);
 
   const technicianOptions = useMemo(() => collectTechnicianOptions(jobs), [jobs]);
 
@@ -232,6 +242,28 @@ export default function JobsWorkspace({
         </header>
 
         <div className="mt-5 flex flex-wrap gap-2">
+          {BOARD_QUEUES.map((queue) => (
+            <button
+              key={queue.key}
+              type="button"
+              onClick={() => {
+                setBoardQueue(queue.key);
+                setQuickFilter("all");
+                setStatusFilter("all");
+                resetFiltersPage();
+              }}
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                boardQueue === queue.key
+                  ? "border-[color:var(--sem-accent-primary)] bg-[color:var(--cmp-selected-surface)] text-[color:var(--sem-accent-primary)]"
+                  : "border-[color:var(--cmp-border-subtle)] bg-[color:var(--cmp-surface-card)]/70 text-[color:var(--sem-text-secondary)] hover:bg-[color:var(--cmp-surface-soft)] hover:text-[color:var(--sem-text-primary)]"
+              }`}
+            >
+              {queue.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
           {QUICK_FILTERS.map((filter) => (
             <button
               key={filter.key}
@@ -276,7 +308,7 @@ export default function JobsWorkspace({
               className="min-w-0 flex-1 bg-transparent text-[color:var(--sem-text-primary)] outline-none"
             >
               <option value="all">All statuses</option>
-              {jobStatuses.map((status) => (
+              {operationalJobStatuses.map((status) => (
                 <option key={status} value={status}>
                   {buildJobStatusLabel(status, locale)}
                 </option>

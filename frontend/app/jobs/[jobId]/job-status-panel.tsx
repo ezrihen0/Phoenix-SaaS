@@ -8,7 +8,8 @@ import { crmApiFetch } from "@/lib/crm/browser-api";
 import {
   canTransitionJobStatus,
   getJobStatusLabel,
-  jobStatuses,
+  mapJobStatusToOperationalBucket,
+  operationalJobStatuses,
   type JobStatus,
 } from "@/lib/crm/statuses";
 
@@ -90,8 +91,8 @@ export default function JobStatusPanel({
       ) : null}
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        {jobStatuses.map((status) => {
-          const isCurrent = currentStatus === status;
+        {operationalJobStatuses.map((status) => {
+          const isCurrent = mapJobStatusToOperationalBucket(currentStatus) === status;
           const canTransition = !isCurrent && canTransitionJobStatus(currentStatus, status);
 
           return (

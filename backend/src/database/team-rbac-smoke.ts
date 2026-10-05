@@ -334,6 +334,24 @@ async function main() {
     assert.equal(await technicianRepo.count({ where: { auth_user_id: dispatchUser.id } }), 0);
     summary.results.push({ name: "multi-org non-technician creates no technician rows", status: "PASS" });
 
+    const dispatchProfile = await profileRepo.findOneOrFail({ where: { auth_user_id: dispatchUser.id } });
+    await teamService.updateMemberAccess(
+      dispatchProfile.id,
+      { systemRole: "technician" },
+      ownerActor,
+    );
+    assert.equal(
+      await technicianRepo.count({
+        where: {
+          auth_user_id: dispatchUser.id,
+          organization_id: orgA.id,
+          is_active: true,
+        },
+      }),
+      1,
+    );
+    summary.results.push({ name: "role change to technician provisions roster row", status: "PASS" });
+
     const usersBeforeAttack = await userRepo.count();
     await expectHttpError(
       () => teamService.createMember({

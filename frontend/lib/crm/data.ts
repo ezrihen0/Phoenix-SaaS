@@ -3,14 +3,7 @@ import type { Database } from "@/lib/types/database";
 type ProfileRole = Database["public"]["Enums"]["profile_role"];
 type JobStatus = Database["public"]["Enums"]["job_status"];
 
-export const openJobStatuses: JobStatus[] = [
-  "new_lead",
-  "contacted",
-  "scheduled",
-  "on_the_way",
-  "in_progress",
-  "waiting_for_approval",
-];
+export { activeJobStatusValues, activeJobStatusValues as openJobStatuses } from "@/lib/crm/statuses";
 
 export const crmLeadSelect = [
   "id",

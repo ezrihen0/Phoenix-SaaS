@@ -5,6 +5,7 @@ export const leadStatuses = ["new_lead", "contacted", "converted"] as const;
 export const jobStatuses = [
   "new_lead",
   "contacted",
+  "submitted",
   "scheduled",
   "on_the_way",
   "in_progress",
@@ -13,26 +14,85 @@ export const jobStatuses = [
   "paid",
   "cancelled",
 ] as const;
-export const dashboardStatuses = [
+
+export const operationalJobStatuses = [
+  "submitted",
+  "scheduled",
+  "completed",
+  "cancelled",
+] as const;
+
+export type OperationalJobStatus = (typeof operationalJobStatuses)[number];
+
+export const activeJobStatusValues: JobStatus[] = [
+  "submitted",
   "new_lead",
   "contacted",
   "scheduled",
   "on_the_way",
   "in_progress",
   "waiting_for_approval",
+];
+
+export const completedJobStatusValues: JobStatus[] = ["completed", "paid"];
+
+/** @deprecated Use activeJobStatusValues */
+export const openJobStatuses: JobStatus[] = activeJobStatusValues;
+
+export const dashboardStatuses = [
+  "submitted",
+  "scheduled",
   "completed",
-  "paid",
 ] as const;
 
-export const technicianJobStatuses = [
-  "on_the_way",
-  "in_progress",
-  "completed",
-] as const;
+export const technicianJobStatuses = operationalJobStatuses;
 
-export const officeOnlyJobStatuses = ["new_lead", "contacted", "paid", "cancelled"] as const;
+export const officeOnlyJobStatuses = ["paid"] as const;
 
 const officeOnlyJobStatusSet: ReadonlySet<JobStatus> = new Set<JobStatus>(officeOnlyJobStatuses);
+
+const submittedBucket = new Set<JobStatus>(["submitted", "new_lead", "contacted"]);
+const scheduledBucket = new Set<JobStatus>([
+  "scheduled",
+  "on_the_way",
+  "in_progress",
+  "waiting_for_approval",
+]);
+
+const operationalTransitionMap: Record<OperationalJobStatus, OperationalJobStatus[]> = {
+  submitted: ["scheduled", "completed", "cancelled"],
+  scheduled: ["submitted", "completed", "cancelled"],
+  completed: [],
+  cancelled: [],
+};
+
+export function mapJobStatusToOperationalBucket(status: JobStatus): OperationalJobStatus {
+  if ((operationalJobStatuses as readonly string[]).includes(status)) {
+    return status as OperationalJobStatus;
+  }
+
+  if (submittedBucket.has(status)) {
+    return "submitted";
+  }
+
+  if (scheduledBucket.has(status)) {
+    return "scheduled";
+  }
+
+  if (status === "paid") {
+    return "completed";
+  }
+
+  return "cancelled";
+}
+
+export function isActiveJobStatus(status: JobStatus): boolean {
+  return activeJobStatusValues.includes(status);
+}
+
+export function isCompletedJobStatus(status: JobStatus): boolean {
+  return completedJobStatusValues.includes(status);
+}
 
 export type LeadStatus = Database["public"]["Enums"]["lead_status"];
 export type JobStatus = Database["public"]["Enums"]["job_status"];
@@ -40,74 +100,37 @@ export type ServiceType = Database["public"]["Enums"]["service_type"];
 export type LeadSource = Database["public"]["Enums"]["lead_source"];
 export type DashboardStatus = (typeof dashboardStatuses)[number];
 
-const jobTransitionMap: Record<JobStatus, JobStatus[]> = {
-  new_lead: ["contacted", "scheduled", "cancelled"],
-  contacted: ["new_lead", "scheduled", "cancelled"],
-  scheduled: ["contacted", "on_the_way", "in_progress", "waiting_for_approval", "completed", "cancelled"],
-  on_the_way: ["scheduled", "in_progress", "waiting_for_approval", "completed", "cancelled"],
-  in_progress: ["on_the_way", "waiting_for_approval", "completed", "cancelled"],
-  waiting_for_approval: ["scheduled", "on_the_way", "in_progress", "completed", "cancelled"],
-  completed: ["waiting_for_approval", "paid"],
-  paid: ["completed"],
-  cancelled: [],
-};
-
 type LocalizedMap<T extends string> = Record<SupportedWorkerUiLocale, Record<T, string>>;
 
-const localizedJobStatusLabels: LocalizedMap<JobStatus> = {
+const localizedOperationalJobStatusLabels: LocalizedMap<OperationalJobStatus> = {
   en: {
-    new_lead: "New Lead",
-    contacted: "Contacted",
+    submitted: "Submitted",
     scheduled: "Scheduled",
-    on_the_way: "On The Way",
-    in_progress: "In Progress",
-    waiting_for_approval: "Waiting Approval",
     completed: "Completed",
-    paid: "Paid",
     cancelled: "Cancelled",
   },
   es: {
-    new_lead: "Nuevo prospecto",
-    contacted: "Contactado",
+    submitted: "Enviado",
     scheduled: "Programado",
-    on_the_way: "En camino",
-    in_progress: "En progreso",
-    waiting_for_approval: "Esperando aprobacion",
     completed: "Completado",
-    paid: "Pagado",
     cancelled: "Cancelado",
   },
   he: {
-    new_lead: "ליד חדש",
-    contacted: "נוצר קשר",
+    submitted: "הוגש",
     scheduled: "מתוזמן",
-    on_the_way: "בדרך",
-    in_progress: "בתהליך",
-    waiting_for_approval: "ממתין לאישור",
     completed: "הושלם",
-    paid: "שולם",
     cancelled: "בוטל",
   },
   uk: {
-    new_lead: "Новий лід",
-    contacted: "Контактовано",
+    submitted: "Подано",
     scheduled: "Заплановано",
-    on_the_way: "В дорозі",
-    in_progress: "У процесі",
-    waiting_for_approval: "Очікує схвалення",
     completed: "Завершено",
-    paid: "Оплачено",
     cancelled: "Скасовано",
   },
   pl: {
-    new_lead: "Nowy lead",
-    contacted: "Skontaktowany",
+    submitted: "Zgloszony",
     scheduled: "Zaplanowany",
-    on_the_way: "W drodze",
-    in_progress: "W trakcie",
-    waiting_for_approval: "Oczekuje na akceptacje",
     completed: "Zakonczony",
-    paid: "Oplacony",
     cancelled: "Anulowany",
   },
 };
@@ -225,7 +248,12 @@ export function canTransitionJobStatus(currentStatus: JobStatus, nextStatus: Job
     return true;
   }
 
-  return jobTransitionMap[currentStatus].includes(nextStatus);
+  if (nextStatus === "paid" || !(operationalJobStatuses as readonly string[]).includes(nextStatus)) {
+    return false;
+  }
+
+  const currentBucket = mapJobStatusToOperationalBucket(currentStatus);
+  return operationalTransitionMap[currentBucket].includes(nextStatus as OperationalJobStatus);
 }
 
 export function isOfficeOnlyJobStatus(status: JobStatus) {
@@ -233,7 +261,8 @@ export function isOfficeOnlyJobStatus(status: JobStatus) {
 }
 
 export function getJobStatusLabel(status: JobStatus, locale?: string | null) {
-  return localizedJobStatusLabels[normalizeLocale(locale)][status];
+  const bucket = mapJobStatusToOperationalBucket(status);
+  return localizedOperationalJobStatusLabels[normalizeLocale(locale)][bucket];
 }
 
 export function getDashboardStatusLabel(
@@ -251,24 +280,31 @@ export function getDashboardStatusLabel(
 export function getDashboardBoardStatus(
   status: Exclude<LeadStatus, "converted"> | JobStatus,
 ): DashboardStatus | null {
-  if (
-    status === "new_lead"
-    || status === "contacted"
-    || status === "scheduled"
-    || status === "on_the_way"
-    || status === "in_progress"
-    || status === "waiting_for_approval"
-    || status === "completed"
-    || status === "paid"
-  ) {
-    return status;
-  }
-
   if (status === "cancelled") {
     return null;
   }
 
-  return "scheduled";
+  if (status === "new_lead" || status === "contacted") {
+    return "submitted";
+  }
+
+  if (
+    status === "on_the_way"
+    || status === "in_progress"
+    || status === "waiting_for_approval"
+  ) {
+    return "scheduled";
+  }
+
+  if (status === "paid") {
+    return "completed";
+  }
+
+  if ((dashboardStatuses as readonly string[]).includes(status)) {
+    return status as DashboardStatus;
+  }
+
+  return null;
 }
 
 export function getServiceTypeLabel(serviceType: ServiceType, locale?: string | null) {

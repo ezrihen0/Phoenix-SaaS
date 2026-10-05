@@ -71,10 +71,14 @@ export class PhoenixFieldReportImportService {
       return this.entryRepository.save(entry);
     }
 
-    const preview = await this.previewService.preview(actor, {
-      reportRecipientEmail: "preview@local",
-      entries: [payload],
-    });
+    const preview = await this.previewService.preview(
+      actor,
+      {
+        reportRecipientEmail: "preview@local",
+        entries: [payload],
+      },
+      { allowClosedOrg: true },
+    );
     const previewRow = preview.rows[0];
 
     if (previewRow.taxError || previewRow.subtotalCents === null || previewRow.taxRateBps === null) {
@@ -141,7 +145,7 @@ export class PhoenixFieldReportImportService {
             service_city: payload.serviceCity,
             service_state_or_region: payload.serviceStateOrRegion,
             service_postal_code: payload.servicePostalCode,
-            scheduled_for: completedAt,
+            scheduled_for: null,
             scheduled_window: null,
             requested_at: completedAt,
             completed_at: completedAt,

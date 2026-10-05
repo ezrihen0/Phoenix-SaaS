@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "crypto";
 import { HttpException } from "@nestjs/common";
 import mysql from "mysql2/promise";
-import { DataSource } from "typeorm";
+import { DataSource, Repository } from "typeorm";
 import type { MysqlConnectionOptions } from "typeorm/driver/mysql/MysqlConnectionOptions";
 
 import type { ActorContext } from "../common/request-types";
@@ -16,7 +16,17 @@ import { MembershipBranchAccessEntity } from "./entities/membership-branch-acces
 import { InvoiceEntity } from "./entities/invoice.entity";
 import { QuoteEntity } from "./entities/quote.entity";
 import { findJobForActor } from "../crm/jobs-access";
-import type { JobType } from "../crm/constants";
+import {
+  getJobStatusTimestampUpdates,
+  type JobStatus,
+  type JobType,
+} from "../crm/constants";
+import { mapJobStatusToOperationalBucket } from "../crm/job-status-model";
+import {
+  assertMayPatchJob,
+  assertMayUpdateJobStatus,
+} from "../crm/jobs-technician-mutation-gate";
+import { parseUpdateJobPayload } from "../crm/validation";
 import { CustomerEntity } from "./entities/customer.entity";
 import { JobEntity } from "./entities/job.entity";
 import { MembershipEntity } from "./entities/membership.entity";
@@ -25,8 +35,26 @@ import { ProfileEntity } from "./entities/profile.entity";
 import { TechnicianEntity } from "./entities/technician.entity";
 import { UserEntity } from "./entities/user.entity";
 import { listPermissionsForMembership } from "../team/membership-permissions";
+import { MultiBranchPhase1Foundation1790000000000 } from "./migrations/deferred/1790000000000-multi-branch-phase1-foundation";
 import { buildDataSourceOptions } from "./typeorm.config";
 import { verifyDatabaseSchema } from "./verify-schema";
+
+async function initializeJobsRbacSmokeDataSource(
+  baseOptions: MysqlConnectionOptions,
+  database: string,
+): Promise<DataSource> {
+  const dataSource = new DataSource({ ...baseOptions, database, migrationsRun: false });
+  await dataSource.initialize();
+  await dataSource.runMigrations();
+
+  const queryRunner = dataSource.createQueryRunner();
+  await queryRunner.connect();
+  await new MultiBranchPhase1Foundation1790000000000().up(queryRunner);
+  await queryRunner.release();
+
+  await verifyDatabaseSchema(dataSource);
+  return dataSource;
+}
 
 type SmokeSummary = {
   ok: boolean;
@@ -108,6 +136,67 @@ async function expectNotFound(run: () => Promise<unknown>) {
   }
 }
 
+async function expectBadRequest(run: () => Promise<unknown>) {
+  try {
+    await run();
+    throw new Error("Expected bad request response.");
+  } catch (error) {
+    if (!(error instanceof HttpException) || error.getStatus() !== 400) {
+      throw error;
+    }
+  }
+}
+
+async function applyJobStatusUpdate(
+  jobRepo: Repository<JobEntity>,
+  actor: ActorContext,
+  organizationId: string,
+  jobId: string,
+  nextStatus: JobStatus,
+) {
+  const job = await findJobForActor(jobRepo, jobId, organizationId, actor, {});
+  assertMayUpdateJobStatus(actor, job, nextStatus);
+  const timestamp = new Date();
+  await jobRepo.update(
+    { id: jobId, organization_id: organizationId },
+    {
+      status: nextStatus,
+      updated_by_auth_user_id: actor.user.id,
+      ...getJobStatusTimestampUpdates(nextStatus, timestamp),
+    },
+  );
+}
+
+async function applyJobSchedulePatch(
+  jobRepo: Repository<JobEntity>,
+  actor: ActorContext,
+  organizationId: string,
+  jobId: string,
+  body: Record<string, unknown>,
+) {
+  const payload = parseUpdateJobPayload(body);
+  const job = await findJobForActor(jobRepo, jobId, organizationId, actor, {});
+  assertMayPatchJob(actor, job, payload);
+  const scheduledFor =
+    payload.scheduledFor !== undefined
+      ? (payload.scheduledFor ? new Date(payload.scheduledFor) : null)
+      : job.scheduled_for;
+  await jobRepo.update(
+    { id: jobId, organization_id: organizationId },
+    {
+      scheduled_for: scheduledFor,
+      scheduled_window:
+        payload.scheduledWindow !== undefined ? payload.scheduledWindow : job.scheduled_window,
+      updated_by_auth_user_id: actor.user.id,
+      ...(payload.title !== undefined ? { title: payload.title } : {}),
+      ...(payload.description !== undefined ? { description: payload.description } : {}),
+      ...(payload.assignedTechnicianId !== undefined
+        ? { assigned_technician_id: payload.assignedTechnicianId }
+        : {}),
+    },
+  );
+}
+
 async function main() {
   const token = randomUUID().replace(/-/g, "").slice(0, 12);
   const database = `wizfield_jobs_rbac_${token}`;
@@ -124,9 +213,7 @@ async function main() {
 
   try {
     await adminConnection.query(`CREATE DATABASE \`${database}\``);
-    dataSource = new DataSource({ ...baseOptions, database, migrationsRun: true });
-    await dataSource.initialize();
-    await verifyDatabaseSchema(dataSource);
+    dataSource = await initializeJobsRbacSmokeDataSource(baseOptions, database);
 
     const orgRepo = dataSource.getRepository(OrganizationEntity);
     const userRepo = dataSource.getRepository(UserEntity);
@@ -184,6 +271,7 @@ async function main() {
       return { user, profile, membership };
     }
 
+    const ownerA = await seedUser("owner-a", "owner", orgA.id);
     const adminA = await seedUser("admin-a", "admin", orgA.id);
     const officeA = await seedUser("office-a", "office_admin", orgA.id);
     const tech1User = await seedUser("tech-1", "technician", orgA.id);
@@ -272,6 +360,8 @@ async function main() {
       jobType: JobType;
       assignedTechnicianId: string | null;
       title: string;
+      status?: JobStatus;
+      scheduledFor?: Date | null;
     }) {
       return jobRepo.save(jobRepo.create({
         id: randomUUID(),
@@ -284,12 +374,12 @@ async function main() {
         lead_source: "website",
         requested_service_type: input.jobType === "inspection" ? "inspection" : "repair",
         job_type: input.jobType,
-        status: "scheduled",
+        status: input.status ?? "scheduled",
         service_address_line_1: "1 Main",
         service_city: "Calgary",
         service_state_or_region: "AB",
         service_postal_code: "T1T1T1",
-        scheduled_for: new Date(),
+        scheduled_for: input.scheduledFor === undefined ? new Date() : input.scheduledFor,
       }));
     }
 
@@ -329,6 +419,10 @@ async function main() {
       title: "Org B Job",
     });
 
+    const ownerActor = buildActor({
+      ...ownerA,
+      organizationId: orgA.id,
+    });
     const adminActor = buildActor({
       ...adminA,
       organizationId: orgA.id,
@@ -432,6 +526,199 @@ async function main() {
       assert.equal(inspection.job_type, "inspection");
       assert.equal(install.job_type, "installation_repair");
       assert.equal(callback.job_type, "callback_warranty");
+    });
+
+    const tech1StatusJob = await createJob({
+      orgId: orgA.id,
+      customerId: customerA.id,
+      jobType: "installation_repair",
+      assignedTechnicianId: tech1.id,
+      title: "Tech1 Status Job",
+      status: "scheduled",
+    });
+    const tech1ScheduleJob = await createJob({
+      orgId: orgA.id,
+      customerId: customerA.id,
+      jobType: "installation_repair",
+      assignedTechnicianId: tech1.id,
+      title: "Tech1 Schedule Job",
+      status: "scheduled",
+    });
+    const queueCompletedJob = await createJob({
+      orgId: orgA.id,
+      customerId: customerA.id,
+      jobType: "installation_repair",
+      assignedTechnicianId: tech1.id,
+      title: "Queue Completed Job",
+      status: "scheduled",
+    });
+    const queueCancelledJob = await createJob({
+      orgId: orgA.id,
+      customerId: customerA.id,
+      jobType: "installation_repair",
+      assignedTechnicianId: tech1.id,
+      title: "Queue Cancelled Job",
+      status: "submitted",
+      scheduledFor: null,
+    });
+    const legacyLeadJob = await createJob({
+      orgId: orgA.id,
+      customerId: customerA.id,
+      jobType: "installation_repair",
+      assignedTechnicianId: tech1.id,
+      title: "Legacy Lead Job",
+      status: "new_lead",
+      scheduledFor: null,
+    });
+    const legacyProgressJob = await createJob({
+      orgId: orgA.id,
+      customerId: customerA.id,
+      jobType: "installation_repair",
+      assignedTechnicianId: tech1.id,
+      title: "Legacy Progress Job",
+      status: "in_progress",
+    });
+    const legacyPaidJob = await createJob({
+      orgId: orgA.id,
+      customerId: customerA.id,
+      jobType: "installation_repair",
+      assignedTechnicianId: tech1.id,
+      title: "Legacy Paid Job",
+      status: "paid",
+      scheduledFor: null,
+    });
+
+    await record(summary, "1 technician can update status on assigned job", async () => {
+      await applyJobStatusUpdate(jobRepo, tech1Actor, orgA.id, tech1StatusJob.id, "completed");
+      const updated = await jobRepo.findOneByOrFail({ id: tech1StatusJob.id });
+      assert.equal(updated.status, "completed");
+    });
+
+    await record(summary, "2 technician can change scheduled date/time on assigned job", async () => {
+      const nextSchedule = new Date("2030-06-15T18:00:00.000Z");
+      await applyJobSchedulePatch(jobRepo, tech1Actor, orgA.id, tech1ScheduleJob.id, {
+        scheduledFor: nextSchedule.toISOString(),
+        scheduledWindow: "10:00-12:00",
+        assignedTechnicianId: tech1.id,
+      });
+      const updated = await jobRepo.findOneByOrFail({ id: tech1ScheduleJob.id });
+      assert.equal(updated.scheduled_for?.toISOString(), nextSchedule.toISOString());
+      assert.equal(updated.scheduled_window, "10:00-12:00");
+    });
+
+    await record(summary, "3 technician cannot update status on another technicians job", async () => {
+      await expectForbidden(() =>
+        applyJobStatusUpdate(jobRepo, tech1Actor, orgA.id, installJob.id, "completed"),
+      );
+    });
+
+    await record(summary, "4 technician cannot change schedule on another technicians job", async () => {
+      await expectForbidden(() =>
+        applyJobSchedulePatch(jobRepo, tech1Actor, orgA.id, installJob.id, {
+          scheduledFor: new Date("2030-07-01T15:00:00.000Z").toISOString(),
+        }),
+      );
+    });
+
+    await record(summary, "5 technician cannot reassign job to another technician", async () => {
+      await expectForbidden(() =>
+        applyJobSchedulePatch(jobRepo, tech1Actor, orgA.id, tech1ScheduleJob.id, {
+          scheduledFor: new Date("2030-07-02T15:00:00.000Z").toISOString(),
+          assignedTechnicianId: tech2.id,
+        }),
+      );
+    });
+
+    await record(summary, "6 technician cannot modify unrelated protected job fields through PATCH", async () => {
+      await expectForbidden(() =>
+        applyJobSchedulePatch(jobRepo, tech1Actor, orgA.id, tech1ScheduleJob.id, {
+          title: "Renamed by technician",
+        }),
+      );
+      await expectBadRequest(() =>
+        applyJobSchedulePatch(jobRepo, tech1Actor, orgA.id, tech1ScheduleJob.id, {}),
+      );
+    });
+
+    await record(summary, "7 office admin owner job mutation behavior unchanged", async () => {
+      const adminTitleJob = await createJob({
+        orgId: orgA.id,
+        customerId: customerA.id,
+        jobType: "installation_repair",
+        assignedTechnicianId: tech2.id,
+        title: "Admin Patch Job",
+        status: "submitted",
+        scheduledFor: null,
+      });
+
+      await applyJobSchedulePatch(jobRepo, adminActor, orgA.id, adminTitleJob.id, {
+        title: "Admin Renamed Job",
+        assignedTechnicianId: tech1.id,
+        scheduledFor: new Date("2030-08-01T16:00:00.000Z").toISOString(),
+      });
+      let updated = await jobRepo.findOneByOrFail({ id: adminTitleJob.id });
+      assert.equal(updated.title, "Admin Renamed Job");
+      assert.equal(updated.assigned_technician_id, tech1.id);
+
+      await applyJobSchedulePatch(jobRepo, officeActor, orgA.id, adminTitleJob.id, {
+        description: "Office updated description",
+      });
+      updated = await jobRepo.findOneByOrFail({ id: adminTitleJob.id });
+      assert.equal(updated.description, "Office updated description");
+
+      const ownerStatusJob = await createJob({
+        orgId: orgA.id,
+        customerId: customerA.id,
+        jobType: "installation_repair",
+        assignedTechnicianId: tech2.id,
+        title: "Owner Status Job",
+        status: "scheduled",
+      });
+      await applyJobStatusUpdate(jobRepo, ownerActor, orgA.id, ownerStatusJob.id, "cancelled");
+      updated = await jobRepo.findOneByOrFail({ id: ownerStatusJob.id });
+      assert.equal(updated.status, "cancelled");
+    });
+
+    await record(summary, "8 completed jobs move out of active and appear in completed jobs", async () => {
+      const activeBefore = await jobsService.listJobs(tech1Actor, orgA.id, { queue: "active" });
+      assert.equal(activeBefore.some((job) => job.id === queueCompletedJob.id), true);
+
+      await applyJobStatusUpdate(jobRepo, tech1Actor, orgA.id, queueCompletedJob.id, "completed");
+
+      const activeAfter = await jobsService.listJobs(tech1Actor, orgA.id, { queue: "active" });
+      const completedAfter = await jobsService.listJobs(tech1Actor, orgA.id, { queue: "completed" });
+      assert.equal(activeAfter.some((job) => job.id === queueCompletedJob.id), false);
+      assert.equal(completedAfter.some((job) => job.id === queueCompletedJob.id), true);
+    });
+
+    await record(summary, "9 cancelled jobs move out of active and appear in cancelled", async () => {
+      const activeBefore = await jobsService.listJobs(tech1Actor, orgA.id, { queue: "active" });
+      assert.equal(activeBefore.some((job) => job.id === queueCancelledJob.id), true);
+
+      await applyJobStatusUpdate(jobRepo, tech1Actor, orgA.id, queueCancelledJob.id, "cancelled");
+
+      const activeAfter = await jobsService.listJobs(tech1Actor, orgA.id, { queue: "active" });
+      const cancelledAfter = await jobsService.listJobs(adminActor, orgA.id, { queue: "cancelled" });
+      assert.equal(activeAfter.some((job) => job.id === queueCancelledJob.id), false);
+      assert.equal(cancelledAfter.some((job) => job.id === queueCancelledJob.id), true);
+    });
+
+    await record(summary, "10 legacy statuses resolve safely into operational buckets", async () => {
+      assert.equal(mapJobStatusToOperationalBucket("new_lead"), "submitted");
+      assert.equal(mapJobStatusToOperationalBucket("in_progress"), "scheduled");
+      assert.equal(mapJobStatusToOperationalBucket("paid"), "completed");
+
+      const activeIds = new Set(
+        (await jobsService.listJobs(tech1Actor, orgA.id, { queue: "active" })).map((job) => job.id),
+      );
+      assert.equal(activeIds.has(legacyLeadJob.id), true);
+      assert.equal(activeIds.has(legacyProgressJob.id), true);
+      assert.equal(activeIds.has(legacyPaidJob.id), false);
+
+      const completedIds = new Set(
+        (await jobsService.listJobs(tech1Actor, orgA.id, { queue: "completed" })).map((job) => job.id),
+      );
+      assert.equal(completedIds.has(legacyPaidJob.id), true);
     });
 
     summary.ok = summary.errors.length === 0;

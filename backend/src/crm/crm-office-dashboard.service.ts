@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { In, Not, Repository } from "typeorm";
+import { InjectDataSource, InjectRepository } from "@nestjs/typeorm";
+import { DataSource, In, Not, Repository } from "typeorm";
 
 import { apiError } from "../common/api-response";
 import { CustomerEntity } from "../database/entities/customer.entity";
@@ -20,6 +20,7 @@ import { classifyFinanceInvoiceOrigin } from "./finance-invoice-origin";
 import { isCollectibleOpenInvoice } from "./finance-metrics.core";
 import { FinanceInvoicePresentationService } from "./finance-invoice-presentation.service";
 import { InvoicePaymentLedgerService } from "./invoice-payment-ledger.service";
+import { ensureTechnicianRosterForSystemRoleMemberships } from "./technician-membership-link";
 
 type RelatedValue<T> = T | T[] | null;
 
@@ -88,6 +89,8 @@ export class CrmOfficeDashboardService {
     private readonly servicesRepository: Repository<ServiceEntity>,
     private readonly invoicePaymentLedgerService: InvoicePaymentLedgerService,
     private readonly financeInvoicePresentationService: FinanceInvoicePresentationService,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   private summarizeInvoiceLedger(invoice: InvoiceEntity) {
@@ -366,6 +369,10 @@ export class CrmOfficeDashboardService {
   }
 
   private async listTechniciansWithV1FallbackForDashboard(organizationId: string) {
+    await ensureTechnicianRosterForSystemRoleMemberships(this.dataSource.manager, {
+      organizationId,
+      systemRoles: ["technician"],
+    });
     await this.provisionFallbackTechniciansIfNeeded(organizationId);
 
     return this.techniciansRepository.find({

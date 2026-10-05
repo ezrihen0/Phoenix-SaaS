@@ -51,12 +51,11 @@ export type TechnicianDashboardResponse = {
     fullName: string;
   };
   summary: {
-    openJobs: number;
-    inProgressJobs: number;
-    waitingForApprovalJobs: number;
+    activeJobs: number;
     completedToday: number;
   };
   jobs: DashboardJob[];
+  completedJobs: DashboardJob[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -97,9 +96,9 @@ export function isTechnicianDashboardResponse(value: unknown): value is Technici
   const summary = value.summary;
 
   return (
-    isFiniteNumber(summary.openJobs)
-    && isFiniteNumber(summary.inProgressJobs)
-    && isFiniteNumber(summary.waitingForApprovalJobs)
+    isFiniteNumber(summary.activeJobs)
     && isFiniteNumber(summary.completedToday)
+    && Array.isArray(value.jobs)
+    && Array.isArray(value.completedJobs)
   );
 }

@@ -74,6 +74,7 @@ export type Database = {
           source: Database["public"]["Enums"]["lead_source"];
           preferred_service_type: Database["public"]["Enums"]["service_type"] | null;
           notes: string | null;
+          tags: string[];
           lifecycle_status: Database["public"]["Enums"]["customer_lifecycle_status"] | null;
           created_at: string;
           updated_at: string;
@@ -94,6 +95,7 @@ export type Database = {
           source?: Database["public"]["Enums"]["lead_source"];
           preferred_service_type?: Database["public"]["Enums"]["service_type"] | null;
           notes?: string | null;
+          tags?: string[];
           lifecycle_status?: Database["public"]["Enums"]["customer_lifecycle_status"] | null;
           created_at?: string;
           updated_at?: string;
@@ -359,7 +361,7 @@ export type Database = {
         | "outside_area"
         | "other_company"
         | "other";
-      job_status: "new_lead" | "contacted" | "scheduled" | "on_the_way" | "in_progress" | "waiting_for_approval" | "completed" | "paid" | "cancelled";
+      job_status: "new_lead" | "contacted" | "submitted" | "scheduled" | "on_the_way" | "in_progress" | "waiting_for_approval" | "completed" | "paid" | "cancelled";
       quote_status: "draft" | "sent" | "approved" | "rejected";
       invoice_status: "unpaid" | "paid";
     };

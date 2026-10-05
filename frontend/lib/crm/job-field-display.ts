@@ -85,7 +85,12 @@ export function jobStatusToneClass(status: JobStatus | string) {
     return "theme-status-error";
   }
 
-  if (status === "new_lead" || status === "contacted" || status === "waiting_for_approval") {
+  if (
+    status === "submitted"
+    || status === "new_lead"
+    || status === "contacted"
+    || status === "waiting_for_approval"
+  ) {
     return "theme-status-warning";
   }
 

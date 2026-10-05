@@ -78,6 +78,9 @@ export class CustomerEntity {
   @Column({ type: "text", nullable: true })
   notes!: string | null;
 
+  @Column({ type: "json", default: () => "(JSON_ARRAY())" })
+  tags!: string[];
+
   @Column({
     type: "enum",
     enum: customerLifecycleStatuses,

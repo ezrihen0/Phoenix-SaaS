@@ -3,7 +3,7 @@ import {
   relationValue,
   type RelatedValue,
 } from "@/lib/crm/job-field-display";
-import type { JobStatus } from "@/lib/crm/statuses";
+import { mapJobStatusToOperationalBucket, type JobStatus } from "@/lib/crm/statuses";
 
 export type JobsQuickFilter =
   | "all"
@@ -51,16 +51,17 @@ export type JobListRecord = {
   quote: RelatedValue<{ price_cents: number; status: string }>;
 };
 
-const statusSortPriority: Record<JobStatus, number> = {
+const statusSortPriority: Partial<Record<JobStatus, number>> = {
   in_progress: 0,
   on_the_way: 1,
   waiting_for_approval: 2,
   scheduled: 3,
-  contacted: 4,
-  new_lead: 5,
-  completed: 6,
-  paid: 7,
-  cancelled: 8,
+  submitted: 4,
+  contacted: 5,
+  new_lead: 6,
+  completed: 7,
+  paid: 8,
+  cancelled: 9,
 };
 
 function startOfLocalDay(date: Date) {
@@ -193,8 +194,8 @@ export function sortJobsForOperations(jobs: JobListRecord[]) {
       return leftScheduled - rightScheduled;
     }
 
-    const leftPriority = statusSortPriority[left.status];
-    const rightPriority = statusSortPriority[right.status];
+    const leftPriority = statusSortPriority[left.status] ?? 50;
+    const rightPriority = statusSortPriority[right.status] ?? 50;
 
     if (leftPriority !== rightPriority) {
       return leftPriority - rightPriority;
@@ -253,7 +254,10 @@ export function filterJobsList(input: {
         return false;
       }
 
-      if (input.statusFilter !== "all" && job.status !== input.statusFilter) {
+      if (
+        input.statusFilter !== "all"
+        && mapJobStatusToOperationalBucket(job.status) !== input.statusFilter
+      ) {
         return false;
       }
 

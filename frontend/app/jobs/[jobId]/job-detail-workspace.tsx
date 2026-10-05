@@ -32,7 +32,7 @@ import {
   canTransitionJobStatus,
   getJobStatusLabel,
   getServiceTypeLabel,
-  jobStatuses,
+  operationalJobStatuses,
   type JobStatus,
 } from "@/lib/crm/statuses";
 import type { Database } from "@/lib/types/database";
@@ -137,7 +137,7 @@ type JobDetailWorkspaceProps = {
 
 const ITEMS_PER_PAGE = 4;
 const DEFAULT_DURATION_MINUTES = 120;
-const EARLY_STAGE_STATUSES: JobStatus[] = ["new_lead", "contacted"];
+const EARLY_STAGE_STATUSES: JobStatus[] = ["new_lead", "contacted", "submitted"];
 
 function relationValue<T>(value: RelatedValue<T> | undefined) {
   if (Array.isArray(value)) {
@@ -500,7 +500,10 @@ export default function JobDetailWorkspace({
   );
   const pagedNotes = usePagedItems(sortedNotes, notesPage);
   const availableStatuses = useMemo(
-    () => jobStatuses.filter((status) => status === job.status || canTransitionJobStatus(job.status, status)),
+    () =>
+      operationalJobStatuses.filter(
+        (status) => status === job.status || canTransitionJobStatus(job.status, status),
+      ),
     [job.status],
   );
   const selectedTechnician =

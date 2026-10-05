@@ -14,13 +14,20 @@ import {
   requireJobListPermission,
 } from "./jobs-access";
 import { BranchScopeService } from "./branch-scope.service";
+import { jobStatuses } from "./constants";
+import { jobStatusMatchesListQueue, type JobListQueue } from "./job-status-model";
 
 type RelatedValue<T> = T | T[] | null;
+
+export type { JobListQueue } from "./job-status-model";
+
+export type JobListQueueFilter = JobListQueue | "all";
 
 export type ListJobsFilters = {
   status?: string;
   technicianId?: string;
   excludeCancelled?: boolean;
+  queue?: JobListQueueFilter;
   limit?: number;
 };
 
@@ -102,7 +109,16 @@ export class JobsService {
 
     if (filters.status?.trim()) {
       queryBuilder.andWhere("job.status = :status", { status: filters.status.trim() });
-    } else if (filters.excludeCancelled !== false) {
+    } else if (
+      filters.queue === "active"
+      || filters.queue === "completed"
+      || filters.queue === "cancelled"
+    ) {
+      const queueStatuses = jobStatuses.filter((status) =>
+        jobStatusMatchesListQueue(status, filters.queue as JobListQueue),
+      );
+      queryBuilder.andWhere("job.status IN (:...queueStatuses)", { queueStatuses });
+    } else if (filters.queue !== "all" && filters.excludeCancelled !== false) {
       queryBuilder.andWhere("job.status != :cancelled", { cancelled: "cancelled" });
     }
 
