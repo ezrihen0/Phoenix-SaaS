@@ -1,0 +1,835 @@
+From 31b01eb9e6445a9afd426b7f61bc4eab4339c557 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 5 Oct 2026 23:45:34 +0000
+Subject: [PATCH] Fix invoice magic-link entry: auto-redeem, session cookie,
+ invoice deep-link, legacy access redirect.
+
+---
+ .env.example                                  |   4 +
+ src/app/access/[token]/page.tsx               |  16 ++
+ src/app/api/portal/auth/redeem/route.ts       |  43 ++++
+ src/app/api/portal/login/route.ts             |  17 +-
+ src/app/portal/auth/magic/page.tsx            |  51 +++++
+ src/app/portal/invoices/[invoiceId]/page.tsx  |  26 +++
+ src/app/portal/login/page.tsx                 |  17 +-
+ src/components/portal/portal-login-form.tsx   |  31 ++-
+ .../portal/portal-magic-link-confirm.tsx      | 139 ++++++++++++
+ src/lib/analytics/events.ts                   |   4 +
+ src/lib/portal/adapter.ts                     |  25 ++-
+ src/lib/portal/session-cookie.ts              |  36 +++
+ src/lib/portal/wizfield-portal-client.ts      | 212 ++++++++++++++++++
+ src/proxy.ts                                  |   2 +
+ 14 files changed, 604 insertions(+), 19 deletions(-)
+ create mode 100644 src/app/access/[token]/page.tsx
+ create mode 100644 src/app/api/portal/auth/redeem/route.ts
+ create mode 100644 src/app/portal/auth/magic/page.tsx
+ create mode 100644 src/app/portal/invoices/[invoiceId]/page.tsx
+ create mode 100644 src/components/portal/portal-magic-link-confirm.tsx
+ create mode 100644 src/lib/portal/session-cookie.ts
+ create mode 100644 src/lib/portal/wizfield-portal-client.ts
+
+diff --git a/.env.example b/.env.example
+index 69f5265..d28f537 100644
+--- a/.env.example
++++ b/.env.example
+@@ -23,6 +23,10 @@ BREVO_API_KEY=
+ # Organization is resolved from the credential; do not send organizationId.
+ WIZFIELD_API_BASE_URL=
+ WIZFIELD_INTEGRATION_SECRET=
++# When true, portal login may mint WizField magic links and invoice entry may redeem sessions.
++PORTAL_ADAPTER_ENABLED=
++# Required when PORTAL_ADAPTER_ENABLED=true for /api/portal/login magic-link mint.
++PHOENIX_INTEGRATION_ORGANIZATION_ID=
+ 
+ # Google Search Console (HTML tag verification)
+ # NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION=
+diff --git a/src/app/access/[token]/page.tsx b/src/app/access/[token]/page.tsx
+new file mode 100644
+index 0000000..e8783f3
+--- /dev/null
++++ b/src/app/access/[token]/page.tsx
+@@ -0,0 +1,16 @@
++import { redirect } from "next/navigation";
++
++type LegacyPortalAccessPageProps = {
++  params: Promise<{ token: string }>;
++};
++
++export default async function LegacyPortalAccessPage({ params }: LegacyPortalAccessPageProps) {
++  const { token } = await params;
++  const normalizedToken = token?.trim();
++
++  if (!normalizedToken) {
++    redirect("/portal/login");
++  }
++
++  redirect(`/portal/auth/magic?token=${encodeURIComponent(normalizedToken)}&entry=invoice`);
++}
+diff --git a/src/app/api/portal/auth/redeem/route.ts b/src/app/api/portal/auth/redeem/route.ts
+new file mode 100644
+index 0000000..5eea0c1
+--- /dev/null
++++ b/src/app/api/portal/auth/redeem/route.ts
+@@ -0,0 +1,43 @@
++import { NextResponse } from "next/server";
++
++import {
++  encodePortalSessionCookieValue,
++  PORTAL_SESSION_COOKIE_NAME,
++  portalSessionCookieOptions,
++} from "@/lib/portal/session-cookie";
++import { redeemPortalMagicLinkOnWizfield } from "@/lib/portal/wizfield-portal-client";
++
++export const dynamic = "force-dynamic";
++
++export async function POST(request: Request) {
++  let token = "";
++
++  try {
++    const payload = (await request.json()) as { token?: unknown };
++    token = typeof payload.token === "string" ? payload.token.trim() : "";
++  } catch {
++    token = "";
++  }
++
++  if (!token) {
++    return NextResponse.json({ ok: false, message: "This sign-in link is not valid." }, { status: 400 });
++  }
++
++  const redeemed = await redeemPortalMagicLinkOnWizfield(token);
++  if (!redeemed.ok) {
++    return NextResponse.json({ ok: false, message: redeemed.message }, { status: redeemed.status });
++  }
++
++  const response = NextResponse.json({
++    ok: true,
++    redirect_path: redeemed.redirect_path,
++  });
++
++  response.cookies.set(
++    PORTAL_SESSION_COOKIE_NAME,
++    encodePortalSessionCookieValue(redeemed.session_token),
++    portalSessionCookieOptions(redeemed.session_expires_at),
++  );
++
++  return response;
++}
+diff --git a/src/app/api/portal/login/route.ts b/src/app/api/portal/login/route.ts
+index 5311e66..f4d0f85 100644
+--- a/src/app/api/portal/login/route.ts
++++ b/src/app/api/portal/login/route.ts
+@@ -14,13 +14,26 @@ export async function POST(request: Request) {
+     email = "";
+   }
+ 
++  if (!email) {
++    return NextResponse.json(
++      {
++        ok: false,
++        status: "deferred",
++        message: "Enter the email on your Phoenix job to continue.",
++        emailDelivery: "skipped",
++      },
++      { status: 200 },
++    );
++  }
++
+   const result = await requestPortalMagicLink(email);
+ 
+   return NextResponse.json(
+     {
+       ok: result.accepted,
+-      status: result.connection.status,
+-      message: result.connection.message,
++      status: result.connection.status === "deferred" ? "deferred" : "connected",
++      message: result.message ?? result.connection.message,
++      emailDelivery: result.emailDelivery ?? "skipped",
+     },
+     { status: 200 },
+   );
+diff --git a/src/app/portal/auth/magic/page.tsx b/src/app/portal/auth/magic/page.tsx
+new file mode 100644
+index 0000000..3f7dd62
+--- /dev/null
++++ b/src/app/portal/auth/magic/page.tsx
+@@ -0,0 +1,51 @@
++import { PortalMagicLinkConfirm } from "@/components/portal/portal-magic-link-confirm";
++
++type PortalMagicLinkPageProps = {
++  searchParams: Promise<{
++    token?: string | string[];
++    entry?: string | string[];
++  }>;
++};
++
++function readQueryParam(value: string | string[] | undefined) {
++  if (Array.isArray(value)) {
++    return value[0]?.trim() ?? "";
++  }
++
++  return typeof value === "string" ? value.trim() : "";
++}
++
++export default async function PortalMagicLinkPage({ searchParams }: PortalMagicLinkPageProps) {
++  const query = await searchParams;
++  const token = readQueryParam(query.token);
++  const entry = readQueryParam(query.entry);
++  const autoRedeem = entry === "invoice";
++
++  return (
++    <section className="section-pad">
++      <div className="page-frame">
++        <div className="mx-auto max-w-xl rounded-[2.5rem] border border-[var(--color-border)] bg-[var(--color-card)] px-6 py-12 sm:px-10">
++          {autoRedeem ? (
++            <>
++              <h1 className="text-3xl font-semibold tracking-tight text-[var(--color-ink)]">Opening your invoice</h1>
++              <p className="mt-4 text-sm leading-7 text-[var(--color-muted)]">
++                Phoenix is verifying this secure invoice link and preparing your portal session.
++              </p>
++            </>
++          ) : (
++            <>
++              <h1 className="text-3xl font-semibold tracking-tight text-[var(--color-ink)]">Confirm sign-in</h1>
++              <p className="mt-4 text-sm leading-7 text-[var(--color-muted)]">
++                Email security scanners may open links automatically. Phoenix only creates a portal session after you
++                confirm below.
++              </p>
++            </>
++          )}
++          <div className="mt-8">
++            <PortalMagicLinkConfirm token={token} autoRedeem={autoRedeem} />
++          </div>
++        </div>
++      </div>
++    </section>
++  );
++}
+diff --git a/src/app/portal/invoices/[invoiceId]/page.tsx b/src/app/portal/invoices/[invoiceId]/page.tsx
+new file mode 100644
+index 0000000..19af22b
+--- /dev/null
++++ b/src/app/portal/invoices/[invoiceId]/page.tsx
+@@ -0,0 +1,26 @@
++import { cookies } from "next/headers";
++import { redirect } from "next/navigation";
++
++import { decodePortalSessionCookieValue, PORTAL_SESSION_COOKIE_NAME } from "@/lib/portal/session-cookie";
++
++type PortalInvoiceDeepLinkPageProps = {
++  params: Promise<{ invoiceId: string }>;
++};
++
++export default async function PortalInvoiceDeepLinkPage({ params }: PortalInvoiceDeepLinkPageProps) {
++  const { invoiceId } = await params;
++  const normalizedInvoiceId = invoiceId?.trim();
++
++  if (!normalizedInvoiceId) {
++    redirect("/portal/login");
++  }
++
++  const cookieStore = await cookies();
++  const sessionToken = decodePortalSessionCookieValue(cookieStore.get(PORTAL_SESSION_COOKIE_NAME)?.value);
++
++  if (!sessionToken) {
++    redirect("/portal/login");
++  }
++
++  redirect(`/portal?tab=finance&invoice=${encodeURIComponent(normalizedInvoiceId)}`);
++}
+diff --git a/src/app/portal/login/page.tsx b/src/app/portal/login/page.tsx
+index b23bd8e..50c1a1a 100644
+--- a/src/app/portal/login/page.tsx
++++ b/src/app/portal/login/page.tsx
+@@ -17,16 +17,23 @@ export default function PortalLoginPage() {
+             Customer portal login
+           </h1>
+           <p className="mt-5 text-sm leading-7 text-[var(--color-muted)]">
+-            Enter the email on your Phoenix job. When WizField is connected, a magic link will open a
+-            bound portal session. Staff login stays at /admin.
++            Enter the email on your Phoenix job. When WizField is connected, a magic link will open a bound portal
++            session. Staff login stays at /admin.
+           </p>
+-          <p className="mt-3 text-sm leading-7 text-[var(--color-muted)]">{connection.message}</p>
++          {connection.connected ? (
++            <p className="mt-3 text-sm leading-7 text-[var(--color-muted)]">{connection.message}</p>
++          ) : (
++            <p className="mt-3 text-sm leading-7 text-[var(--color-muted)]">{connection.message}</p>
++          )}
+           <div className="mt-8">
+             <PortalLoginForm />
+           </div>
+           <p className="mt-8 text-sm">
+-            <Link href="/portal" className="font-semibold text-[var(--color-ember)]">
+-              Return to portal
++            <Link
++              href="https://phoenixfireplace.ca/calgary/request-service?cta=portal-login"
++              className="font-semibold text-[var(--color-ember)]"
++            >
++              Request service on phoenixfireplace.ca
+             </Link>
+           </p>
+         </div>
+diff --git a/src/components/portal/portal-login-form.tsx b/src/components/portal/portal-login-form.tsx
+index 5e52746..d621ae7 100644
+--- a/src/components/portal/portal-login-form.tsx
++++ b/src/components/portal/portal-login-form.tsx
+@@ -2,40 +2,53 @@
+ 
+ import { useState } from "react";
+ 
+-type LoginState = "idle" | "submitting" | "preparing";
++type LoginState = "idle" | "submitting" | "sent" | "error";
+ 
+ export function PortalLoginForm() {
+   const [email, setEmail] = useState("");
+   const [state, setState] = useState<LoginState>("idle");
++  const [message, setMessage] = useState<string | null>(null);
+ 
+   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+     event.preventDefault();
+     setState("submitting");
++    setMessage(null);
+ 
+     try {
+-      await fetch("/api/portal/login", {
++      const response = await fetch("/api/portal/login", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({ email }),
+       });
++      const body = (await response.json()) as { ok?: boolean; message?: string };
++
++      if (body.ok) {
++        setState("sent");
++        setMessage(body.message || "If that email is on file, check your inbox for a sign-in link.");
++        return;
++      }
++
++      setState("error");
++      setMessage(body.message || "Sign-in is not available yet. Try again later or call Phoenix.");
+     } catch {
+-      // The contract shell still shows the preparing state; live auth is not enabled.
++      setState("error");
++      setMessage("Something went wrong. Try again or call Phoenix.");
+     }
+-
+-    setState("preparing");
+   }
+ 
+-  if (state === "preparing") {
++  if (state === "sent") {
+     return (
+       <div className="rounded-[1.75rem] border border-[var(--color-border)] bg-[var(--color-card)] p-6 text-sm leading-7 text-[var(--color-muted)]">
+-        A magic link will be sent to this address when the customer portal is connected to WizField.
+-        Live passwordless sign-in is not enabled yet, and no session was created.
++        {message}
+       </div>
+     );
+   }
+ 
+   return (
+     <form onSubmit={onSubmit} className="grid gap-4">
++      {message ? (
++        <p className="rounded-2xl bg-[rgba(201,95,43,0.08)] px-4 py-3 text-sm text-[var(--color-muted)]">{message}</p>
++      ) : null}
+       <label className="grid gap-2 text-sm">
+         <span className="font-semibold text-[var(--color-ink)]">Email</span>
+         <input
+@@ -54,7 +67,7 @@ export function PortalLoginForm() {
+         disabled={state === "submitting"}
+         className="inline-flex items-center justify-center rounded-full bg-[var(--color-ember)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-70"
+       >
+-        {state === "submitting" ? "Checking access…" : "Send magic link"}
++        {state === "submitting" ? "Sending link…" : "Send magic link"}
+       </button>
+     </form>
+   );
+diff --git a/src/components/portal/portal-magic-link-confirm.tsx b/src/components/portal/portal-magic-link-confirm.tsx
+new file mode 100644
+index 0000000..dd9474c
+--- /dev/null
++++ b/src/components/portal/portal-magic-link-confirm.tsx
+@@ -0,0 +1,139 @@
++"use client";
++
++import { useCallback, useEffect, useRef, useState } from "react";
++import { useRouter } from "next/navigation";
++
++import { trackPortalEvent } from "@/lib/analytics/events";
++
++type PortalMagicLinkConfirmProps = {
++  token: string;
++  autoRedeem?: boolean;
++};
++
++type RedeemResponse = {
++  ok?: boolean;
++  message?: string;
++  redirect_path?: string;
++};
++
++const redeemInFlightTokens = new Set<string>();
++
++export function PortalMagicLinkConfirm({ token, autoRedeem = false }: PortalMagicLinkConfirmProps) {
++  const router = useRouter();
++  const [error, setError] = useState<string | null>(null);
++  const [state, setState] = useState<"idle" | "submitting" | "done">("idle");
++  const redeemStartedRef = useRef(false);
++
++  const redeem = useCallback(async () => {
++    if (!token) {
++      setError("This sign-in link is missing a token. Request a new link from the login page.");
++      return;
++    }
++
++    if (redeemInFlightTokens.has(token)) {
++      return;
++    }
++
++    redeemInFlightTokens.add(token);
++    setState("submitting");
++    setError(null);
++
++    try {
++      const response = await fetch("/api/portal/auth/redeem", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ token }),
++      });
++      const body = (await response.json()) as RedeemResponse;
++
++      if (!response.ok || !body.ok) {
++        setError(body.message || "This sign-in link could not be used.");
++        setState("idle");
++        redeemInFlightTokens.delete(token);
++        return;
++      }
++
++      setState("done");
++      trackPortalEvent("portal_login_success");
++
++      const redirectPath =
++        typeof body.redirect_path === "string" && body.redirect_path.trim()
++          ? body.redirect_path.trim()
++          : "/portal";
++      router.replace(redirectPath);
++      router.refresh();
++    } catch {
++      setError("Something went wrong. Try again or request a new sign-in link.");
++      setState("idle");
++      redeemInFlightTokens.delete(token);
++    }
++  }, [router, token]);
++
++  useEffect(() => {
++    if (!autoRedeem || !token) {
++      return;
++    }
++
++    if (redeemStartedRef.current) {
++      return;
++    }
++
++    redeemStartedRef.current = true;
++    void redeem();
++  }, [autoRedeem, redeem, token]);
++
++  if (!token) {
++    return (
++      <p className="rounded-2xl bg-[rgba(201,95,43,0.08)] px-4 py-3 text-sm text-[var(--color-muted)]">
++        This link is incomplete. Use Customer Login and request a new magic link.
++      </p>
++    );
++  }
++
++  if (autoRedeem) {
++    return (
++      <div className="grid gap-4">
++        {error ? (
++          <p className="rounded-2xl bg-[rgba(201,95,43,0.08)] px-4 py-3 text-sm text-[var(--color-muted)]">{error}</p>
++        ) : null}
++        <p className="text-sm leading-7 text-[var(--color-muted)]">
++          {state === "done"
++            ? "Redirecting to your invoice…"
++            : state === "submitting"
++              ? "Opening your invoice securely…"
++              : "Preparing secure access…"}
++        </p>
++        {error ? (
++          <button
++            type="button"
++            disabled={state === "submitting"}
++            onClick={() => {
++              redeemStartedRef.current = false;
++              redeemInFlightTokens.delete(token);
++              void redeem();
++            }}
++            className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--color-ember)] px-5 text-sm font-semibold text-white disabled:opacity-70"
++          >
++            Try again
++          </button>
++        ) : null}
++      </div>
++    );
++  }
++
++  return (
++    <div className="grid gap-4">
++      {error ? (
++        <p className="rounded-2xl bg-[rgba(201,95,43,0.08)] px-4 py-3 text-sm text-[var(--color-muted)]">{error}</p>
++      ) : null}
++      <button
++        type="button"
++        disabled={state === "submitting" || state === "done"}
++        onClick={() => void redeem()}
++        className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--color-ember)] px-5 text-sm font-semibold text-white disabled:opacity-70"
++      >
++        {state === "submitting" ? "Opening your portal…" : state === "done" ? "Redirecting…" : "Continue to my portal"}
++      </button>
++    </div>
++  );
++}
+diff --git a/src/lib/analytics/events.ts b/src/lib/analytics/events.ts
+index 3d882c6..61e8fb2 100644
+--- a/src/lib/analytics/events.ts
++++ b/src/lib/analytics/events.ts
+@@ -37,6 +37,10 @@ export function trackLeadSubmitted(formName = "request_service") {
+   sendGAEvent("lead_submitted", { form_name: formName });
+ }
+ 
++export function trackPortalEvent(eventName: string, params?: GAEventParams) {
++  sendGAEvent(eventName, params);
++}
++
+ export function trackThankYouView() {
+   sendGAEvent("thank_you_view");
+ }
+diff --git a/src/lib/portal/adapter.ts b/src/lib/portal/adapter.ts
+index a045ba7..15d7523 100644
+--- a/src/lib/portal/adapter.ts
++++ b/src/lib/portal/adapter.ts
+@@ -1,12 +1,24 @@
+ import "server-only";
+ 
+ import type { PortalConnectionStatus, PortalCustomerSnapshot, PortalSession } from "@/lib/portal/types";
++import { isWizfieldConfigured } from "@/lib/wizfield/client";
++
++import { isPortalAdapterEnabled, requestPortalMagicLinkOnWizfield } from "@/lib/portal/wizfield-portal-client";
+ 
+ /**
+  * WizField adapter boundary. Production must not query WizField from the frontend
+  * or invent mock customers while the CRM is deferred.
+  */
+ export function getPortalConnectionStatus(): PortalConnectionStatus {
++  if (isWizfieldConfigured()) {
++    return {
++      connected: true,
++      provider: "wizfield",
++      status: isPortalAdapterEnabled() ? "connected" : "preparing",
++      message: "Your Phoenix portal is connected. Sign in with the email on your job to continue.",
++    };
++  }
++
+   return {
+     connected: false,
+     provider: "wizfield",
+@@ -16,13 +28,20 @@ export function getPortalConnectionStatus(): PortalConnectionStatus {
+   };
+ }
+ 
+-export async function requestPortalMagicLink(_identifier: string): Promise<{
++export async function requestPortalMagicLink(identifier: string): Promise<{
+   accepted: boolean;
+   connection: PortalConnectionStatus;
++  message?: string;
++  emailDelivery?: "sent" | "skipped";
+ }> {
++  const connection = getPortalConnectionStatus();
++  const result = await requestPortalMagicLinkOnWizfield(identifier);
++
+   return {
+-    accepted: false,
+-    connection: getPortalConnectionStatus(),
++    accepted: result.ok,
++    connection,
++    message: result.message,
++    emailDelivery: result.emailDelivery,
+   };
+ }
+ 
+diff --git a/src/lib/portal/session-cookie.ts b/src/lib/portal/session-cookie.ts
+new file mode 100644
+index 0000000..2be25cc
+--- /dev/null
++++ b/src/lib/portal/session-cookie.ts
+@@ -0,0 +1,36 @@
++import "server-only";
++
++export const PORTAL_SESSION_COOKIE_NAME = "phoenix_portal_session";
++
++type PortalSessionCookiePayload = {
++  token: string;
++};
++
++export function encodePortalSessionCookieValue(sessionToken: string) {
++  const payload: PortalSessionCookiePayload = { token: sessionToken.trim() };
++  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
++}
++
++export function decodePortalSessionCookieValue(cookieValue: string | undefined | null) {
++  if (!cookieValue?.trim()) {
++    return null;
++  }
++
++  try {
++    const parsed = JSON.parse(Buffer.from(cookieValue.trim(), "base64url").toString("utf8")) as PortalSessionCookiePayload;
++    return typeof parsed.token === "string" && parsed.token.trim() ? parsed.token.trim() : null;
++  } catch {
++    return null;
++  }
++}
++
++export function portalSessionCookieOptions(expiresAt: string | Date) {
++  const expires = expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
++  return {
++    httpOnly: true,
++    secure: process.env.NODE_ENV === "production",
++    sameSite: "lax" as const,
++    path: "/",
++    expires: Number.isNaN(expires.getTime()) ? undefined : expires,
++  };
++}
+diff --git a/src/lib/portal/wizfield-portal-client.ts b/src/lib/portal/wizfield-portal-client.ts
+new file mode 100644
+index 0000000..abf9a70
+--- /dev/null
++++ b/src/lib/portal/wizfield-portal-client.ts
+@@ -0,0 +1,212 @@
++import "server-only";
++
++import { isWizfieldConfigured } from "@/lib/wizfield/client";
++
++const REDEEM_ERROR_MESSAGES: Record<string, string> = {
++  invalid_link: "This sign-in link is not valid.",
++  expired_link: "This sign-in link has expired.",
++  used_link: "This sign-in link has already been used.",
++  portal_link_redeem_race: "This sign-in link is no longer available.",
++};
++
++function readEnv(name: string) {
++  return process.env[name]?.trim() || "";
++}
++
++function getWizfieldPortalConfig() {
++  if (!isWizfieldConfigured()) {
++    return null;
++  }
++
++  const baseUrl = readEnv("WIZFIELD_API_BASE_URL").replace(/\/+$/, "");
++  const secret = readEnv("WIZFIELD_INTEGRATION_SECRET");
++  if (!baseUrl || !secret) {
++    return null;
++  }
++
++  return { baseUrl, secret };
++}
++
++function resolveOrganizationId() {
++  return (
++    readEnv("PHOENIX_INTEGRATION_ORGANIZATION_ID")
++    || readEnv("PHOENIX_WIZFIELD_ORGANIZATION_ID")
++    || readEnv("WIZFIELD_ORGANIZATION_ID")
++  );
++}
++
++function unwrapApiData<T>(body: unknown): T | null {
++  if (!body || typeof body !== "object") {
++    return null;
++  }
++
++  const record = body as { data?: unknown };
++  if (record.data && typeof record.data === "object") {
++    return record.data as T;
++  }
++
++  return body as T;
++}
++
++function redeemErrorMessage(body: unknown, fallback: string) {
++  if (body && typeof body === "object") {
++    const error = (body as { error?: { code?: string; message?: string } }).error;
++    if (error?.code && REDEEM_ERROR_MESSAGES[error.code]) {
++      return REDEEM_ERROR_MESSAGES[error.code];
++    }
++    if (typeof error?.message === "string" && error.message.trim()) {
++      return error.message.trim();
++    }
++  }
++
++  return fallback;
++}
++
++export type RedeemPortalMagicLinkResult =
++  | {
++      ok: true;
++      session_token: string;
++      session_expires_at: string;
++      redirect_path: string;
++    }
++  | {
++      ok: false;
++      status: number;
++      message: string;
++    };
++
++export async function redeemPortalMagicLinkOnWizfield(rawToken: string): Promise<RedeemPortalMagicLinkResult> {
++  const config = getWizfieldPortalConfig();
++  if (!config) {
++    return {
++      ok: false,
++      status: 503,
++      message: "The customer portal is not connected yet. Try again later or call Phoenix.",
++    };
++  }
++
++  const token = rawToken.trim();
++  if (!token) {
++    return { ok: false, status: 400, message: "This sign-in link is not valid." };
++  }
++
++  const response = await fetch(`${config.baseUrl}/api/portal/auth/redeem`, {
++    method: "POST",
++    headers: {
++      Authorization: `Bearer ${config.secret}`,
++      "Content-Type": "application/json",
++      Accept: "application/json",
++    },
++    body: JSON.stringify({ token }),
++    cache: "no-store",
++  });
++
++  let body: unknown = null;
++  try {
++    body = await response.json();
++  } catch {
++    body = null;
++  }
++
++  if (!response.ok) {
++    return {
++      ok: false,
++      status: response.status,
++      message: redeemErrorMessage(body, "This sign-in link could not be used."),
++    };
++  }
++
++  const data = unwrapApiData<{
++    session_token?: string;
++    session_expires_at?: string;
++    redirect_path?: string;
++  }>(body);
++
++  const sessionToken = typeof data?.session_token === "string" ? data.session_token.trim() : "";
++  const sessionExpiresAt =
++    typeof data?.session_expires_at === "string" ? data.session_expires_at.trim() : "";
++  const redirectPath =
++    typeof data?.redirect_path === "string" && data.redirect_path.trim()
++      ? data.redirect_path.trim()
++      : "/portal";
++
++  if (!sessionToken || !sessionExpiresAt) {
++    return {
++      ok: false,
++      status: 502,
++      message: "This sign-in link could not be used.",
++    };
++  }
++
++  return {
++    ok: true,
++    session_token: sessionToken,
++    session_expires_at: sessionExpiresAt,
++    redirect_path: redirectPath,
++  };
++}
++
++export async function requestPortalMagicLinkOnWizfield(email: string) {
++  const config = getWizfieldPortalConfig();
++  if (!config) {
++    return {
++      ok: false as const,
++      status: "deferred" as const,
++      message:
++        "The customer portal is prepared, but WizField is not connected yet. Job status, quotes, invoices, and documents will appear here after the adapter is live.",
++      emailDelivery: "skipped" as const,
++    };
++  }
++
++  const organizationId = resolveOrganizationId();
++  if (!organizationId) {
++    return {
++      ok: false as const,
++      status: "connected" as const,
++      message:
++        "Portal magic link is not enabled on WizField yet. Set PORTAL_ADAPTER_ENABLED after WizField routes are live.",
++      emailDelivery: "skipped" as const,
++    };
++  }
++
++  if (readEnv("PORTAL_ADAPTER_ENABLED").toLowerCase() !== "true") {
++    return {
++      ok: false as const,
++      status: "connected" as const,
++      message:
++        "Portal magic link is not enabled on WizField yet. Set PORTAL_ADAPTER_ENABLED after WizField routes are live.",
++      emailDelivery: "skipped" as const,
++    };
++  }
++
++  const response = await fetch(`${config.baseUrl}/api/integrations/phoenix/portal/magic-link`, {
++    method: "POST",
++    headers: {
++      Authorization: `Bearer ${config.secret}`,
++      "Content-Type": "application/json",
++      Accept: "application/json",
++    },
++    body: JSON.stringify({ organizationId, email }),
++    cache: "no-store",
++  });
++
++  if (!response.ok) {
++    return {
++      ok: false as const,
++      status: "connected" as const,
++      message: "Sign-in is not available yet. Try again later or call Phoenix.",
++      emailDelivery: "skipped" as const,
++    };
++  }
++
++  return {
++    ok: true as const,
++    status: "connected" as const,
++    message: "If that email is on file, check your inbox for a sign-in link.",
++    emailDelivery: "sent" as const,
++  };
++}
++
++export function isPortalAdapterEnabled() {
++  return isWizfieldConfigured() && readEnv("PORTAL_ADAPTER_ENABLED").toLowerCase() === "true";
++}
+diff --git a/src/proxy.ts b/src/proxy.ts
+index e11ffb4..c331577 100644
+--- a/src/proxy.ts
++++ b/src/proxy.ts
+@@ -30,6 +30,8 @@ function isAllowedPortalPath(pathname: string) {
+   return (
+     pathname === "/portal" ||
+     pathname.startsWith("/portal/") ||
++    pathname === "/access" ||
++    pathname.startsWith("/access/") ||
+     pathname === "/api/portal" ||
+     pathname.startsWith("/api/portal/")
+   );
+-- 
+2.43.0
+
