@@ -35,8 +35,8 @@ import { MobileShellNav } from "@/components/mobile-shell-nav";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
 import { WorkspaceContextBanner } from "@/components/workspace-context-banner";
 import { ThemeRuntime } from "@/components/theme-runtime";
+import { usePhoenixBoot } from "@/components/phoenix/phoenix-boot-provider";
 import { GlobalSearchShell } from "@/features/global-search/global-search-shell";
-import { getClientDestination, getClientSession } from "@/lib/auth/client-auth";
 import { handleLogout } from "@/lib/auth/logout";
 import { isShellNavHrefVisible, type ShellNavRole } from "@/lib/navigation/shell-nav-policy";
 import { CRM_BRAND_NAME, CRM_LOGO_ALT, CRM_LOGO_SRC } from "@/lib/branding/crm-brand";
@@ -140,6 +140,7 @@ export function AppShell({ children }: AppShellProps) {
   const t = useTranslations();
   const pathname = usePathname();
   const router = useRouter();
+  const { status: bootStatus, session, clientDestination, clearClientAuth } = usePhoenixBoot();
   const searchPopoverRef = useRef<HTMLDivElement | null>(null);
   const searchSheetRef = useRef<HTMLDivElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -197,41 +198,28 @@ export function AppShell({ children }: AppShellProps) {
   }, [collapsed, collapsedPreferenceReady]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadUser() {
-      const session = await getClientSession().catch(() => null);
-
-      if (cancelled) {
-        return;
-      }
-
-      const nextLabel = session?.profile?.full_name?.trim()
-        || session?.technician?.display_name?.trim()
-        || session?.user?.email?.trim()
-        || "Phoenix CRM User";
-      const canSearch = canUseGlobalSearch(session?.profile?.role);
-
-      setUserLabel(nextLabel);
-      setSearchEnabled(Boolean(canSearch));
-      setShellNavRole(session?.profile?.role ?? null);
-      setShellNavPermissions(session?.permissions ?? []);
-      setShellNavRoleResolved(true);
-
-      try {
-        const destinationResponse = await getClientDestination();
-        setActivationMode(destinationResponse.destination === "/pricing");
-      } catch {
-        setActivationMode(pathname === "/billing/success");
-      }
+    if (bootStatus !== "ready") {
+      return;
     }
 
-    void loadUser();
+    const nextLabel = session?.profile?.full_name?.trim()
+      || session?.technician?.display_name?.trim()
+      || session?.user?.email?.trim()
+      || "Phoenix CRM User";
+    const canSearch = canUseGlobalSearch(session?.profile?.role);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname]);
+    setUserLabel(nextLabel);
+    setSearchEnabled(Boolean(canSearch));
+    setShellNavRole(session?.profile?.role ?? null);
+    setShellNavPermissions(session?.permissions ?? []);
+    setShellNavRoleResolved(true);
+
+    if (clientDestination === "/pricing") {
+      setActivationMode(true);
+    } else {
+      setActivationMode(pathname === "/billing/success");
+    }
+  }, [bootStatus, session, clientDestination, pathname]);
 
   useEffect(() => {
     if (!enabled || !shellNavRoleResolved) {
@@ -380,6 +368,7 @@ export function AppShell({ children }: AppShellProps) {
           <button
             type="button"
             onClick={async () => {
+              clearClientAuth();
               await handleLogout(router);
             }}
             className={[

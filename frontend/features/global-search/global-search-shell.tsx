@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-import { getClientSession } from "@/lib/auth/client-auth";
+import { usePhoenixBoot } from "@/components/phoenix/phoenix-boot-provider";
 import { ThemeRuntime } from "@/components/theme-runtime";
 
 import { GlobalSearchCombobox } from "./global-search-combobox";
@@ -32,36 +32,17 @@ function canUseGlobalSearch(role: string | null | undefined): role is SearchCapa
 export function GlobalSearchShell({ mode = "bar", open = true, onClose }: GlobalSearchShellProps) {
   const t = useTranslations();
   const pathname = usePathname();
+  const { status: bootStatus, session } = usePhoenixBoot();
   const [isOfficeRoute, setIsOfficeRoute] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function resolveVisibility() {
-      await Promise.resolve();
-
-      if (!pathname || !isAllowedPath(pathname)) {
-        if (!cancelled) {
-          setIsOfficeRoute(false);
-        }
-
-        return;
-      }
-
-      const session = await getClientSession().catch(() => null);
-      const isOffice = canUseGlobalSearch(session?.profile?.role);
-
-      if (!cancelled) {
-        setIsOfficeRoute(Boolean(isOffice));
-      }
+    if (!pathname || !isAllowedPath(pathname) || bootStatus !== "ready") {
+      setIsOfficeRoute(false);
+      return;
     }
 
-    void resolveVisibility();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname]);
+    setIsOfficeRoute(canUseGlobalSearch(session?.profile?.role));
+  }, [pathname, bootStatus, session]);
 
   const enabled = useMemo(() => isOfficeRoute, [isOfficeRoute]);
   const {

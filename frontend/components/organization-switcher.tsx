@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Building2, ChevronDown, Loader2, Plus } from "lucide-react";
 
+import { usePhoenixBoot } from "@/components/phoenix/phoenix-boot-provider";
 import type { ClientSession } from "@/lib/auth/client-auth";
 import {
   createClientOrganization,
-  getClientSession,
   setClientActiveOrganization,
 } from "@/lib/auth/client-auth";
 import {
@@ -32,7 +31,7 @@ export function OrganizationSwitcher({
   onOpenMore,
 }: OrganizationSwitcherProps) {
   const t = useTranslations("shell.workspace");
-  const pathname = usePathname();
+  const { session: bootSession } = usePhoenixBoot();
   const [session, setSession] = useState<ClientSession | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [switchingToId, setSwitchingToId] = useState<string | null>(null);
@@ -43,20 +42,9 @@ export function OrganizationSwitcher({
   const [createError, setCreateError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  const loadSession = useCallback(async () => {
-    setLoadError(null);
-    try {
-      const next = await getClientSession();
-      setSession(next);
-    } catch (error) {
-      setSession(null);
-      setLoadError(error instanceof Error ? error.message : t("loadError"));
-    }
-  }, [t]);
-
   useEffect(() => {
-    void loadSession();
-  }, [loadSession, pathname]);
+    setSession(bootSession);
+  }, [bootSession]);
 
   useEffect(() => {
     if (!menuOpen) {

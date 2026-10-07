@@ -9,6 +9,15 @@ type ApiEnvelope<T> = {
 
 export type ClientDestination = "/pricing" | "/home";
 
+type ClientAuthUnauthorizedHandler = () => void;
+
+let clientAuthUnauthorizedHandler: ClientAuthUnauthorizedHandler | null = null;
+
+/** Called when session/destination auth fetch returns 401/403 (e.g. logout elsewhere, revoked session). */
+export function registerClientAuthUnauthorizedHandler(handler: ClientAuthUnauthorizedHandler | null) {
+  clientAuthUnauthorizedHandler = handler;
+}
+
 async function authFetch<T>(
   input: string,
   init?: RequestInit,
@@ -27,6 +36,10 @@ async function authFetch<T>(
   });
 
   const payload = await response.json().catch(() => null) as ApiEnvelope<T> | null;
+
+  if (response.status === 401 || response.status === 403) {
+    clientAuthUnauthorizedHandler?.();
+  }
 
   if (!response.ok) {
     throw new Error(payload?.error?.message ?? "The request could not be completed.");
@@ -117,8 +130,23 @@ export async function logoutSession() {
   });
 }
 
+let clientSessionInFlight: Promise<ClientSession> | null = null;
+let clientDestinationInFlight: Promise<{ destination: ClientDestination | null }> | null = null;
+
+/** Clears in-flight client auth dedupe (e.g. after logout). Does not cache responses. */
+export function invalidateClientAuthCache() {
+  clientSessionInFlight = null;
+  clientDestinationInFlight = null;
+}
+
 export async function getClientSession() {
-  return authFetch<ClientSession>("/api/auth/session");
+  if (!clientSessionInFlight) {
+    clientSessionInFlight = authFetch<ClientSession>("/api/auth/session").finally(() => {
+      clientSessionInFlight = null;
+    });
+  }
+
+  return clientSessionInFlight;
 }
 
 export type ClientSessionProbeStatus = "authenticated" | "unauthenticated" | "unavailable";
@@ -179,7 +207,15 @@ export async function setClientActiveOrganization(organizationId: string) {
 }
 
 export async function getClientDestination() {
-  return authFetch<{ destination: ClientDestination | null }>("/api/auth/destination");
+  if (!clientDestinationInFlight) {
+    clientDestinationInFlight = authFetch<{ destination: ClientDestination | null }>(
+      "/api/auth/destination",
+    ).finally(() => {
+      clientDestinationInFlight = null;
+    });
+  }
+
+  return clientDestinationInFlight;
 }
 
 export async function updateCurrentPassword(password: string) {
