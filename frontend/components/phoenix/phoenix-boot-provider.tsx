@@ -17,6 +17,7 @@ import {
   getClientDestination,
   invalidateClientAuthCache,
   probeClientSession,
+  registerClientAuthUnauthorizedHandler,
   type ClientDestination,
   type ClientSession,
   type ClientSessionProbeStatus,
@@ -157,6 +158,16 @@ export function PhoenixBootProvider({ children }: PhoenixBootProviderProps) {
   useEffect(() => {
     void runBoot();
   }, [runBoot]);
+
+  useEffect(() => {
+    registerClientAuthUnauthorizedHandler(() => {
+      clearClientAuth();
+    });
+
+    return () => {
+      registerClientAuthUnauthorizedHandler(null);
+    };
+  }, [clearClientAuth]);
 
   const retry = useCallback(() => {
     void runBoot();

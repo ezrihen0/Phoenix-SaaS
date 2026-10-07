@@ -265,11 +265,64 @@ Recorded production-path evidence:
 
 Optional owner UX gates (mobile composer, non-owner role send) remain in [WizField_Reverification_Runbook.md](WizField_Reverification_Runbook.md) §6B and do not block the engineering closeout above.
 
-### Staff shell client auth dedupe (2026-10-07, Phase 1)
+### Staff shell client auth dedupe (2026-10-07, Phase 1 — PR #6, **not deployed**)
 
-- **Scope:** Reuse `PhoenixBootProvider` session/destination in the staff shell (App Shell, org switcher, global search, workspace banner) instead of refetching on every client route change. In-flight dedupe for concurrent `getClientSession` / `getClientDestination` only (no indefinite client cache).
+- **Scope:** Reuse `PhoenixBootProvider` session/destination in the staff shell (App Shell, org switcher, global search, workspace banner) instead of refetching on every client route change. In-flight dedupe for concurrent `getClientSession` / `getClientDestination` only (no indefinite client cache). `authFetch` 401/403 invokes `registerClientAuthUnauthorizedHandler` → `clearClientAuth()` (not the unused `refreshClientAuth` API).
 - **Unchanged:** Server-side `requireServerSession`, permission gates, org switch full navigation to `/home`, logout API + redirect.
-- **Verification:** Re-run read-only client-nav benchmark on `https://app.phoenixfireplace.ca` before/after; confirm logout clears client auth state and org switch still hard-navigates to `/home`.
+
+#### Invalid production “before / after” (withdrawn)
+
+| Label | URL tested | Git commit of **frontend bundle** | Valid as code A/B? |
+| --- | --- | --- | --- |
+| Mislabeled “before” | `https://app.phoenixfireplace.ca` | Deployed production (`e23cc10` at time of run) | Same bundle as “after” |
+| Mislabeled “after” | `https://app.phoenixfireplace.ca` | **Same** deployed production (`e23cc10`) | **No** — PR #6 was not deployed |
+
+Both Playwright runs executed the **same** production JavaScript. Timing deltas and identical `/api/auth/session` counts (e.g. 3× on Jobs) **cannot** be attributed to Phase 1. Any improvement claim from those JSON files is **withdrawn**.
+
+#### Valid local candidate vs baseline (matched conditions)
+
+**Method:** `next build` + `next start`, `NEXT_PUBLIC_BACKEND_URL=https://app.phoenixfireplace.ca`, Playwright `frontend/scripts/phoenix-client-nav-bench.mjs`, **3 runs per route**, median click→usable and auth call counts. Home included.
+
+| Route | Baseline `e23cc10` @ `http://127.0.0.1:3001` | Candidate (PR branch) @ `http://127.0.0.1:3000` |
+| --- | --- | --- |
+| Home | 65 ms usable; 0 session / 0 dest (nav window) | 60 ms usable; 0 session / 0 dest |
+| Jobs | **836 ms** usable; **3** session / **0** dest | **800 ms** usable; **0** session / **0** dest |
+| Customers | **892 ms** usable; **0** session / **1** dest | **927 ms** usable; **0** session / **0** dest |
+| Invoices | **839 ms** usable; **3** session / **1** dest | **911 ms** usable; **0** session / **0** dest |
+
+**Demonstrated:** candidate removes **client-initiated** session/destination refetches during shell nav (vs baseline `app-shell.tsx` `useEffect([pathname])` calling `getClientSession` + `getClientDestination`, and baseline `organization-switcher.tsx` refetch on `pathname`). **Not demonstrated:** that duplicate auth alone explains multi-second production delays (usable medians are sub-second locally; production wall times vary widely for other reasons).
+
+Artifacts: `/opt/cursor/artifacts/bench-local-baseline-e23cc10.json`, `bench-local-candidate.json`.
+
+#### Why production session counts looked unchanged
+
+Production “before” and “after” both ran **`e23cc10`**. Counts stayed identical because the **code did not change**. Remaining `/api/auth/session` traffic on production is from the **deployed** shell pathname effect, org switcher pathname reload, boot probe, RSC/data requests, and other clients — not from Phase 1. Overlap of auth requests with navigation timestamps does **not** prove they block usable UI; local baseline shows auth overlap with **0** blocking span on Jobs while usable ≈ 836 ms.
+
+Initiator stacks from production/minified `next start` builds are classified as `other_client` (minification); attribution above is from **source** at `e23cc10` vs PR branch diff.
+
+#### Security / auth state smokes (executed)
+
+| Check | Environment | Result | Evidence |
+| --- | --- | --- | --- |
+| Login + active session | Local candidate `:3000` | **PASS** | `security-smoke-local-candidate.json` |
+| Logout invalidates session (API) | Local candidate | **PASS** | logout 201 → session 401 |
+| Revoked session rejected | Local candidate | **PASS** | session 401 after API logout |
+| Invalid credentials | Local candidate | **PASS** | HTTP 401 |
+| Login + session + logout API | Production API via `:3000` proxy | **PASS** | `security-smoke-production-api.json` |
+| Organization switch | Local / production | **SKIP** | test account has single org membership |
+| Disabled user | — | **SKIP** | no dedicated disabled test user in env |
+| Logout UI (Playwright) | Production `https://app.phoenixfireplace.ca` | **PASS** | logout POST 201, browser session 401 (`logout-ui-production-smoke.json`) |
+| Logout UI (Playwright) | Local `http://127.0.0.1:3000` | **FAIL** | logout POST **500** when `Origin: http://127.0.0.1:3000` (browser fetch); Node fetch without Origin **201**. Environment/proxy limitation, not Phase 1 logic. |
+
+#### 401 / permission invalidation (client, demonstrated on candidate build)
+
+**Wiring:** `client-auth.ts` `authFetch` → on 401/403 calls registered handler; `PhoenixBootProvider` registers → `clearClientAuth()` (`invalidateClientAuthCache` + null session/destination). `probeClientSession` uses raw `fetch` and does **not** trigger the handler (by design for boot).
+
+**E2E:** revoke session via API → `/reset-password` (`getClientSession` → `authFetch`) → navigate `/home` → browser session **401**, redirect to login — **PASS** (`invalidation-e2e-local-candidate.json`). `refreshClientAuth` remains available for explicit refresh only; it is not the 401 path.
+
+#### Deploy gate
+
+PR #6 remains **pending deploy**. Re-run production candidate benchmark only after the PR frontend is deployed to staging or production; do not treat pre-deploy production traces as Phase 1 verification.
 
 ## Closeout statement
 

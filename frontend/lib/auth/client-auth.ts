@@ -9,6 +9,15 @@ type ApiEnvelope<T> = {
 
 export type ClientDestination = "/pricing" | "/home";
 
+type ClientAuthUnauthorizedHandler = () => void;
+
+let clientAuthUnauthorizedHandler: ClientAuthUnauthorizedHandler | null = null;
+
+/** Called when session/destination auth fetch returns 401/403 (e.g. logout elsewhere, revoked session). */
+export function registerClientAuthUnauthorizedHandler(handler: ClientAuthUnauthorizedHandler | null) {
+  clientAuthUnauthorizedHandler = handler;
+}
+
 async function authFetch<T>(
   input: string,
   init?: RequestInit,
@@ -27,6 +36,10 @@ async function authFetch<T>(
   });
 
   const payload = await response.json().catch(() => null) as ApiEnvelope<T> | null;
+
+  if (response.status === 401 || response.status === 403) {
+    clientAuthUnauthorizedHandler?.();
+  }
 
   if (!response.ok) {
     throw new Error(payload?.error?.message ?? "The request could not be completed.");
