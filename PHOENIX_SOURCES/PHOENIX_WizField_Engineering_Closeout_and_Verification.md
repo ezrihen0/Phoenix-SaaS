@@ -265,6 +265,12 @@ Recorded production-path evidence:
 
 Optional owner UX gates (mobile composer, non-owner role send) remain in [WizField_Reverification_Runbook.md](WizField_Reverification_Runbook.md) §6B and do not block the engineering closeout above.
 
+### Staff shell client auth dedupe (2026-10-07, Phase 1)
+
+- **Scope:** Reuse `PhoenixBootProvider` session/destination in the staff shell (App Shell, org switcher, global search, workspace banner) instead of refetching on every client route change. In-flight dedupe for concurrent `getClientSession` / `getClientDestination` only (no indefinite client cache).
+- **Unchanged:** Server-side `requireServerSession`, permission gates, org switch full navigation to `/home`, logout API + redirect.
+- **Verification:** Re-run read-only client-nav benchmark on `https://app.phoenixfireplace.ca` before/after; confirm logout clears client auth state and org switch still hard-navigates to `/home`.
+
 ## Closeout statement
 
 WizField completed the internal engineering foundation through Gate 14 with:

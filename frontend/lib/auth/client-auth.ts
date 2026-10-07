@@ -117,8 +117,23 @@ export async function logoutSession() {
   });
 }
 
+let clientSessionInFlight: Promise<ClientSession> | null = null;
+let clientDestinationInFlight: Promise<{ destination: ClientDestination | null }> | null = null;
+
+/** Clears in-flight client auth dedupe (e.g. after logout). Does not cache responses. */
+export function invalidateClientAuthCache() {
+  clientSessionInFlight = null;
+  clientDestinationInFlight = null;
+}
+
 export async function getClientSession() {
-  return authFetch<ClientSession>("/api/auth/session");
+  if (!clientSessionInFlight) {
+    clientSessionInFlight = authFetch<ClientSession>("/api/auth/session").finally(() => {
+      clientSessionInFlight = null;
+    });
+  }
+
+  return clientSessionInFlight;
 }
 
 export type ClientSessionProbeStatus = "authenticated" | "unauthenticated" | "unavailable";
@@ -179,7 +194,15 @@ export async function setClientActiveOrganization(organizationId: string) {
 }
 
 export async function getClientDestination() {
-  return authFetch<{ destination: ClientDestination | null }>("/api/auth/destination");
+  if (!clientDestinationInFlight) {
+    clientDestinationInFlight = authFetch<{ destination: ClientDestination | null }>(
+      "/api/auth/destination",
+    ).finally(() => {
+      clientDestinationInFlight = null;
+    });
+  }
+
+  return clientDestinationInFlight;
 }
 
 export async function updateCurrentPassword(password: string) {

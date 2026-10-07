@@ -14,7 +14,10 @@ import {
 
 import { applyTheme, readStoredTheme } from "@/components/theme-runtime";
 import {
+  getClientDestination,
+  invalidateClientAuthCache,
   probeClientSession,
+  type ClientDestination,
   type ClientSession,
   type ClientSessionProbeStatus,
 } from "@/lib/auth/client-auth";
@@ -27,8 +30,11 @@ type PhoenixBootContextValue = {
   status: PhoenixBootStatus;
   session: ClientSession | null;
   sessionStatus: ClientSessionProbeStatus | null;
+  clientDestination: ClientDestination | null;
   errorMessage: string | null;
   retry: () => void;
+  refreshClientAuth: () => Promise<void>;
+  clearClientAuth: () => void;
 };
 
 const PhoenixBootContext = createContext<PhoenixBootContextValue | null>(null);
@@ -57,12 +63,52 @@ type PhoenixBootProviderProps = {
   children: ReactNode;
 };
 
+async function resolveClientDestinationForSession(
+  session: ClientSession | null,
+  sessionStatus: ClientSessionProbeStatus,
+): Promise<ClientDestination | null> {
+  if (sessionStatus !== "authenticated" || !session) {
+    return null;
+  }
+
+  try {
+    const payload = await getClientDestination();
+    return payload.destination;
+  } catch {
+    return null;
+  }
+}
+
 export function PhoenixBootProvider({ children }: PhoenixBootProviderProps) {
   const [status, setStatus] = useState<PhoenixBootStatus>("booting");
   const [session, setSession] = useState<ClientSession | null>(null);
   const [sessionStatus, setSessionStatus] = useState<ClientSessionProbeStatus | null>(null);
+  const [clientDestination, setClientDestination] = useState<ClientDestination | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const bootAttemptRef = useRef(0);
+
+  const applyAuthProbe = useCallback(
+    async (probe: Awaited<ReturnType<typeof probeClientSession>>) => {
+      setSession(probe.session);
+      setSessionStatus(probe.status);
+      const destination = await resolveClientDestinationForSession(probe.session, probe.status);
+      setClientDestination(destination);
+    },
+    [],
+  );
+
+  const refreshClientAuth = useCallback(async () => {
+    invalidateClientAuthCache();
+    const probe = await probeClientSession();
+    await applyAuthProbe(probe);
+  }, [applyAuthProbe]);
+
+  const clearClientAuth = useCallback(() => {
+    invalidateClientAuthCache();
+    setSession(null);
+    setSessionStatus("unauthenticated");
+    setClientDestination(null);
+  }, []);
 
   const runBoot = useCallback(async () => {
     const attemptId = ++bootAttemptRef.current;
@@ -81,13 +127,18 @@ export function PhoenixBootProvider({ children }: PhoenixBootProviderProps) {
     if (probe.status === "unavailable") {
       setSession(null);
       setSessionStatus("unavailable");
+      setClientDestination(null);
       setStatus("error");
       setErrorMessage("Phoenix CRM could not reach the sign-in service. Check your connection and try again.");
       return;
     }
 
-    setSession(probe.session);
-    setSessionStatus(probe.status);
+    await applyAuthProbe(probe);
+
+    if (attemptId !== bootAttemptRef.current) {
+      return;
+    }
+
     await waitForNextPaint();
 
     if (attemptId !== bootAttemptRef.current) {
@@ -96,7 +147,7 @@ export function PhoenixBootProvider({ children }: PhoenixBootProviderProps) {
 
     markBootComplete();
     setStatus("ready");
-  }, []);
+  }, [applyAuthProbe]);
 
   useLayoutEffect(() => {
     applyTheme(readStoredTheme());
@@ -116,10 +167,13 @@ export function PhoenixBootProvider({ children }: PhoenixBootProviderProps) {
       status,
       session,
       sessionStatus,
+      clientDestination,
       errorMessage,
       retry,
+      refreshClientAuth,
+      clearClientAuth,
     }),
-    [status, session, sessionStatus, errorMessage, retry],
+    [status, session, sessionStatus, clientDestination, errorMessage, retry, refreshClientAuth, clearClientAuth],
   );
 
   const showOverlay = status !== "ready";

@@ -4,51 +4,41 @@ import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { getClientSession } from "@/lib/auth/client-auth";
+import { usePhoenixBoot } from "@/components/phoenix/phoenix-boot-provider";
 
 const BOOTSTRAP_ORGANIZATION_SLUG = "phoenix";
 const OPERATING_PHOENIX_ORGANIZATION_SLUG = "phoenix-fireplace";
 
 export function WorkspaceContextBanner() {
   const t = useTranslations("shell.workspaceContext");
+  const { status: bootStatus, session } = usePhoenixBoot();
   const [visible, setVisible] = useState(false);
   const [workspaceLabel, setWorkspaceLabel] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    if (bootStatus !== "ready" || !session?.active_organization) {
+      setVisible(false);
+      return;
+    }
 
-    void (async () => {
-      try {
-        const session = await getClientSession();
-        if (cancelled || !session?.active_organization) {
-          return;
-        }
+    const slug = session.active_organization.slug?.trim().toLowerCase() ?? "";
+    setUserEmail(session.user.email);
 
-        const slug = session.active_organization.slug?.trim().toLowerCase() ?? "";
-        setUserEmail(session.user.email);
+    if (slug === BOOTSTRAP_ORGANIZATION_SLUG) {
+      setWorkspaceLabel(session.active_organization.name);
+      setVisible(true);
+      return;
+    }
 
-        if (slug === BOOTSTRAP_ORGANIZATION_SLUG) {
-          setWorkspaceLabel(session.active_organization.name);
-          setVisible(true);
-          return;
-        }
+    if (slug !== OPERATING_PHOENIX_ORGANIZATION_SLUG) {
+      setWorkspaceLabel(session.active_organization.name);
+      setVisible(false);
+      return;
+    }
 
-        if (slug !== OPERATING_PHOENIX_ORGANIZATION_SLUG) {
-          setWorkspaceLabel(session.active_organization.name);
-          setVisible(false);
-        }
-      } catch {
-        if (!cancelled) {
-          setVisible(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    setVisible(false);
+  }, [bootStatus, session]);
 
   if (!visible) {
     return null;
